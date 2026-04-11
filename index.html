@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Elektriker Essen | neuverdrahtet – Elektroinstallation, Smart Home, Wallbox, E-Check</title>
+<meta name="description" content="Ihr Elektriker in Essen: neuverdrahtet – Elektroinstallation, E-Check, Smart Home, Wallbox & Photovoltaik. Qualifizierter Fachbetrieb Danny Berger. Jetzt Angebot anfordern!"/>
+<meta name="robots" content="index,follow"/>
+<link rel="canonical" href="https://www.neuverdrahtet.com/"/>
+<meta property="og:title" content="Elektriker Essen – neuverdrahtet | Danny Berger"/>
+<meta property="og:description" content="Elektroinstallation, Smart Home, Wallbox & E-Check in Essen. Fachbetrieb Danny Berger."/>
+<meta property="og:image" content="https://www.neuverdrahtet.com/van.jpg"/>
+<meta property="og:url" content="https://www.neuverdrahtet.com/"/>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"ElectricalContractor","name":"neuverdrahtet","telephone":"+4920189085050","email":"info@neuverdrahtet.com","address":{"@type":"PostalAddress","streetAddress":"Donnerstraße 131","addressLocality":"Essen","postalCode":"45357","addressCountry":"DE"},"url":"https://www.neuverdrahtet.com","sameAs":["https://www.instagram.com/neuverdrahtet","https://www.facebook.com/neuverdrahtet"]}
+</script>
+<link rel="preload" href="van.jpg" as="image"/>
+<link rel="preload" href="logo.png" as="image"/>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--blau:#2F4EA1;--blau2:#1d3480;--blau3:#0f2060;--teal:#66AEB8;--gelb:#E9C84E;--grau:#e8ecf5;--grau2:#f4f6fb;--dunkel:#0d1526;--text:#1a2035;--textm:#4a5575;--white:#fff;--wa:#25D366;--r:12px}
+html{scroll-behavior:smooth}
+body{font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);overflow-x:hidden}
+a{text-decoration:none;color:inherit}
+img{display:block;max-width:100%}
+
+/* FLOAT WA */
+.wa-float{position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;width:56px;height:56px;background:var(--wa);border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(37,211,102,.5);animation:wap 3s ease-in-out infinite}
+.wa-float svg{width:30px;height:30px;color:#fff}
+.wa-float:hover{transform:scale(1.1);animation:none}
+@keyframes wap{0%,100%{box-shadow:0 4px 20px rgba(37,211,102,.5)}50%{box-shadow:0 4px 30px rgba(37,211,102,.8),0 0 0 8px rgba(37,211,102,.1)}}
+
+/* TOPBAR */
+.topbar{background:var(--blau3);padding:.4rem 5vw;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap}
+.tb-l{font-size:.73rem;color:rgba(255,255,255,.55);font-weight:500}
+.tb-r{display:flex;gap:1.2rem;align-items:center}
+.tb-r a{font-size:.73rem;font-weight:700;color:var(--gelb);display:flex;align-items:center;gap:5px}
+.tb-wa{color:#4ade80!important}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:2px solid var(--grau);display:flex;align-items:center;justify-content:space-between;padding:0 5vw;height:68px;box-shadow:0 2px 16px rgba(0,0,0,.06)}
+.nav-logo img{height:46px;width:auto}
+.nav-links{display:flex;align-items:center;gap:.1rem;list-style:none}
+.nav-links li a{display:flex;align-items:center;gap:4px;padding:.48rem .85rem;font-size:.86rem;font-weight:600;color:var(--text);border-radius:6px;transition:background .15s}
+.nav-links li a:hover{background:var(--grau2);color:var(--blau)}
+.drop{display:none;position:absolute;top:calc(100% + 8px);left:0;background:#fff;border:1px solid var(--grau);border-radius:10px;min-width:220px;box-shadow:0 8px 32px rgba(0,0,0,.12);overflow:hidden;z-index:300}
+.nav-links li:hover .drop{display:block}
+.drop a{display:flex;align-items:center;gap:10px;padding:.62rem 1.2rem;font-size:.83rem;color:var(--textm);border-bottom:1px solid #f0f2f8}
+.drop a:last-child{border:none}
+.drop a:hover{background:var(--grau2);color:var(--blau)}
+.nav-cta{background:var(--gelb)!important;color:var(--blau)!important;font-weight:700!important;padding:.5rem 1.2rem!important;border-radius:6px!important}
+.nav-tel{background:var(--blau)!important;color:#fff!important;font-weight:700!important;padding:.5rem 1rem!important;border-radius:6px!important;display:flex!important;align-items:center!important;gap:5px!important;font-size:.84rem!important}
+.nav-wa{background:var(--wa)!important;color:#fff!important;font-weight:700!important;padding:.5rem 1rem!important;border-radius:6px!important;display:flex!important;align-items:center!important;gap:5px!important;font-size:.84rem!important}
+.ham{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.ham span{display:block;width:24px;height:2px;background:var(--blau);border-radius:2px}
+.mob-menu{display:none;flex-direction:column;position:fixed;top:68px;left:0;right:0;background:#fff;border-bottom:3px solid var(--gelb);padding:1rem 5vw 1.5rem;z-index:190;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.mob-menu.open{display:flex}
+.mob-menu a{padding:.7rem 0;font-size:.95rem;font-weight:600;border-bottom:1px solid var(--grau)}
+.mob-menu a:last-child{border:none}
+.mob-cta{margin-top:.8rem;background:var(--gelb);color:var(--blau)!important;text-align:center;border-radius:6px;padding:.9rem;font-weight:700!important}
+.mob-wa-btn{margin-top:.5rem;background:var(--wa);color:#fff!important;text-align:center;border-radius:6px;padding:.85rem;font-weight:700!important;display:flex;align-items:center;justify-content:center;gap:8px}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:8px;font-family:'Barlow',sans-serif;font-weight:700;font-size:.9rem;letter-spacing:.04em;text-transform:uppercase;padding:.85rem 1.8rem;border-radius:6px;border:none;cursor:pointer;transition:transform .2s,opacity .2s}
+.btn:hover{transform:translateY(-2px);opacity:.9}
+.btn-yellow{background:var(--gelb);color:var(--blau)}
+.btn-wa{background:var(--wa);color:#fff}
+.btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.35)}
+
+/* HERO */
+.hero{position:relative;min-height:88vh;display:flex;align-items:center;background:var(--dunkel);overflow:hidden}
+.hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.5;z-index:1}
+.hero-overlay{position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(9,16,32,.82) 0%,rgba(13,21,38,.65) 50%,rgba(9,16,32,.5) 100%)}
+.hero-inner{position:relative;z-index:5;padding:5rem 5vw;max-width:780px}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gelb);background:rgba(233,200,78,.12);border:1px solid rgba(233,200,78,.25);padding:.35rem .9rem;border-radius:2px;margin-bottom:1.6rem}
+.hero-badge::before{content:'';width:6px;height:6px;background:var(--gelb);border-radius:50%;animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+h1{font-family:'Barlow Condensed',sans-serif;font-size:clamp(2.8rem,5.5vw,5rem);font-weight:900;line-height:1;color:#fff;margin-bottom:1.2rem}
+h1 .hl{color:var(--gelb)}
+h1 .hl2{color:var(--teal)}
+.hero-sub{font-size:clamp(.95rem,1.5vw,1.08rem);color:rgba(255,255,255,.62);line-height:1.72;max-width:540px;margin-bottom:2.4rem;font-weight:300}
+.hero-btns{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:3rem}
+.trust-bar{display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.trust-item{flex:1;min-width:100px;padding:.9rem 1.1rem;border-right:1px solid rgba(255,255,255,.07)}
+.trust-item:last-child{border:none}
+.trust-num{font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:900;color:var(--gelb);line-height:1}
+.trust-lbl{font-size:.62rem;font-weight:600;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em}
+
+/* SOCIAL BAR */
+.soc-bar{background:var(--blau2);padding:.85rem 5vw;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.soc-bar-l{font-size:.8rem;color:rgba(255,255,255,.6);font-weight:500}
+.soc-bar-r{display:flex;gap:.5rem;flex-wrap:wrap}
+.sb{display:inline-flex;align-items:center;gap:6px;padding:.48rem .95rem;border-radius:6px;font-size:.79rem;font-weight:700;color:#fff;transition:opacity .2s,transform .2s}
+.sb:hover{opacity:.88;transform:translateY(-1px)}
+.sb-wa{background:var(--wa)}
+.sb-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+.sb-fb{background:#1877F2}
+.sb-tel{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2)}
+
+/* USP STRIP */
+.strip{background:var(--blau);display:grid;grid-template-columns:repeat(4,1fr)}
+.si{padding:1.7rem 1.3rem;border-right:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-start;gap:12px}
+.si:last-child{border:none}
+.si-ico{width:38px;height:38px;background:rgba(233,200,78,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.si-t{font-size:.86rem;font-weight:700;color:#fff;margin-bottom:.18rem}
+.si-s{font-size:.74rem;color:rgba(255,255,255,.5);line-height:1.45}
+
+/* SECTIONS */
+section{padding:5rem 5vw}
+.ey{font-size:.68rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);margin-bottom:.55rem}
+h2{font-family:'Barlow Condensed',sans-serif;font-size:clamp(1.9rem,3.2vw,2.75rem);font-weight:800;color:var(--blau);line-height:1.07;margin-bottom:.85rem}
+h2.wh{color:#fff}
+.lead{font-size:.95rem;color:var(--textm);line-height:1.74;max-width:580px;margin-bottom:2.8rem}
+
+/* LEISTUNGEN */
+#leistungen{background:var(--grau2)}
+.l-intro{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:end;margin-bottom:3rem}
+.l-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(47,78,161,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s}
+.lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(47,78,161,.12)}
+.lc-top{height:130px;display:flex;align-items:center;justify-content:center;font-size:3rem;position:relative}
+.lc-tag{position:absolute;top:10px;right:10px;background:var(--gelb);color:var(--blau);font-size:.62rem;font-weight:800;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px}
+.lc-body{padding:1.3rem 1.4rem;flex:1;display:flex;flex-direction:column}
+.lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--blau);margin-bottom:.4rem}
+.lc-text{font-size:.82rem;color:var(--textm);line-height:1.65;flex:1}
+.lc-link{display:inline-flex;align-items:center;gap:5px;margin-top:.9rem;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--blau)}
+.lc-more{background:var(--blau);border-radius:var(--r);padding:1.8rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.lc-more p{font-size:.9rem;color:rgba(255,255,255,.7);line-height:1.6;font-style:italic}
+
+/* ÜBER UNS */
+#warum{background:#fff}
+.w-grid{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
+.w-photo-wrap{position:relative}
+.w-photo{border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;box-shadow:0 16px 48px rgba(47,78,161,.18)}
+.w-photo img{width:100%;height:100%;object-fit:cover;object-position:center top}
+.w-badge{position:absolute;bottom:-16px;right:-16px;background:var(--gelb);border-radius:10px;padding:1rem 1.5rem;box-shadow:0 8px 24px rgba(0,0,0,.14)}
+.w-badge .nm{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:900;color:var(--blau);line-height:1.1}
+.w-badge .rl{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(47,78,161,.65);margin-top:3px}
+.wl-list{display:flex;flex-direction:column;gap:.9rem;margin-top:1.6rem}
+.wl{display:flex;align-items:flex-start;gap:13px;padding:1rem 1.3rem;background:var(--grau2);border-radius:8px;border-left:3px solid var(--teal)}
+.wl:hover{border-color:var(--blau)}
+.wl-ico{width:34px;height:34px;background:var(--blau);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.wl-t{font-size:.9rem;font-weight:700;color:var(--blau);margin-bottom:.18rem}
+.wl-s{font-size:.81rem;color:var(--textm);line-height:1.55}
+
+/* FACHBETRIEB DARK */
+#fachbetrieb{background:var(--dunkel);position:relative;overflow:hidden}
+#fachbetrieb::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(47,78,161,.25) 0%,transparent 60%)}
+.fb-inner{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1.2fr;gap:5rem;align-items:center}
+.m-text{font-size:.94rem;color:rgba(255,255,255,.55);line-height:1.74;margin-bottom:1.8rem;font-weight:300}
+.m-stats{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:2.2rem}
+.ms{background:rgba(47,78,161,.18);border:1px solid rgba(47,78,161,.32);border-radius:8px;padding:1.1rem}
+.ms-n{font-family:'Barlow Condensed',sans-serif;font-size:1.9rem;font-weight:900;color:var(--gelb);line-height:1}
+.ms-l{font-size:.7rem;font-weight:600;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
+.partners{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.5rem}
+.pl{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:.38rem .8rem;font-size:.77rem;font-weight:700;color:rgba(255,255,255,.5)}
+.m-cards{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.mc{background:rgba(47,78,161,.13);border:1px solid rgba(47,78,161,.22);border-radius:var(--r);padding:1.4rem}
+.mc:hover{border-color:var(--teal)}
+.mc-ico{font-size:2rem;margin-bottom:.8rem}
+.mc-t{font-size:.9rem;font-weight:700;color:#fff;margin-bottom:.35rem}
+.mc-s{font-size:.79rem;color:rgba(255,255,255,.42);line-height:1.55}
+
+/* KONTAKT */
+#angebot{background:#fff}
+.a-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:5rem;align-items:start}
+.form-box{background:var(--grau2);border-radius:var(--r);padding:2.3rem;border:1px solid var(--grau)}
+.form-box h3{font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:800;color:var(--blau);margin-bottom:1.4rem}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+.fg{margin-bottom:.9rem}
+.fg label{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8492b2;margin-bottom:.35rem}
+.fg input,.fg select,.fg textarea{width:100%;padding:.72rem .95rem;background:#fff;border:1.5px solid var(--grau);border-radius:7px;font-family:'Barlow',sans-serif;font-size:.89rem;color:var(--text);outline:none;transition:border-color .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blau)}
+.fg textarea{resize:vertical;min-height:95px}
+.form-check{display:flex;align-items:flex-start;gap:10px;margin:.35rem 0 1rem;font-size:.78rem;color:var(--textm);line-height:1.5}
+.form-check input{margin-top:3px;accent-color:var(--blau);flex-shrink:0}
+.form-check a{color:var(--blau);font-weight:600}
+.form-submit{width:100%;padding:.95rem;background:var(--blau);color:#fff;font-family:'Barlow',sans-serif;font-size:.93rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:none;border-radius:7px;cursor:pointer;transition:background .2s}
+.form-submit:hover{background:var(--blau2)}
+.ci-list{display:flex;flex-direction:column;gap:1rem}
+.ki{display:flex;align-items:flex-start;gap:13px}
+.ki-ico{width:44px;height:44px;background:var(--blau);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.ki-l{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8492b2}
+.ki-v{font-size:.92rem;font-weight:600;color:var(--text);margin-top:2px}
+.ki-v a{color:var(--blau)}
+.soc-btns{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.3rem}
+.sc{display:inline-flex;align-items:center;gap:7px;padding:.6rem 1.1rem;border-radius:7px;font-size:.82rem;font-weight:700;color:#fff;transition:opacity .2s,transform .2s}
+.sc:hover{opacity:.9;transform:translateY(-2px)}
+.sc-wa{background:var(--wa)}
+.sc-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+.sc-fb{background:#1877F2}
+.nd-box{background:linear-gradient(135deg,var(--blau),var(--blau2));border-radius:var(--r);padding:1.3rem;margin-top:1.4rem;display:flex;align-items:center;gap:1rem}
+.nd-t{font-size:.88rem;font-weight:700;color:#fff}
+.nd-s{font-size:.73rem;color:rgba(255,255,255,.5);margin-top:2px}
+.nd-n{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gelb);white-space:nowrap}
+
+/* LEGAL */
+.ls{padding:5rem 5vw}
+.ls:nth-child(odd){background:var(--grau2)}
+.lw{max-width:800px;display:flex;flex-direction:column;gap:1.1rem;margin-top:2.2rem}
+.lcrd{background:#fff;border-radius:var(--r);padding:1.6rem 1.9rem;border:1px solid var(--grau)}
+.ls:nth-child(even) .lcrd{background:var(--grau2)}
+.lh{font-size:.73rem;font-weight:700;text-transform:uppercase;letter-spacing:.13em;color:var(--teal);margin-bottom:.75rem}
+.lcrd p{font-size:.89rem;color:var(--text);line-height:1.78;margin-bottom:.45rem}
+.lcrd p:last-child{margin:0}
+.lcrd ul{margin:.5rem 0 0 1.1rem;font-size:.89rem;color:var(--text);line-height:1.9}
+.lcrd a{color:var(--blau);font-weight:600}
+
+/* CTA BANNER */
+.cta{background:linear-gradient(135deg,var(--blau),var(--blau2));padding:4rem 5vw;text-align:center}
+.cta h2{color:#fff;margin-bottom:.55rem}
+.cta p{font-size:.97rem;color:rgba(255,255,255,.62);margin-bottom:2rem}
+.cta-btns{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
+
+/* FOOTER */
+footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
+.ft-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:3rem;padding-bottom:2.8rem;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:1.6rem}
+.ft-logo{height:48px;width:auto;filter:brightness(0) invert(1);margin-bottom:.85rem;display:block}
+.ft-desc{font-size:.8rem;line-height:1.7;max-width:260px}
+.ft-badges{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.9rem}
+.ftb{font-size:.66rem;font-weight:700;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px;border:1px solid}
+.ftb-y{color:var(--gelb);border-color:rgba(233,200,78,.3)}
+.ftb-t{color:var(--teal);border-color:rgba(102,174,184,.3)}
+.ftb-b{color:#6D82B8;border-color:rgba(109,130,184,.3)}
+.ft-soc{display:flex;gap:.45rem;margin-top:1rem}
+.fts{width:35px;height:35px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:transform .2s}
+.fts:hover{transform:translateY(-2px)}
+.fts svg{width:18px;height:18px;color:#fff}
+.fts-wa{background:var(--wa)}
+.fts-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
+.fts-fb{background:#1877F2}
+.ft-col h4{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.7);margin-bottom:.9rem}
+.ft-col ul{list-style:none}
+.ft-col li{margin-bottom:.45rem;font-size:.8rem}
+.ft-col a{color:rgba(255,255,255,.35);transition:color .2s}
+.ft-col a:hover{color:var(--gelb)}
+.ft-bottom{display:flex;justify-content:space-between;align-items:center;font-size:.74rem;flex-wrap:wrap;gap:.5rem}
+.ft-bottom a{color:rgba(255,255,255,.28);margin-left:1.1rem;transition:color .2s}
+.ft-bottom a:hover{color:var(--gelb)}
+.ft-logo-right{display:flex;align-items:center;gap:1rem}
+.ft-logo-right img{height:36px;width:auto;filter:brightness(0) invert(1);opacity:.38}
+
+/* RESPONSIVE */
+@media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
+@media(max-width:640px){.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+</style>
+</head>
+<body>
+
+<a href="https://wa.me/4920189085050" class="wa-float" target="_blank" rel="noopener" aria-label="WhatsApp"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <span class="tb-l">📍 Qualifizierter Fachbetrieb · Donnerstraße 131 · 45357 Essen</span>
+  <div class="tb-r">
+    <a href="https://wa.me/4920189085050" class="tb-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
+    <a href="tel:+4920189085050"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+    <a href="mailto:info@neuverdrahtet.com">✉ info@neuverdrahtet.com</a>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <a href="#home"><img src="logo.png" alt="neuverdrahtet" class="nav-logo"/></a>
+  <ul class="nav-links">
+    <li><a href="#home">Start</a></li>
+    <li style="position:relative">
+      <a href="#leistungen">Leistungen ▾</a>
+      <div class="drop">
+        <a href="#leistungen">⚡ Elektroinstallation</a>
+        <a href="#leistungen">🔌 Wallbox</a>
+        <a href="#leistungen">✅ E-Check</a>
+        <a href="#leistungen">🏠 Smart Home</a>
+        <a href="#leistungen">☀️ Photovoltaik</a>
+        <a href="#leistungen">💡 Beleuchtung</a>
+        <a href="#leistungen">♨️ Wärmepumpe</a>
+        <a href="#leistungen">📊 Messtechnik</a>
+      </div>
+    </li>
+    <li><a href="#warum">Über uns</a></li>
+    <li><a href="#angebot">Kontakt</a></li>
+    <li><a href="tel:+4920189085050" class="nav-tel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a></li>
+    <li><a href="https://wa.me/4920189085050" class="nav-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a></li>
+    <li><a href="#angebot" class="nav-cta">Angebot anfordern</a></li>
+  </ul>
+  <button class="ham" id="ham"><span></span><span></span><span></span></button>
+</nav>
+<div class="mob-menu" id="mob">
+  <a href="#home">Start</a>
+  <a href="#leistungen">Leistungen</a>
+  <a href="#warum">Über uns</a>
+  <a href="#angebot">Kontakt</a>
+  <a href="tel:+4920189085050"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+  <a href="https://wa.me/4920189085050" class="mob-wa-btn" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp schreiben</a>
+  <a href="#angebot" class="mob-cta">Angebot anfordern</a>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="home">
+  <img src="van.jpg" alt="neuverdrahtet Fahrzeug Essen" class="hero-img" loading="eager"/>
+  <div class="hero-overlay"></div>
+  <div class="hero-inner">
+    <div class="hero-badge">Qualifizierter Fachbetrieb · Essen · Danny Berger</div>
+    <h1>Ihr Elektriker<br>in <span class="hl">Essen</span> –<br><span class="hl2">vom Fachbetrieb.</span></h1>
+    <p class="hero-sub">Danny Berger realisiert Elektroinstallationen, Smart Home, Wallbox, Photovoltaik und mehr – persönlich, zuverlässig und auf Ihr Zuhause abgestimmt.</p>
+    <div class="hero-btns">
+      <a href="#angebot" class="btn btn-yellow">📋 Angebot anfordern</a>
+      <a href="https://wa.me/4920189085050" class="btn btn-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
+      <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+    </div>
+    <div class="trust-bar">
+      <div class="trust-item"><div class="trust-num">Fach</div><div class="trust-lbl">betrieb</div></div>
+      <div class="trust-item"><div class="trust-num">E-Check</div><div class="trust-lbl">zertifiziert</div></div>
+      <div class="trust-item"><div class="trust-num">VDE</div><div class="trust-lbl">normkonform</div></div>
+      <div class="trust-item"><div class="trust-num">NRW</div><div class="trust-lbl">Einsatzgebiet</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- SOCIAL BAR -->
+<div class="soc-bar">
+  <span class="soc-bar-l">📱 Direkt schreiben oder anrufen:</span>
+  <div class="soc-bar-r">
+    <a href="https://wa.me/4920189085050" class="sb sb-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp – 0201 89085050</a>
+    <a href="https://www.instagram.com/neuverdrahtet" class="sb sb-ig" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> @neuverdrahtet</a>
+    <a href="https://www.facebook.com/neuverdrahtet" class="sb sb-fb" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> Facebook</a>
+    <a href="tel:+4920189085050" class="sb sb-tel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+  </div>
+</div>
+
+<!-- USP STRIP -->
+<div class="strip">
+  <div class="si"><div class="si-ico">🛡️</div><div><div class="si-t">Qualifizierter Fachbetrieb</div><div class="si-s">Qualität & Verantwortung in jedem Projekt</div></div></div>
+  <div class="si"><div class="si-ico">⏱️</div><div><div class="si-t">Schnell vor Ort</div><div class="si-s">Regional in Essen & Ruhrgebiet</div></div></div>
+  <div class="si"><div class="si-ico">👤</div><div><div class="si-t">Persönlich erreichbar</div><div class="si-s">Danny Berger – Ihr direkter Ansprechpartner</div></div></div>
+  <div class="si"><div class="si-ico">✅</div><div><div class="si-t">Sauber & transparent</div><div class="si-s">Ehrliche Beratung, faire Preise</div></div></div>
+</div>
+
+<!-- LEISTUNGEN -->
+<section id="leistungen">
+  <div class="l-intro">
+    <div>
+      <div class="ey">Was wir für Sie tun</div>
+      <h2>Unsere Leistungen –<br>Elektrotechnik für heute und morgen</h2>
+    </div>
+    <p class="lead" style="margin-bottom:0">Als qualifizierter Fachbetrieb in Essen bieten wir moderne Elektrolösungen – ob Neubau oder Altbausanierung. Alles aus einer Hand.</p>
+  </div>
+  <div class="l-grid">
+    <div class="lc">
+      <div class="lc-top" style="background:#1a2d5e"><span>⚡</span><span class="lc-tag">Schwerpunkt</span></div>
+      <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#1a4060"><span>🔌</span></div>
+      <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#2a3560"><span>✅</span></div>
+      <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#111a30"><span>🏠</span></div>
+      <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#0a1a3a"><span>☀️</span></div>
+      <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#1a1a2e"><span>💡</span></div>
+      <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#0c2a4a"><span>♨️</span></div>
+      <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc">
+      <div class="lc-top" style="background:#1a2d5e"><span>📊</span></div>
+      <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    </div>
+    <div class="lc-more">
+      <p>„Ihre gewünschte Leistung ist nicht dabei? Sprechen Sie uns an – wir finden eine Lösung."</p>
+      <a href="#angebot" class="btn btn-yellow" style="white-space:nowrap;flex-shrink:0">Kontakt aufnehmen</a>
+    </div>
+  </div>
+</section>
+
+<!-- ÜBER UNS -->
+<section id="warum">
+  <div class="w-grid">
+    <div class="w-photo-wrap">
+      <div class="w-photo"><img src="danny.jpg" alt="Danny Berger Inhaber neuverdrahtet Essen"/></div>
+      <div class="w-badge"><div class="nm">Danny Berger</div><div class="rl">Elektriker · Inhaber</div></div>
+    </div>
+    <div>
+      <div class="ey">Warum neuverdrahtet?</div>
+      <h2>Weil Sie mehr erwarten dürfen als nur einen Elektriker.</h2>
+      <p style="font-size:.95rem;color:var(--textm);line-height:1.74;margin-bottom:.8rem">Mit neuverdrahtet entscheiden Sie sich für einen qualifizierten Fachbetrieb aus Essen, der persönliche Beratung, moderne Technik und zuverlässige Ausführung vereint.</p>
+      <div class="wl-list">
+        <div class="wl"><div class="wl-ico">🛡️</div><div><div class="wl-t">Fachbetrieb mit Erfahrung</div><div class="wl-s">Danny Berger bringt Fachwissen und Handschlagqualität in jedes Projekt.</div></div></div>
+        <div class="wl"><div class="wl-ico">📋</div><div><div class="wl-t">Individuelle Lösungen statt 08/15</div><div class="wl-s">Abgestimmt auf Wohnsituation, Budget und Zukunftspläne.</div></div></div>
+        <div class="wl"><div class="wl-ico">📍</div><div><div class="wl-t">Regional verwurzelt – persönlich erreichbar</div><div class="wl-s">Als lokaler Elektriker in Essen schnell bei Ihnen.</div></div></div>
+        <div class="wl"><div class="wl-ico">⭐</div><div><div class="wl-t">Smarte Technik, starke Marken</div><div class="wl-s">Hager, Homematic IP, SMA Solar, DOTLUX, Bosch.</div></div></div>
+        <div class="wl"><div class="wl-ico">✅</div><div><div class="wl-t">Sauber, transparent, zuverlässig</div><div class="wl-s">Termine werden gehalten, ehrlich kommuniziert – jederzeit verlässlich.</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FACHBETRIEB DARK -->
+<section id="fachbetrieb">
+  <div class="fb-inner">
+    <div>
+      <div class="ey" style="color:var(--teal)">Qualifizierter Fachbetrieb</div>
+      <h2 class="wh">neuverdrahtet steht für moderne Elektrotechnik vom Fachbetrieb</h2>
+      <p class="m-text">Als qualifizierter Fachbetrieb aus Essen bietet neuverdrahtet individuelle Lösungen für Alt- und Neubauten – von der Elektroinstallation über Smart-Home bis zu Photovoltaik und Wallboxen.</p>
+      <div class="m-stats">
+        <div class="ms"><div class="ms-n">100%</div><div class="ms-l">Fachbetrieb</div></div>
+        <div class="ms"><div class="ms-n">VDE</div><div class="ms-l">Normkonform</div></div>
+        <div class="ms"><div class="ms-n">NRW</div><div class="ms-l">Einsatzgebiet</div></div>
+        <div class="ms"><div class="ms-n">E-Check</div><div class="ms-l">Zertifiziert</div></div>
+      </div>
+      <p style="font-size:.74rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:.55rem">Markenpartner</p>
+      <div class="partners">
+        <span class="pl">Hager</span><span class="pl">Homematic IP</span><span class="pl">SMA Solar</span><span class="pl">DOTLUX</span><span class="pl">Bosch</span>
+      </div>
+    </div>
+    <div class="m-cards">
+      <div class="mc"><div class="mc-ico">⚡</div><div class="mc-t">Elektroinstallation</div><div class="mc-s">Alt- & Neubau, normgerecht nach VDE.</div></div>
+      <div class="mc"><div class="mc-ico">🏠</div><div class="mc-t">Smart Home & KNX</div><div class="mc-s">Homematic IP – Ihr Zuhause vernetzt.</div></div>
+      <div class="mc"><div class="mc-ico">☀️</div><div class="mc-t">Photovoltaik & Speicher</div><div class="mc-s">SMA Solar, Planung & Förderberatung.</div></div>
+      <div class="mc"><div class="mc-ico">✅</div><div class="mc-t">E-Check & Prüfungen</div><div class="mc-s">DGUV V3, vollständig dokumentiert.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- KONTAKT -->
+<section id="angebot">
+  <div class="ey">Jetzt loslegen</div>
+  <h2>Angebot für Ihre Elektroarbeiten anfordern</h2>
+  <p class="lead">Danny Berger prüft Ihre Anfrage persönlich und meldet sich innerhalb weniger Werktage zurück.</p>
+  <div class="a-grid">
+    <div class="form-box">
+      <h3>Ihr Angebot anfordern</h3>
+      <form action="https://formspree.io/f/mvzverea" method="POST">
+        <input type="hidden" name="_subject" value="Neue Anfrage neuverdrahtet.com"/>
+        <div class="fg"><label for="leistung">Was planen Sie?</label>
+          <select id="leistung" name="leistung">
+            <option value="">Bitte wählen …</option>
+            <option>Elektroinstallation – Neubau</option>
+            <option>Elektroinstallation – Sanierung / Altbau</option>
+            <option>Wallbox Installation</option>
+            <option>E-Check / Sicherheitsprüfung</option>
+            <option>Smart Home Installation</option>
+            <option>Photovoltaik & Speicher</option>
+            <option>Beleuchtungstechnik</option>
+            <option>Wärmepumpe Anschluss</option>
+            <option>Mess- & Prüftechnik</option>
+            <option>Sonstiges</option>
+          </select>
+        </div>
+        <div class="fg"><label for="objekt">Objekt / Größe</label><input type="text" id="objekt" name="objekt" placeholder="z. B. Einfamilienhaus, ca. 140 m²"/></div>
+        <div class="form-row">
+          <div class="fg"><label for="vn">Vorname *</label><input type="text" id="vn" name="vorname" placeholder="Vorname" required/></div>
+          <div class="fg"><label for="nn">Nachname *</label><input type="text" id="nn" name="nachname" placeholder="Nachname" required/></div>
+        </div>
+        <div class="form-row">
+          <div class="fg"><label for="em">E-Mail *</label><input type="email" id="em" name="email" placeholder="E-Mail" required/></div>
+          <div class="fg"><label for="tel">Telefon *</label><input type="tel" id="tel" name="telefon" placeholder="Telefonnummer" required/></div>
+        </div>
+        <div class="fg"><label for="msg">Ihre Nachricht</label><textarea id="msg" name="nachricht" placeholder="Beschreiben Sie kurz Ihr Vorhaben …"></textarea></div>
+        <div class="form-check">
+          <input type="checkbox" id="ds" required/>
+          <label for="ds">Ich stimme zu, dass meine Angaben zur Beantwortung meiner Anfrage gespeichert werden. <a href="#datenschutz">Datenschutzerklärung</a></label>
+        </div>
+        <button type="submit" class="form-submit">Jetzt Angebot anfordern</button>
+      </form>
+    </div>
+    <div>
+      <h3 style="font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:800;color:var(--blau);margin-bottom:.65rem">Direkt mit Danny Berger sprechen</h3>
+      <p style="font-size:.9rem;color:var(--textm);line-height:1.72;margin-bottom:1.8rem">Kein Callcenter, keine Warteschleife. Als Inhaber bin ich Ihr persönlicher Ansprechpartner.</p>
+      <div class="ci-list">
+        <div class="ki"><div class="ki-ico">📞</div><div><div class="ki-l">Telefon & WhatsApp</div><div class="ki-v"><a href="tel:+4920189085050">0201 89085050</a></div></div></div>
+        <div class="ki"><div class="ki-ico">✉️</div><div><div class="ki-l">E-Mail</div><div class="ki-v"><a href="mailto:info@neuverdrahtet.com">info@neuverdrahtet.com</a></div></div></div>
+        <div class="ki"><div class="ki-ico">🌐</div><div><div class="ki-l">Website</div><div class="ki-v"><a href="https://www.neuverdrahtet.com" target="_blank">www.neuverdrahtet.com</a></div></div></div>
+        <div class="ki"><div class="ki-ico">📍</div><div><div class="ki-l">Adresse</div><div class="ki-v">Donnerstraße 131<br>45357 Essen</div></div></div>
+      </div>
+      <div class="soc-btns">
+        <a href="https://wa.me/4920189085050" class="sc sc-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp schreiben</a>
+        <a href="https://www.instagram.com/neuverdrahtet" class="sc sc-ig" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> @neuverdrahtet</a>
+        <a href="https://www.facebook.com/neuverdrahtet" class="sc sc-fb" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> Facebook</a>
+      </div>
+      <div class="nd-box">
+        <span style="font-size:1.8rem">⚡</span>
+        <div><div class="nd-t">Schnell erreichbar – auch via WhatsApp</div><div class="nd-s">Danny Berger antwortet persönlich</div></div>
+        <div class="nd-n">0201 89085050</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- IMPRESSUM -->
+<div id="impressum" class="ls">
+  <div class="ey">Rechtliches</div>
+  <h2>Impressum</h2>
+  <div class="lw">
+    <div class="lcrd"><div class="lh">Angaben gemäß § 5 DDG</div><p><strong>neuverdrahtet – Elektrotechnik & Service</strong><br>Danny Berger · Donnerstraße 131 · 45357 Essen · Deutschland</p></div>
+    <div class="lcrd"><div class="lh">Kontakt</div><p>Telefon & WhatsApp: <a href="tel:+4920189085050">0201 89085050</a><br>E-Mail: <a href="mailto:info@neuverdrahtet.com">info@neuverdrahtet.com</a></p></div>
+    <div class="lcrd"><div class="lh">Umsatzsteuer-ID</div><p>Gemäß § 27a UStG: <strong>DE 456 2452 79</strong></p></div>
+    <div class="lcrd"><div class="lh">Berufsbezeichnung</div><p><strong>Elektroniker für Energie- und Gebäudetechnik</strong><br>Handwerkskammer Düsseldorf · Georg-Schulhoff-Platz 1 · 40221 Düsseldorf</p><ul><li>Handwerksordnung (HwO) – <a href="https://www.gesetze-im-internet.de/hwo/" target="_blank">gesetze-im-internet.de/hwo/</a></li><li>ElektroAusbV – <a href="https://www.gesetze-im-internet.de/elekausbv_2021/" target="_blank">gesetze-im-internet.de/elekausbv_2021/</a></li></ul></div>
+    <div class="lcrd"><div class="lh">EU-Streitschlichtung</div><p><a href="https://ec.europa.eu/consumers/odr/" target="_blank">ec.europa.eu/consumers/odr/</a> – Wir nehmen nicht an Streitbeilegungsverfahren teil.</p></div>
+    <div class="lcrd"><div class="lh">Haftung</div><p>Für eigene Inhalte verantwortlich nach § 7 Abs. 1 DDG. Für externe Links keine Haftung.</p></div>
+  </div>
+</div>
+
+<!-- DATENSCHUTZ -->
+<div id="datenschutz" class="ls">
+  <div class="ey">Rechtliches</div>
+  <h2>Datenschutzerklärung</h2>
+  <div class="lw">
+    <div class="lcrd"><div class="lh">1. Datenschutz auf einen Blick</div><p>Personenbezogene Daten werden nur zur Bearbeitung Ihrer Anfragen verarbeitet. Sie haben jederzeit das Recht auf Auskunft, Berichtigung oder Löschung.</p></div>
+    <div class="lcrd"><div class="lh">2. Verantwortliche Stelle</div><p>Danny Berger · neuverdrahtet · Donnerstraße 131 · 45357 Essen<br>Tel: <a href="tel:+4920189085050">0201 89085050</a> · E-Mail: <a href="mailto:info@neuverdrahtet.com">info@neuverdrahtet.com</a></p></div>
+    <div class="lcrd"><div class="lh">3. Aufsichtsbehörde</div><p>Landesbeauftragte für Datenschutz NRW · Kavalleriestr. 2-4 · 40213 Düsseldorf · <a href="https://www.ldi.nrw.de" target="_blank">ldi.nrw.de</a></p></div>
+    <div class="lcrd"><div class="lh">4. Datenerfassung</div><p><strong>Kontaktformular:</strong> Daten werden zur Bearbeitung gespeichert (Art. 6 Abs. 1 lit. b DSGVO) und danach gelöscht.<br><strong>WhatsApp:</strong> Meta Platforms Ireland Ltd. – <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank">Datenschutzrichtlinien</a><br><strong>Cookies/Logs:</strong> Automatisch erfasst nach Art. 6 Abs. 1 lit. f DSGVO.</p></div>
+    <div class="lcrd"><div class="lh">5. Google Fonts & SSL</div><p>Diese Seite nutzt Google Fonts und SSL/TLS-Verschlüsselung (https://).</p></div>
+    <div class="lcrd" style="font-size:.8rem;color:var(--textm)">Stand: April 2026</div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div class="cta">
+  <h2>Sie brauchen Hilfe bei Ihrer Elektrik?</h2>
+  <p>Danny Berger ist in Essen und im Ruhrgebiet für Sie unterwegs.</p>
+  <div class="cta-btns">
+    <a href="#angebot" class="btn btn-yellow">📋 Jetzt Angebot anfordern</a>
+    <a href="https://wa.me/4920189085050" class="btn btn-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
+    <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="ft-grid">
+    <div>
+      <img src="logo.png" alt="neuverdrahtet" class="ft-logo"/>
+      <p class="ft-desc">Qualifizierter Fachbetrieb aus Essen. Danny Berger. Elektroinstallation, Smart Home, Wallbox, Photovoltaik – persönlich, zuverlässig, zukunftssicher.</p>
+      <div class="ft-badges">
+        <span class="ftb ftb-y">Fachbetrieb</span>
+        <span class="ftb ftb-t">E-Check</span>
+        <span class="ftb ftb-b">VDE-konform</span>
+      </div>
+      <div class="ft-soc">
+        <a href="https://wa.me/4920189085050" class="fts fts-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+        <a href="https://www.instagram.com/neuverdrahtet" class="fts fts-ig" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg></a>
+        <a href="https://www.facebook.com/neuverdrahtet" class="fts fts-fb" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></a>
+      </div>
+    </div>
+    <div class="ft-col">
+      <h4>Leistungen</h4>
+      <ul>
+        <li><a href="#leistungen">Elektroinstallation</a></li>
+        <li><a href="#leistungen">Photovoltaik</a></li>
+        <li><a href="#leistungen">Beleuchtung</a></li>
+        <li><a href="#leistungen">E-Check</a></li>
+        <li><a href="#leistungen">Smart Home</a></li>
+        <li><a href="#leistungen">Wallbox</a></li>
+        <li><a href="#leistungen">Wärmepumpe</a></li>
+        <li><a href="#leistungen">Messtechnik</a></li>
+      </ul>
+    </div>
+    <div class="ft-col">
+      <h4>Unternehmen</h4>
+      <ul>
+        <li><a href="#warum">Über uns</a></li>
+        <li><a href="#fachbetrieb">Fachbetrieb</a></li>
+        <li><a href="#angebot">Kontakt</a></li>
+        <li><a href="#impressum">Impressum</a></li>
+        <li><a href="#datenschutz">Datenschutz</a></li>
+      </ul>
+    </div>
+    <div class="ft-col">
+      <h4>Kontakt</h4>
+      <ul>
+        <li><a href="tel:+4920189085050">0201 89085050</a></li>
+        <li><a href="https://wa.me/4920189085050" target="_blank">WhatsApp</a></li>
+        <li><a href="mailto:info@neuverdrahtet.com">info@neuverdrahtet.com</a></li>
+        <li><a href="https://www.instagram.com/neuverdrahtet" target="_blank">@neuverdrahtet</a></li>
+        <li><a href="https://www.facebook.com/neuverdrahtet" target="_blank">Facebook</a></li>
+        <li style="color:rgba(255,255,255,.2);margin-top:.5rem">Donnerstraße 131<br>45357 Essen</li>
+      </ul>
+    </div>
+  </div>
+  <div class="ft-bottom">
+    <span>© 2025 neuverdrahtet · Danny Berger · Elektriker Essen</span>
+    <div class="ft-logo-right">
+      <a href="#impressum">Impressum</a>
+      <a href="#datenschutz">Datenschutz</a>
+      <img src="logo.png" alt="neuverdrahtet"/>
+    </div>
+  </div>
+</footer>
+
+<script>
+const ham = document.getElementById('ham');
+const mob = document.getElementById('mob');
+ham.addEventListener('click', () => mob.classList.toggle('open'));
+mob.querySelectorAll('a').forEach(a => a.addEventListener('click', () => mob.classList.remove('open')));
+window.addEventListener('scroll', () => {
+  document.querySelector('nav').style.boxShadow = window.scrollY > 20 ? '0 4px 24px rgba(0,0,0,.13)' : '0 2px 16px rgba(0,0,0,.06)';
+}, {passive:true});
+</script>
+</body>
+</html>
