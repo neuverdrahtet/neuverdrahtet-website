@@ -119,7 +119,7 @@ h2.wh{color:#fff}
 .l-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
 .lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(47,78,161,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s}
 .lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(47,78,161,.12)}
-.lc-top{height:130px;display:flex;align-items:center;justify-content:center;font-size:3rem;position:relative}
+.lc-top{height:160px;overflow:hidden;position:relative}.lc-top img{width:100%;height:100%;object-fit:cover;transition:transform .4s}.lc:hover .lc-top img{transform:scale(1.06)}
 .lc-tag{position:absolute;top:10px;right:10px;background:var(--gelb);color:var(--blau);font-size:.62rem;font-weight:800;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px}
 .lc-body{padding:1.3rem 1.4rem;flex:1;display:flex;flex-direction:column}
 .lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--blau);margin-bottom:.4rem}
@@ -262,7 +262,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
   <div class="tb-r">
     <a href="https://wa.me/4920189085050" class="tb-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
     <a href="tel:+4920189085050"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
-    <a href="/cdn-cgi/l/email-protection#3851565e5778565d4d4e5d4a5c4a59504c5d4c165b5755">✉ <span class="__cf_email__" data-cfemail="94fdfaf2fbd4faf1e1e2f1e6f0e6f5fce0f1e0baf7fbf9">[email&#160;protected]</span></a>
+    <span id="email-show" style="color:var(--gelb);font-weight:700;cursor:pointer">✉ info[at]neuverdrahtet.com</span>
   </div>
 </div>
 
@@ -354,35 +354,35 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
   </div>
   <div class="l-grid">
     <div class="lc" onclick="window.location='elektroinstallation.html'">
-      <div class="lc-top" style="background:#1a2d5e"><span>⚡</span><span class="lc-tag">Schwerpunkt</span></div>
+      <div class="lc-top"><img src="elektro.jpg" alt="Elektroinstallation Schaltschrank" loading="lazy"/><span class="lc-tag">Schwerpunkt</span></div>
       <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='wallbox.html'">
-      <div class="lc-top" style="background:#1a4060"><span>🔌</span></div>
+      <div class="lc-top"><img src="wallbox.jpg" alt="Wallbox Ladestation E-Auto" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='e-check.html'">
-      <div class="lc-top" style="background:#2a3560"><span>✅</span></div>
+      <div class="lc-top"><img src="echeck.jpg" alt="E-Check Sicherheitsprüfung" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='smart-home.html'">
-      <div class="lc-top" style="background:#111a30"><span>🏠</span></div>
+      <div class="lc-top"><img src="smarthome.jpg" alt="Smart Home Steuerung" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='photovoltaik.html'">
-      <div class="lc-top" style="background:#0a1a3a"><span>☀️</span></div>
+      <div class="lc-top"><img src="solar.jpg" alt="Photovoltaik Solaranlage" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='beleuchtung.html'">
-      <div class="lc-top" style="background:#1a1a2e"><span>💡</span></div>
+      <div class="lc-top"><img src="licht.jpg" alt="Beleuchtungstechnik LED" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='waermepumpe.html'">
-      <div class="lc-top" style="background:#0c2a4a"><span>♨️</span></div>
+      <div class="lc-top"><img src="waerme.jpg" alt="Wärmepumpe Installation" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc" onclick="window.location='messtechnik.html'">
-      <div class="lc-top" style="background:#1a2d5e"><span>📊</span></div>
+      <div class="lc-top"><img src="mess.jpg" alt="Messtechnik Prüftechnik" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
     <div class="lc-more">
@@ -489,7 +489,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
       <p style="font-size:.9rem;color:var(--textm);line-height:1.72;margin-bottom:1.8rem">Kein Callcenter, keine Warteschleife. Als Inhaber bin ich Ihr persönlicher Ansprechpartner.</p>
       <div class="ci-list">
         <div class="ki"><div class="ki-ico">📞</div><div><div class="ki-l">Telefon & WhatsApp</div><div class="ki-v"><a href="tel:+4920189085050">0201 89085050</a></div></div></div>
-        <div class="ki"><div class="ki-ico">✉️</div><div><div class="ki-l">E-Mail</div><div class="ki-v"><a href="/cdn-cgi/l/email-protection#fe97909891be909b8b889b8c9a8c9f968a9b8ad09d9193"><span class="__cf_email__" data-cfemail="e0898e868fa08e859596859284928188948594ce838f8d">[email&#160;protected]</span></a></div></div></div>
+        <div class="ki"><div class="ki-ico">✉️</div><div><div class="ki-l">E-Mail</div><div class="ki-v"><span class="email-show">info[at]neuverdrahtet.com</span></div></div></div>
         <div class="ki"><div class="ki-ico">🌐</div><div><div class="ki-l">Website</div><div class="ki-v"><a href="https://www.neuverdrahtet.com" target="_blank">www.neuverdrahtet.com</a></div></div></div>
         <div class="ki"><div class="ki-ico">📍</div><div><div class="ki-l">Adresse</div><div class="ki-v">Donnerstraße 131<br>45357 Essen</div></div></div>
       </div>
@@ -563,7 +563,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
       <ul>
         <li><a href="tel:+4920189085050">0201 89085050</a></li>
         <li><a href="https://wa.me/4920189085050" target="_blank">WhatsApp</a></li>
-        <li><a href="/cdn-cgi/l/email-protection#e38a8d858ca38d86969586918791828b978697cd808c8e"><span class="__cf_email__" data-cfemail="bed7d0d8d1fed0dbcbc8dbccdaccdfd6cadbca90ddd1d3">[email&#160;protected]</span></a></li>
+        <li><span class="email-show">info[at]neuverdrahtet.com</span></li>
         <li><a href="https://www.instagram.com/neuverdrahtet" target="_blank">@neuverdrahtet</a></li>
         <li><a href="https://www.facebook.com/neuverdrahtet" target="_blank">Facebook</a></li>
         <li style="color:rgba(255,255,255,.2);margin-top:.5rem">Donnerstraße 131<br>45357 Essen</li>
