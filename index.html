@@ -40,7 +40,7 @@ img{display:block;max-width:100%}
 
 /* NAV */
 nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:2px solid var(--grau);display:flex;align-items:center;justify-content:space-between;padding:0 5vw;height:68px;box-shadow:0 2px 16px rgba(0,0,0,.06)}
-.nav-logo img{height:36px;width:auto}
+.nav-logo img{height:38px!important;max-height:38px!important;width:auto!important;display:block}
 .nav-links{display:flex;align-items:center;gap:.1rem;list-style:none}
 .nav-links li a{display:flex;align-items:center;gap:4px;padding:.48rem .85rem;font-size:.86rem;font-weight:600;color:var(--text);border-radius:6px;transition:background .15s}
 .nav-links li a:hover{background:var(--grau2);color:var(--blau)}
@@ -245,6 +245,11 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 @media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
 @media(max-width:640px){.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+
+.lc{position:relative;cursor:pointer}
+.lc-link-full{position:absolute;inset:0;z-index:1}
+.lc-body .lc-link{position:relative;z-index:2}
+
 </style>
 </head>
 <body>
@@ -263,7 +268,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 
 <!-- NAV -->
 <nav>
-  <a href="#home"><img src="logo.png" alt="neuverdrahtet" class="nav-logo"/></a>
+  <a href="#home" style="flex-shrink:0;display:flex;align-items:center"><img src="logo.png" alt="neuverdrahtet" style="height:38px;max-height:38px;width:auto;display:block"/></a>
   <ul class="nav-links">
     <li><a href="#home">Start</a></li>
     <li style="position:relative">
@@ -348,35 +353,35 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
     <p class="lead" style="margin-bottom:0">Als qualifizierter Fachbetrieb in Essen bieten wir moderne Elektrolösungen – ob Neubau oder Altbausanierung. Alles aus einer Hand.</p>
   </div>
   <div class="l-grid">
-    <div class="lc">
+    <div class="lc" onclick="window.location='elektroinstallation.html'">
       <div class="lc-top" style="background:#1a2d5e"><span>⚡</span><span class="lc-tag">Schwerpunkt</span></div>
       <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='wallbox.html'">
       <div class="lc-top" style="background:#1a4060"><span>🔌</span></div>
       <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='e-check.html'">
       <div class="lc-top" style="background:#2a3560"><span>✅</span></div>
       <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='smart-home.html'">
       <div class="lc-top" style="background:#111a30"><span>🏠</span></div>
       <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='photovoltaik.html'">
       <div class="lc-top" style="background:#0a1a3a"><span>☀️</span></div>
       <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='beleuchtung.html'">
       <div class="lc-top" style="background:#1a1a2e"><span>💡</span></div>
       <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='waermepumpe.html'">
       <div class="lc-top" style="background:#0c2a4a"><span>♨️</span></div>
       <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
-    <div class="lc">
+    <div class="lc" onclick="window.location='messtechnik.html'">
       <div class="lc-top" style="background:#1a2d5e"><span>📊</span></div>
       <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
     </div>
@@ -446,6 +451,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
       <h3>Ihr Angebot anfordern</h3>
       <form action="https://formspree.io/f/mvzverea" method="POST">
         <input type="hidden" name="_subject" value="Neue Anfrage neuverdrahtet.com"/>
+        <input type="text" name="_gotcha" style="display:none"/>
         <div class="fg"><label for="leistung">Was planen Sie?</label>
           <select id="leistung" name="leistung">
             <option value="">Bitte wählen …</option>
@@ -473,7 +479,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
         <div class="fg"><label for="msg">Ihre Nachricht</label><textarea id="msg" name="nachricht" placeholder="Beschreiben Sie kurz Ihr Vorhaben …"></textarea></div>
         <div class="form-check">
           <input type="checkbox" id="ds" required/>
-          <label for="ds">Ich stimme zu, dass meine Angaben zur Beantwortung meiner Anfrage gespeichert werden. <a href="#datenschutz">Datenschutzerklärung</a></label>
+          <label for="ds">Ich stimme zu, dass meine Angaben zur Beantwortung meiner Anfrage gespeichert werden. <a href="datenschutz.html">Datenschutzerklärung</a></label>
         </div>
         <button type="submit" class="form-submit">Jetzt Angebot anfordern</button>
       </form>
@@ -500,34 +506,6 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
     </div>
   </div>
 </section>
-
-<!-- IMPRESSUM -->
-<div id="impressum" class="ls">
-  <div class="ey">Rechtliches</div>
-  <h2>Impressum</h2>
-  <div class="lw">
-    <div class="lcrd"><div class="lh">Angaben gemäß § 5 DDG</div><p><strong>neuverdrahtet – Elektrotechnik & Service</strong><br>Danny Berger · Donnerstraße 131 · 45357 Essen · Deutschland</p></div>
-    <div class="lcrd"><div class="lh">Kontakt</div><p>Telefon & WhatsApp: <a href="tel:+4920189085050">0201 89085050</a><br>E-Mail: <a href="/cdn-cgi/l/email-protection#224b4c444d624c47575447504650434a5647560c414d4f"><span class="__cf_email__" data-cfemail="a6cfc8c0c9e6c8c3d3d0c3d4c2d4c7ced2c3d288c5c9cb">[email&#160;protected]</span></a></p></div>
-    <div class="lcrd"><div class="lh">Umsatzsteuer-ID</div><p>Gemäß § 27a UStG: <strong>DE 456 2452 79</strong></p></div>
-    <div class="lcrd"><div class="lh">Berufsbezeichnung</div><p><strong>Elektroniker für Energie- und Gebäudetechnik</strong><br>Handwerkskammer Düsseldorf · Georg-Schulhoff-Platz 1 · 40221 Düsseldorf</p><ul><li>Handwerksordnung (HwO) – <a href="https://www.gesetze-im-internet.de/hwo/" target="_blank">gesetze-im-internet.de/hwo/</a></li><li>ElektroAusbV – <a href="https://www.gesetze-im-internet.de/elekausbv_2021/" target="_blank">gesetze-im-internet.de/elekausbv_2021/</a></li></ul></div>
-    <div class="lcrd"><div class="lh">EU-Streitschlichtung</div><p><a href="https://ec.europa.eu/consumers/odr/" target="_blank">ec.europa.eu/consumers/odr/</a> – Wir nehmen nicht an Streitbeilegungsverfahren teil.</p></div>
-    <div class="lcrd"><div class="lh">Haftung</div><p>Für eigene Inhalte verantwortlich nach § 7 Abs. 1 DDG. Für externe Links keine Haftung.</p></div>
-  </div>
-</div>
-
-<!-- DATENSCHUTZ -->
-<div id="datenschutz" class="ls">
-  <div class="ey">Rechtliches</div>
-  <h2>Datenschutzerklärung</h2>
-  <div class="lw">
-    <div class="lcrd"><div class="lh">1. Datenschutz auf einen Blick</div><p>Personenbezogene Daten werden nur zur Bearbeitung Ihrer Anfragen verarbeitet. Sie haben jederzeit das Recht auf Auskunft, Berichtigung oder Löschung.</p></div>
-    <div class="lcrd"><div class="lh">2. Verantwortliche Stelle</div><p>Danny Berger · neuverdrahtet · Donnerstraße 131 · 45357 Essen<br>Tel: <a href="tel:+4920189085050">0201 89085050</a> · E-Mail: <a href="/cdn-cgi/l/email-protection#046d6a626b446a61717261766076656c7061702a676b69"><span class="__cf_email__" data-cfemail="e1888f878ea18f849497849385938089958495cf828e8c">[email&#160;protected]</span></a></p></div>
-    <div class="lcrd"><div class="lh">3. Aufsichtsbehörde</div><p>Landesbeauftragte für Datenschutz NRW · Kavalleriestr. 2-4 · 40213 Düsseldorf · <a href="https://www.ldi.nrw.de" target="_blank">ldi.nrw.de</a></p></div>
-    <div class="lcrd"><div class="lh">4. Datenerfassung</div><p><strong>Kontaktformular:</strong> Daten werden zur Bearbeitung gespeichert (Art. 6 Abs. 1 lit. b DSGVO) und danach gelöscht.<br><strong>WhatsApp:</strong> Meta Platforms Ireland Ltd. – <a href="https://www.whatsapp.com/legal/privacy-policy" target="_blank">Datenschutzrichtlinien</a><br><strong>Cookies/Logs:</strong> Automatisch erfasst nach Art. 6 Abs. 1 lit. f DSGVO.</p></div>
-    <div class="lcrd"><div class="lh">5. Google Fonts & SSL</div><p>Diese Seite nutzt Google Fonts und SSL/TLS-Verschlüsselung (https://).</p></div>
-    <div class="lcrd" style="font-size:.8rem;color:var(--textm)">Stand: April 2026</div>
-  </div>
-</div>
 
 <!-- CTA -->
 <div class="cta">
@@ -576,8 +554,8 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
         <li><a href="#warum">Über uns</a></li>
         <li><a href="#fachbetrieb">Fachbetrieb</a></li>
         <li><a href="#angebot">Kontakt</a></li>
-        <li><a href="#impressum">Impressum</a></li>
-        <li><a href="#datenschutz">Datenschutz</a></li>
+        <li><a href="impressum.html">Impressum</a></li>
+        <li><a href="datenschutz.html">Datenschutz</a></li>
       </ul>
     </div>
     <div class="ft-col">
