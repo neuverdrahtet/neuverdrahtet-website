@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;600&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet"/>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--blau:#2F4EA1;--blau2:#1d3480;--blau3:#0f2060;--teal:#66AEB8;--gelb:#E9C84E;--grau:#e8ecf5;--grau2:#f4f6fb;--dunkel:#0d1526;--text:#1a2035;--textm:#4a5575;--white:#fff;--wa:#25D366;--r:12px}
+:root{--blau:#1a1a1a;--blau2:#111111;--blau3:#0d0d0d;--teal:#C0C0C0;--gelb:#F5C500;--grau:#e8ecf5;--grau2:#f4f6fb;--dunkel:#0d0d0d;--text:#1a1a1a;--textm:#555555;--white:#fff;--wa:#25D366;--r:12px}
 html{scroll-behavior:smooth}
 body{font-family:'Barlow',sans-serif;color:var(--text);background:var(--white);overflow-x:hidden}
 a{text-decoration:none;color:inherit}
@@ -39,7 +39,7 @@ img{display:block;max-width:100%}
 .tb-wa{color:#4ade80!important}
 
 /* NAV */
-nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:2px solid var(--grau);display:flex;align-items:center;justify-content:space-between;padding:0 5vw;height:68px;box-shadow:0 2px 16px rgba(0,0,0,.06)}
+nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border-bottom:2px solid #1a1a1a;display:flex;align-items:center;justify-content:space-between;padding:0 5vw;height:68px;box-shadow:0 2px 16px rgba(0,0,0,.06)}
 .nav-logo img{height:38px!important;max-height:38px!important;width:auto!important;display:block}
 .nav-links{display:flex;align-items:center;gap:.1rem;list-style:none}
 .nav-links li a{display:flex;align-items:center;gap:4px;padding:.48rem .85rem;font-size:.86rem;font-weight:600;color:var(--text);border-radius:6px;transition:background .15s}
@@ -71,9 +71,9 @@ nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-
 /* HERO */
 .hero{position:relative;min-height:88vh;display:flex;align-items:center;background:var(--dunkel);overflow:hidden}
 .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.5;z-index:1}
-.hero-overlay{position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(9,16,32,.82) 0%,rgba(13,21,38,.65) 50%,rgba(9,16,32,.5) 100%)}
+.hero-overlay{position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(9,16,32,.82) 0%,rgba(13,21,38,.65) 50%,rgba(0,0,0,.5) 100%)}
 .hero-inner{position:relative;z-index:5;padding:5rem 5vw;max-width:780px}
-.hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gelb);background:rgba(233,200,78,.12);border:1px solid rgba(233,200,78,.25);padding:.35rem .9rem;border-radius:2px;margin-bottom:1.6rem}
+.hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gelb);background:rgba(245,197,0,.12);border:1px solid rgba(233,200,78,.25);padding:.35rem .9rem;border-radius:2px;margin-bottom:1.6rem}
 .hero-badge::before{content:'';width:6px;height:6px;background:var(--gelb);border-radius:50%;animation:blink 2s ease-in-out infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
 h1{font-family:'Barlow Condensed',sans-serif;font-size:clamp(2.8rem,5.5vw,5rem);font-weight:900;line-height:1;color:#fff;margin-bottom:1.2rem}
@@ -81,14 +81,14 @@ h1 .hl{color:var(--gelb)}
 h1 .hl2{color:var(--teal)}
 .hero-sub{font-size:clamp(.95rem,1.5vw,1.08rem);color:rgba(255,255,255,.62);line-height:1.72;max-width:540px;margin-bottom:2.4rem;font-weight:300}
 .hero-btns{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:3rem}
-.trust-bar{display:flex;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;flex-wrap:wrap}
-.trust-item{flex:1;min-width:100px;padding:.9rem 1.1rem;border-right:1px solid rgba(255,255,255,.07)}
+.trust-bar{display:flex;background:rgba(255,255,255,.04);border:1px solid rgba(245,197,0,.15);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.trust-item{flex:1;min-width:100px;padding:.9rem 1.1rem;border-right:1px solid rgba(245,197,0,.15)}
 .trust-item:last-child{border:none}
 .trust-num{font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:900;color:var(--gelb);line-height:1}
 .trust-lbl{font-size:.62rem;font-weight:600;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.08em}
 
 /* SOCIAL BAR */
-.soc-bar{background:var(--blau2);padding:.85rem 5vw;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.soc-bar{background:#1a1a1a;padding:.85rem 5vw;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
 .soc-bar-l{font-size:.8rem;color:rgba(255,255,255,.6);font-weight:500}
 .soc-bar-r{display:flex;gap:.5rem;flex-wrap:wrap}
 .sb{display:inline-flex;align-items:center;gap:6px;padding:.48rem .95rem;border-radius:6px;font-size:.79rem;font-weight:700;color:#fff;transition:opacity .2s,transform .2s}
@@ -102,14 +102,14 @@ h1 .hl2{color:var(--teal)}
 .strip{background:var(--blau);display:grid;grid-template-columns:repeat(4,1fr)}
 .si{padding:1.7rem 1.3rem;border-right:1px solid rgba(255,255,255,.1);display:flex;align-items:flex-start;gap:12px}
 .si:last-child{border:none}
-.si-ico{width:38px;height:38px;background:rgba(233,200,78,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.si-ico{width:38px;height:38px;background:rgba(245,197,0,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
 .si-t{font-size:.86rem;font-weight:700;color:#fff;margin-bottom:.18rem}
 .si-s{font-size:.74rem;color:rgba(255,255,255,.5);line-height:1.45}
 
 /* SECTIONS */
 section{padding:5rem 5vw}
-.ey{font-size:.68rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--teal);margin-bottom:.55rem}
-h2{font-family:'Barlow Condensed',sans-serif;font-size:clamp(1.9rem,3.2vw,2.75rem);font-weight:800;color:var(--blau);line-height:1.07;margin-bottom:.85rem}
+.ey{font-size:.68rem;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gelb);margin-bottom:.55rem}
+h2{font-family:'Barlow Condensed',sans-serif;font-size:clamp(1.9rem,3.2vw,2.75rem);font-weight:800;color:#1a1a1a;line-height:1.07;margin-bottom:.85rem}
 h2.wh{color:#fff}
 .lead{font-size:.95rem;color:var(--textm);line-height:1.74;max-width:580px;margin-bottom:2.8rem}
 
@@ -117,14 +117,14 @@ h2.wh{color:#fff}
 #leistungen{background:var(--grau2)}
 .l-intro{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:end;margin-bottom:3rem}
 .l-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(47,78,161,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s}
-.lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(47,78,161,.12)}
+.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s}
+.lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(0,0,0,.12)}
 .lc-top{height:160px;overflow:hidden;position:relative}.lc-top img{width:100%;height:100%;object-fit:cover;transition:transform .4s}.lc:hover .lc-top img{transform:scale(1.06)}
 .lc-tag{position:absolute;top:10px;right:10px;background:var(--gelb);color:var(--blau);font-size:.62rem;font-weight:800;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px}
 .lc-body{padding:1.3rem 1.4rem;flex:1;display:flex;flex-direction:column}
-.lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--blau);margin-bottom:.4rem}
+.lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:#1a1a1a;margin-bottom:.4rem}
 .lc-text{font-size:.82rem;color:var(--textm);line-height:1.65;flex:1}
-.lc-link{display:inline-flex;align-items:center;gap:5px;margin-top:.9rem;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--blau)}
+.lc-link{display:inline-flex;align-items:center;gap:5px;margin-top:.9rem;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gelb)}
 .lc-more{background:var(--blau);border-radius:var(--r);padding:1.8rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
 .lc-more p{font-size:.9rem;color:rgba(255,255,255,.7);line-height:1.6;font-style:italic}
 
@@ -132,32 +132,32 @@ h2.wh{color:#fff}
 #warum{background:#fff}
 .w-grid{display:grid;grid-template-columns:1fr 1fr;gap:5rem;align-items:center}
 .w-photo-wrap{position:relative}
-.w-photo{border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;box-shadow:0 16px 48px rgba(47,78,161,.18)}
+.w-photo{border-radius:var(--r);overflow:hidden;aspect-ratio:3/4;box-shadow:0 16px 48px rgba(0,0,0,.18)}
 .w-photo img{width:100%;height:100%;object-fit:cover;object-position:center top}
 .w-badge{position:absolute;bottom:-16px;right:-16px;background:var(--gelb);border-radius:10px;padding:1rem 1.5rem;box-shadow:0 8px 24px rgba(0,0,0,.14)}
 .w-badge .nm{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:900;color:var(--blau);line-height:1.1}
 .w-badge .rl{font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:rgba(47,78,161,.65);margin-top:3px}
 .wl-list{display:flex;flex-direction:column;gap:.9rem;margin-top:1.6rem}
-.wl{display:flex;align-items:flex-start;gap:13px;padding:1rem 1.3rem;background:var(--grau2);border-radius:8px;border-left:3px solid var(--teal)}
+.wl{display:flex;align-items:flex-start;gap:13px;padding:1rem 1.3rem;background:var(--grau2);border-radius:8px;border-left:3px solid var(--gelb)}
 .wl:hover{border-color:var(--blau)}
-.wl-ico{width:34px;height:34px;background:var(--blau);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
+.wl-ico{width:34px;height:34px;background:#1a1a1a;border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:16px}
 .wl-t{font-size:.9rem;font-weight:700;color:var(--blau);margin-bottom:.18rem}
 .wl-s{font-size:.81rem;color:var(--textm);line-height:1.55}
 
 /* FACHBETRIEB DARK */
 #fachbetrieb{background:var(--dunkel);position:relative;overflow:hidden}
-#fachbetrieb::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(47,78,161,.25) 0%,transparent 60%)}
+#fachbetrieb::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse 60% 80% at 80% 50%,rgba(0,0,0,.25) 0%,transparent 60%)}
 .fb-inner{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1.2fr;gap:5rem;align-items:center}
 .m-text{font-size:.94rem;color:rgba(255,255,255,.55);line-height:1.74;margin-bottom:1.8rem;font-weight:300}
 .m-stats{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin-bottom:2.2rem}
-.ms{background:rgba(47,78,161,.18);border:1px solid rgba(47,78,161,.32);border-radius:8px;padding:1.1rem}
+.ms{background:rgba(0,0,0,.18);border:1px solid rgba(47,78,161,.32);border-radius:8px;padding:1.1rem}
 .ms-n{font-family:'Barlow Condensed',sans-serif;font-size:1.9rem;font-weight:900;color:var(--gelb);line-height:1}
 .ms-l{font-size:.7rem;font-weight:600;color:rgba(255,255,255,.38);text-transform:uppercase;letter-spacing:.08em;margin-top:3px}
 .partners{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.5rem}
 .pl{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:.38rem .8rem;font-size:.77rem;font-weight:700;color:rgba(255,255,255,.5)}
 .m-cards{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
-.mc{background:rgba(47,78,161,.13);border:1px solid rgba(47,78,161,.22);border-radius:var(--r);padding:1.4rem}
-.mc:hover{border-color:var(--teal)}
+.mc{background:rgba(0,0,0,.13);border:1px solid rgba(47,78,161,.22);border-radius:var(--r);padding:1.4rem}
+.mc:hover{border-color:var(--gelb)}
 .mc-ico{font-size:2rem;margin-bottom:.8rem}
 .mc-t{font-size:.9rem;font-weight:700;color:#fff;margin-bottom:.35rem}
 .mc-s{font-size:.79rem;color:rgba(255,255,255,.42);line-height:1.55}
@@ -169,19 +169,19 @@ h2.wh{color:#fff}
 .form-box h3{font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:800;color:var(--blau);margin-bottom:1.4rem}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
 .fg{margin-bottom:.9rem}
-.fg label{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#8492b2;margin-bottom:.35rem}
+.fg label{display:block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888888;margin-bottom:.35rem}
 .fg input,.fg select,.fg textarea{width:100%;padding:.72rem .95rem;background:#fff;border:1.5px solid var(--grau);border-radius:7px;font-family:'Barlow',sans-serif;font-size:.89rem;color:var(--text);outline:none;transition:border-color .2s}
-.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:var(--blau)}
+.fg input:focus,.fg select:focus,.fg textarea:focus{border-color:#1a1a1a}
 .fg textarea{resize:vertical;min-height:95px}
 .form-check{display:flex;align-items:flex-start;gap:10px;margin:.35rem 0 1rem;font-size:.78rem;color:var(--textm);line-height:1.5}
 .form-check input{margin-top:3px;accent-color:var(--blau);flex-shrink:0}
 .form-check a{color:var(--blau);font-weight:600}
 .form-submit{width:100%;padding:.95rem;background:var(--blau);color:#fff;font-family:'Barlow',sans-serif;font-size:.93rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border:none;border-radius:7px;cursor:pointer;transition:background .2s}
-.form-submit:hover{background:var(--blau2)}
+.form-submit:hover{background:#111111}
 .ci-list{display:flex;flex-direction:column;gap:1rem}
 .ki{display:flex;align-items:flex-start;gap:13px}
-.ki-ico{width:44px;height:44px;background:var(--blau);border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
-.ki-l{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#8492b2}
+.ki-ico{width:44px;height:44px;background:#1a1a1a;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.ki-l{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#888888}
 .ki-v{font-size:.92rem;font-weight:600;color:var(--text);margin-top:2px}
 .ki-v a{color:var(--blau)}
 .soc-btns{display:flex;gap:.6rem;flex-wrap:wrap;margin-top:1.3rem}
@@ -190,7 +190,7 @@ h2.wh{color:#fff}
 .sc-wa{background:var(--wa)}
 .sc-ig{background:linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)}
 .sc-fb{background:#1877F2}
-.nd-box{background:linear-gradient(135deg,var(--blau),var(--blau2));border-radius:var(--r);padding:1.3rem;margin-top:1.4rem;display:flex;align-items:center;gap:1rem}
+.nd-box{background:linear-gradient(135deg,#1a1a1a,#000000);border-radius:var(--r);padding:1.3rem;margin-top:1.4rem;display:flex;align-items:center;gap:1rem}
 .nd-t{font-size:.88rem;font-weight:700;color:#fff}
 .nd-s{font-size:.73rem;color:rgba(255,255,255,.5);margin-top:2px}
 .nd-n{margin-left:auto;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:var(--gelb);white-space:nowrap}
@@ -208,20 +208,20 @@ h2.wh{color:#fff}
 .lcrd a{color:var(--blau);font-weight:600}
 
 /* CTA BANNER */
-.cta{background:linear-gradient(135deg,var(--blau),var(--blau2));padding:4rem 5vw;text-align:center}
+.cta{background:linear-gradient(135deg,#1a1a1a,#000000);padding:4rem 5vw;text-align:center}
 .cta h2{color:#fff;margin-bottom:.55rem}
 .cta p{font-size:.97rem;color:rgba(255,255,255,.62);margin-bottom:2rem}
 .cta-btns{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap}
 
 /* FOOTER */
-footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
+footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 .ft-grid{display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:3rem;padding-bottom:2.8rem;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:1.6rem}
 .ft-logo{height:48px;width:auto;filter:brightness(0) invert(1);margin-bottom:.85rem;display:block}
 .ft-desc{font-size:.8rem;line-height:1.7;max-width:260px}
 .ft-badges{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.9rem}
 .ftb{font-size:.66rem;font-weight:700;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px;border:1px solid}
 .ftb-y{color:var(--gelb);border-color:rgba(233,200,78,.3)}
-.ftb-t{color:var(--teal);border-color:rgba(102,174,184,.3)}
+.ftb-t{color:var(--teal);border-color:rgba(192,192,192,.3)}
 .ftb-b{color:#6D82B8;border-color:rgba(109,130,184,.3)}
 .ft-soc{display:flex;gap:.45rem;margin-top:1rem}
 .fts{width:35px;height:35px;border-radius:7px;display:flex;align-items:center;justify-content:center;transition:transform .2s}
@@ -250,6 +250,26 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 .lc-link-full{position:absolute;inset:0;z-index:1}
 .lc-body .lc-link{position:relative;z-index:2}
 
+
+.btn-booking{background:#F5C500;color:#1a1a1a;font-weight:800}
+.btn-booking:hover{background:#111111}
+.booking-banner{background:linear-gradient(135deg,#1a1a1a,#111111);padding:2.5rem 5vw;display:flex;align-items:center;justify-content:space-between;gap:2rem;flex-wrap:wrap}
+.booking-banner-l h3{font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:.4rem}
+.booking-banner-l p{font-size:.9rem;color:rgba(255,255,255,.75);max-width:500px}
+
+
+.hero-logo-right{
+  position:absolute;
+  right:3vw;
+  top:50%;
+  transform:translateY(-50%);
+  z-index:4;
+  opacity:.18;
+  width:clamp(200px,30vw,450px);
+  pointer-events:none;
+}
+@media(max-width:768px){.hero-logo-right{opacity:.1;width:200px;right:0;top:auto;bottom:1rem;transform:none}}
+
 </style>
 </head>
 <body>
@@ -268,7 +288,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 
 <!-- NAV -->
 <nav>
-  <a href="#home" style="flex-shrink:0;display:flex;align-items:center"><img src="logo.png" alt="neuverdrahtet" style="height:38px;max-height:38px;width:auto;display:block"/></a>
+  <a href="#home" style="flex-shrink:0;display:flex;align-items:center;background:#1a1a1a;border-radius:6px;padding:4px 8px"><img src="logo.png" alt="neuverdrahtet" style="height:38px;max-height:38px;width:auto;display:block"/></a>
   <ul class="nav-links">
     <li><a href="#home">Start</a></li>
     <li style="position:relative">
@@ -288,7 +308,8 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
     <li><a href="#angebot">Kontakt</a></li>
     <li><a href="tel:+4920189085050" class="nav-tel"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a></li>
     <li><a href="https://wa.me/4920189085050" class="nav-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a></li>
-    <li><a href="#angebot" class="nav-cta">Angebot anfordern</a></li>
+    <li><a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="nav-cta" target="_blank" rel="noopener">📅 Termin buchen</a></li>
+    <li><a href="#angebot" class="nav-cta" style="background:var(--gelb)">Angebot anfordern</a></li>
   </ul>
   <button class="ham" id="ham"><span></span><span></span><span></span></button>
 </nav>
@@ -306,6 +327,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 <section class="hero" id="home">
   <img src="van.jpg" alt="neuverdrahtet Fahrzeug Essen" class="hero-img" loading="eager"/>
   <div class="hero-overlay"></div>
+  <img src="logo_hero.png" alt="" class="hero-logo-right" aria-hidden="true"/>
   <div class="hero-inner">
     <div class="hero-badge">Qualifizierter Fachbetrieb · Essen · Danny Berger</div>
     <h1>Ihr Elektriker<br>in <span class="hl">Essen</span> –<br><span class="hl2">vom Fachbetrieb.</span></h1>
@@ -313,7 +335,8 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
     <div class="hero-btns">
       <a href="#angebot" class="btn btn-yellow">📋 Angebot anfordern</a>
       <a href="https://wa.me/4920189085050" class="btn btn-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
-      <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+      <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="btn btn-booking" target="_blank" rel="noopener">📅 Termin buchen</a>
+    <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
     </div>
     <div class="trust-bar">
       <div class="trust-item"><div class="trust-num">Fach</div><div class="trust-lbl">betrieb</div></div>
@@ -418,7 +441,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 <section id="fachbetrieb">
   <div class="fb-inner">
     <div>
-      <div class="ey" style="color:var(--teal)">Qualifizierter Fachbetrieb</div>
+      <div class="ey" style="color:var(--gelb)">Qualifizierter Fachbetrieb</div>
       <h2 class="wh">neuverdrahtet steht für moderne Elektrotechnik vom Fachbetrieb</h2>
       <p class="m-text">Als qualifizierter Fachbetrieb aus Essen bietet neuverdrahtet individuelle Lösungen für Alt- und Neubauten – von der Elektroinstallation über Smart-Home bis zu Photovoltaik und Wallboxen.</p>
       <div class="m-stats">
@@ -442,6 +465,18 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 </section>
 
 <!-- KONTAKT -->
+
+<!-- BUCHUNG BANNER -->
+<div class="booking-banner">
+  <div class="booking-banner-l">
+    <h3>📅 Direkt einen Termin buchen</h3>
+    <p>Wählen Sie einen Beratungstermin oder Vor-Ort-Besichtigungstermin – kostenlos und unverbindlich. Mo–Fr 8–17 Uhr verfügbar.</p>
+  </div>
+  <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="btn btn-booking" target="_blank" rel="noopener" style="white-space:nowrap;flex-shrink:0;font-size:1rem;padding:1rem 2rem">
+    📅 Jetzt Termin buchen
+  </a>
+</div>
+
 <section id="angebot">
   <div class="ey">Jetzt loslegen</div>
   <h2>Angebot für Ihre Elektroarbeiten anfordern</h2>
@@ -493,6 +528,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
         <div class="ki"><div class="ki-ico">🌐</div><div><div class="ki-l">Website</div><div class="ki-v"><a href="https://www.neuverdrahtet.com" target="_blank">www.neuverdrahtet.com</a></div></div></div>
         <div class="ki"><div class="ki-ico">📍</div><div><div class="ki-l">Adresse</div><div class="ki-v">Donnerstraße 131<br>45357 Essen</div></div></div>
       </div>
+      <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="btn btn-booking" target="_blank" rel="noopener" style="margin-bottom:.8rem;width:100%;justify-content:center">📅 Termin buchen – Mo bis Fr 8–17 Uhr</a>
       <div class="soc-btns">
         <a href="https://wa.me/4920189085050" class="sc sc-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp schreiben</a>
         <a href="https://www.instagram.com/neuverdrahtet" class="sc sc-ig" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg> @neuverdrahtet</a>
@@ -514,7 +550,8 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
   <div class="cta-btns">
     <a href="#angebot" class="btn btn-yellow">📋 Jetzt Angebot anfordern</a>
     <a href="https://wa.me/4920189085050" class="btn btn-wa" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg> WhatsApp</a>
-    <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+    <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="btn btn-booking" target="_blank" rel="noopener">📅 Termin buchen</a>
+      <a href="tel:+4920189085050" class="btn btn-outline"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
   </div>
 </div>
 
@@ -522,7 +559,7 @@ footer{background:#080e1c;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 <footer>
   <div class="ft-grid">
     <div>
-      <img src="logo.png" alt="neuverdrahtet" class="ft-logo"/>
+      <img src="logo.png" alt="neuverdrahtet" class="ft-logo" style="filter:none;opacity:1;background:#1a1a1a;padding:6px 10px;border-radius:6px"/>
       <p class="ft-desc">Qualifizierter Fachbetrieb aus Essen. Danny Berger. Elektroinstallation, Smart Home, Wallbox, Photovoltaik – persönlich, zuverlässig, zukunftssicher.</p>
       <div class="ft-badges">
         <span class="ftb ftb-y">Fachbetrieb</span>
