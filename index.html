@@ -244,7 +244,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 /* RESPONSIVE */
 @media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
-@media(max-width:640px){.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+@media(max-width:640px){.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.25;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
 
 .lc{position:relative;cursor:pointer}
 .lc-link-full{position:absolute;inset:0;z-index:1}
@@ -258,17 +258,8 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 .booking-banner-l p{font-size:.9rem;color:rgba(255,255,255,.75);max-width:500px}
 
 
-.hero-logo-right{
-  position:absolute;
-  right:3vw;
-  top:50%;
-  transform:translateY(-50%);
-  z-index:4;
-  opacity:.18;
-  width:clamp(200px,30vw,450px);
-  pointer-events:none;
-}
-@media(max-width:768px){.hero-logo-right{opacity:.1;width:200px;right:0;top:auto;bottom:1rem;transform:none}}
+
+@media(max-width:768px){}
 
 </style>
 </head>
@@ -288,7 +279,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 
 <!-- NAV -->
 <nav>
-  <a href="#home" style="flex-shrink:0;display:flex;align-items:center;background:#1a1a1a;border-radius:6px;padding:4px 8px"><img src="logo.png" alt="neuverdrahtet" style="height:44px;width:auto;display:block"/></a>
+  <a href="#home" style="flex-shrink:0;display:flex;align-items:center;background:#1a1a1a;border-radius:6px;padding:4px 8px"><img src="logo.png" alt="neuverdrahtet" style="height:46px;width:auto;display:block"/></a>
   <ul class="nav-links">
     <li><a href="#home">Start</a></li>
     <li style="position:relative">
@@ -327,7 +318,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 <section class="hero" id="home">
   <img src="van.jpg" alt="neuverdrahtet Fahrzeug Essen" class="hero-img" loading="eager"/>
   <div class="hero-overlay"></div>
-  <img src="logo_hero.png" alt="" class="hero-logo-right" aria-hidden="true"/>
+  <img src="logo_hero.png" alt="" class="hero-logo-bg" aria-hidden="true"/>
   <div class="hero-inner">
     <div class="hero-badge">Qualifizierter Fachbetrieb · Essen · Danny Berger</div>
     <h1>Ihr Elektriker<br>in <span class="hl">Essen</span> –<br><span class="hl2">vom Fachbetrieb.</span></h1>
