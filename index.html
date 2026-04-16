@@ -70,7 +70,7 @@ nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-
 
 /* HERO */
 .hero{position:relative;min-height:88vh;display:flex;align-items:center;background:var(--dunkel);overflow:hidden}
-.hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;opacity:.5;z-index:1}
+
 .hero-overlay{position:absolute;inset:0;z-index:2;background:linear-gradient(135deg,rgba(9,16,32,.82) 0%,rgba(13,21,38,.65) 50%,rgba(0,0,0,.5) 100%)}
 .hero-inner{position:relative;z-index:5;padding:5rem 5vw;max-width:780px}
 .hero-badge{display:inline-flex;align-items:center;gap:7px;font-size:.68rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--gelb);background:rgba(245,197,0,.12);border:1px solid rgba(233,200,78,.25);padding:.35rem .9rem;border-radius:2px;margin-bottom:1.6rem}
@@ -244,7 +244,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 /* RESPONSIVE */
 @media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
-@media(max-width:640px){.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.25;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+@media(max-width:640px){.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.35;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
 
 .lc{position:relative;cursor:pointer}
 .lc-link-full{position:absolute;inset:0;z-index:1}
@@ -316,7 +316,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 
 <!-- HERO -->
 <section class="hero" id="home">
-  <img src="van.jpg" alt="neuverdrahtet Fahrzeug Essen" class="hero-img" loading="eager"/>
+  
   <div class="hero-overlay"></div>
   <img src="logo_hero.png" alt="" class="hero-logo-bg" aria-hidden="true"/>
   <div class="hero-inner">
