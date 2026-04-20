@@ -52,10 +52,10 @@ nav{position:sticky;top:0;z-index:200;background:rgba(255,255,255,.97);backdrop-
 .nav-cta{background:var(--gelb)!important;color:var(--blau)!important;font-weight:700!important;padding:.5rem 1.2rem!important;border-radius:6px!important}
 .nav-tel{background:var(--blau)!important;color:#fff!important;font-weight:700!important;padding:.5rem 1rem!important;border-radius:6px!important;display:flex!important;align-items:center!important;gap:5px!important;font-size:.84rem!important}
 .nav-wa{background:var(--wa)!important;color:#fff!important;font-weight:700!important;padding:.5rem 1rem!important;border-radius:6px!important;display:flex!important;align-items:center!important;gap:5px!important;font-size:.84rem!important}
-.ham{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.ham{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:10px;z-index:300;position:relative}
 .ham span{display:block;width:24px;height:2px;background:var(--blau);border-radius:2px}
-.mob-menu{display:none;flex-direction:column;position:fixed;top:68px;left:0;right:0;background:#fff;border-bottom:3px solid var(--gelb);padding:1rem 5vw 1.5rem;z-index:190;box-shadow:0 8px 24px rgba(0,0,0,.1)}
-.mob-menu.open{display:flex}
+.mob-menu{display:none;flex-direction:column;position:fixed;top:0;padding-top:70px;left:0;right:0;background:#fff;border-bottom:3px solid var(--gelb);padding:1rem 5vw 1.5rem;z-index:190;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.mob-menu.open{display:flex;min-height:100vh}
 .mob-menu a{padding:.7rem 0;font-size:.95rem;font-weight:600;border-bottom:1px solid var(--grau)}
 .mob-menu a:last-child{border:none}
 .mob-cta{margin-top:.8rem;background:var(--gelb);color:var(--blau)!important;text-align:center;border-radius:6px;padding:.9rem;font-weight:700!important}
@@ -603,3 +603,39 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
   </div>
   <div class="ft-bottom">
     <span>© 2025 neuverdrahtet · Danny Berger · Elekt
+<script>
+var ham=document.getElementById('ham'),mob=document.getElementById('mob');
+if(ham&&mob){
+  ham.addEventListener('click',function(e){
+    e.stopPropagation();
+    mob.classList.toggle('open');
+    document.body.style.overflow=mob.classList.contains('open')?'hidden':'';
+  });
+  mob.querySelectorAll('a').forEach(function(a){
+    a.addEventListener('click',function(){
+      mob.classList.remove('open');
+      document.body.style.overflow='';
+    });
+  });
+  document.addEventListener('click',function(e){
+    if(mob.classList.contains('open')&&!mob.contains(e.target)&&!ham.contains(e.target)){
+      mob.classList.remove('open');
+      document.body.style.overflow='';
+    }
+  });
+}
+window.addEventListener('scroll',function(){
+  var nav=document.querySelector('nav');
+  if(nav)nav.style.boxShadow=window.scrollY>20?'0 4px 24px rgba(0,0,0,.6)':'0 4px 20px rgba(0,0,0,.4)';
+},{passive:true});
+(function(){
+  var e=['i','n','f','o','@','n','e','u','v','e','r','d','r','a','h','t','e','t','.','c','o','m'].join('');
+  document.querySelectorAll('.email-show').forEach(function(el){
+    var a=document.createElement('a');a.href='mailto:'+e;a.textContent=e;
+    a.style.cssText='color:inherit;font-weight:inherit';
+    el.textContent='';el.appendChild(a);
+  });
+})();
+</script>
+</body>
+</html>
