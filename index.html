@@ -172,8 +172,8 @@ h2.wh{color:#fff}
 /* LEISTUNGEN */
 #leistungen{background:var(--grau2)}
 .l-intro{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:end;margin-bottom:3rem}
-.l-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem}
-.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s;cursor:pointer}
+.l-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem;align-items:start}
+.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s;cursor:pointer;height:100%}
 .lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(0,0,0,.12)}
 .lc-top{height:240px;overflow:hidden;position:relative}.lc-top img{width:100%;height:100%;object-fit:cover;transition:transform .4s}.lc:hover .lc-top img{transform:scale(1.06)}
 .lc-tag{position:absolute;top:10px;right:10px;background:var(--gelb);color:var(--blau);font-size:.62rem;font-weight:800;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px}
@@ -212,7 +212,7 @@ h2.wh{color:#fff}
 .partners{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.5rem}
 .pl{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:.38rem .8rem;font-size:.77rem;font-weight:700;color:rgba(255,255,255,.5)}
 .m-cards{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
-.mc{background:rgba(0,0,0,.13);border:1px solid rgba(47,78,161,.22);border-radius:var(--r);padding:1.4rem}
+.mc{background:rgba(0,0,0,.13);border:1px solid rgba(47,78,161,.22);border-radius:var(--r);padding:1.4rem;text-decoration:none;display:block;color:inherit;cursor:pointer;transition:transform .2s,border-color .2s,box-shadow .2s}
 .mc:hover{border-color:var(--gelb)}
 .mc-ico{font-size:2rem;margin-bottom:.8rem}
 .mc-t{font-size:.9rem;font-weight:700;color:#fff;margin-bottom:.35rem}
@@ -298,9 +298,9 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 .ft-logo-right img{height:36px;width:auto;filter:brightness(0) invert(1);opacity:.38}
 
 /* RESPONSIVE */
-@media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
+@media(max-width:1024px){.l-grid{grid-template-columns:repeat(2,1fr)}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
-@media(max-width:640px){.l-grid{grid-template-columns:1fr!important}.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.35;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+@media(max-width:600px){.l-grid{grid-template-columns:1fr!important}.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.35;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
 
 .lc{position:relative;cursor:pointer}
 .lc-link-full{position:absolute;inset:0;z-index:1}
@@ -456,7 +456,7 @@ footer{margin-bottom:52px}
   <div class="l-grid">
     <div class="lc" onclick="window.location='elektroinstallation.html'">
       <div class="lc-top"><img src="elektro.jpg" alt="Elektroinstallation Essen – neuverdrahtet Fachbetrieb" loading="lazy"/><span class="lc-tag">Schwerpunkt</span></div>
-      <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="elektroinstallation.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -474,7 +474,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='wallbox.html'">
       <div class="lc-top"><img src="wallbox.jpg" alt="Wallbox Installation Essen – E-Auto laden zu Hause" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="wallbox.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -492,7 +492,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='e-check.html'">
       <div class="lc-top"><img src="echeck.jpg" alt="E-Check Sicherheitsprüfung Essen – neuverdrahtet" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="e-check.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -510,7 +510,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='smart-home.html'">
       <div class="lc-top"><img src="smarthome.jpg" alt="Smart Home Installation Essen – Homematic IP" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="smart-home.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -528,7 +528,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='photovoltaik.html'">
       <div class="lc-top"><img src="solar.jpg" alt="Photovoltaik Elektroanschluss Essen – PV Anlage" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="photovoltaik.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -546,7 +546,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='beleuchtung.html'">
       <div class="lc-top"><img src="licht.jpg" alt="Beleuchtungstechnik LED Essen – neuverdrahtet" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="beleuchtung.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -564,7 +564,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='waermepumpe.html'">
       <div class="lc-top"><img src="waerme.jpg" alt="Wärmepumpe Elektroanschluss Essen – neuverdrahtet" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="waermepumpe.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -582,7 +582,7 @@ footer{margin-bottom:52px}
     </div>
     <div class="lc" onclick="window.location='messtechnik.html'">
       <div class="lc-top"><img src="mess.jpg" alt="DGUV V3 Prüfung Essen – Messtechnik neuverdrahtet" loading="lazy"/></div>
-      <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+      <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="messtechnik.html#kontakt" class="lc-link">Anfragen →</a></div>
     <div class="lc-preise">
       <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
       <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
@@ -662,10 +662,10 @@ footer{margin-bottom:52px}
       </div>
     </div>
     <div class="m-cards">
-      <div class="mc"><div class="mc-ico">⚡</div><div class="mc-t">Elektroinstallation</div><div class="mc-s">Alt- & Neubau, normgerecht nach VDE.</div></div>
-      <div class="mc"><div class="mc-ico">🏠</div><div class="mc-t">Smart Home & KNX</div><div class="mc-s">Homematic IP – Ihr Zuhause vernetzt.</div></div>
-      <div class="mc"><div class="mc-ico">☀️</div><div class="mc-t">Photovoltaik & Speicher</div><div class="mc-s">SMA Solar, Planung & Förderberatung.</div></div>
-      <div class="mc"><div class="mc-ico">✅</div><div class="mc-t">E-Check & Prüfungen</div><div class="mc-s">DGUV V3, vollständig dokumentiert.</div></div>
+      <a href="elektroinstallation.html" class="mc" aria-label="Elektroinstallation Essen – neuverdrahtet"><div class="mc-ico">⚡</div><div class="mc-t">Elektroinstallation</div><div class="mc-s">Alt- & Neubau, normgerecht nach VDE.</div><div style="font-size:.7rem;color:rgba(245,197,0,.7);font-weight:700;margin-top:.6rem;letter-spacing:.05em">Mehr erfahren →</div></a>
+      <a href="smart-home.html" class="mc" aria-label="Smart Home & KNX Essen – neuverdrahtet"><div class="mc-ico">🏠</div><div class="mc-t">Smart Home & KNX</div><div class="mc-s">Homematic IP – Ihr Zuhause vernetzt.</div><div style="font-size:.7rem;color:rgba(245,197,0,.7);font-weight:700;margin-top:.6rem;letter-spacing:.05em">Mehr erfahren →</div></a>
+      <a href="photovoltaik.html" class="mc" aria-label="Photovoltaik & Speicher Essen – neuverdrahtet"><div class="mc-ico">☀️</div><div class="mc-t">Photovoltaik & Speicher</div><div class="mc-s">SMA Solar, Planung & Förderberatung.</div><div style="font-size:.7rem;color:rgba(245,197,0,.7);font-weight:700;margin-top:.6rem;letter-spacing:.05em">Mehr erfahren →</div></a>
+      <a href="e-check.html" class="mc" aria-label="E-Check & Prüfungen Essen – neuverdrahtet"><div class="mc-ico">✅</div><div class="mc-t">E-Check & Prüfungen</div><div class="mc-s">DGUV V3, vollständig dokumentiert.</div><div style="font-size:.7rem;color:rgba(245,197,0,.7);font-weight:700;margin-top:.6rem;letter-spacing:.05em">Mehr erfahren →</div></a>
     </div>
   </div>
 </section>
