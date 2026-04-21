@@ -261,7 +261,35 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 
 @media(max-width:768px){}
 
+
+.lc-preise{background:#f8f8f8;border-top:2px solid var(--gelb);padding:.9rem 1.2rem}
+.lc-preis-title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:.55rem}
+.lc-pk-list{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.8rem}
+.lc-pk{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;padding:.3rem .5rem;border-radius:4px;background:#fff;border:1px solid #eee}
+.lc-pk-name{color:#333;font-weight:500}
+.lc-pk-preis{font-family:'Barlow Condensed',sans-serif;font-weight:900;color:#1a1a1a;font-size:.92rem}
+.lc-btns{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.lc-btn-book{display:flex;align-items:center;justify-content:center;gap:4px;background:var(--gelb);color:#1a1a1a;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.55rem .4rem;border-radius:5px}
+.lc-btn-ask{display:flex;align-items:center;justify-content:center;gap:4px;background:#1a1a1a;color:#fff;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.55rem .4rem;border-radius:5px}
+.lc-storno{font-size:.61rem;color:#999;text-align:center;margin-top:.45rem;line-height:1.4}
+.lc-anfahrt{font-size:.63rem;color:#1B5E20;background:#f1f8f1;border-radius:4px;padding:.25rem .5rem;margin-bottom:.5rem;text-align:center}
+
+
+/* Sticky CTA Bar */
+.sticky-cta{position:fixed;bottom:0;left:0;right:0;z-index:998;background:#1a1a1a;border-top:2px solid #F5C500;display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem 1rem;box-shadow:0 -4px 20px rgba(0,0,0,.4)}
+.sticky-cta a{display:inline-flex;align-items:center;gap:5px;font-family:'Barlow',sans-serif;font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;padding:.55rem 1rem;border-radius:5px;white-space:nowrap}
+.scta-book{background:#F5C500;color:#1a1a1a}
+.scta-ask{background:rgba(245,197,0,.1);color:#F5C500;border:1px solid rgba(245,197,0,.3)}
+.scta-wa{background:#25D366;color:#fff}
+.scta-tel{background:rgba(255,255,255,.07);color:#fff;border:1px solid rgba(255,255,255,.15)}
+@media(max-width:480px){.sticky-cta{gap:.3rem}.sticky-cta a{font-size:.65rem;padding:.5rem .65rem}}
+/* Schiebt Footer nach oben damit Sticky Bar nicht überlappt */
+footer{margin-bottom:52px}
+
 </style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Service","name":"Index","provider":{"@type":"LocalBusiness","name":"neuverdrahtet UG","telephone":"+4920189085050","address":{"@type":"PostalAddress","streetAddress":"Donnerstraße 131","addressLocality":"Essen","postalCode":"45357","addressCountry":"DE"}},"potentialAction":[{"@type":"ReserveAction","name":"Termin buchen","target":"https://calendar.app.google/j8eMCQ3y6P7Fp6kd7"},{"@type":"CommunicateAction","name":"Angebot anfragen","target":"https://formspree.io/f/mvzverea"}]}
+</script>
 </head>
 <body>
 
@@ -372,34 +400,146 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
     <div class="lc" onclick="window.location='elektroinstallation.html'">
       <div class="lc-top"><img src="elektro.jpg" alt="Elektroinstallation Schaltschrank" loading="lazy"/><span class="lc-tag">Schwerpunkt</span></div>
       <div class="lc-body"><div class="lc-title">Elektroinstallation</div><p class="lc-text">Wir übernehmen Ihre komplette Elektroinstallation – normgerecht, effizient und auf Ihre Wohnsituation abgestimmt. Ob Altbau-Modernisierung oder Neubau: Sicherheit, Komfort und langlebige Technik.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">Steckdose / Schalter tauschen</span><span class="lc-pk-preis">ab 65 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Elektro Starter (bis 3 Kreise)</span><span class="lc-pk-preis">ab 490 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Wohnung komplett (Arbeit)</span><span class="lc-pk-preis">ab 1.800 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='wallbox.html'">
       <div class="lc-top"><img src="wallbox.jpg" alt="Wallbox Ladestation E-Auto" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Wallbox</div><p class="lc-text">Laden Sie Ihr E-Auto sicher zuhause. Wir installieren Ihre Wallbox fachgerecht – auch in Verbindung mit einer PV-Anlage – und kümmern uns um Anmeldung und Förderung.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">Wallbox Anschluss bis 10m</span><span class="lc-pk-preis">ab 490 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Wallbox + Zuleitung bis 20m</span><span class="lc-pk-preis">ab 890 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">WP + Wallbox Kombi</span><span class="lc-pk-preis">ab 1.200 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='e-check.html'">
       <div class="lc-top"><img src="echeck.jpg" alt="E-Check Sicherheitsprüfung" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">E-Check</div><p class="lc-text">Der E-Check ist die anerkannte Sicherheitsprüfung – ideal für Vermieter, Eigentümer oder zur Versicherungsvorlage. Fachgerecht durchgeführt und vollständig dokumentiert.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">Wohnung bis 60 m²</span><span class="lc-pk-preis">ab 149 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">E-Check EFH (10 Kreise)</span><span class="lc-pk-preis">ab 199 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Gewerbe / Praxis</span><span class="lc-pk-preis">ab 199 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='smart-home.html'">
       <div class="lc-top"><img src="smarthome.jpg" alt="Smart Home Steuerung" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Smart Home</div><p class="lc-text">Steuern Sie Licht, Heizung, Rollläden und mehr per App oder Sprachbefehl. Wir vernetzen Ihr Zuhause mit smarter Technik von z. B. Homematic IP – individuell planbar.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">Beratung & Planung</span><span class="lc-pk-preis">ab 89 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Starter-Paket (3 Räume)</span><span class="lc-pk-preis">ab 250 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Erweiterung Bestand</span><span class="lc-pk-preis">ab 120 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='photovoltaik.html'">
       <div class="lc-top"><img src="solar.jpg" alt="Photovoltaik Solaranlage" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Photovoltaik</div><p class="lc-text">Nutzen Sie Sonnenenergie mit einer PV-Anlage – inklusive Speicher und Eigenverbrauchsoptimierung. Wir setzen auf Marken wie SMA Solar und beraten zu Förderungen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">PV Elektroanschluss (Arbeit)</span><span class="lc-pk-preis">ab 650 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">PV + Speicher Kombi</span><span class="lc-pk-preis">ab 990 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">MaStR-Anmeldung</span><span class="lc-pk-preis">ab 89 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='beleuchtung.html'">
       <div class="lc-top"><img src="licht.jpg" alt="Beleuchtungstechnik LED" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Beleuchtungstechnik</div><p class="lc-text">Wohnraum- oder Außenbeleuchtung: Wir planen und realisieren Lichtkonzepte mit hochwertigen LED-Systemen von z. B. DOTLUX – funktional, sparsam und ästhetisch.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">Einzelleuchte montieren</span><span class="lc-pk-preis">ab 59 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">LED Strahler (bis 5 Stk.)</span><span class="lc-pk-preis">ab 120 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">Lichtkonzept Wohnraum</span><span class="lc-pk-preis">ab 380 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='waermepumpe.html'">
       <div class="lc-top"><img src="waerme.jpg" alt="Wärmepumpe Installation" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Wärmepumpe</div><p class="lc-text">Wir installieren Ihre Wärmepumpe (z. B. Bosch) fachgerecht – vom Anschluss bis zur intelligenten Steuerung. In Kombination mit PV und Smart Home für maximale Effizienz.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">WP Elektroanschluss (Arbeit)</span><span class="lc-pk-preis">ab 580 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">WP + Wallbox Kombi</span><span class="lc-pk-preis">ab 1.200 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">WP Steuerung / Smart</span><span class="lc-pk-preis">ab 229 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc" onclick="window.location='messtechnik.html'">
       <div class="lc-top"><img src="mess.jpg" alt="Messtechnik Prüftechnik" loading="lazy"/></div>
       <div class="lc-body"><div class="lc-title">Mess- & Prüftechnik</div><p class="lc-text">Wir prüfen Ihre elektrischen Anlagen mit modernster Messtechnik – bei Umbauten, Hauskäufen oder als E-Check-Vorabkontrolle. Schwachstellen frühzeitig erkennen.</p><a href="#angebot" class="lc-link">Anfragen →</a></div>
+    <div class="lc-preise">
+      <div class="lc-anfahrt">🚗 Anfahrt bis 20 km kostenlos</div>
+      <div class="lc-preis-title">Arbeitspreise zzgl. MwSt. &amp; Material</div>
+      <div class="lc-pk-list"><div class="lc-pk"><span class="lc-pk-name">DGUV V3 Büro (Anlage)</span><span class="lc-pk-preis">ab 199 €</span></div>
+<div class="lc-pk"><span class="lc-pk-name">DGUV V4 Gerät</span><span class="lc-pk-preis">ab 3,50 €/Gerät</span></div>
+<div class="lc-pk"><span class="lc-pk-name">E-Check Gewerbe</span><span class="lc-pk-preis">ab 199 €</span></div></div>
+      <div class="lc-btns">
+        <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="lc-btn-book" target="_blank" rel="noopener">📅 Buchen</a>
+        <a href="#angebot" class="lc-btn-ask">📋 Anfragen</a>
+      </div>
+      <div class="lc-storno">⚠️ Storno bis 48h kostenlos · danach 59 €</div>
+    </div>
+    </div>
+  </div>
     </div>
     <div class="lc-more">
       <p>„Ihre gewünschte Leistung ist nicht dabei? Sprechen Sie uns an – wir finden eine Lösung."</p>
@@ -637,5 +777,11 @@ window.addEventListener('scroll',function(){
   });
 })();
 </script>
+<div class="sticky-cta" role="navigation" aria-label="Schnellkontakt">
+  <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="scta-book" target="_blank" rel="noopener" aria-label="Termin buchen – neuverdrahtet Elektriker Essen">📅 Buchen</a>
+  <a href="#angebot" class="scta-ask" aria-label="Angebot anfragen">📋 Anfragen</a>
+  <a href="https://wa.me/4920189085050" class="scta-wa" target="_blank" rel="noopener" aria-label="WhatsApp – neuverdrahtet"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+  <a href="tel:+4920189085050" class="scta-tel" aria-label="Jetzt anrufen 0201 89085050"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+</div>
 </body>
 </html>

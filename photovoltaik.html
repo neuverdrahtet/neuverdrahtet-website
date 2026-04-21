@@ -108,7 +108,49 @@ footer a{color:rgba(255,255,255,.3);margin-left:1rem;transition:color .2s}
 footer a:hover{color:var(--gold)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}
 @media(max-width:768px){.srv-grid{grid-template-columns:1fr}.cb{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.nav-right .nav-home{display:none}}
+
+<style>
+.preise-sec{background:#f8f8f8;padding:3.5rem 5vw;border-top:3px solid var(--gelb)}
+.preise-inner{max-width:1100px;margin:0 auto}
+.pk2-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:1.2rem;margin-top:1.5rem}
+.pk2{background:#fff;border-radius:10px;border:1.5px solid #e8e8e8;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 2px 12px rgba(0,0,0,.06);transition:transform .22s,box-shadow .22s,border-color .22s}
+.pk2:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(0,0,0,.12);border-color:rgba(233,200,78,.6)}
+.pk2-head{background:#1a1a1a;padding:1.2rem 1.4rem 1rem;color:#fff}
+.pk2-name{font-size:1rem;font-weight:800;margin-bottom:.35rem;font-family:'Barlow Condensed',sans-serif}
+.pk2-preis{font-size:1.65rem;font-weight:900;color:#E9C84E;line-height:1;font-family:'Barlow Condensed',sans-serif}
+.pk2-basis{font-size:.65rem;opacity:.7;margin-top:.2rem}
+.pk2-tags{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.6rem}
+.pk2-tag{font-size:.62rem;font-weight:700;padding:.15rem .5rem;border-radius:3px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.8)}
+.pk2-body{padding:1rem 1.4rem;flex:1}
+.pk2-body ul{list-style:none;display:flex;flex-direction:column;gap:.28rem}
+.pk2-body ul li{font-size:.81rem;color:#555;display:flex;gap:7px;align-items:flex-start;line-height:1.5}
+.pk2-body ul li::before{content:'✓';font-weight:700;color:#E9C84E;flex-shrink:0}
+.pk2-foot{border-top:1px solid #e8e8e8;padding:.75rem 1.4rem}
+.pk2-extra{font-size:.69rem;color:rgba(26,26,26,.45);line-height:1.5;margin-bottom:.35rem}
+.pk2-info{font-size:.68rem;color:#1B5E20;background:#f1f8f1;border-radius:4px;padding:.3rem .6rem;margin-bottom:.35rem;line-height:1.5}
+.pk2-storno{font-size:.67rem;color:#8B6200;background:#fff8e1;border-radius:4px;padding:.3rem .6rem;line-height:1.5}
+.pk2-btns{display:flex;gap:.45rem;padding:.75rem 1.4rem 1.2rem}
+.pk2-book{flex:1;display:block;background:#E9C84E;color:#1a1a1a;text-align:center;padding:.65rem;border-radius:6px;font-size:.73rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.pk2-ask{flex:1;display:block;background:#1a1a1a;color:#fff;text-align:center;padding:.65rem;border-radius:6px;font-size:.73rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+@media(max-width:640px){.pk2-grid{grid-template-columns:1fr}}
+
+/* Sticky CTA Bar */
+.sticky-cta{position:fixed;bottom:0;left:0;right:0;z-index:998;background:#1a1a1a;border-top:2px solid #F5C500;display:flex;align-items:center;justify-content:center;gap:.5rem;padding:.55rem 1rem;box-shadow:0 -4px 20px rgba(0,0,0,.4)}
+.sticky-cta a{display:inline-flex;align-items:center;gap:5px;font-family:'Barlow',sans-serif;font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;padding:.55rem 1rem;border-radius:5px;white-space:nowrap}
+.scta-book{background:#F5C500;color:#1a1a1a}
+.scta-ask{background:rgba(245,197,0,.1);color:#F5C500;border:1px solid rgba(245,197,0,.3)}
+.scta-wa{background:#25D366;color:#fff}
+.scta-tel{background:rgba(255,255,255,.07);color:#fff;border:1px solid rgba(255,255,255,.15)}
+@media(max-width:480px){.sticky-cta{gap:.3rem}.sticky-cta a{font-size:.65rem;padding:.5rem .65rem}}
+/* Schiebt Footer nach oben damit Sticky Bar nicht überlappt */
+footer{margin-bottom:52px}
+
 </style>
+
+</style>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"Service","name":"Photovoltaik","provider":{"@type":"LocalBusiness","name":"neuverdrahtet UG","telephone":"+4920189085050","address":{"@type":"PostalAddress","streetAddress":"Donnerstraße 131","addressLocality":"Essen","postalCode":"45357","addressCountry":"DE"}},"potentialAction":[{"@type":"ReserveAction","name":"Termin buchen","target":"https://calendar.app.google/j8eMCQ3y6P7Fp6kd7"},{"@type":"CommunicateAction","name":"Angebot anfragen","target":"https://formspree.io/f/mvzverea"}]}
+</script>
 </head>
 <body>
 <a href="https://wa.me/4920189085050" class="wa-float" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
@@ -198,6 +240,69 @@ footer a:hover{color:var(--gold)}
     </div>
   </div>
 </div>
+
+<div id="preise" class="preise-sec">
+  <div class="preise-inner">
+    <div style="font-size:.67rem;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#E9C84E;margin-bottom:.5rem">Transparente Festpreise 2026</div>
+    <h2 style="font-family:'Barlow Condensed',sans-serif;font-size:clamp(1.7rem,2.8vw,2.2rem);font-weight:800;color:#1a1a1a;margin-bottom:.4rem">Photovoltaik Elektroanschluss Essen – Preise</h2>
+    <p style="font-size:.84rem;color:#666;margin-bottom:1.3rem">Arbeitspreise zzgl. 19% MwSt. · Material separat · Stand April 2026</p>
+    <div class="pk2-grid"><div class="pk2">
+        <div class="pk2-head">
+          <div class="pk2-name">MaStR-Anmeldung / Balkonkraftwerk</div>
+          <div class="pk2-preis">ab 49 €</div>
+          <div class="pk2-basis">Arbeitspreis zzgl. MwSt. &amp; Material</div>
+          <div class="pk2-tags"><span class="pk2-tag">⏱ ca. 30 Min</span><span class="pk2-tag">Pflicht ab 600 W</span></div>
+        </div>
+        <div class="pk2-body"><ul><li>Marktstammdatenregister-Anmeldung</li><li>Netzbetreiber-Meldung</li><li>Dokumentation</li><li>Auch für Balkonkraftwerke</li></ul></div>
+        <div class="pk2-foot">
+          <div class="pk2-extra">➕ Netzanschluss: separat</div>
+          <div class="pk2-info">🚗 Anfahrt bis 20 km kostenlos · Zone 2: +29 € · Zone 3: +49 €</div>
+          <div class="pk2-storno">⚠️ Storno bis 48h kostenlos · danach 59 € Pauschale</div>
+        </div>
+        <div class="pk2-btns">
+          <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="pk2-book" target="_blank" rel="noopener">📅 Buchen</a>
+          <a href="#kontakt" class="pk2-ask">📋 Anfragen</a>
+        </div>
+      </div>
+<div class="pk2">
+        <div class="pk2-head">
+          <div class="pk2-name">PV Elektroanschluss + Anmeldung</div>
+          <div class="pk2-preis">ab 650 €</div>
+          <div class="pk2-basis">Arbeitspreis zzgl. MwSt. &amp; Material</div>
+          <div class="pk2-tags"><span class="pk2-tag">⏱ ca. 4–6h</span><span class="pk2-tag">Wechselrichter</span></div>
+        </div>
+        <div class="pk2-body"><ul><li>Wechselrichter anschließen</li><li>Einspeisezähler vorbereiten</li><li>DC + AC Verkabelung prüfen</li><li>MaStR + Netzbetreiber-Anmeldung</li><li>Inbetriebnahmeprotokoll</li></ul></div>
+        <div class="pk2-foot">
+          <div class="pk2-extra">➕ PV-Module & Wechselrichter: separat</div>
+          <div class="pk2-info">🚗 Anfahrt bis 20 km kostenlos · Zone 2: +29 € · Zone 3: +49 €</div>
+          <div class="pk2-storno">⚠️ Storno bis 48h kostenlos · danach 59 € Pauschale</div>
+        </div>
+        <div class="pk2-btns">
+          <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="pk2-book" target="_blank" rel="noopener">📅 Buchen</a>
+          <a href="#kontakt" class="pk2-ask">📋 Anfragen</a>
+        </div>
+      </div>
+<div class="pk2">
+        <div class="pk2-head">
+          <div class="pk2-name">PV + Speicher Kombianschluss</div>
+          <div class="pk2-preis">ab 1.000 €</div>
+          <div class="pk2-basis">Arbeitspreis zzgl. MwSt. &amp; Material</div>
+          <div class="pk2-tags"><span class="pk2-tag">⏱ ca. 1 Tag</span><span class="pk2-tag">Mit Batteriespeicher</span></div>
+        </div>
+        <div class="pk2-body"><ul><li>PV-Anlage anschließen</li><li>Speicher integrieren</li><li>Energiemanagement einrichten</li><li>MaStR + Netzbetreiber</li><li>Vollprotokoll</li></ul></div>
+        <div class="pk2-foot">
+          <div class="pk2-extra">➕ Hardware (PV, Speicher): separat</div>
+          <div class="pk2-info">🚗 Anfahrt bis 20 km kostenlos · Zone 2: +29 € · Zone 3: +49 €</div>
+          <div class="pk2-storno">⚠️ Storno bis 48h kostenlos · danach 59 € Pauschale</div>
+        </div>
+        <div class="pk2-btns">
+          <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="pk2-book" target="_blank" rel="noopener">📅 Buchen</a>
+          <a href="#kontakt" class="pk2-ask">📋 Anfragen</a>
+        </div>
+      </div></div>
+  </div>
+</div>
+</div>
 <footer>
   <img src="logo.png" alt="neuverdrahtet" class="ft-logo"/>
   <span>© 2025 neuverdrahtet · Danny Berger · Essen</span>
@@ -211,5 +316,11 @@ footer a:hover{color:var(--gold)}
 document.querySelectorAll('.faq-q').forEach(q=>q.addEventListener('click',()=>q.parentElement.classList.toggle('open')));
 (function(){var e=['i','n','f','o','@','n','e','u','v','e','r','d','r','a','h','t','e','t','.','c','o','m'].join('');document.querySelectorAll('.email-show').forEach(function(el){var a=document.createElement('a');a.href='mailto:'+e;a.textContent=e;a.style.cssText='color:inherit';el.textContent='';el.appendChild(a);});})();
 </script>
+<div class="sticky-cta" role="navigation" aria-label="Schnellkontakt">
+  <a href="https://calendar.app.google/j8eMCQ3y6P7Fp6kd7" class="scta-book" target="_blank" rel="noopener" aria-label="Termin buchen – neuverdrahtet Elektriker Essen">📅 Buchen</a>
+  <a href="#kontakt" class="scta-ask" aria-label="Angebot anfragen">📋 Anfragen</a>
+  <a href="https://wa.me/4920189085050" class="scta-wa" target="_blank" rel="noopener" aria-label="WhatsApp – neuverdrahtet"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg></a>
+  <a href="tel:+4920189085050" class="scta-tel" aria-label="Jetzt anrufen 0201 89085050"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.42 2 2 0 0 1 3.6 1.24h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l.61-.61a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.22 17z"/></svg> 0201 89085050</a>
+</div>
 </body>
 </html>
