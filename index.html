@@ -172,13 +172,13 @@ h2.wh{color:#fff}
 /* LEISTUNGEN */
 #leistungen{background:var(--grau2)}
 .l-intro{display:grid;grid-template-columns:1fr 1fr;gap:4rem;align-items:end;margin-bottom:3rem}
-.l-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s}
+.l-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1.5rem}
+.lc{background:#fff;border-radius:var(--r);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.09);display:flex;flex-direction:column;border:1.5px solid transparent;transition:transform .25s,box-shadow .25s,border-color .25s;cursor:pointer}
 .lc:hover{transform:translateY(-4px);box-shadow:0 16px 48px rgba(47,78,161,.16);border-color:rgba(0,0,0,.12)}
-.lc-top{height:220px;overflow:hidden;position:relative}.lc-top img{width:100%;height:100%;object-fit:cover;transition:transform .4s}.lc:hover .lc-top img{transform:scale(1.06)}
+.lc-top{height:240px;overflow:hidden;position:relative}.lc-top img{width:100%;height:100%;object-fit:cover;transition:transform .4s}.lc:hover .lc-top img{transform:scale(1.06)}
 .lc-tag{position:absolute;top:10px;right:10px;background:var(--gelb);color:var(--blau);font-size:.62rem;font-weight:800;text-transform:uppercase;padding:.2rem .55rem;border-radius:3px}
-.lc-body{padding:1.3rem 1.4rem;flex:1;display:flex;flex-direction:column}
-.lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:800;color:#1a1a1a;margin-bottom:.4rem}
+.lc-body{padding:1.4rem 1.6rem;flex:1;display:flex;flex-direction:column}
+.lc-title{font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:800;color:#1a1a1a;margin-bottom:.5rem}
 .lc-text{font-size:.82rem;color:var(--textm);line-height:1.65;flex:1}
 .lc-link{display:inline-flex;align-items:center;gap:5px;margin-top:.9rem;font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--gelb)}
 .lc-more{background:var(--blau);border-radius:var(--r);padding:1.8rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}
@@ -300,7 +300,7 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 /* RESPONSIVE */
 @media(max-width:1024px){.l-grid{grid-template-columns:1fr 1fr}.fb-inner{grid-template-columns:1fr}.m-cards{grid-template-columns:1fr 1fr}}
 @media(max-width:900px){.strip{grid-template-columns:1fr 1fr}.si{border-bottom:1px solid rgba(255,255,255,.1);border-right:none}.si:nth-child(odd){border-right:1px solid rgba(255,255,255,.1)}.w-grid,.a-grid{grid-template-columns:1fr}.l-intro{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr 1fr}.nav-links{display:none}.ham{display:flex}}
-@media(max-width:640px){.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.35;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
+@media(max-width:640px){.l-grid{grid-template-columns:1fr!important}.hero-logo-bg{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:3;opacity:.35;width:min(90vw,950px);pointer-events:none}.l-grid{grid-template-columns:1fr}.strip{grid-template-columns:1fr}.si{border-right:none}.m-stats,.m-cards{grid-template-columns:1fr}.ft-grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.trust-bar{flex-direction:column}.soc-bar{flex-direction:column;align-items:flex-start}}
 
 .lc{position:relative;cursor:pointer}
 .lc-link-full{position:absolute;inset:0;z-index:1}
@@ -318,15 +318,15 @@ footer{background:#0a0a0a;color:rgba(255,255,255,.38);padding:3.5rem 5vw 1.5rem}
 @media(max-width:768px){}
 
 
-.lc-preise{background:#f8f8f8;border-top:2px solid var(--gelb);padding:.9rem 1.2rem}
+.lc-preise{background:#f8f8f8;border-top:2px solid var(--gelb);padding:1rem 1.6rem}
 .lc-preis-title{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#888;margin-bottom:.55rem}
 .lc-pk-list{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.8rem}
 .lc-pk{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;padding:.3rem .5rem;border-radius:4px;background:#fff;border:1px solid #eee}
 .lc-pk-name{color:#333;font-weight:500}
 .lc-pk-preis{font-family:'Barlow Condensed',sans-serif;font-weight:900;color:#1a1a1a;font-size:.92rem}
-.lc-btns{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
-.lc-btn-book{display:flex;align-items:center;justify-content:center;gap:4px;background:var(--gelb);color:#1a1a1a;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.55rem .4rem;border-radius:5px}
-.lc-btn-ask{display:flex;align-items:center;justify-content:center;gap:4px;background:#1a1a1a;color:#fff;font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.55rem .4rem;border-radius:5px}
+.lc-btns{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:.2rem}
+.lc-btn-book{display:flex;align-items:center;justify-content:center;gap:5px;background:var(--gelb);color:#1a1a1a;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.65rem .5rem;border-radius:5px}
+.lc-btn-ask{display:flex;align-items:center;justify-content:center;gap:5px;background:#1a1a1a;color:#fff;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:.65rem .5rem;border-radius:5px}
 .lc-storno{font-size:.61rem;color:#999;text-align:center;margin-top:.45rem;line-height:1.4}
 .lc-anfahrt{font-size:.63rem;color:#1B5E20;background:#f1f8f1;border-radius:4px;padding:.25rem .5rem;margin-bottom:.5rem;text-align:center}
 
