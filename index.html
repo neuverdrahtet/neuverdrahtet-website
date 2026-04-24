@@ -1456,7 +1456,7 @@ function showLeistung(id){
       <div class="fg" style="margin-bottom:.7rem"><label>E-Mail</label><input type="email" id="bf-m" placeholder="email@beispiel.de"></div>
       <div class="fg" style="margin-bottom:.7rem"><label>Wunschtermin</label><input type="date" id="bf-d"></div>
       <div class="fg" style="margin-bottom:.9rem"><label>Beschreibung</label><textarea id="bf-msg" rows="3" placeholder="Was soll gemacht werden?"></textarea></div>
-      <button class="btn-gold" onclick="submitBook('${s.name}')" style="width:100%">Anfrage senden ›</button>
+      <button class="btn-gold" onclick="submitBook('${s.name}',this)" style="width:100%">Anfrage senden ›</button>
       <div id="bookOk" style="display:none;margin-top:.7rem;padding:.6rem;background:rgba(233,200,78,.1);border:1px solid rgba(233,200,78,.3);border-radius:4px;font-size:.82rem;color:var(--gold);text-align:center">✓ Anfrage gesendet! Wir melden uns bald.</div>
     </div>`;
   showPage('leistung');
@@ -1465,11 +1465,12 @@ function showLeistung(id){
 // ===== FORMS =====
 const FORMSPREE_URL = 'https://formspree.io/f/xpwzgkap';
 
-async function submitBook(service){
+async function submitBook(service,btnEl){
   const n=document.getElementById('bf-n')?.value?.trim();
   const t=document.getElementById('bf-t')?.value?.trim();
   if(!n||!t){alert('Bitte Name und Telefon angeben.');return;}
-  const btn=event.target;
+  const btn=btnEl||event?.target;
+  if(!btn){alert('Fehler: Button nicht gefunden.');return;}
   btn.disabled=true;btn.textContent='Wird gesendet…';
   const data={
     _subject:'Neue Anfrage: '+service,
