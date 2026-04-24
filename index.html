@@ -113,10 +113,10 @@ nav{
   position:absolute;
   right:3%;top:50%;transform:translateY(-50%);
   width:min(480px,48vw);
-  opacity:0.10;
+  opacity:0.22;
   pointer-events:none;
   z-index:0;
-  filter:brightness(10);
+  filter:brightness(10) drop-shadow(0 0 40px rgba(233,200,78,0.25));
 }
 /* diagonal gold stripe */
 #home::before{
@@ -623,7 +623,7 @@ footer{
 
 /* ======= RESPONSIVE ======= */
 @media(max-width:960px){
-  .hero-inner{grid-template-columns:1fr;gap:3rem;}
+  .hero-inner{grid-template-columns:1fr;gap:2rem;}
   .hero-photo-wrap{max-width:320px;margin:0 auto;}
   .about-grid{grid-template-columns:1fr;}
   .about-photo-wrap{max-width:340px;margin:0 auto;}
@@ -632,21 +632,52 @@ footer{
   .footer-grid{grid-template-columns:1fr 1fr;}
   .lp-grid{grid-template-columns:1fr;}
   .lp-sidebar{position:static;}
-  .nav-links{display:none;flex-direction:column;position:absolute;top:68px;left:0;right:0;background:rgba(10,10,10,.98);padding:1rem;gap:.3rem;border-bottom:1px solid rgba(233,200,78,.2);}
+  .nav-links{display:none;flex-direction:column;position:absolute;top:68px;left:0;right:0;background:rgba(10,10,10,.98);padding:1rem;gap:.3rem;border-bottom:1px solid rgba(233,200,78,.2);z-index:999;}
   .nav-links.open{display:flex;}
   .nav-toggle{display:flex;}
+  .services-grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));}
+  #home .hero-logo-bg{opacity:0.05;width:min(300px,60vw);}
 }
+
 @media(max-width:600px){
   .footer-grid{grid-template-columns:1fr;}
   .footer-bottom{flex-direction:column;align-items:flex-start;gap:.8rem;}
-  .trust-bar{gap:1.2rem;}
-  .hero-stats{gap:1.5rem;}
+  .trust-bar{gap:1rem;flex-wrap:wrap;justify-content:center;}
+  .hero-stats{gap:1rem;flex-wrap:wrap;}
+  .stat-num{font-size:2rem;}
   .form-grid{grid-template-columns:1fr;}
   .fg.full{grid-column:span 1;}
   .lp-checklist{grid-template-columns:1fr;}
-  .contact-grid{gap:2rem;}
+  .contact-grid{gap:1.5rem;}
+  .hero-h1{font-size:clamp(2rem,8vw,3.5rem);}
+  .hero-sub{font-size:.9rem;}
+  .hero-btns{flex-direction:column;align-items:stretch;}
+  .btn-gold,.btn-outline,.btn-wa{width:100%;justify-content:center;text-align:center;}
+  .services-grid{grid-template-columns:1fr;}
+  .service-img-wrap{height:200px;}
+  .section-title{font-size:clamp(1.6rem,5vw,2.5rem);}
+  .wa-float{bottom:1rem;right:.8rem;}
+  .wa-bubble{font-size:.7rem;padding:.35rem .8rem;}
+  .wa-btn{width:50px;height:50px;}
+  .modal-box{margin:1rem;padding:1.5rem 1rem;}
+  nav{padding:0 1rem;}
+  .nav-logo img{height:38px;}
+  #home{padding-top:60px;}
+  .hero-eyebrow{font-size:.7rem;}
+  .price-table td,.price-table th{font-size:.8rem;padding:.5rem .4rem;}
+  .lp-cta-box{padding:1.5rem 1rem;}
 }
 
+
+@media(max-width:400px){
+  .hero-h1{font-size:clamp(1.7rem,7vw,2.5rem);}
+  .hero-btns{gap:.6rem;}
+  .stat-num{font-size:1.7rem;}
+  .hero-stats{gap:.8rem;}
+  .section-tag{font-size:.65rem;}
+  .service-name{font-size:1rem;}
+  .wa-bubble{display:none;}
+}
 /* fade-in */
 .fi{opacity:0;transform:translateY(18px);transition:opacity .6s ease,transform .6s ease;}
 .fi.vis{opacity:1;transform:translateY(0);}
@@ -683,7 +714,7 @@ footer{
       <p class="hero-sub">neuverdrahtet UG – Elektroinstallation, Fliesenarbeiten, Trockenbau, Malerarbeiten, Komplettbäder und mehr. Sauber ausgeführt, termingerecht, mit über 20 Jahren Erfahrung in Sanierung und Renovierung.</p>
       <div class="hero-stats">
         <div class="stat"><div class="stat-num">20+</div><div class="stat-label">Jahre Erfahrung</div></div>
-        <div class="stat"><div class="stat-num">8</div><div class="stat-label">Gewerke</div></div>
+        <div class="stat"><div class="stat-num">9</div><div class="stat-label">Gewerke</div></div>
         <div class="stat"><div class="stat-num">500+</div><div class="stat-label">Aufträge</div></div>
       </div>
       <div class="hero-btns">
@@ -821,7 +852,7 @@ footer{
           </div>
         </div>
         <p class="form-note">* Pflichtfelder. Mit der Absendung stimmen Sie unserer <a href="#" onclick="showPage('datenschutz')">Datenschutzerklärung</a> zu.</p>
-        <button class="btn-gold" style="width:100%" onclick="submitContact()">Anfrage absenden ›</button>
+        <button class="btn-gold" style="width:100%" onclick="submitContact(this)">Anfrage absenden ›</button>
       </div>
     </div>
   </div>
@@ -1379,11 +1410,12 @@ function showPage(id){
   if(p){p.classList.add('active');window.scrollTo({top:0,behavior:'smooth'});}
   document.getElementById('navLinks').classList.remove('open');
 }
-function gotoMain(sec){
+function gotoMain(sec){document.getElementById('navLinks').classList.remove('open');
   showPage('main');
   setTimeout(()=>{const el=document.getElementById(sec);if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},120);
 }
 function toggleNav(){document.getElementById('navLinks').classList.toggle('open');}
+function closeModal(){document.getElementById('successModal').classList.remove('active');}
 
 // ===== RENDER SERVICES =====
 function renderServices(){
@@ -1459,14 +1491,14 @@ async function submitBook(service){
   }catch(e){btn.disabled=false;btn.textContent='Anfrage senden ›';alert('Verbindungsfehler. Bitte rufen Sie uns an.');}
 }
 
-async function submitContact(){
+async function submitContact(btnEl){
   const v=document.getElementById('cf-vn')?.value?.trim();
   const n=document.getElementById('cf-nn')?.value?.trim();
   const t=document.getElementById('cf-tel')?.value?.trim();
   const ls=document.getElementById('cf-ls')?.value;
   if(!v||!t){alert('Bitte Vorname und Telefon angeben.');return;}
   if(!ls){alert('Bitte eine Leistung auswählen.');return;}
-  const btn=event.target;
+  const btn=btnEl;
   btn.disabled=true;btn.textContent='Wird gesendet…';
   const data={
     _subject:'Neue Kontaktanfrage: '+ls,
