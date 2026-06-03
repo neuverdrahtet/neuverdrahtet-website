@@ -3,12 +3,4 @@ Allow: /
 Disallow: /danke.html
 Disallow: /404.html
 
-User-agent: Googlebot
-Allow: /
-Crawl-delay: 0
-
-User-agent: Bingbot
-Allow: /
-Crawl-delay: 1
-
-Sitemap: https://neuverdrahtet.github.io/neuverdrahtet-website/sitemap.xml
+Sitemap: https://www.neuverdrahtet.com/sitemap.xml
