@@ -18,7 +18,25 @@ const routes = {
 };
 
 const viewEl = document.getElementById('view');
+const sidebarEl = document.getElementById('sidebar');
+const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+const menuBtn = document.getElementById('mobile-menu-btn');
 let currentCleanup = null;
+
+function closeSidebar() {
+  sidebarEl.classList.remove('open');
+  sidebarBackdrop.hidden = true;
+}
+function openSidebar() {
+  sidebarEl.classList.add('open');
+  sidebarBackdrop.hidden = false;
+}
+menuBtn.addEventListener('click', () => {
+  if (sidebarEl.classList.contains('open')) closeSidebar();
+  else openSidebar();
+});
+sidebarBackdrop.addEventListener('click', closeSidebar);
+document.querySelectorAll('.sidebar-nav a').forEach((a) => a.addEventListener('click', closeSidebar));
 
 async function router() {
   const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';

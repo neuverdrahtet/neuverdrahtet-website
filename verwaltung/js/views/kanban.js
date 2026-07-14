@@ -37,6 +37,9 @@ export async function render(container) {
                 <div class="title">${escapeHtml(p.titel)}</div>
                 <div class="meta">${escapeHtml(kundenById[p.kundeId]?.firma || '')}</div>
                 ${p.mitarbeiterIds?.length ? `<div class="meta">${p.mitarbeiterIds.map((id) => escapeHtml(mitarbeiterById[id]?.name || '')).filter(Boolean).join(', ')}</div>` : ''}
+                <select class="card-move" data-id="${p.id}" title="Spalte wechseln (auch per Ziehen möglich)">
+                  ${spalten.map((s2) => `<option value="${s2.id}" ${s2.id === p.status ? 'selected' : ''}>${escapeHtml(s2.titel)}</option>`).join('')}
+                </select>
               </div>
             `).join('')}
           </div>
@@ -58,7 +61,22 @@ export async function render(container) {
         setTimeout(() => card.classList.add('dragging'), 0);
       });
       card.addEventListener('dragend', () => card.classList.remove('dragging'));
-      card.addEventListener('click', () => openCardForm(projekte.find((p) => p.id === card.dataset.id)));
+      card.addEventListener('click', (e) => {
+        if (e.target.closest('.card-move')) return;
+        openCardForm(projekte.find((p) => p.id === card.dataset.id));
+      });
+    });
+
+    board.querySelectorAll('.card-move').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async (e) => {
+        e.stopPropagation();
+        const projekt = projekte.find((p) => p.id === select.dataset.id);
+        if (!projekt) return;
+        projekt.status = select.value;
+        await put('projekte', projekt);
+        renderBoard();
+      });
     });
 
     board.querySelectorAll('.kanban-col').forEach((col) => {
