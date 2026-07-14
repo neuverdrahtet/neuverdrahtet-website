@@ -2,6 +2,35 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
+function parseNumber(str) {
+  const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseKatalogCsv(text, standardSteuersatz) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^typ$/i.test(cols[0] || '') || /^bezeichnung$/i.test(cols[1] || '')) continue;
+    const [typRaw, bezeichnung, einheit, preisRaw, ustRaw] = cols;
+    if (!bezeichnung) { errors.push(line); continue; }
+    const typ = /^leistung$/i.test((typRaw || '').trim()) ? 'leistung' : 'artikel';
+    rows.push({
+      id: uid(),
+      typ,
+      bezeichnung,
+      beschreibung: '',
+      einheit: einheit || (typ === 'artikel' ? 'Stk.' : 'Std.'),
+      preis: parseNumber(preisRaw),
+      steuersatz: ustRaw ? parseNumber(ustRaw) : standardSteuersatz,
+    });
+  }
+  return { rows, errors };
+}
+
 export async function render(container) {
   let items = await getAll('katalog');
   const settings = await getSettings();
@@ -12,7 +41,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Artikel &amp; Leistungen</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
+        <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche ...">
@@ -68,6 +100,50 @@ export async function render(container) {
     applyFilter();
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-import').addEventListener('click', () => openImport());
+
+  function openImport() {
+    const { body, close } = openModal({
+      title: 'Material / Leistungen importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV einfügen oder Datei wählen. Spalten (mit Semikolon oder Komma getrennt): <code>Typ;Bezeichnung;Einheit;Preis;USt</code> – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV-Datei</label>
+          <input type="file" id="import-file" accept=".csv,text/csv,text/plain">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Material;Kabel NYM-J 3x1,5mm²;m;1,20;19
+Leistung;Steckdose montieren;Std.;65;19"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      body.querySelector('#import-text').value = await file.text();
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = parseKatalogCsv(text, settings.standardSteuersatz);
+      if (rows.length === 0) {
+        body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      for (const row of rows) await put('katalog', row);
+      toast(`${rows.length} Einträge importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      render(container);
+    });
+  }
 
   function openForm(item) {
     const isEdit = !!item;

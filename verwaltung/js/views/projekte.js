@@ -1,16 +1,25 @@
-import { getAll, put, remove } from '../db.js';
+import { getAll, put, remove, getSettings, BEREICHE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderFotoSection } from '../fotos.js';
+import { renderDokumenteSection } from '../dokumente.js';
+
+const ALLE_OFFEN = '__offen__';
+const ALLE = '__alle__';
 
 export async function render(container) {
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen] = await Promise.all([
-    getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'), getAll('angebote'), getAll('rechnungen'),
+  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings] = await Promise.all([
+    getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
+    getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
+  kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
+  const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   projekte.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+  let folder = ALLE_OFFEN;
   let filtered = projekte;
 
   container.innerHTML = `
@@ -18,19 +27,50 @@ export async function render(container) {
       <h1>Projekte</h1>
       <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neues Projekt</button></div>
     </div>
-    <div class="search-bar">
-      <input type="search" id="search" placeholder="Suche nach Titel oder Kunde ...">
-      <select id="status-filter"><option value="">Alle Status</option>${spalten.map((s) => `<option value="${s.id}">${escapeHtml(s.titel)}</option>`).join('')}</select>
+    <div class="projekte-layout">
+      <div class="projekte-folders" id="folders"></div>
+      <div class="projekte-main">
+        <div class="search-bar">
+          <input type="search" id="search" placeholder="Suche nach Titel oder Kunde ...">
+        </div>
+        <div id="table-host"></div>
+      </div>
     </div>
-    <div id="table-host"></div>
   `;
+  const foldersHost = container.querySelector('#folders');
   const tableHost = container.querySelector('#table-host');
 
+  function folderCount(id) {
+    if (id === ALLE) return projekte.length;
+    if (id === ALLE_OFFEN) return projekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
+    return projekte.filter((p) => p.status === id).length;
+  }
+
+  function renderFolders() {
+    const items = [
+      { id: ALLE_OFFEN, titel: 'Alle offenen' },
+      { id: ALLE, titel: 'Alle Projekte' },
+      ...spalten.map((s) => ({ id: s.id, titel: s.titel })),
+    ];
+    foldersHost.innerHTML = items.map((it) => `
+      <button type="button" class="folder-item ${folder === it.id ? 'active' : ''}" data-folder="${it.id}">
+        <span>${escapeHtml(it.titel)}</span><span class="count">${folderCount(it.id)}</span>
+      </button>
+    `).join('');
+    foldersHost.querySelectorAll('.folder-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        folder = btn.dataset.folder;
+        applyFilter();
+      });
+    });
+  }
+
   function applyFilter() {
+    renderFolders();
     const q = container.querySelector('#search').value.trim().toLowerCase();
-    const status = container.querySelector('#status-filter').value;
     filtered = projekte.filter((p) => {
-      if (status && p.status !== status) return false;
+      if (folder === ALLE_OFFEN && spaltenById[p.status]?.geschlossen) return false;
+      if (folder !== ALLE && folder !== ALLE_OFFEN && p.status !== folder) return false;
       if (!q) return true;
       const kunde = kundenById[p.kundeId];
       return [p.titel, kunde?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -45,12 +85,13 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Titel</th><th>Kunde</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr><th>Titel</th><th>Kunde</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
           ${filtered.map((p) => `
             <tr data-id="${p.id}">
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
+              <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
               <td><span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span></td>
               <td>${formatDate(p.start)}</td>
               <td>${formatDate(p.ende)}</td>
@@ -65,14 +106,17 @@ export async function render(container) {
   }
 
   container.querySelector('#search').addEventListener('input', applyFilter);
-  container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
   function openForm(p) {
     const isEdit = !!p;
-    const data = p || { id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '', start: '', ende: '', mitarbeiterIds: [], createdAt: new Date().toISOString() };
+    const data = p || {
+      id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
+      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', createdAt: new Date().toISOString(),
+    };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
+    const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
     const { body, close } = openModal({
       title: isEdit ? 'Projekt bearbeiten' : 'Neues Projekt',
@@ -86,6 +130,12 @@ export async function render(container) {
             </div>
             <div class="field"><label>Status</label>
               <select name="status">${spalten.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Bereich</label>
+              <select name="bereich" id="f-bereich">${BEREICHE.map((b) => `<option value="${b.id}" ${b.id === data.bereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Kategorie</label>
+              <select name="kategorieId" id="f-kategorie">${kategorienForBereich(data.bereich).map((k) => `<option value="${k.id}" ${k.id === data.kategorieId ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Start</label><input type="date" name="start" value="${data.start || ''}"></div>
             <div class="field"><label>Ende</label><input type="date" name="ende" value="${data.ende || ''}"></div>
@@ -108,6 +158,8 @@ export async function render(container) {
             ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
             <div class="divider"></div>
             <div id="foto-host"></div>
+            <div class="divider"></div>
+            <div id="dok-host"></div>
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -117,6 +169,10 @@ export async function render(container) {
           </div>
         </form>
       `,
+    });
+    body.querySelector('#f-bereich').addEventListener('change', (e) => {
+      const sel = body.querySelector('#f-kategorie');
+      sel.innerHTML = kategorienForBereich(e.target.value).map((k) => `<option value="${k.id}">${escapeHtml(k.titel)}</option>`).join('');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
@@ -128,13 +184,17 @@ export async function render(container) {
         render(container);
       });
       renderFotoSection(body.querySelector('#foto-host'), data.id);
+      renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
+        title: 'Dokumente (Berichte, Stundenzettel, ...)',
+        berichtContext: { firma: settings.firmenname, kunde: kundenById[data.kundeId]?.firma || '', projekt: data.titel },
+      });
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
-      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung']) {
+      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.titel) return;
@@ -145,5 +205,5 @@ export async function render(container) {
     });
   }
 
-  renderTable();
+  applyFilter();
 }

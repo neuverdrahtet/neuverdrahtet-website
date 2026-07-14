@@ -12,7 +12,7 @@ export async function render(container) {
       <h1>Vorlagen</h1>
       <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neue Vorlage</button></div>
     </div>
-    <p class="hint">Vorlagen bündeln mehrere Positionen (z.B. ein Standardpaket "Steckdose montieren"), die du in Angeboten/Rechnungen mit einem Klick übernehmen kannst.</p>
+    <p class="hint">Positions-Vorlagen bündeln Positionen für Angebote/Rechnungen. Dokumentations-Vorlagen sind Text-Bausteine für Berichte (z.B. Abnahmeprotokoll), die du bei einem Projekt-Dokument einfügen kannst.</p>
     <div id="table-host"></div>
   `;
   const tableHost = container.querySelector('#table-host');
@@ -24,15 +24,17 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Name</th><th>Positionen</th><th class="text-right">Summe (netto)</th></tr></thead>
+        <thead><tr><th>Typ</th><th>Name</th><th>Positionen</th><th class="text-right">Summe (netto)</th></tr></thead>
         <tbody>
           ${vorlagen.map((v) => {
+            const isDok = v.typ === 'dokumentation';
             const summe = (v.positionen || []).reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0);
             return `
             <tr data-id="${v.id}">
+              <td><span class="badge ${isDok ? 'badge-success' : 'badge-accent'}">${isDok ? 'Dokumentation' : 'Positionen'}</span></td>
               <td>${escapeHtml(v.name)}</td>
-              <td>${(v.positionen || []).length}</td>
-              <td class="text-right">${formatCurrency(summe)}</td>
+              <td>${isDok ? '–' : (v.positionen || []).length}</td>
+              <td class="text-right">${isDok ? '–' : formatCurrency(summe)}</td>
             </tr>
           `; }).join('')}
         </tbody>
@@ -47,17 +49,37 @@ export async function render(container) {
 
   function openForm(v) {
     const isEdit = !!v;
-    const data = v || { id: uid(), name: '', positionen: [] };
+    const data = v || { id: uid(), typ: 'positionen', name: '', positionen: [], textVorlage: '' };
+
+    function bodyFor(typ) {
+      if (typ === 'dokumentation') {
+        return `
+          <div class="divider"></div>
+          <div class="field">
+            <label>Text-Vorlage</label>
+            <textarea name="textVorlage" style="min-height:220px" placeholder="Platzhalter: {{firma}}, {{kunde}}, {{projekt}}, {{datum}}">${escapeHtml(data.textVorlage || '')}</textarea>
+          </div>
+          <p class="hint">Diese Vorlage steht bei Projekt-Dokumenten unter "Bericht aus Vorlage erstellen" zur Auswahl.</p>
+        `;
+      }
+      return `<div class="divider"></div><div id="pos-host"></div>`;
+    }
+
     const { body, close } = openModal({
       title: isEdit ? 'Vorlage bearbeiten' : 'Neue Vorlage',
       wide: true,
       bodyHtml: `
         <form id="vorlage-form">
           <div class="form-grid">
-            <div class="field col-span-2"><label>Name *</label><input name="name" required value="${escapeHtml(data.name)}"></div>
+            <div class="field"><label>Name *</label><input name="name" required value="${escapeHtml(data.name)}"></div>
+            <div class="field"><label>Typ</label>
+              <select name="typ" id="f-typ">
+                <option value="positionen" ${data.typ !== 'dokumentation' ? 'selected' : ''}>Positionen (Angebot/Rechnung)</option>
+                <option value="dokumentation" ${data.typ === 'dokumentation' ? 'selected' : ''}>Dokumentation (Bericht)</option>
+              </select>
+            </div>
           </div>
-          <div class="divider"></div>
-          <div id="pos-host"></div>
+          <div id="typ-body">${bodyFor(data.typ)}</div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             <span class="spacer"></span>
@@ -68,11 +90,25 @@ export async function render(container) {
       `,
     });
 
-    const editor = createPositionsEditor({
+    let editor = data.typ !== 'dokumentation' ? createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
+    }) : null;
+
+    body.querySelector('#f-typ').addEventListener('change', (e) => {
+      body.querySelector('#typ-body').innerHTML = bodyFor(e.target.value);
+      if (e.target.value === 'dokumentation') {
+        editor = null;
+      } else {
+        editor = createPositionsEditor({
+          host: body.querySelector('#pos-host'),
+          katalog,
+          positionen: data.positionen,
+          defaultSteuersatz: settings.standardSteuersatz,
+        });
+      }
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -88,7 +124,14 @@ export async function render(container) {
     body.querySelector('#vorlage-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
-      const updated = { ...data, name: (fd.get('name') || '').toString().trim(), positionen: editor.getPositionen() };
+      const typ = fd.get('typ') || 'positionen';
+      const updated = {
+        ...data,
+        name: (fd.get('name') || '').toString().trim(),
+        typ,
+        positionen: typ === 'dokumentation' ? [] : editor.getPositionen(),
+        textVorlage: typ === 'dokumentation' ? (fd.get('textVorlage') || '').toString() : '',
+      };
       if (!updated.name) return;
       await put('vorlagen', updated);
       toast(isEdit ? 'Vorlage aktualisiert' : 'Vorlage angelegt', 'success');
