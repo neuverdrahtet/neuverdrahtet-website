@@ -1,0 +1,205 @@
+import { getAll, put, remove, getSettings, setSettings } from '../db.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNummer, toast, calcTotals } from '../utils.js';
+import { openModal, confirmDelete } from '../ui.js';
+import { createPositionsEditor } from '../positions.js';
+import { printHtml, buildDocHtml } from '../pdf.js';
+
+const STATUS_LABEL = {
+  entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
+};
+const STATUS_BADGE = {
+  entwurf: 'badge', versendet: 'badge-accent', angenommen: 'badge-success', abgelehnt: 'badge-danger',
+};
+
+export async function render(container) {
+  let [angebote, kunden, projekte, katalog, settings] = await Promise.all([
+    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(),
+  ]);
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
+  let filtered = angebote;
+
+  container.innerHTML = `
+    <div class="view-header">
+      <h1>Angebote</h1>
+      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neues Angebot</button></div>
+    </div>
+    <div class="search-bar">
+      <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
+      <select id="status-filter">
+        <option value="">Alle Status</option>
+        ${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
+      </select>
+    </div>
+    <div id="table-host"></div>
+  `;
+  const tableHost = container.querySelector('#table-host');
+
+  function applyFilter() {
+    const q = container.querySelector('#search').value.trim().toLowerCase();
+    const status = container.querySelector('#status-filter').value;
+    filtered = angebote.filter((a) => {
+      if (status && a.status !== status) return false;
+      if (!q) return true;
+      return [a.nummer, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
+    });
+    renderTable();
+  }
+
+  function renderTable() {
+    if (filtered.length === 0) {
+      tableHost.innerHTML = `<div class="empty-state">Noch keine Angebote erstellt.</div>`;
+      return;
+    }
+    tableHost.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Gültig bis</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
+        <tbody>
+          ${filtered.map((a) => `
+            <tr data-id="${a.id}">
+              <td>${escapeHtml(a.nummer)}</td>
+              <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
+              <td>${formatDate(a.datum)}</td>
+              <td>${formatDate(a.gueltigBis)}</td>
+              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}">${STATUS_LABEL[a.status] || a.status}</span></td>
+              <td class="text-right">${formatCurrency(a.brutto)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+    tableHost.querySelectorAll('tbody tr').forEach((row) => {
+      row.addEventListener('click', () => openForm(angebote.find((a) => a.id === row.dataset.id)));
+    });
+  }
+
+  container.querySelector('#search').addEventListener('input', applyFilter);
+  container.querySelector('#status-filter').addEventListener('change', applyFilter);
+  container.querySelector('#btn-new').addEventListener('click', () => openForm());
+
+  function openForm(a) {
+    const isEdit = !!a;
+    const data = a || {
+      id: uid(), nummer: '', kundeId: '', projektId: '', datum: todayISO(),
+      gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
+      status: 'entwurf', betreff: '', notizen: '', positionen: [], createdAt: new Date().toISOString(),
+    };
+
+    const { body, close } = openModal({
+      title: isEdit ? `Angebot ${data.nummer}` : 'Neues Angebot',
+      wide: true,
+      bodyHtml: `
+        <form id="ang-form">
+          <div class="form-grid">
+            <div class="field"><label>Kunde *</label>
+              <select name="kundeId" required><option value="">– wählen –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Projekt</label>
+              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
+            <div class="field"><label>Gültig bis</label><input type="date" name="gueltigBis" value="${data.gueltigBis}"></div>
+            <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Angebot für Elektroinstallation"></div>
+            ${isEdit ? `<div class="field"><label>Status</label>
+              <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+            </div>` : ''}
+          </div>
+          <div class="divider"></div>
+          <div id="pos-host"></div>
+          <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
+          <div class="modal-actions">
+            ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
+            ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+
+    const editor = createPositionsEditor({
+      host: body.querySelector('#pos-host'),
+      katalog,
+      positionen: data.positionen,
+      defaultSteuersatz: settings.standardSteuersatz,
+    });
+
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (isEdit) {
+      body.querySelector('#btn-delete').addEventListener('click', async () => {
+        if (!confirmDelete(`Angebot ${data.nummer} wirklich löschen?`)) return;
+        await remove('angebote', data.id);
+        toast('Angebot gelöscht');
+        close();
+        render(container);
+      });
+      body.querySelector('#btn-print').addEventListener('click', () => {
+        const totals = editor.getTotals();
+        const html = buildDocHtml({
+          settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
+          refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
+          kunde: kundenById[data.kundeId], betreff: data.betreff,
+          introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
+          positionen: editor.getPositionen(), totals,
+          closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
+        });
+        printHtml(html);
+      });
+      const toRechnungBtn = body.querySelector('#btn-to-rechnung');
+      if (toRechnungBtn) {
+        toRechnungBtn.addEventListener('click', async () => {
+          const totals = editor.getTotals();
+          const rSettings = await getSettings();
+          const nummer = nextNummer(rSettings.rechnungPrefix, rSettings.naechsteRechnungNr);
+          const rechnung = {
+            id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
+            datum: todayISO(), faelligAm: addDays(todayISO(), rSettings.zahlungszielTage || 14),
+            status: 'offen', betreff: data.betreff, notizen: data.notizen,
+            positionen: editor.getPositionen(), netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+            createdAt: new Date().toISOString(),
+          };
+          await put('rechnungen', rechnung);
+          await setSettings({ naechsteRechnungNr: rSettings.naechsteRechnungNr + 1 });
+          toast('Rechnung aus Angebot erstellt', 'success');
+          close();
+          window.location.hash = '#/rechnungen';
+        });
+      }
+    }
+
+    body.querySelector('#ang-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = { ...data };
+      updated.kundeId = fd.get('kundeId') || '';
+      updated.projektId = fd.get('projektId') || '';
+      updated.datum = fd.get('datum') || todayISO();
+      updated.gueltigBis = fd.get('gueltigBis') || '';
+      updated.betreff = (fd.get('betreff') || '').toString().trim();
+      updated.notizen = (fd.get('notizen') || '').toString().trim();
+      if (isEdit) updated.status = fd.get('status') || data.status;
+      if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
+
+      updated.positionen = editor.getPositionen();
+      const totals = calcTotals(updated.positionen);
+      updated.netto = totals.netto;
+      updated.steuer = totals.steuer;
+      updated.brutto = totals.brutto;
+
+      if (!isEdit) {
+        const currentSettings = await getSettings();
+        updated.nummer = nextNummer(currentSettings.angebotPrefix, currentSettings.naechsteAngebotNr);
+        await setSettings({ naechsteAngebotNr: currentSettings.naechsteAngebotNr + 1 });
+      }
+
+      await put('angebote', updated);
+      toast(isEdit ? 'Angebot aktualisiert' : 'Angebot angelegt', 'success');
+      close();
+      render(container);
+    });
+  }
+
+  renderTable();
+}
