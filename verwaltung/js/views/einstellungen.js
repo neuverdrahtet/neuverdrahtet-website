@@ -50,6 +50,22 @@ export async function render(container) {
     </div>
 
     <div class="card">
+      <h2>Zeiterfassung &amp; Buchhaltung</h2>
+      <form id="buch-form">
+        <div class="form-grid">
+          <div class="field"><label>Stundensatz für Zeiterfassung (€)</label><input type="number" step="0.01" min="0" name="stundensatz" value="${settings.stundensatz}"></div>
+          <div class="field"></div>
+          <div class="field"><label>DATEV Berater-Nr.</label><input name="datevBeraterNr" value="${escapeHtml(settings.datevBeraterNr || '')}"></div>
+          <div class="field"><label>DATEV Mandanten-Nr.</label><input name="datevMandantNr" value="${escapeHtml(settings.datevMandantNr || '')}"></div>
+          <div class="field"><label>Erlöskonto (SKR)</label><input name="datevErloesKonto" value="${escapeHtml(settings.datevErloesKonto)}"></div>
+          <div class="field"><label>Aufwandskonto (SKR)</label><input name="datevAufwandKonto" value="${escapeHtml(settings.datevAufwandKonto)}"></div>
+        </div>
+        <p class="hint">Die DATEV-Felder werden nur für den Buchhaltungsexport benötigt – bitte mit deinem Steuerberater abstimmen.</p>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Zugangscode</h2>
       <p class="hint">Optionaler Zugangscode für dieses Gerät. Hinweis: Dies ist kein vollwertiger Passwortschutz, sondern nur eine einfache Zugriffshürde – die Daten liegen unverschlüsselt im Browser dieses Geräts.</p>
       <form id="pw-form">
@@ -83,6 +99,20 @@ export async function render(container) {
     </div>
 
     <div class="card">
+      <h2>KI-Angebotserstellung</h2>
+      <p class="hint">
+        Erstellt Angebotspositionen automatisch aus Stichpunkten (z.B. auf der Baustelle diktiert). Dafür wird ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt, der deinen Anthropic-API-Schlüssel sicher verwahrt – der Schlüssel selbst liegt niemals im Browser. Details/Einrichtung: Ordner <code>cloudflare-worker/</code> im Projekt bzw. frag im Chat nach.
+      </p>
+      <form id="ai-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Worker-URL</label><input name="aiWorkerUrl" placeholder="https://neuverdrahtet-ki-angebote.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.aiWorkerUrl || '')}"></div>
+          <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="aiAppSecret" value="${escapeHtml(settings.aiAppSecret || '')}"></div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Datensicherung / Geräte-Sync</h2>
       <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
       <div class="flex-row flex-wrap">
@@ -103,6 +133,29 @@ export async function render(container) {
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
     await setSettings(update);
     toast('Firmendaten gespeichert', 'success');
+  });
+
+  container.querySelector('#buch-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      stundensatz: Number(fd.get('stundensatz')) || 0,
+      datevBeraterNr: (fd.get('datevBeraterNr') || '').toString().trim(),
+      datevMandantNr: (fd.get('datevMandantNr') || '').toString().trim(),
+      datevErloesKonto: (fd.get('datevErloesKonto') || '8400').toString().trim(),
+      datevAufwandKonto: (fd.get('datevAufwandKonto') || '4900').toString().trim(),
+    });
+    toast('Gespeichert', 'success');
+  });
+
+  container.querySelector('#ai-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      aiWorkerUrl: (fd.get('aiWorkerUrl') || '').toString().trim(),
+      aiAppSecret: (fd.get('aiAppSecret') || '').toString().trim(),
+    });
+    toast('KI-Einstellungen gespeichert', 'success');
   });
 
   container.querySelector('#google-form').addEventListener('submit', async (e) => {

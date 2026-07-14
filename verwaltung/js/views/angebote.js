@@ -5,6 +5,8 @@ import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
+import { sendDocumentViaWhatsApp } from '../whatsapp.js';
+import { generateAngebotFromStichpunkte } from '../ai.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -14,8 +16,8 @@ const STATUS_BADGE = {
 };
 
 export async function render(container) {
-  let [angebote, kunden, projekte, katalog, settings] = await Promise.all([
-    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(),
+  let [angebote, kunden, projekte, katalog, settings, vorlagen] = await Promise.all([
+    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
@@ -107,12 +109,16 @@ export async function render(container) {
             </div>` : ''}
           </div>
           <div class="divider"></div>
+          <div class="flex-row" style="margin-bottom:10px">
+            <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
+          </div>
           <div id="pos-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
+            ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -122,11 +128,45 @@ export async function render(container) {
       `,
     });
 
-    const editor = createPositionsEditor({
+let editor = createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
+      vorlagen,
+    });
+
+    body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
+      const stichpunkte = window.prompt('Stichpunkte für das Angebot (z.B. "3 Steckdosen Wohnzimmer, 1 neuer Sicherungskasten, Verkabelung Garage"):');
+      if (!stichpunkte || !stichpunkte.trim()) return;
+      const btn = body.querySelector('#btn-ki-erstellen');
+      btn.disabled = true;
+      btn.textContent = 'KI erstellt Vorschlag ...';
+      try {
+        const kundeId = body.querySelector('select[name="kundeId"]').value;
+        const kunde = kundenById[kundeId];
+        const result = await generateAngebotFromStichpunkte({
+          stichpunkte, kundeName: kunde?.firma, katalog,
+        });
+        if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
+        if (result.einleitung) {
+          const notizenField = body.querySelector('textarea[name="notizen"]');
+          notizenField.value = result.einleitung + (notizenField.value ? '\n\n' + notizenField.value : '');
+        }
+        const neuePositionen = [
+          ...editor.getPositionen(),
+          ...(result.positionen || []).map((p) => ({ ...p, id: uid() })),
+        ];
+        editor = createPositionsEditor({
+          host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen,
+          defaultSteuersatz: settings.standardSteuersatz, vorlagen,
+        });
+        toast(`${(result.positionen || []).length} Positionen von der KI übernommen`, 'success');
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+      btn.disabled = false;
+      btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -162,6 +202,18 @@ export async function render(container) {
             bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
             filename: `Angebot-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+          });
+        });
+      }
+      const whatsappBtn = body.querySelector('#btn-whatsapp');
+      if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', () => {
+          const kunde = kundenById[data.kundeId];
+          sendDocumentViaWhatsApp({
+            phone: kunde?.telefon,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            pdfBlob: buildDocPdfBlob(docOpts()),
+            filename: `Angebot-${data.nummer}.pdf`,
           });
         });
       }

@@ -1,6 +1,7 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { renderFotoSection } from '../fotos.js';
 
 export async function render(container) {
   let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen] = await Promise.all([
@@ -105,6 +106,8 @@ export async function render(container) {
             ${linkedAngebote.length ? `<ul class="cal-event-list">${linkedAngebote.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Angebote verknüpft.</p>'}
             <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
             ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
+            <div class="divider"></div>
+            <div id="foto-host"></div>
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -124,6 +127,7 @@ export async function render(container) {
         close();
         render(container);
       });
+      renderFotoSection(body.querySelector('#foto-host'), data.id);
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
