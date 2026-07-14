@@ -7,6 +7,21 @@ function parseNumber(str) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function cellToText(cell) {
+  if (cell == null) return '';
+  if (typeof cell === 'number') return String(cell).replace('.', ',');
+  return String(cell).trim();
+}
+
+async function excelFileToCsvText(file) {
+  if (!window.XLSX) throw new Error('Excel-Bibliothek konnte nicht geladen werden.');
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+  return rows.map((row) => row.map(cellToText).join(';')).join('\n');
+}
+
 function parseKatalogCsv(text, standardSteuersatz) {
   const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -107,10 +122,10 @@ export async function render(container) {
       title: 'Material / Leistungen importieren',
       wide: true,
       bodyHtml: `
-        <p class="hint">CSV einfügen oder Datei wählen. Spalten (mit Semikolon oder Komma getrennt): <code>Typ;Bezeichnung;Einheit;Preis;USt</code> – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Typ;Bezeichnung;Einheit;Preis;USt</code> – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
         <div class="field" style="margin-bottom:10px">
-          <label>CSV-Datei</label>
-          <input type="file" id="import-file" accept=".csv,text/csv,text/plain">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
         </div>
         <div class="field">
           <label>oder CSV-Text einfügen</label>
@@ -129,7 +144,12 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     body.querySelector('#import-file').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      body.querySelector('#import-text').value = await file.text();
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
     });
     body.querySelector('#btn-do-import').addEventListener('click', async () => {
       const text = body.querySelector('#import-text').value;
