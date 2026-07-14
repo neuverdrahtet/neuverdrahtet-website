@@ -2,5 +2,6 @@ User-agent: *
 Allow: /
 Disallow: /danke.html
 Disallow: /404.html
+Disallow: /verwaltung/
 
 Sitemap: https://www.neuverdrahtet.com/sitemap.xml

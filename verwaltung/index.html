@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Verwaltung · neuverdrahtet</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="lock-screen" class="lock-screen" hidden>
+  <form id="lock-form" class="lock-box">
+    <h1>neuverdrahtet Verwaltung</h1>
+    <p>Bitte Zugangscode eingeben.</p>
+    <input type="password" id="lock-input" autocomplete="off" placeholder="Zugangscode" required>
+    <button type="submit">Entsperren</button>
+    <p id="lock-error" class="lock-error" hidden>Falscher Code.</p>
+  </form>
+</div>
+
+<div id="app" class="app" hidden>
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <img src="../logo-nav.png" alt="neuverdrahtet" onerror="this.style.display='none'">
+      <span>Verwaltung</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="#/dashboard" data-route="dashboard">📊 Dashboard</a>
+      <a href="#/kunden" data-route="kunden">👥 Kunden</a>
+      <a href="#/kanban" data-route="kanban">🗂️ Kanban</a>
+      <a href="#/projekte" data-route="projekte">📁 Projekte</a>
+      <a href="#/kalender" data-route="kalender">📅 Kalender</a>
+      <a href="#/mitarbeiter" data-route="mitarbeiter">🧑‍🔧 Mitarbeiter</a>
+      <a href="#/katalog" data-route="katalog">🧾 Artikel &amp; Leistungen</a>
+      <a href="#/angebote" data-route="angebote">📄 Angebote</a>
+      <a href="#/rechnungen" data-route="rechnungen">💶 Rechnungen</a>
+      <a href="#/mahnungen" data-route="mahnungen">⚠️ Mahnungen</a>
+      <a href="#/einstellungen" data-route="einstellungen">⚙️ Einstellungen</a>
+    </nav>
+    <div class="sidebar-footer">
+      <a href="../index.html">← zur Website</a>
+    </div>
+  </aside>
+  <main id="view" class="view"></main>
+</div>
+
+<div id="print-root" class="print-root"></div>
+<div id="toast-host" class="toast-host"></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

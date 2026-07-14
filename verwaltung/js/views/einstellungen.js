@@ -1,0 +1,141 @@
+import { getSettings, setSettings, exportAll, importAll } from '../db.js';
+import { escapeHtml, toast } from '../utils.js';
+import { confirmDelete } from '../ui.js';
+
+export async function render(container) {
+  const settings = await getSettings();
+
+  container.innerHTML = `
+    <div class="view-header"><h1>Einstellungen</h1></div>
+
+    <div class="card">
+      <h2>Firmendaten</h2>
+      <form id="firma-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Firmenname</label><input name="firmenname" value="${escapeHtml(settings.firmenname)}"></div>
+          <div class="field"><label>Straße &amp; Hausnr.</label><input name="strasse" value="${escapeHtml(settings.strasse)}"></div>
+          <div class="field"><label>PLZ &amp; Ort</label><input name="plzOrt" value="${escapeHtml(settings.plzOrt)}"></div>
+          <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(settings.telefon)}"></div>
+          <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(settings.email)}"></div>
+          <div class="field"><label>USt-IdNr.</label><input name="ustId" value="${escapeHtml(settings.ustId)}"></div>
+          <div class="field"><label>Steuernummer</label><input name="steuernummer" value="${escapeHtml(settings.steuernummer)}"></div>
+          <div class="field"><label>IBAN</label><input name="iban" value="${escapeHtml(settings.iban)}"></div>
+          <div class="field"><label>BIC</label><input name="bic" value="${escapeHtml(settings.bic)}"></div>
+          <div class="field"><label>Bank</label><input name="bank" value="${escapeHtml(settings.bank)}"></div>
+          <div class="field field-checkbox col-span-2"><input type="checkbox" name="kleinunternehmer" id="ku" ${settings.kleinunternehmer ? 'checked' : ''}><label for="ku">Kleinunternehmer nach §19 UStG (keine USt. ausweisen)</label></div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Nummernkreise &amp; Fristen</h2>
+      <form id="nr-form">
+        <div class="form-grid">
+          <div class="field"><label>Angebots-Präfix</label><input name="angebotPrefix" value="${escapeHtml(settings.angebotPrefix)}"></div>
+          <div class="field"><label>Nächste Angebotsnummer</label><input type="number" min="1" name="naechsteAngebotNr" value="${settings.naechsteAngebotNr}"></div>
+          <div class="field"><label>Rechnungs-Präfix</label><input name="rechnungPrefix" value="${escapeHtml(settings.rechnungPrefix)}"></div>
+          <div class="field"><label>Nächste Rechnungsnummer</label><input type="number" min="1" name="naechsteRechnungNr" value="${settings.naechsteRechnungNr}"></div>
+          <div class="field"><label>Standard USt.-Satz (%)</label><input type="number" name="standardSteuersatz" value="${settings.standardSteuersatz}"></div>
+          <div class="field"><label>Angebot gültig (Tage)</label><input type="number" name="angebotGueltigTage" value="${settings.angebotGueltigTage}"></div>
+          <div class="field"><label>Zahlungsziel Rechnung (Tage)</label><input type="number" name="zahlungszielTage" value="${settings.zahlungszielTage}"></div>
+          <div class="field"><label>Mahnfrist (Tage)</label><input type="number" name="mahnfristTage" value="${settings.mahnfristTage}"></div>
+          <div class="field"><label>Mahngebühr Stufe 1 (€)</label><input type="number" step="0.01" name="mahn1" value="${settings.mahnGebuehr?.[1] ?? 0}"></div>
+          <div class="field"><label>Mahngebühr Stufe 2 (€)</label><input type="number" step="0.01" name="mahn2" value="${settings.mahnGebuehr?.[2] ?? 0}"></div>
+          <div class="field"><label>Mahngebühr Stufe 3 (€)</label><input type="number" step="0.01" name="mahn3" value="${settings.mahnGebuehr?.[3] ?? 0}"></div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Zugangscode</h2>
+      <p class="hint">Optionaler Zugangscode für dieses Gerät. Hinweis: Dies ist kein vollwertiger Passwortschutz, sondern nur eine einfache Zugriffshürde – die Daten liegen unverschlüsselt im Browser dieses Geräts.</p>
+      <form id="pw-form">
+        <div class="form-grid">
+          <div class="field"><label>Zugangscode (leer = kein Schutz)</label><input name="passcode" value="${escapeHtml(settings.passcode || '')}"></div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Datensicherung / Geräte-Sync</h2>
+      <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
+      <div class="flex-row flex-wrap">
+        <button class="btn" id="btn-export">Daten exportieren (JSON)</button>
+        <button class="btn" id="btn-import">Daten importieren ...</button>
+        <input type="file" id="import-file" accept="application/json" hidden>
+      </div>
+    </div>
+  `;
+
+  container.querySelector('#firma-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const update = {};
+    for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank']) {
+      update[key] = (fd.get(key) || '').toString().trim();
+    }
+    update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
+    await setSettings(update);
+    toast('Firmendaten gespeichert', 'success');
+  });
+
+  container.querySelector('#nr-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      angebotPrefix: fd.get('angebotPrefix') || 'AN-',
+      naechsteAngebotNr: Number(fd.get('naechsteAngebotNr')) || 1,
+      rechnungPrefix: fd.get('rechnungPrefix') || 'RE-',
+      naechsteRechnungNr: Number(fd.get('naechsteRechnungNr')) || 1,
+      standardSteuersatz: Number(fd.get('standardSteuersatz')) || 19,
+      angebotGueltigTage: Number(fd.get('angebotGueltigTage')) || 30,
+      zahlungszielTage: Number(fd.get('zahlungszielTage')) || 14,
+      mahnfristTage: Number(fd.get('mahnfristTage')) || 10,
+      mahnGebuehr: [0, Number(fd.get('mahn1')) || 0, Number(fd.get('mahn2')) || 0, Number(fd.get('mahn3')) || 0],
+    });
+    toast('Einstellungen gespeichert', 'success');
+  });
+
+  container.querySelector('#pw-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({ passcode: (fd.get('passcode') || '').toString().trim() });
+    toast('Zugangscode gespeichert. Wird nach Neuladen aktiv.', 'success');
+  });
+
+  container.querySelector('#btn-export').addEventListener('click', async () => {
+    const data = await exportAll();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `neuverdrahtet-verwaltung-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Export erstellt', 'success');
+  });
+
+  const fileInput = container.querySelector('#import-file');
+  container.querySelector('#btn-import').addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    if (!confirmDelete('Import fügt Daten hinzu bzw. überschreibt vorhandene Einträge mit gleicher ID. Fortfahren?')) {
+      fileInput.value = '';
+      return;
+    }
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      await importAll(data, { replace: false });
+      toast('Import erfolgreich. Seite wird neu geladen.', 'success');
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) {
+      toast('Import fehlgeschlagen: ' + err.message, 'danger');
+    }
+    fileInput.value = '';
+  });
+}
