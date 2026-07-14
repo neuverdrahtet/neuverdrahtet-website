@@ -2,6 +2,8 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
+import { buildDocPdfBlob } from '../docpdf.js';
+import { openEmailComposer } from '../emailsend.js';
 
 const STUFE_TEXT = {
   1: (settings, frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
@@ -67,7 +69,11 @@ export async function render(container) {
                 <td><span class="badge badge-warn">Stufe ${m.stufe}</span></td>
                 <td>${formatDate(m.datum)}</td>
                 <td class="text-right">${formatCurrency(m.gebuehr)}</td>
-                <td><button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button> <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button></td>
+                <td>
+                  <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
+                  ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
+                  <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button>
+                </td>
               </tr>
             `; }).join('')}
           </tbody>
@@ -85,6 +91,9 @@ export async function render(container) {
   container.querySelectorAll('.btn-print-mahnung').forEach((btn) => {
     btn.addEventListener('click', () => printMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
   });
+  container.querySelectorAll('.btn-email-mahnung').forEach((btn) => {
+    btn.addEventListener('click', () => emailMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
+  });
   container.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!confirmDelete('Mahnung wirklich löschen?')) return;
@@ -94,27 +103,39 @@ export async function render(container) {
     });
   });
 
-  function printMahnung(m) {
-    if (!m) return;
+  function mahnungDocOpts(m) {
     const rech = rechnungenById[m.rechnungId];
     const kunde = kundenById[rech?.kundeId];
-    const totals = calcTotals([
-      { menge: 1, einzelpreis: rech?.brutto || 0, steuersatz: 0, bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}` },
-      { menge: 1, einzelpreis: m.gebuehr || 0, steuersatz: 0, bezeichnung: 'Mahngebühr' },
-    ]);
-    const html = buildDocHtml({
+    const positionen = [
+      { bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}`, menge: 1, einheit: '', einzelpreis: rech?.brutto || 0, steuersatz: 0 },
+      { bezeichnung: 'Mahngebühr', menge: 1, einheit: '', einzelpreis: m.gebuehr || 0, steuersatz: 0 },
+    ];
+    return {
       settings, art: `${m.stufe}. Mahnung`, nummer: rech?.nummer || '', datum: m.datum,
       refLabel: 'Neue Zahlungsfrist', refValue: formatDate(m.neueFrist),
       kunde, betreff: `Zahlungserinnerung zu Rechnung ${rech?.nummer || ''} vom ${formatDate(rech?.datum)}`,
       introText: m.text,
-      positionen: [
-        { bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}`, menge: 1, einheit: '', einzelpreis: rech?.brutto || 0, steuersatz: 0 },
-        { bezeichnung: 'Mahngebühr', menge: 1, einheit: '', einzelpreis: m.gebuehr || 0, steuersatz: 0 },
-      ],
-      totals,
+      positionen, totals: calcTotals(positionen),
       closingText: '',
+    };
+  }
+
+  function printMahnung(m) {
+    if (!m) return;
+    printHtml(buildDocHtml(mahnungDocOpts(m)));
+  }
+
+  function emailMahnung(m) {
+    if (!m) return;
+    const rech = rechnungenById[m.rechnungId];
+    const kunde = kundenById[rech?.kundeId];
+    openEmailComposer({
+      to: kunde?.email || '',
+      subject: `${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}`,
+      bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${m.text}\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+      filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
+      buildPdfBlob: () => buildDocPdfBlob(mahnungDocOpts(m)),
     });
-    printHtml(html);
   }
 
   function openForm(rechnung, stufe) {

@@ -1,6 +1,7 @@
 import { getSettings, setSettings, exportAll, importAll } from '../db.js';
 import { escapeHtml, toast } from '../utils.js';
 import { confirmDelete } from '../ui.js';
+import * as google from '../google.js';
 
 export async function render(container) {
   const settings = await getSettings();
@@ -60,6 +61,28 @@ export async function render(container) {
     </div>
 
     <div class="card">
+      <h2>Google-Verbindung (Kalender &amp; Gmail)</h2>
+      <p class="hint">
+        Verbindet die Verwaltung mit deinem Google-Konto, damit Termine mit Google Kalender abgeglichen werden und du Angebote/Rechnungen/Mahnungen direkt per Gmail verschicken kannst.
+        Dafür brauchst du einmalig eine kostenlose <strong>Google Client-ID</strong> aus der Google Cloud Console – frag mich im Chat, wenn du dabei Hilfe brauchst.
+        Die Verbindung gilt jeweils nur für die aktuelle Browser-Sitzung; nach dem Schließen des Browsers musst du dich beim nächsten Mal neu verbinden.
+      </p>
+      <form id="google-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Google Client-ID</label><input name="googleClientId" placeholder="xxxxxxxx.apps.googleusercontent.com" value="${escapeHtml(settings.googleClientId || '')}"></div>
+          <div class="field col-span-2"><label>Kalender-ID</label><input name="googleCalendarId" value="${escapeHtml(settings.googleCalendarId || 'primary')}"><span class="hint mb-0">Meist reicht "primary" (dein Hauptkalender).</span></div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px">
+          <span id="google-status" class="badge ${google.isConnected() ? 'badge-success' : 'badge'}">${google.isConnected() ? 'Verbunden' : 'Nicht verbunden'}</span>
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-google-disconnect" ${google.isConnected() ? '' : 'disabled'}>Trennen</button>
+          <button type="button" class="btn" id="btn-google-connect">Mit Google verbinden</button>
+          <button type="submit" class="btn btn-primary">Speichern</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Datensicherung / Geräte-Sync</h2>
       <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
       <div class="flex-row flex-wrap">
@@ -80,6 +103,32 @@ export async function render(container) {
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
     await setSettings(update);
     toast('Firmendaten gespeichert', 'success');
+  });
+
+  container.querySelector('#google-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      googleClientId: (fd.get('googleClientId') || '').toString().trim(),
+      googleCalendarId: (fd.get('googleCalendarId') || 'primary').toString().trim() || 'primary',
+    });
+    toast('Google-Einstellungen gespeichert', 'success');
+  });
+
+  container.querySelector('#btn-google-connect').addEventListener('click', async () => {
+    try {
+      await google.connect();
+      toast('Mit Google verbunden', 'success');
+      render(container);
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  });
+
+  container.querySelector('#btn-google-disconnect').addEventListener('click', () => {
+    google.disconnect();
+    toast('Google-Verbindung getrennt');
+    render(container);
   });
 
   container.querySelector('#nr-form').addEventListener('submit', async (e) => {
