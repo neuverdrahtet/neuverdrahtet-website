@@ -3,6 +3,8 @@ import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNum
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
+import { buildDocPdfBlob } from '../docpdf.js';
+import { openEmailComposer } from '../emailsend.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -110,6 +112,7 @@ export async function render(container) {
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
+            ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -135,18 +138,33 @@ export async function render(container) {
         close();
         render(container);
       });
-      body.querySelector('#btn-print').addEventListener('click', () => {
+      function docOpts() {
         const totals = editor.getTotals();
-        const html = buildDocHtml({
+        return {
           settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
           positionen: editor.getPositionen(), totals,
           closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
-        });
-        printHtml(html);
+        };
+      }
+      body.querySelector('#btn-print').addEventListener('click', () => {
+        printHtml(buildDocHtml(docOpts()));
       });
+      const emailBtn = body.querySelector('#btn-email');
+      if (emailBtn) {
+        emailBtn.addEventListener('click', () => {
+          const kunde = kundenById[data.kundeId];
+          openEmailComposer({
+            to: kunde?.email || '',
+            subject: `Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            filename: `Angebot-${data.nummer}.pdf`,
+            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+          });
+        });
+      }
       const toRechnungBtn = body.querySelector('#btn-to-rechnung');
       if (toRechnungBtn) {
         toRechnungBtn.addEventListener('click', async () => {

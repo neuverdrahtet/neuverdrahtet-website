@@ -1,6 +1,7 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, el, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import * as google from '../google.js';
 
 export async function render(container) {
   let kunden = await getAll('kunden');
@@ -80,6 +81,14 @@ export async function render(container) {
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
+          ${isEdit && data.email ? `
+            <div class="divider"></div>
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+              <h2 style="font-size:14px;margin:0">E-Mail-Verlauf (Gmail)</h2>
+              <button type="button" class="btn btn-sm" id="btn-load-emails">E-Mails laden</button>
+            </div>
+            <div id="email-history"><p class="text-mute">Noch nicht geladen.</p></div>
+          ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             <span class="spacer"></span>
@@ -99,6 +108,34 @@ export async function render(container) {
         close();
         render(container);
       });
+      const loadEmailsBtn = body.querySelector('#btn-load-emails');
+      if (loadEmailsBtn) {
+        loadEmailsBtn.addEventListener('click', async () => {
+          const host = body.querySelector('#email-history');
+          loadEmailsBtn.disabled = true;
+          loadEmailsBtn.textContent = 'Lädt ...';
+          host.innerHTML = '<p class="text-mute">Lädt ...</p>';
+          try {
+            const emails = await google.searchEmailsForAddress(data.email);
+            host.innerHTML = emails.length === 0
+              ? '<p class="text-mute">Keine E-Mails gefunden.</p>'
+              : `<ul class="cal-event-list">${emails.map((m) => `
+                  <li>
+                    <div>
+                      <strong>${escapeHtml(m.subject)}</strong>
+                      <div class="text-mute">${escapeHtml(m.from)} · ${escapeHtml(m.date)}</div>
+                      <div class="text-mute">${escapeHtml(m.snippet)}</div>
+                    </div>
+                    <a class="btn btn-sm" href="https://mail.google.com/mail/u/0/#all/${m.threadId}" target="_blank" rel="noopener">Öffnen</a>
+                  </li>
+                `).join('')}</ul>`;
+          } catch (err) {
+            host.innerHTML = `<p class="text-mute">Fehler: ${escapeHtml(err.message)}</p>`;
+          }
+          loadEmailsBtn.disabled = false;
+          loadEmailsBtn.textContent = 'E-Mails laden';
+        });
+      }
     }
 
     body.querySelector('#kunde-form').addEventListener('submit', async (e) => {

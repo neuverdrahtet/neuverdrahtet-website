@@ -127,6 +127,8 @@ const DEFAULT_SETTINGS = {
   mahnGebuehr: [0, 5, 10, 15],
   mahnfristTage: 10,
   passcode: '',
+  googleClientId: '',
+  googleCalendarId: 'primary',
 };
 
 const DEFAULT_KANBAN_SPALTEN = [

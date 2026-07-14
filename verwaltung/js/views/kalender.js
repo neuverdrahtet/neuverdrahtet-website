@@ -1,11 +1,17 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import * as google from '../google.js';
+import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 
-export async function render(container) {
+export async function render(container, _route, { autoSync = true } = {}) {
+  if (autoSync && google.isConnected() && (await google.isConfigured())) {
+    try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
+  }
+
   let [termine, kunden, projekte, mitarbeiter] = await Promise.all([
     getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'),
   ]);
@@ -19,7 +25,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Kalender</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neuer Termin</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-sync">🔄 Mit Google synchronisieren</button>
+        <button class="btn btn-primary" id="btn-new">+ Neuer Termin</button>
+      </div>
     </div>
     <div class="card">
       <div class="cal-header">
@@ -30,6 +39,21 @@ export async function render(container) {
       <div class="cal-grid" id="cal-grid"></div>
     </div>
   `;
+
+  container.querySelector('#btn-sync').addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-sync');
+    btn.disabled = true;
+    btn.textContent = 'Synchronisiere ...';
+    try {
+      const result = await syncCalendar();
+      toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.`, 'success');
+      render(container, _route, { autoSync: false });
+    } catch (err) {
+      toast(err.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = '🔄 Mit Google synchronisieren';
+    }
+  });
 
   const grid = container.querySelector('#cal-grid');
   const title = container.querySelector('#cal-title');
@@ -137,10 +161,11 @@ export async function render(container) {
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Termin "${data.titel}" wirklich löschen?`)) return;
+        try { await deleteSyncedEvent(data); } catch (err) { /* ignore Google errors on delete */ }
         await remove('termine', data.id);
         toast('Termin gelöscht');
         close();
-        render(container);
+        render(container, null, { autoSync: false });
       });
     }
     body.querySelector('#termin-form').addEventListener('submit', async (e) => {
@@ -154,11 +179,12 @@ export async function render(container) {
       updated.projektId = fd.get('projektId') || '';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
       updated.notizen = (fd.get('notizen') || '').toString().trim();
+      updated.aktualisiertAm = new Date().toISOString();
       if (!updated.titel) return;
       await put('termine', updated);
       toast(isEdit ? 'Termin aktualisiert' : 'Termin angelegt', 'success');
       close();
-      render(container);
+      render(container, null, { autoSync: false });
     });
   }
 

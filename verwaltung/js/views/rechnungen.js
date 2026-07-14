@@ -3,6 +3,8 @@ import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNum
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
+import { buildDocPdfBlob } from '../docpdf.js';
+import { openEmailComposer } from '../emailsend.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -115,6 +117,7 @@ export async function render(container) {
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
+            ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -139,18 +142,33 @@ export async function render(container) {
         close();
         render(container);
       });
-      body.querySelector('#btn-print').addEventListener('click', () => {
+      function docOpts() {
         const totals = editor.getTotals();
-        const html = buildDocHtml({
+        return {
           settings, art: 'Rechnung', nummer: data.nummer, datum: data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
           positionen: editor.getPositionen(), totals,
           closingText: (data.notizen || '') + `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
-        });
-        printHtml(html);
+        };
+      }
+      body.querySelector('#btn-print').addEventListener('click', () => {
+        printHtml(buildDocHtml(docOpts()));
       });
+      const emailBtn = body.querySelector('#btn-email');
+      if (emailBtn) {
+        emailBtn.addEventListener('click', () => {
+          const kunde = kundenById[data.kundeId];
+          openEmailComposer({
+            to: kunde?.email || '',
+            subject: `Rechnung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            filename: `Rechnung-${data.nummer}.pdf`,
+            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+          });
+        });
+      }
     }
 
     body.querySelector('#re-form').addEventListener('submit', async (e) => {
