@@ -1,4 +1,5 @@
-import { uid, calcTotals, formatCurrency, escapeHtml } from './utils.js';
+import { uid, calcTotals, formatCurrency, escapeHtml, toast } from './utils.js';
+import { put } from './db.js';
 
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
@@ -12,7 +13,7 @@ function totalsHtml(totals) {
   `;
 }
 
-export function createPositionsEditor({ host, katalog, positionen, defaultSteuersatz = 19 }) {
+export function createPositionsEditor({ host, katalog, positionen, defaultSteuersatz = 19, vorlagen = [] }) {
   let posState = (positionen || []).map((p) => ({ ...p, id: p.id || uid() }));
 
   function render() {
@@ -44,6 +45,14 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         </select>
         <button type="button" class="btn btn-sm" id="btn-add-katalog">+ übernehmen</button>
         <button type="button" class="btn btn-sm" id="btn-add-manual">+ freie Position</button>
+        ${vorlagen.length ? `
+          <select class="f-vorlage-select">
+            <option value="">Vorlage einfügen ...</option>
+            ${vorlagen.map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('')}
+          </select>
+          <button type="button" class="btn btn-sm" id="btn-add-vorlage">+ einfügen</button>
+        ` : ''}
+        <button type="button" class="btn btn-sm btn-ghost" id="btn-save-vorlage">Als Vorlage speichern</button>
       </div>
       <div class="totals-box">${totalsHtml(totals)}</div>
     `;
@@ -71,6 +80,27 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     host.querySelector('#btn-add-manual').addEventListener('click', () => {
       posState.push({ id: uid(), bezeichnung: '', einheit: '', menge: 1, einzelpreis: 0, steuersatz: defaultSteuersatz });
       render();
+    });
+
+    const vorlageBtn = host.querySelector('#btn-add-vorlage');
+    if (vorlageBtn) {
+      vorlageBtn.addEventListener('click', () => {
+        const select = host.querySelector('.f-vorlage-select');
+        const vorlage = vorlagen.find((v) => v.id === select.value);
+        if (!vorlage) return;
+        for (const p of vorlage.positionen || []) {
+          posState.push({ ...p, id: uid() });
+        }
+        render();
+      });
+    }
+
+    host.querySelector('#btn-save-vorlage').addEventListener('click', async () => {
+      if (posState.length === 0) { toast('Keine Positionen zum Speichern vorhanden', 'danger'); return; }
+      const name = window.prompt('Name für die neue Vorlage:');
+      if (!name || !name.trim()) return;
+      await put('vorlagen', { id: uid(), name: name.trim(), positionen: posState.map((p) => ({ ...p, id: uid() })) });
+      toast('Vorlage gespeichert', 'success');
     });
 
     function updateSum(row, i) {

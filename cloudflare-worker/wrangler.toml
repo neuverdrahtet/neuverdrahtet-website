@@ -1,0 +1,10 @@
+name = "neuverdrahtet-ki-angebote"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets (ANTHROPIC_API_KEY, APP_SECRET) werden NICHT hier eingetragen,
+# sondern per "wrangler secret put" bzw. im Cloudflare-Dashboard gesetzt.
+
+[vars]
+ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
+MODEL_ID = "claude-opus-4-8"

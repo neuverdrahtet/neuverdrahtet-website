@@ -5,13 +5,15 @@ import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
+import { sendDocumentViaWhatsApp } from '../whatsapp.js';
+import { generateAngebotFromStichpunkte } from '../ai.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
 
 export async function render(container) {
-  let [rechnungen, kunden, projekte, katalog, settings] = await Promise.all([
-    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(),
+  let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen] = await Promise.all([
+    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   rechnungen.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
@@ -112,12 +114,17 @@ export async function render(container) {
             ` : ''}
           </div>
           <div class="divider"></div>
+          <div class="flex-row flex-wrap" style="margin-bottom:10px">
+            <button type="button" class="btn btn-sm" id="btn-zeit-uebernehmen">⏱️ Offene Zeiterfassung übernehmen</button>
+            <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
+          </div>
           <div id="pos-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
+            ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -126,11 +133,60 @@ export async function render(container) {
       `,
     });
 
-    const editor = createPositionsEditor({
+let editor = createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
+      vorlagen,
+    });
+
+    body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
+      const stichpunkte = window.prompt('Stichpunkte für die Rechnung:');
+      if (!stichpunkte || !stichpunkte.trim()) return;
+      const btn = body.querySelector('#btn-ki-erstellen');
+      btn.disabled = true;
+      btn.textContent = 'KI erstellt Vorschlag ...';
+      try {
+        const kundeId = body.querySelector('select[name="kundeId"]').value;
+        const kunde = kundenById[kundeId];
+        const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog });
+        if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
+        if (result.einleitung) {
+          const notizenField = body.querySelector('textarea[name="notizen"]');
+          notizenField.value = result.einleitung + (notizenField.value ? '\n\n' + notizenField.value : '');
+        }
+        const neuePositionen = [...editor.getPositionen(), ...(result.positionen || []).map((p) => ({ ...p, id: uid() }))];
+        editor = createPositionsEditor({
+          host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen,
+          defaultSteuersatz: settings.standardSteuersatz, vorlagen,
+        });
+        toast(`${(result.positionen || []).length} Positionen von der KI übernommen`, 'success');
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+      btn.disabled = false;
+      btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
+    });
+
+    let uebernommeneZeitIds = [];
+    body.querySelector('#btn-zeit-uebernehmen').addEventListener('click', async () => {
+      const projektId = body.querySelector('select[name="projektId"]').value;
+      if (!projektId) { toast('Bitte zuerst ein Projekt wählen', 'danger'); return; }
+      const offen = zeiterfassung.filter((z) => z.projektId === projektId && !z.abgerechnet);
+      if (offen.length === 0) { toast('Keine offenen Zeiten für dieses Projekt', 'info'); return; }
+      const totalMinutes = offen.reduce((s, z) => s + (z.dauerMinuten || 0), 0);
+      const stunden = Math.round((totalMinutes / 60) * 100) / 100;
+      const projekt = projekte.find((p) => p.id === projektId);
+      const neuePositionen = [...editor.getPositionen(), {
+        id: uid(), bezeichnung: `Arbeitszeit ${projekt?.titel || ''}`, beschreibung: '',
+        einheit: 'Std.', menge: stunden, einzelpreis: settings.stundensatz || 0, steuersatz: settings.standardSteuersatz,
+      }];
+      uebernommeneZeitIds = offen.map((z) => z.id);
+      Object.assign(editor, createPositionsEditor({
+        host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen, defaultSteuersatz: settings.standardSteuersatz, vorlagen,
+      }));
+      toast(`${stunden} Std. aus ${offen.length} Zeiteinträgen übernommen`, 'success');
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -169,6 +225,18 @@ export async function render(container) {
           });
         });
       }
+      const whatsappBtn = body.querySelector('#btn-whatsapp');
+      if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', () => {
+          const kunde = kundenById[data.kundeId];
+          sendDocumentViaWhatsApp({
+            phone: kunde?.telefon,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            pdfBlob: buildDocPdfBlob(docOpts()),
+            filename: `Rechnung-${data.nummer}.pdf`,
+          });
+        });
+      }
     }
 
     body.querySelector('#re-form').addEventListener('submit', async (e) => {
@@ -200,6 +268,10 @@ export async function render(container) {
       }
 
       await put('rechnungen', updated);
+      for (const zid of uebernommeneZeitIds) {
+        const z = zeiterfassung.find((e) => e.id === zid);
+        if (z) await put('zeiterfassung', { ...z, abgerechnet: true });
+      }
       toast(isEdit ? 'Rechnung aktualisiert' : 'Rechnung angelegt', 'success');
       close();
       render(container);

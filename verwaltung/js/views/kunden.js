@@ -2,6 +2,7 @@ import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, el, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+import { openWhatsApp } from '../whatsapp.js';
 
 export async function render(container) {
   let kunden = await getAll('kunden');
@@ -91,6 +92,7 @@ export async function render(container) {
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -108,6 +110,12 @@ export async function render(container) {
         close();
         render(container);
       });
+      const whatsappBtn = body.querySelector('#btn-whatsapp');
+      if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', () => {
+          openWhatsApp(data.telefon, `Hallo${data.ansprechpartner ? ' ' + data.ansprechpartner : ''}, hier ist neuverdrahtet.`);
+        });
+      }
       const loadEmailsBtn = body.querySelector('#btn-load-emails');
       if (loadEmailsBtn) {
         loadEmailsBtn.addEventListener('click', async () => {

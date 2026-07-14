@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   kunden: 'id',
@@ -12,6 +12,10 @@ const STORES = {
   rechnungen: 'id',
   mahnungen: 'id',
   einstellungen: 'key',
+  zeiterfassung: 'id',
+  fotos: 'id',
+  vorlagen: 'id',
+  ausgaben: 'id',
 };
 
 export const STORE_NAMES = Object.keys(STORES);
@@ -129,6 +133,13 @@ const DEFAULT_SETTINGS = {
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',
+  stundensatz: 60,
+  datevBeraterNr: '',
+  datevMandantNr: '',
+  datevErloesKonto: '8400',
+  datevAufwandKonto: '4900',
+  aiWorkerUrl: '',
+  aiAppSecret: '',
 };
 
 const DEFAULT_KANBAN_SPALTEN = [

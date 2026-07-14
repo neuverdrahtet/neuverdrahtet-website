@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
+import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 
 const STUFE_TEXT = {
   1: (settings, frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
@@ -72,6 +73,7 @@ export async function render(container) {
                 <td>
                   <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
                   ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
+                  ${kundenById[rech?.kundeId]?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
                   <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button>
                 </td>
               </tr>
@@ -93,6 +95,9 @@ export async function render(container) {
   });
   container.querySelectorAll('.btn-email-mahnung').forEach((btn) => {
     btn.addEventListener('click', () => emailMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
+  });
+  container.querySelectorAll('.btn-whatsapp-mahnung').forEach((btn) => {
+    btn.addEventListener('click', () => whatsappMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
   });
   container.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
     btn.addEventListener('click', async () => {
@@ -135,6 +140,18 @@ export async function render(container) {
       bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${m.text}\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
       filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
       buildPdfBlob: () => buildDocPdfBlob(mahnungDocOpts(m)),
+    });
+  }
+
+  function whatsappMahnung(m) {
+    if (!m) return;
+    const rech = rechnungenById[m.rechnungId];
+    const kunde = kundenById[rech?.kundeId];
+    sendDocumentViaWhatsApp({
+      phone: kunde?.telefon,
+      text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+      pdfBlob: buildDocPdfBlob(mahnungDocOpts(m)),
+      filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
     });
   }
 
