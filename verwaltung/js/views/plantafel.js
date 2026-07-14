@@ -1,145 +1,141 @@
 import { getAll, put, remove, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
-import * as google from '../google.js';
-import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
+
+const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
 }
 
-const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
-const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+function startOfWeek(d) {
+  const date = new Date(d);
+  const offset = (date.getDay() + 6) % 7; // Monday = 0
+  date.setDate(date.getDate() - offset);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
 
-export async function render(container, _route, { autoSync = true } = {}) {
-  if (autoSync && google.isConnected() && (await google.isConfigured())) {
-    try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
-  }
-
+export async function render(container) {
   let [termine, kunden, projekte, mitarbeiter] = await Promise.all([
     getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'),
   ]);
-  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
-  const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
-  const now = new Date();
-  let viewYear = now.getFullYear();
-  let viewMonth = now.getMonth();
+  let weekStart = startOfWeek(new Date());
 
   container.innerHTML = `
     <div class="view-header">
-      <h1>Kalender</h1>
-      <div class="actions">
-        <button class="btn" id="btn-sync">🔄 Mit Google synchronisieren</button>
-        <button class="btn btn-primary" id="btn-new">+ Neuer Termin</button>
-      </div>
+      <h1>Plantafel</h1>
+      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neuer Termin</button></div>
     </div>
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
     <div class="card">
       <div class="cal-header">
-        <button class="btn btn-sm" id="btn-prev">← </button>
-        <div class="cal-title" id="cal-title"></div>
-        <button class="btn btn-sm" id="btn-next">→</button>
+        <button class="btn btn-sm" id="btn-prev">← Woche</button>
+        <div class="cal-title" id="week-title"></div>
+        <button class="btn btn-sm" id="btn-today">Heute</button>
+        <button class="btn btn-sm" id="btn-next">Woche →</button>
       </div>
-      <div class="cal-grid" id="cal-grid"></div>
+      <div id="plantafel-host"></div>
     </div>
   `;
 
-  container.querySelector('#btn-sync').addEventListener('click', async () => {
-    const btn = container.querySelector('#btn-sync');
-    btn.disabled = true;
-    btn.textContent = 'Synchronisiere ...';
-    try {
-      const result = await syncCalendar();
-      toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.`, 'success');
-      render(container, _route, { autoSync: false });
-    } catch (err) {
-      toast(err.message, 'danger');
-      btn.disabled = false;
-      btn.textContent = '🔄 Mit Google synchronisieren';
-    }
-  });
+  const host = container.querySelector('#plantafel-host');
+  const weekTitle = container.querySelector('#week-title');
 
-  const grid = container.querySelector('#cal-grid');
-  const title = container.querySelector('#cal-title');
-
-  function todayStr() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  function terminsOnDay(dateStr) {
-    return termine.filter((t) => (t.start || '').slice(0, 10) === dateStr).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  function fmtDay(d) {
+    return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(d);
   }
 
   function renderGrid() {
-    title.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
-    const first = new Date(viewYear, viewMonth, 1);
-    const startOffset = (first.getDay() + 6) % 7; // Monday = 0
-    const gridStart = new Date(viewYear, viewMonth, 1 - startOffset);
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+    const weekEnd = days[6];
+    weekTitle.textContent = `${fmtDay(weekStart)} – ${fmtDay(weekEnd)} ${weekEnd.getFullYear()}`;
 
-    let html = DOW.map((d) => `<div class="cal-dow">${d}</div>`).join('');
-    const today = todayStr();
-    for (let i = 0; i < 42; i++) {
-      const d = new Date(gridStart);
-      d.setDate(gridStart.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
-      const isOtherMonth = d.getMonth() !== viewMonth;
-      const events = terminsOnDay(dateStr);
-      html += `
-        <div class="cal-day ${isOtherMonth ? 'other-month' : ''} ${dateStr === today ? 'today' : ''}" data-date="${dateStr}">
-          <div class="day-num">${d.getDate()}</div>
-          ${events.slice(0, 3).map((e) => {
-            const ti = typInfo(e.typ);
-            return `<div class="cal-event" data-id="${e.id}" style="background:${ti.farbe}22;color:${ti.farbe}" title="${escapeHtml(ti.titel)}">${escapeHtml(e.titel)}</div>`;
-          }).join('')}
-          ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
-        </div>
-      `;
+    if (mitarbeiter.length === 0) {
+      host.innerHTML = '<div class="empty-state">Noch keine Mitarbeiter angelegt.</div>';
+      return;
     }
-    grid.innerHTML = html;
 
-    grid.querySelectorAll('.cal-event').forEach((el) => {
-      el.addEventListener('click', (e) => {
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    host.innerHTML = `
+      <div class="plantafel-grid" style="grid-template-columns: 160px repeat(7, 1fr);">
+        <div class="plantafel-cell plantafel-head"></div>
+        ${days.map((d) => {
+          const dateStr = d.toISOString().slice(0, 10);
+          return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">${DOW[(d.getDay() + 6) % 7]}<br>${fmtDay(d)}</div>`;
+        }).join('')}
+        ${mitarbeiter.map((m) => `
+          <div class="plantafel-cell plantafel-name">
+            <span class="dot" style="background:${m.farbe || '#f0a020'}"></span>${escapeHtml(m.name)}
+          </div>
+          ${days.map((d) => {
+            const dateStr = d.toISOString().slice(0, 10);
+            const dayTermine = termine.filter((t) => t.mitarbeiterIds?.includes(m.id) && (t.start || '').slice(0, 10) === dateStr);
+            return `
+              <div class="plantafel-cell plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-ma="${m.id}" data-date="${dateStr}">
+                ${dayTermine.map((t) => {
+                  const ti = typInfo(t.typ);
+                  return `<div class="plantafel-chip" data-id="${t.id}" style="background:${ti.farbe}22;color:${ti.farbe};border-color:${ti.farbe}55" title="${escapeHtml(t.titel)}">${escapeHtml(t.titel)}</div>`;
+                }).join('')}
+              </div>
+            `;
+          }).join('')}
+        `).join('')}
+      </div>
+    `;
+
+    host.querySelectorAll('.plantafel-chip').forEach((chip) => {
+      chip.addEventListener('click', (e) => {
         e.stopPropagation();
-        openForm(termine.find((t) => t.id === el.dataset.id));
+        openForm(termine.find((t) => t.id === chip.dataset.id));
       });
     });
-    grid.querySelectorAll('.cal-day').forEach((el) => {
-      el.addEventListener('click', () => openForm(null, el.dataset.date));
+    host.querySelectorAll('.plantafel-day').forEach((cell) => {
+      cell.addEventListener('click', () => openForm(null, { date: cell.dataset.date, mitarbeiterId: cell.dataset.ma }));
     });
   }
 
   container.querySelector('#btn-prev').addEventListener('click', () => {
-    viewMonth--;
-    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    weekStart.setDate(weekStart.getDate() - 7);
     renderGrid();
   });
   container.querySelector('#btn-next').addEventListener('click', () => {
-    viewMonth++;
-    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    weekStart.setDate(weekStart.getDate() + 7);
     renderGrid();
   });
-  container.querySelector('#btn-new').addEventListener('click', () => openForm(null, todayStr()));
+  container.querySelector('#btn-today').addEventListener('click', () => {
+    weekStart = startOfWeek(new Date());
+    renderGrid();
+  });
+  container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
-  function openForm(t, defaultDate) {
+  function openForm(t, prefill) {
     const isEdit = !!t;
+    const todayStr = new Date().toISOString().slice(0, 10);
     const data = t || {
-      id: uid(), titel: '', start: `${defaultDate || todayStr()}T09:00`, ende: '',
-      ort: '', kundeId: '', projektId: '', mitarbeiterIds: [], notizen: '', typ: 'termin',
+      id: uid(), titel: '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
+      ort: '', kundeId: '', projektId: '', mitarbeiterIds: prefill?.mitarbeiterId ? [prefill.mitarbeiterId] : [], notizen: '',
     };
-    const startDate = (data.start || '').slice(0, 10) || defaultDate || todayStr();
+    const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
 
     const { body, close } = openModal({
       title: isEdit ? 'Termin bearbeiten' : 'Neuer Termin',
       bodyHtml: `
-        <form id="termin-form">
+        <form id="pt-form">
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Art</label>
-              <select name="typ">${TERMIN_TYPEN.map((t) => `<option value="${t.id}" ${t.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(t.titel)}</option>`).join('')}</select>
+              <select name="typ">${TERMIN_TYPEN.map((tt) => `<option value="${tt.id}" ${tt.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(tt.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
@@ -174,14 +170,13 @@ export async function render(container, _route, { autoSync = true } = {}) {
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Termin "${data.titel}" wirklich löschen?`)) return;
-        try { await deleteSyncedEvent(data); } catch (err) { /* ignore Google errors on delete */ }
         await remove('termine', data.id);
         toast('Termin gelöscht');
         close();
-        render(container, null, { autoSync: false });
+        render(container);
       });
     }
-    body.querySelector('#termin-form').addEventListener('submit', async (e) => {
+    body.querySelector('#pt-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
@@ -198,7 +193,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       await put('termine', updated);
       toast(isEdit ? 'Termin aktualisiert' : 'Termin angelegt', 'success');
       close();
-      render(container, null, { autoSync: false });
+      render(container);
     });
   }
 

@@ -2,16 +2,17 @@ import { getAll } from '../db.js';
 import { formatCurrency, formatDate, todayISO, escapeHtml } from '../utils.js';
 
 export async function render(container) {
-  const [rechnungen, projekte, termine, kunden] = await Promise.all([
-    getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'),
+  const [rechnungen, projekte, termine, kunden, spalten] = await Promise.all([
+    getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
   ]);
   const today = todayISO();
+  const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
 
   const offen = rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
   const ueberfaellig = offen.filter((r) => r.faelligAm && r.faelligAm < today);
   const offenSumme = offen.reduce((s, r) => s + (r.brutto || 0), 0);
   const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + (r.brutto || 0), 0);
-  const aktiveProjekte = projekte.filter((p) => p.status !== 'abgeschlossen');
+  const aktiveProjekte = projekte.filter((p) => !spaltenById[p.status]?.geschlossen);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
 
   const in7Tage = new Date();

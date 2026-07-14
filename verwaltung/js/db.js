@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
   kunden: 'id',
@@ -16,6 +16,9 @@ const STORES = {
   fotos: 'id',
   vorlagen: 'id',
   ausgaben: 'id',
+  aufgaben: 'id',
+  dokumente: 'id',
+  kategorien: 'id',
 };
 
 export const STORE_NAMES = Object.keys(STORES);
@@ -142,12 +145,55 @@ const DEFAULT_SETTINGS = {
   aiAppSecret: '',
 };
 
-const DEFAULT_KANBAN_SPALTEN = [
-  { id: 'anfrage', titel: 'Anfrage', reihenfolge: 0 },
-  { id: 'angebot', titel: 'Angebot erstellt', reihenfolge: 1 },
-  { id: 'beauftragt', titel: 'Beauftragt', reihenfolge: 2 },
-  { id: 'in-arbeit', titel: 'In Arbeit', reihenfolge: 3 },
-  { id: 'abgeschlossen', titel: 'Abgeschlossen', reihenfolge: 4 },
+export const DEFAULT_KANBAN_SPALTEN = [
+  { id: 'neue-anfrage', titel: 'Neue Anfrage', reihenfolge: 0, geschlossen: false },
+  { id: 'vor-ort-termin', titel: 'Vor-Ort-Termin', reihenfolge: 1, geschlossen: false },
+  { id: 'angebot-erstellt', titel: 'Angebot erstellt', reihenfolge: 2, geschlossen: false },
+  { id: 'angebot-versendet', titel: 'Angebot versendet', reihenfolge: 3, geschlossen: false },
+  { id: 'angebot-abgelehnt', titel: 'Angebot abgelehnt', reihenfolge: 4, geschlossen: false },
+  { id: 'auftragsbestaetigung', titel: 'Auftragsbestätigung', reihenfolge: 5, geschlossen: false },
+  { id: 'abschlagsrechnung', titel: 'Abschlagsrechnung', reihenfolge: 6, geschlossen: false },
+  { id: 'materialbestellung', titel: 'Materialbestellung', reihenfolge: 7, geschlossen: false },
+  { id: 'umsetzungsbeginn', titel: 'Umsetzungsbeginn', reihenfolge: 8, geschlossen: false },
+  { id: 'in-arbeit', titel: 'In Arbeit', reihenfolge: 9, geschlossen: false },
+  { id: 'projekt-erledigt', titel: 'Projekt erledigt', reihenfolge: 10, geschlossen: false },
+  { id: 'kundenrechnung', titel: 'Kundenrechnung', reihenfolge: 11, geschlossen: false },
+  { id: 'reklamation', titel: 'Reklamation', reihenfolge: 12, geschlossen: false },
+  { id: 'abgeschlossen', titel: 'Abgeschlossen', reihenfolge: 13, geschlossen: true },
+  { id: 'archiviert', titel: 'Archiviert', reihenfolge: 14, geschlossen: true },
+];
+
+export const BEREICHE = [
+  { id: 'auftrag', titel: 'Aufträge' },
+  { id: 'service', titel: 'Service' },
+  { id: 'wartung', titel: 'Wartungen & Prüfungen' },
+];
+
+export const DEFAULT_KATEGORIEN = [
+  { id: 'auftrag-elektroinstallation', bereich: 'auftrag', titel: 'Elektroinstallation', reihenfolge: 0 },
+  { id: 'auftrag-neubau', bereich: 'auftrag', titel: 'Neubau', reihenfolge: 1 },
+  { id: 'auftrag-sanierung', bereich: 'auftrag', titel: 'Sanierung / Altbau', reihenfolge: 2 },
+  { id: 'auftrag-smarthome', bereich: 'auftrag', titel: 'Smart Home', reihenfolge: 3 },
+  { id: 'auftrag-sonstiges', bereich: 'auftrag', titel: 'Sonstiges', reihenfolge: 4 },
+  { id: 'service-reparatur', bereich: 'service', titel: 'Reparatur', reihenfolge: 0 },
+  { id: 'service-stoerung', bereich: 'service', titel: 'Störungsbeseitigung', reihenfolge: 1 },
+  { id: 'service-beratung', bereich: 'service', titel: 'Beratung', reihenfolge: 2 },
+  { id: 'service-kleinauftrag', bereich: 'service', titel: 'Kleinauftrag', reihenfolge: 3 },
+  { id: 'service-sonstiges', bereich: 'service', titel: 'Sonstiges', reihenfolge: 4 },
+  { id: 'wartung-echeck', bereich: 'wartung', titel: 'E-Check', reihenfolge: 0 },
+  { id: 'wartung-dguv-v3', bereich: 'wartung', titel: 'Wiederkehrende Prüfung (DGUV V3)', reihenfolge: 1 },
+  { id: 'wartung-uvv', bereich: 'wartung', titel: 'UVV-Prüfung', reihenfolge: 2 },
+  { id: 'wartung-blitzschutz', bereich: 'wartung', titel: 'Blitzschutzprüfung', reihenfolge: 3 },
+  { id: 'wartung-vertrag', bereich: 'wartung', titel: 'Wartungsvertrag', reihenfolge: 4 },
+  { id: 'wartung-sonstiges', bereich: 'wartung', titel: 'Sonstiges', reihenfolge: 5 },
+];
+
+export const TERMIN_TYPEN = [
+  { id: 'termin', titel: 'Termin', farbe: '#2b7fd6' },
+  { id: 'baustelle', titel: 'Baustelle', farbe: '#f0a020' },
+  { id: 'schulung', titel: 'Schulung', farbe: '#8e44ad' },
+  { id: 'krank', titel: 'Krank', farbe: '#c0392b' },
+  { id: 'urlaub', titel: 'Urlaub', farbe: '#1f8a4c' },
 ];
 
 export async function ensureSeeded() {
@@ -158,9 +204,15 @@ export async function ensureSeeded() {
     }
   }
   const spalten = await getAll('kanbanSpalten');
-  if (spalten.length === 0) {
-    for (const s of DEFAULT_KANBAN_SPALTEN) {
-      await put('kanbanSpalten', s);
+  const spaltenIds = new Set(spalten.map((s) => s.id));
+  const missingSpalten = DEFAULT_KANBAN_SPALTEN.filter((s) => !spaltenIds.has(s.id));
+  for (const s of missingSpalten) {
+    await put('kanbanSpalten', { ...s, reihenfolge: spalten.length + missingSpalten.indexOf(s) });
+  }
+  const kategorien = await getAll('kategorien');
+  if (kategorien.length === 0) {
+    for (const k of DEFAULT_KATEGORIEN) {
+      await put('kategorien', k);
     }
   }
 }

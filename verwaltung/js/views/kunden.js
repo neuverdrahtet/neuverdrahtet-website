@@ -1,12 +1,14 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, el, toast } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
 
 export async function render(container) {
-  let kunden = await getAll('kunden');
+  let [kunden, projekte, spalten] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten')]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
+  spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
+  const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   let filtered = kunden;
 
   container.innerHTML = `
@@ -68,6 +70,8 @@ export async function render(container) {
   function openForm(kunde) {
     const isEdit = !!kunde;
     const data = kunde || { id: uid(), firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '' };
+    const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
+    const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const { body, close } = openModal({
       title: isEdit ? 'Kunde bearbeiten' : 'Neuer Kunde',
       bodyHtml: `
@@ -82,6 +86,22 @@ export async function render(container) {
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
+          ${isEdit ? `
+            <div class="divider"></div>
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+              <h2 style="font-size:14px;margin:0">Aufträge &amp; Projekte (${linkedProjekte.length}, davon ${offenCount} offen)</h2>
+            </div>
+            ${linkedProjekte.length ? `<ul class="cal-event-list">${linkedProjekte.map((p) => `
+              <li>
+                <div>
+                  <strong>${escapeHtml(p.titel)}</strong>
+                  <div class="text-mute">${formatDate(p.start)}${p.ende ? ' – ' + formatDate(p.ende) : ''}</div>
+                </div>
+                <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+              </li>
+            `).join('')}</ul>` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
+            <p class="hint">Berichte, Stundenzettel und Bilder werden je Auftrag im Projekt selbst dokumentiert (Menü Projekte → Auftrag öffnen).</p>
+          ` : ''}
           ${isEdit && data.email ? `
             <div class="divider"></div>
             <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">

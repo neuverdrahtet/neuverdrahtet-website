@@ -120,6 +120,16 @@ export function compressImage(file, { maxWidth = 1600, quality = 0.8 } = {}) {
   });
 }
 
+const CURRENT_MA_KEY = 'nv-verwaltung-aktueller-mitarbeiter';
+
+export function getCurrentMitarbeiterId() {
+  return localStorage.getItem(CURRENT_MA_KEY) || '';
+}
+
+export function setCurrentMitarbeiterId(id) {
+  localStorage.setItem(CURRENT_MA_KEY, id || '');
+}
+
 export function debounce(fn, wait = 250) {
   let t;
   return (...args) => {
