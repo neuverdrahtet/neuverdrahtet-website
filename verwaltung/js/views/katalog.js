@@ -30,14 +30,14 @@ function parseKatalogCsv(text, standardSteuersatz) {
   for (const line of lines) {
     const cols = line.split(delimiter).map((c) => c.trim());
     if (/^typ$/i.test(cols[0] || '') || /^bezeichnung$/i.test(cols[1] || '')) continue;
-    const [typRaw, bezeichnung, einheit, preisRaw, ustRaw] = cols;
+    const [typRaw, bezeichnung, einheit, preisRaw, ustRaw, beschreibungRaw] = cols;
     if (!bezeichnung) { errors.push(line); continue; }
     const typ = /^leistung$/i.test((typRaw || '').trim()) ? 'leistung' : 'artikel';
     rows.push({
       id: uid(),
       typ,
       bezeichnung,
-      beschreibung: '',
+      beschreibung: beschreibungRaw || '',
       einheit: einheit || (typ === 'artikel' ? 'Stk.' : 'Std.'),
       preis: parseNumber(preisRaw),
       steuersatz: ustRaw ? parseNumber(ustRaw) : standardSteuersatz,
@@ -122,7 +122,7 @@ export async function render(container) {
       title: 'Material / Leistungen importieren',
       wide: true,
       bodyHtml: `
-        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Typ;Bezeichnung;Einheit;Preis;USt</code> – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Typ;Bezeichnung;Einheit;Preis;USt;Beschreibung</code> (Beschreibung optional) – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
         <div class="field" style="margin-bottom:10px">
           <label>CSV- oder Excel-Datei</label>
           <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
