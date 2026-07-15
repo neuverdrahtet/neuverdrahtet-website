@@ -592,6 +592,15 @@ table.data-table tbody tr { cursor: pointer; }
   white-space: nowrap;
 }
 .plantafel-name .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.plantafel-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-mute);
+  padding: 10px 0 2px;
+}
+.plantafel-section-label:first-of-type { padding-top: 2px; }
 .plantafel-days {
   position: relative;
   display: grid;
@@ -730,6 +739,78 @@ table.data-table tbody tr { cursor: pointer; }
 .es-progress-row input[type="range"] { flex: 1; accent-color: var(--accent); }
 .es-fortschritt-val { font-size: 12px; color: var(--text-mute); width: 36px; text-align: right; }
 .es-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+
+/* Leaflet dark-theme tweaks (map tiles/popups stay light by design) */
+#map { border: 1px solid var(--border); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #fff; color: #1c2733; }
+.leaflet-bar a { color: #1c2733; }
+
+/* Dashboard */
+.dash-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 18px; align-items: start; margin-bottom: 18px; }
+.dash-main, .dash-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.dash-main .card, .dash-side .card { margin-bottom: 0; }
+@media (max-width: 1000px) {
+  .dash-layout { grid-template-columns: 1fr; }
+}
+
+.dash-score-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.dash-score-gauge { position: relative; width: 80px; height: 80px; flex-shrink: 0; }
+.dash-score-gauge svg { width: 100%; height: 100%; }
+.dash-score-gauge circle { transition: stroke-dasharray 0.4s ease; }
+.dash-score-gauge span {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700; color: var(--score-color, var(--accent));
+}
+.dash-score-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.dash-score-stats > div { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.dash-score-stats strong { font-size: 17px; }
+.dash-score-stats .badge { width: fit-content; }
+
+.dash-pipeline { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.dash-pipeline-col {
+  flex: 1 0 100px;
+  text-decoration: none;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: center;
+  color: var(--text);
+}
+.dash-pipeline-col:hover { border-color: var(--accent); }
+.dash-pipeline-col .count { display: block; font-size: 18px; font-weight: 700; }
+.dash-pipeline-col .label { display: block; font-size: 10.5px; color: var(--text-mute); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.dash-quicklinks { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-quicklinks .btn { text-decoration: none; flex: 1 1 auto; justify-content: center; }
+
+.dash-team { display: flex; flex-direction: column; gap: 10px; }
+.dash-team-member { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.dash-avatar {
+  width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
+}
+
+.dash-weather-now { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.dash-weather-icon { font-size: 34px; }
+.dash-weather-temp { font-size: 30px; font-weight: 700; }
+.dash-weather-hours {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  text-align: center;
+  font-size: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.dash-weather-hours > div { display: flex; flex-direction: column; gap: 3px; }
 
 /* Nachkalkulation */
 .nk-bars { display: flex; flex-direction: column; gap: 10px; }

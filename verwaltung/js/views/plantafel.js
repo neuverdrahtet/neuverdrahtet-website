@@ -6,6 +6,12 @@ import { suggestSlot } from '../terminvorschlag.js';
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const LANE_HEIGHT = 24;
 
+const RES_TYPES = [
+  { type: 'mitarbeiter', field: 'mitarbeiterIds', label: 'Mitarbeiter', nameKey: 'name', colorFallback: '#f0a020' },
+  { type: 'geraet', field: 'geraeteIds', label: 'Geräte', nameKey: 'name', colorFallback: '#14b8a6' },
+  { type: 'flotte', field: 'flottenIds', label: 'Flotten', nameKey: 'bezeichnung', colorFallback: '#4d8bf0' },
+];
+
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
 }
@@ -33,10 +39,14 @@ function daysBetweenStr(a, b) {
 }
 
 export async function render(container) {
-  let [termine, kunden, projekte, mitarbeiter] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'),
+  let [termine, kunden, projekte, mitarbeiter, geraete, flotten] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
+
+  const resourceLists = { mitarbeiter, geraet: geraete, flotte: flotten };
 
   let weekStart = startOfWeek(new Date());
 
@@ -55,7 +65,7 @@ export async function render(container) {
         <button class="btn btn-sm" id="btn-today">Heute</button>
         <button class="btn btn-sm" id="btn-next">Woche →</button>
       </div>
-      <p class="hint">Balken ziehen zum Verschieben (auch auf andere Mitarbeiter-Zeile), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
+      <p class="hint">Balken ziehen zum Verschieben (auch auf andere Zeilen), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
       <div id="plantafel-host"></div>
     </div>
   `;
@@ -87,6 +97,50 @@ export async function render(container) {
     return lanes.length;
   }
 
+  function buildRow(resource, resType, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr) {
+    const items = termine
+      .filter((t) => t[field]?.includes(resource.id))
+      .map((t) => {
+        const start = toDateOnly(t.start);
+        const ende = toDateOnly(t.ende) || start;
+        if (ende < weekStartStr || start > weekEndStr) return null;
+        const clipStart = start < weekStartStr ? weekStartStr : start;
+        const clipEnd = ende > weekEndStr ? weekEndStr : ende;
+        return { termin: t, startIdx: daysBetweenStr(weekStartStr, clipStart), endIdx: daysBetweenStr(weekStartStr, clipEnd) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.startIdx - b.startIdx);
+    const laneCount = packLanes(items);
+    const rowHeight = Math.max(56, laneCount * LANE_HEIGHT + 14);
+
+    return `
+      <div class="plantafel-row">
+        <div class="plantafel-cell plantafel-name">
+          <span class="dot" style="background:${resource.farbe || colorFallback}"></span>${escapeHtml(resource[nameKey] || '')}
+        </div>
+        <div class="plantafel-days" data-restype="${resType}" data-resid="${resource.id}" style="min-height:${rowHeight}px">
+          ${weekDays().map((d, i) => {
+            const dateStr = toDateOnly(d.toISOString());
+            return `<div class="plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-idx="${i}" data-date="${dateStr}"></div>`;
+          }).join('')}
+          <div class="plantafel-bars">
+            ${items.map((it) => {
+              const ti = typInfo(it.termin.typ);
+              const span = it.endIdx - it.startIdx + 1;
+              return `
+                <div class="plantafel-bar" draggable="true" data-id="${it.termin.id}"
+                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${ti.farbe}33; border-color:${ti.farbe}; color:${ti.farbe}">
+                  <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   function renderGrid() {
     const days = weekDays();
     const weekEnd = days[6];
@@ -112,51 +166,12 @@ export async function render(container) {
             }).join('')}
           </div>
         </div>
-        ${mitarbeiter.map((m) => {
-          const items = termine
-            .filter((t) => t.mitarbeiterIds?.includes(m.id))
-            .map((t) => {
-              const start = toDateOnly(t.start);
-              const ende = toDateOnly(t.ende) || start;
-              if (ende < weekStartStr || start > weekEndStr) return null;
-              const clipStart = start < weekStartStr ? weekStartStr : start;
-              const clipEnd = ende > weekEndStr ? weekEndStr : ende;
-              return {
-                termin: t,
-                startIdx: daysBetweenStr(weekStartStr, clipStart),
-                endIdx: daysBetweenStr(weekStartStr, clipEnd),
-              };
-            })
-            .filter(Boolean)
-            .sort((a, b) => a.startIdx - b.startIdx);
-          const laneCount = packLanes(items);
-          const rowHeight = Math.max(56, laneCount * LANE_HEIGHT + 14);
-
+        ${RES_TYPES.map(({ type, field, label, nameKey, colorFallback }) => {
+          const list = resourceLists[type];
+          if (list.length === 0) return '';
           return `
-            <div class="plantafel-row">
-              <div class="plantafel-cell plantafel-name">
-                <span class="dot" style="background:${m.farbe || '#f0a020'}"></span>${escapeHtml(m.name)}
-              </div>
-              <div class="plantafel-days" data-ma="${m.id}" style="min-height:${rowHeight}px">
-                ${days.map((d, i) => {
-                  const dateStr = toDateOnly(d.toISOString());
-                  return `<div class="plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-idx="${i}" data-date="${dateStr}"></div>`;
-                }).join('')}
-                <div class="plantafel-bars">
-                  ${items.map((it) => {
-                    const ti = typInfo(it.termin.typ);
-                    const span = it.endIdx - it.startIdx + 1;
-                    return `
-                      <div class="plantafel-bar" draggable="true" data-id="${it.termin.id}"
-                        style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${ti.farbe}33; border-color:${ti.farbe}; color:${ti.farbe}">
-                        <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
-                        <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            </div>
+            <div class="plantafel-section-label">${label}</div>
+            ${list.map((r) => buildRow(r, type, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr)).join('')}
           `;
         }).join('')}
       </div>
@@ -166,11 +181,11 @@ export async function render(container) {
   }
 
   function wireInteractions(weekStartStr) {
-    // Click empty day cell -> new termin for that employee/day
+    // Click empty day cell -> new termin for that resource/day
     host.querySelectorAll('.plantafel-day').forEach((cell) => {
       cell.addEventListener('click', () => {
         const row = cell.closest('.plantafel-days');
-        openForm(null, { date: cell.dataset.date, mitarbeiterId: row.dataset.ma });
+        openForm(null, { date: cell.dataset.date, resType: row.dataset.restype, resId: row.dataset.resid });
       });
     });
 
@@ -210,9 +225,11 @@ export async function render(container) {
         const time = (termin.start || '').slice(11, 16) || '00:00';
         termin.start = `${newStart}T${time}`;
         termin.ende = newEnde;
-        const targetMa = row.dataset.ma;
-        if (targetMa && !termin.mitarbeiterIds?.includes(targetMa)) {
-          termin.mitarbeiterIds = [targetMa];
+        const resType = row.dataset.restype;
+        const resId = row.dataset.resid;
+        const resDef = RES_TYPES.find((r) => r.type === resType);
+        if (resDef && resId && !termin[resDef.field]?.includes(resId)) {
+          termin[resDef.field] = [resId];
         }
         termin.aktualisiertAm = new Date().toISOString();
         await put('termine', termin);
@@ -278,13 +295,18 @@ export async function render(container) {
     const todayStr = new Date().toISOString().slice(0, 10);
     const data = t || {
       id: uid(), titel: '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
-      ort: '', kundeId: '', projektId: '', mitarbeiterIds: prefill?.mitarbeiterId ? [prefill.mitarbeiterId] : [], notizen: '',
+      ort: '', kundeId: '', projektId: '',
+      mitarbeiterIds: prefill?.resType === 'mitarbeiter' ? [prefill.resId] : [],
+      geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
+      flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
+      notizen: '',
     };
     const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
 
     const { body, close } = openModal({
       title: isEdit ? 'Termin bearbeiten' : 'Neuer Termin',
+      wide: true,
       bodyHtml: `
         <form id="pt-form">
           <div class="form-grid">
@@ -312,6 +334,28 @@ export async function render(container) {
               </div>
               <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
             </div>
+            ${geraete.length ? `
+              <div class="field col-span-2"><label>Geräte</label>
+                <div class="tag-list">
+                  ${geraete.map((g) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="geraeteIds" value="${g.id}" ${data.geraeteIds?.includes(g.id) ? 'checked' : ''}> ${escapeHtml(g.name)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${flotten.length ? `
+              <div class="field col-span-2"><label>Flotten</label>
+                <div class="tag-list">
+                  ${flotten.map((f) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="flottenIds" value="${f.id}" ${data.flottenIds?.includes(f.id) ? 'checked' : ''}> ${escapeHtml(f.bezeichnung)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           <div class="modal-actions">
@@ -356,6 +400,8 @@ export async function render(container) {
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
+      updated.geraeteIds = fd.getAll('geraeteIds');
+      updated.flottenIds = fd.getAll('flottenIds');
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.aktualisiertAm = new Date().toISOString();
       if (!updated.titel) return;

@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 const STORES = {
   kunden: 'id',
@@ -20,6 +20,8 @@ const STORES = {
   dokumente: 'id',
   kategorien: 'id',
   nachrichten: 'id',
+  geraete: 'id',
+  flotten: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -152,6 +154,9 @@ const DEFAULT_SETTINGS = {
   datevAufwandKonto: '4900',
   aiWorkerUrl: '',
   aiAppSecret: '',
+  wetterOrt: 'Essen',
+  wetterLat: 51.4556,
+  wetterLng: 7.0116,
 };
 
 export const DEFAULT_KANBAN_SPALTEN = [

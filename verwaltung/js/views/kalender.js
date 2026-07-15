@@ -1,9 +1,10 @@
-import { getAll, put, remove, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
+import { geocode } from '../geocode.js';
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
@@ -17,8 +18,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
   }
 
-  let [termine, kunden, projekte, mitarbeiter] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'),
+  let [termine, kunden, projekte, mitarbeiter, settings] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getSettings(),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
@@ -26,6 +27,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const now = new Date();
   let viewYear = now.getFullYear();
   let viewMonth = now.getMonth();
+  let mapInstance = null;
 
   container.innerHTML = `
     <div class="view-header">
@@ -38,15 +40,96 @@ export async function render(container, _route, { autoSync = true } = {}) {
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
-    <div class="card">
-      <div class="cal-header">
-        <button class="btn btn-sm" id="btn-prev">← </button>
-        <div class="cal-title" id="cal-title"></div>
-        <button class="btn btn-sm" id="btn-next">→</button>
+    <div class="tabs" id="cal-mode-tabs">
+      <button type="button" class="tab-item active" data-mode="monat">📅 Monat</button>
+      <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
+    </div>
+    <div id="monat-view">
+      <div class="card">
+        <div class="cal-header">
+          <button class="btn btn-sm" id="btn-prev">← </button>
+          <div class="cal-title" id="cal-title"></div>
+          <button class="btn btn-sm" id="btn-next">→</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
       </div>
-      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+    <div id="karte-view" hidden>
+      <div class="card">
+        <p class="hint" id="karte-status">Termine mit Ort werden geladen ...</p>
+        <div id="map" style="height:520px;border-radius:var(--radius);"></div>
+      </div>
     </div>
   `;
+
+  function setMode(mode) {
+    container.querySelectorAll('#cal-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    container.querySelector('#monat-view').hidden = mode !== 'monat';
+    container.querySelector('#karte-view').hidden = mode !== 'karte';
+    if (mode === 'karte') renderKarte();
+  }
+  container.querySelectorAll('#cal-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  async function renderKarte() {
+    const statusEl = container.querySelector('#karte-status');
+    const mapEl = container.querySelector('#map');
+    if (!window.L) { statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.'; return; }
+
+    const mitOrt = termine.filter((t) => t.ort?.trim()).slice(0, 60);
+    if (mitOrt.length === 0) {
+      statusEl.textContent = 'Keine Termine mit hinterlegtem Ort gefunden.';
+    }
+
+    if (!mapInstance) {
+      mapInstance = window.L.map(mapEl).setView([settings.wetterLat || 51.4556, settings.wetterLng || 7.0116], 11);
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende',
+      }).addTo(mapInstance);
+    } else {
+      mapInstance.setView([settings.wetterLat || 51.4556, settings.wetterLng || 7.0116], 11);
+      mapInstance.eachLayer((layer) => { if (layer instanceof window.L.CircleMarker) mapInstance.removeLayer(layer); });
+    }
+    setTimeout(() => mapInstance.invalidateSize(), 50);
+
+    const toGeocode = mitOrt.filter((t) => !(t.lat && t.lng));
+    for (let i = 0; i < toGeocode.length; i++) {
+      const t = toGeocode[i];
+      statusEl.textContent = `Adressen werden geladen ... (${i + 1}/${toGeocode.length})`;
+      try {
+        const pos = await geocode(t.ort);
+        if (pos) {
+          t.lat = pos.lat;
+          t.lng = pos.lng;
+          await put('termine', t);
+        }
+      } catch (err) {
+        // ignore single geocoding failures, continue with the rest
+      }
+    }
+
+    const withCoords = mitOrt.filter((t) => t.lat && t.lng);
+    statusEl.textContent = withCoords.length
+      ? `${withCoords.length} Termin(e) mit Standort auf der Karte. Adressen werden einmalig geokodiert und dann gespeichert.`
+      : 'Keine Standorte konnten ermittelt werden.';
+
+    const bounds = [];
+    withCoords.forEach((t) => {
+      const ti = typInfo(t.typ);
+      const marker = window.L.circleMarker([t.lat, t.lng], {
+        radius: 8, color: ti.farbe, fillColor: ti.farbe, fillOpacity: 0.7, weight: 2,
+      }).addTo(mapInstance);
+      const kunde = kundenById[t.kundeId];
+      marker.bindPopup(`
+        <strong>${escapeHtml(t.titel)}</strong><br>
+        ${(t.start || '').slice(0, 10)}${(t.start || '').slice(11, 16) ? ' ' + t.start.slice(11, 16) : ''}<br>
+        ${kunde ? escapeHtml(kunde.firma) + '<br>' : ''}
+        ${escapeHtml(t.ort)}
+      `);
+      bounds.push([t.lat, t.lng]);
+    });
+    if (bounds.length) mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+  }
 
   container.querySelector('#btn-sync').addEventListener('click', async () => {
     const btn = container.querySelector('#btn-sync');
