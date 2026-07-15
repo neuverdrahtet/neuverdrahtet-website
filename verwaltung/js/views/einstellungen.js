@@ -1,7 +1,16 @@
 import { getSettings, setSettings, exportAll, importAll } from '../db.js';
-import { escapeHtml, toast } from '../utils.js';
+import { escapeHtml, toast, compressImage } from '../utils.js';
 import { confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Logo konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 export async function render(container) {
   const settings = await getSettings();
@@ -10,9 +19,40 @@ export async function render(container) {
     <div class="view-header"><h1>Einstellungen</h1></div>
 
     <div class="card">
+      <h2>Darstellung</h2>
+      <form id="theme-form">
+        <div class="form-grid">
+          <div class="field">
+            <label>Farbschema</label>
+            <select name="theme">
+              <option value="dark" ${settings.theme !== 'light' ? 'selected' : ''}>Dunkel</option>
+              <option value="light" ${settings.theme === 'light' ? 'selected' : ''}>Hell</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Firmendaten</h2>
       <form id="firma-form">
         <div class="form-grid">
+          <div class="field col-span-2">
+            <label>Firmenlogo (für PDFs)</label>
+            <div class="flex-row" style="align-items:flex-start">
+              <div id="logo-preview" style="width:88px;height:88px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card-2);flex-shrink:0">
+                ${settings.logoDataUrl ? `<img src="${settings.logoDataUrl}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span class="text-mute" style="font-size:11px">Kein Logo</span>'}
+              </div>
+              <div class="flex-row flex-wrap">
+                <label class="btn btn-sm" style="cursor:pointer">
+                  Logo hochladen
+                  <input type="file" id="logo-input" accept="image/*" hidden>
+                </label>
+                ${settings.logoDataUrl ? '<button type="button" class="btn btn-sm btn-danger" id="btn-logo-remove">Entfernen</button>' : ''}
+              </div>
+            </div>
+          </div>
           <div class="field col-span-2"><label>Firmenname</label><input name="firmenname" value="${escapeHtml(settings.firmenname)}"></div>
           <div class="field"><label>Straße &amp; Hausnr.</label><input name="strasse" value="${escapeHtml(settings.strasse)}"></div>
           <div class="field"><label>PLZ &amp; Ort</label><input name="plzOrt" value="${escapeHtml(settings.plzOrt)}"></div>
@@ -23,6 +63,7 @@ export async function render(container) {
           <div class="field"><label>IBAN</label><input name="iban" value="${escapeHtml(settings.iban)}"></div>
           <div class="field"><label>BIC</label><input name="bic" value="${escapeHtml(settings.bic)}"></div>
           <div class="field"><label>Bank</label><input name="bank" value="${escapeHtml(settings.bank)}"></div>
+          <div class="field"><label>Inhaber</label><input name="inhaber" value="${escapeHtml(settings.inhaber || '')}"></div>
           <div class="field field-checkbox col-span-2"><input type="checkbox" name="kleinunternehmer" id="ku" ${settings.kleinunternehmer ? 'checked' : ''}><label for="ku">Kleinunternehmer nach §19 UStG (keine USt. ausweisen)</label></div>
         </div>
         <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
@@ -123,11 +164,42 @@ export async function render(container) {
     </div>
   `;
 
+  container.querySelector('#theme-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const theme = fd.get('theme') === 'light' ? 'light' : 'dark';
+    await setSettings({ theme });
+    document.documentElement.dataset.theme = theme;
+    toast('Darstellung gespeichert', 'success');
+  });
+
+  container.querySelector('#logo-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const blob = await compressImage(file, { maxWidth: 400, quality: 0.9 });
+      const dataUrl = await blobToDataUrl(blob);
+      await setSettings({ logoDataUrl: dataUrl });
+      toast('Logo gespeichert', 'success');
+      render(container);
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  });
+  const logoRemoveBtn = container.querySelector('#btn-logo-remove');
+  if (logoRemoveBtn) {
+    logoRemoveBtn.addEventListener('click', async () => {
+      await setSettings({ logoDataUrl: '' });
+      toast('Logo entfernt');
+      render(container);
+    });
+  }
+
   container.querySelector('#firma-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const update = {};
-    for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank']) {
+    for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank', 'inhaber']) {
       update[key] = (fd.get(key) || '').toString().trim();
     }
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';

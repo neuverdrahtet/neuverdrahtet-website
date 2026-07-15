@@ -1,7 +1,9 @@
-import { getAll, put, remove, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { suggestSlot } from '../terminvorschlag.js';
+import { mountKarte, KARTE_TAB_HTML } from '../karte.js';
+import { openStatusManager } from '../statusManager.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const LANE_HEIGHT = 24;
@@ -39,12 +41,15 @@ function daysBetweenStr(a, b) {
 }
 
 export async function render(container) {
-  let [termine, kunden, projekte, mitarbeiter, geraete, flotten] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'),
+  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
+  terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const activeStatusFilter = new Set();
 
   const resourceLists = { mitarbeiter, geraet: geraete, flotte: flotten };
 
@@ -58,20 +63,37 @@ export async function render(container) {
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
-    <div class="card">
-      <div class="cal-header">
-        <button class="btn btn-sm" id="btn-prev">← Woche</button>
-        <div class="cal-title" id="week-title"></div>
-        <button class="btn btn-sm" id="btn-today">Heute</button>
-        <button class="btn btn-sm" id="btn-next">Woche →</button>
-      </div>
-      <p class="hint">Balken ziehen zum Verschieben (auch auf andere Zeilen), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
-      <div id="plantafel-host"></div>
+    <div class="status-pill-bar" id="status-pill-bar"></div>
+    <div class="tabs" id="pt-mode-tabs">
+      <button type="button" class="tab-item active" data-mode="woche">🗓️ Woche</button>
+      <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
     </div>
+    <div id="woche-view">
+      <div class="card">
+        <div class="cal-header">
+          <button class="btn btn-sm" id="btn-prev">← Woche</button>
+          <div class="cal-title" id="week-title"></div>
+          <button class="btn btn-sm" id="btn-today">Heute</button>
+          <button class="btn btn-sm" id="btn-next">Woche →</button>
+        </div>
+        <p class="hint">Balken ziehen zum Verschieben (auch auf andere Zeilen), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
+        <div id="plantafel-host"></div>
+      </div>
+    </div>
+    ${KARTE_TAB_HTML}
   `;
 
   const host = container.querySelector('#plantafel-host');
   const weekTitle = container.querySelector('#week-title');
+  const karte = mountKarte(container, { termine, kundenById, settings });
+
+  function setMode(mode) {
+    container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    container.querySelector('#woche-view').hidden = mode !== 'woche';
+    container.querySelector('#karte-view').hidden = mode !== 'karte';
+    if (mode === 'karte') karte.refresh();
+  }
+  container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
   function fmtDay(d) {
     return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(d);
@@ -100,6 +122,7 @@ export async function render(container) {
   function buildRow(resource, resType, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr) {
     const items = termine
       .filter((t) => t[field]?.includes(resource.id))
+      .filter((t) => !activeStatusFilter.size || activeStatusFilter.has(t.status || 'geplant'))
       .map((t) => {
         const start = toDateOnly(t.start);
         const ende = toDateOnly(t.ende) || start;
@@ -125,11 +148,11 @@ export async function render(container) {
           }).join('')}
           <div class="plantafel-bars">
             ${items.map((it) => {
-              const ti = typInfo(it.termin.typ);
+              const farbe = it.termin.farbe || typInfo(it.termin.typ).farbe;
               const span = it.endIdx - it.startIdx + 1;
               return `
                 <div class="plantafel-bar" draggable="true" data-id="${it.termin.id}"
-                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${ti.farbe}33; border-color:${ti.farbe}; color:${ti.farbe}">
+                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
                   <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
                 </div>
@@ -139,6 +162,33 @@ export async function render(container) {
         </div>
       </div>
     `;
+  }
+
+  function renderStatusPills() {
+    const bar = container.querySelector('#status-pill-bar');
+    bar.innerHTML = terminStatus.map((s) => `
+      <label class="status-pill ${activeStatusFilter.has(s.id) ? 'active' : ''}" style="--pill-color:${s.farbe}" data-id="${s.id}">
+        <input type="checkbox" value="${s.id}" ${activeStatusFilter.has(s.id) ? 'checked' : ''}>
+        <span class="dot" style="background:${s.farbe}"></span>${escapeHtml(s.titel)}
+      </label>
+    `).join('') + `<button type="button" class="status-pill manage-btn" id="btn-status-manage">⚙️ Status verwalten</button>`;
+    bar.querySelectorAll('.status-pill[data-id]').forEach((label) => {
+      label.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) activeStatusFilter.add(label.dataset.id);
+        else activeStatusFilter.delete(label.dataset.id);
+        label.classList.toggle('active', e.target.checked);
+        renderGrid();
+      });
+    });
+    bar.querySelector('#btn-status-manage').addEventListener('click', () => {
+      openStatusManager({
+        title: 'Termin-Status verwalten',
+        store: 'terminStatus',
+        items: terminStatus,
+        canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
+        onChange: () => render(container),
+      });
+    });
   }
 
   function renderGrid() {
@@ -299,7 +349,7 @@ export async function render(container) {
       mitarbeiterIds: prefill?.resType === 'mitarbeiter' ? [prefill.resId] : [],
       geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
       flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
-      notizen: '',
+      notizen: '', farbe: '', status: terminStatus[0]?.id || 'geplant',
     };
     const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
@@ -314,10 +364,14 @@ export async function render(container) {
             <div class="field"><label>Art</label>
               <select name="typ">${TERMIN_TYPEN.map((tt) => `<option value="${tt.id}" ${tt.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(tt.titel)}</option>`).join('')}</select>
             </div>
+            <div class="field"><label>Status</label>
+              <select name="status">${terminStatus.map((s) => `<option value="${s.id}" ${s.id === (data.status || terminStatus[0]?.id) ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
             <div class="field"><label>Von</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${toDateOnly(data.ende) || ''}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            <div class="field"><label>Farbe (optional, überschreibt Art-Farbe)</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || typInfo(data.typ || 'termin').farbe)}"></div>
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
@@ -367,6 +421,12 @@ export async function render(container) {
         </form>
       `,
     });
+    let farbeCustom = !!data.farbe;
+    body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });
+    body.querySelector('select[name="typ"]').addEventListener('change', (e) => {
+      if (farbeCustom) return;
+      body.querySelector('input[name="farbe"]').value = typInfo(e.target.value).farbe;
+    });
     body.querySelector('#btn-vorschlag').addEventListener('click', async () => {
       const checked = body.querySelector('input[name="mitarbeiterIds"]:checked');
       if (!checked) { toast('Bitte zuerst einen Mitarbeiter auswählen', 'danger'); return; }
@@ -397,8 +457,10 @@ export async function render(container) {
       const enddatum = (fd.get('enddatum') || '').toString().trim();
       updated.ende = enddatum && enddatum >= fd.get('datum') ? enddatum : '';
       updated.ort = (fd.get('ort') || '').toString().trim();
+      updated.farbe = (fd.get('farbe') || '').toString().trim();
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
+      updated.status = fd.get('status') || terminStatus[0]?.id || 'geplant';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
       updated.geraeteIds = fd.getAll('geraeteIds');
       updated.flottenIds = fd.getAll('flottenIds');
@@ -412,5 +474,6 @@ export async function render(container) {
     });
   }
 
+  renderStatusPills();
   renderGrid();
 }

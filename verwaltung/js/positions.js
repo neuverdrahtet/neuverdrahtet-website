@@ -21,12 +21,13 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     host.innerHTML = `
       <table class="pos-table">
         <thead><tr>
-          <th>Bezeichnung</th><th class="col-menge">Menge</th><th>Einheit</th>
+          <th class="col-posnr">Pos.</th><th>Bezeichnung</th><th class="col-menge">Menge</th><th>Einheit</th>
           <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th><th class="col-del"></th>
         </tr></thead>
         <tbody>
           ${posState.map((p, i) => `
             <tr data-i="${i}">
+              <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen"></td>
               <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Bezeichnung"></td>
               <td class="col-menge"><input class="f-menge" type="number" step="0.01" value="${p.menge ?? 1}"></td>
               <td><input class="f-einheit" value="${escapeHtml(p.einheit || '')}"></td>
@@ -59,6 +60,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
 
     host.querySelectorAll('tbody tr').forEach((row) => {
       const i = Number(row.dataset.i);
+      row.querySelector('.f-posnr').addEventListener('input', (e) => { posState[i].posNr = e.target.value; });
       row.querySelector('.f-bez').addEventListener('input', (e) => { posState[i].bezeichnung = e.target.value; });
       row.querySelector('.f-einheit').addEventListener('input', (e) => { posState[i].einheit = e.target.value; });
       row.querySelector('.f-menge').addEventListener('input', (e) => { posState[i].menge = Number(e.target.value); updateSum(row, i); });

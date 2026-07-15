@@ -4,10 +4,14 @@ import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
-import { geocode } from '../geocode.js';
+import { mountKarte, KARTE_TAB_HTML } from '../karte.js';
+import { openStatusManager } from '../statusManager.js';
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
+}
+function terminFarbe(t) {
+  return t.farbe || typInfo(t.typ).farbe;
 }
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
@@ -18,16 +22,18 @@ export async function render(container, _route, { autoSync = true } = {}) {
     try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
   }
 
-  let [termine, kunden, projekte, mitarbeiter, settings] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getSettings(),
+  let [termine, kunden, projekte, mitarbeiter, settings, terminStatus] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getSettings(), getAll('terminStatus'),
   ]);
+  terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const statusById = Object.fromEntries(terminStatus.map((s) => [s.id, s]));
+  const activeStatusFilter = new Set();
 
   const now = new Date();
   let viewYear = now.getFullYear();
   let viewMonth = now.getMonth();
-  let mapInstance = null;
 
   container.innerHTML = `
     <div class="view-header">
@@ -40,6 +46,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
+    <div class="status-pill-bar" id="status-pill-bar"></div>
     <div class="tabs" id="cal-mode-tabs">
       <button type="button" class="tab-item active" data-mode="monat">📅 Monat</button>
       <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
@@ -54,82 +61,18 @@ export async function render(container, _route, { autoSync = true } = {}) {
         <div class="cal-grid" id="cal-grid"></div>
       </div>
     </div>
-    <div id="karte-view" hidden>
-      <div class="card">
-        <p class="hint" id="karte-status">Termine mit Ort werden geladen ...</p>
-        <div id="map" style="height:520px;border-radius:var(--radius);"></div>
-      </div>
-    </div>
+    ${KARTE_TAB_HTML}
   `;
+
+  const karte = mountKarte(container, { termine, kundenById, settings });
 
   function setMode(mode) {
     container.querySelectorAll('#cal-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     container.querySelector('#monat-view').hidden = mode !== 'monat';
     container.querySelector('#karte-view').hidden = mode !== 'karte';
-    if (mode === 'karte') renderKarte();
+    if (mode === 'karte') karte.refresh();
   }
   container.querySelectorAll('#cal-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
-
-  async function renderKarte() {
-    const statusEl = container.querySelector('#karte-status');
-    const mapEl = container.querySelector('#map');
-    if (!window.L) { statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.'; return; }
-
-    const mitOrt = termine.filter((t) => t.ort?.trim()).slice(0, 60);
-    if (mitOrt.length === 0) {
-      statusEl.textContent = 'Keine Termine mit hinterlegtem Ort gefunden.';
-    }
-
-    if (!mapInstance) {
-      mapInstance = window.L.map(mapEl).setView([settings.wetterLat || 51.4556, settings.wetterLng || 7.0116], 11);
-      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende',
-      }).addTo(mapInstance);
-    } else {
-      mapInstance.setView([settings.wetterLat || 51.4556, settings.wetterLng || 7.0116], 11);
-      mapInstance.eachLayer((layer) => { if (layer instanceof window.L.CircleMarker) mapInstance.removeLayer(layer); });
-    }
-    setTimeout(() => mapInstance.invalidateSize(), 50);
-
-    const toGeocode = mitOrt.filter((t) => !(t.lat && t.lng));
-    for (let i = 0; i < toGeocode.length; i++) {
-      const t = toGeocode[i];
-      statusEl.textContent = `Adressen werden geladen ... (${i + 1}/${toGeocode.length})`;
-      try {
-        const pos = await geocode(t.ort);
-        if (pos) {
-          t.lat = pos.lat;
-          t.lng = pos.lng;
-          await put('termine', t);
-        }
-      } catch (err) {
-        // ignore single geocoding failures, continue with the rest
-      }
-    }
-
-    const withCoords = mitOrt.filter((t) => t.lat && t.lng);
-    statusEl.textContent = withCoords.length
-      ? `${withCoords.length} Termin(e) mit Standort auf der Karte. Adressen werden einmalig geokodiert und dann gespeichert.`
-      : 'Keine Standorte konnten ermittelt werden.';
-
-    const bounds = [];
-    withCoords.forEach((t) => {
-      const ti = typInfo(t.typ);
-      const marker = window.L.circleMarker([t.lat, t.lng], {
-        radius: 8, color: ti.farbe, fillColor: ti.farbe, fillOpacity: 0.7, weight: 2,
-      }).addTo(mapInstance);
-      const kunde = kundenById[t.kundeId];
-      marker.bindPopup(`
-        <strong>${escapeHtml(t.titel)}</strong><br>
-        ${(t.start || '').slice(0, 10)}${(t.start || '').slice(11, 16) ? ' ' + t.start.slice(11, 16) : ''}<br>
-        ${kunde ? escapeHtml(kunde.firma) + '<br>' : ''}
-        ${escapeHtml(t.ort)}
-      `);
-      bounds.push([t.lat, t.lng]);
-    });
-    if (bounds.length) mapInstance.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
-  }
 
   container.querySelector('#btn-sync').addEventListener('click', async () => {
     const btn = container.querySelector('#btn-sync');
@@ -155,10 +98,38 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
   function terminsOnDay(dateStr) {
     return termine.filter((t) => {
+      if (activeStatusFilter.size && !activeStatusFilter.has(t.status || 'geplant')) return false;
       const start = (t.start || '').slice(0, 10);
       const ende = (t.ende || '').slice(0, 10) || start;
       return dateStr >= start && dateStr <= ende;
     }).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  }
+
+  function renderStatusPills() {
+    const bar = container.querySelector('#status-pill-bar');
+    bar.innerHTML = terminStatus.map((s) => `
+      <label class="status-pill ${activeStatusFilter.has(s.id) ? 'active' : ''}" style="--pill-color:${s.farbe}" data-id="${s.id}">
+        <input type="checkbox" value="${s.id}" ${activeStatusFilter.has(s.id) ? 'checked' : ''}>
+        <span class="dot" style="background:${s.farbe}"></span>${escapeHtml(s.titel)}
+      </label>
+    `).join('') + `<button type="button" class="status-pill manage-btn" id="btn-status-manage">⚙️ Status verwalten</button>`;
+    bar.querySelectorAll('.status-pill[data-id]').forEach((label) => {
+      label.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) activeStatusFilter.add(label.dataset.id);
+        else activeStatusFilter.delete(label.dataset.id);
+        label.classList.toggle('active', e.target.checked);
+        renderGrid();
+      });
+    });
+    bar.querySelector('#btn-status-manage').addEventListener('click', () => {
+      openStatusManager({
+        title: 'Termin-Status verwalten',
+        store: 'terminStatus',
+        items: terminStatus,
+        canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
+        onChange: () => render(container, _route, { autoSync: false }),
+      });
+    });
   }
 
   function renderGrid() {
@@ -179,8 +150,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
         <div class="cal-day ${isOtherMonth ? 'other-month' : ''} ${dateStr === today ? 'today' : ''}" data-date="${dateStr}">
           <div class="day-num">${d.getDate()}</div>
           ${events.slice(0, 3).map((e) => {
-            const ti = typInfo(e.typ);
-            return `<div class="cal-event" data-id="${e.id}" style="background:${ti.farbe}22;color:${ti.farbe}" title="${escapeHtml(ti.titel)}">${escapeHtml(e.titel)}</div>`;
+            const farbe = terminFarbe(e);
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(typInfo(e.typ).titel)}">${escapeHtml(e.titel)}</div>`;
           }).join('')}
           ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
         </div>
@@ -215,7 +186,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     const isEdit = !!t;
     const data = t || {
       id: uid(), titel: '', start: `${defaultDate || todayStr()}T09:00`, ende: '',
-      ort: '', kundeId: '', projektId: '', mitarbeiterIds: [], notizen: '', typ: 'termin',
+      ort: '', kundeId: '', projektId: '', mitarbeiterIds: [], notizen: '', typ: 'termin', farbe: '',
+      status: terminStatus[0]?.id || 'geplant',
     };
     const startDate = (data.start || '').slice(0, 10) || defaultDate || todayStr();
     const startTime = (data.start || '').slice(11, 16) || '09:00';
@@ -229,10 +201,14 @@ export async function render(container, _route, { autoSync = true } = {}) {
             <div class="field"><label>Art</label>
               <select name="typ">${TERMIN_TYPEN.map((t) => `<option value="${t.id}" ${t.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(t.titel)}</option>`).join('')}</select>
             </div>
+            <div class="field"><label>Status</label>
+              <select name="status">${terminStatus.map((s) => `<option value="${s.id}" ${s.id === (data.status || terminStatus[0]?.id) ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
             <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${(data.ende || '').slice(0, 10)}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            <div class="field"><label>Farbe (optional, überschreibt Art-Farbe)</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || typInfo(data.typ || 'termin').farbe)}"></div>
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
@@ -259,6 +235,12 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
         </form>
       `,
+    });
+    let farbeCustom = !!data.farbe;
+    body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });
+    body.querySelector('select[name="typ"]').addEventListener('change', (e) => {
+      if (farbeCustom) return;
+      body.querySelector('input[name="farbe"]').value = typInfo(e.target.value).farbe;
     });
     body.querySelector('#btn-vorschlag').addEventListener('click', async () => {
       const checked = body.querySelector('input[name="mitarbeiterIds"]:checked');
@@ -287,10 +269,12 @@ export async function render(container, _route, { autoSync = true } = {}) {
       const updated = { ...data };
       updated.titel = (fd.get('titel') || '').toString().trim();
       updated.typ = fd.get('typ') || 'termin';
+      updated.status = fd.get('status') || terminStatus[0]?.id || 'geplant';
       updated.start = `${fd.get('datum')}T${fd.get('uhrzeit') || '00:00'}`;
       const enddatum = (fd.get('enddatum') || '').toString().trim();
       updated.ende = enddatum && enddatum >= fd.get('datum') ? enddatum : '';
       updated.ort = (fd.get('ort') || '').toString().trim();
+      updated.farbe = (fd.get('farbe') || '').toString().trim();
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
@@ -304,5 +288,6 @@ export async function render(container, _route, { autoSync = true } = {}) {
     });
   }
 
+  renderStatusPills();
   renderGrid();
 }

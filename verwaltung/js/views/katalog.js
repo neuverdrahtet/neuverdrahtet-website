@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings } from '../db.js';
-import { uid, escapeHtml, formatCurrency, toast } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät' };
@@ -8,21 +8,6 @@ const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 
 function parseNumber(str) {
   const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
-}
-
-function cellToText(cell) {
-  if (cell == null) return '';
-  if (typeof cell === 'number') return String(cell).replace('.', ',');
-  return String(cell).trim();
-}
-
-async function excelFileToCsvText(file) {
-  if (!window.XLSX) throw new Error('Excel-Bibliothek konnte nicht geladen werden.');
-  const buf = await file.arrayBuffer();
-  const wb = window.XLSX.read(buf, { type: 'array' });
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
-  return rows.map((row) => row.map(cellToText).join(';')).join('\n');
 }
 
 function parseKatalogCsv(text, standardSteuersatz) {
