@@ -1,6 +1,7 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { openStatusManager } from '../statusManager.js';
 
 export async function render(container) {
   let [projekte, kunden, mitarbeiter, spalten] = await Promise.all([
@@ -14,6 +15,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Kanban</h1>
       <div class="actions">
+        <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
         <button class="btn" id="btn-new-col">+ Spalte</button>
         <button class="btn btn-primary" id="btn-new-card">+ Neues Projekt</button>
       </div>
@@ -33,7 +35,7 @@ export async function render(container) {
           </div>
           <div class="kanban-cards" data-col-body="${s.id}">
             ${cards.map((p) => `
-              <div class="kanban-card" draggable="true" data-id="${p.id}">
+              <div class="kanban-card" draggable="true" data-id="${p.id}" style="border-left-color:${escapeHtml(p.farbe || 'var(--accent)')}">
                 <div class="title">${escapeHtml(p.titel)}</div>
                 <div class="meta">${escapeHtml(kundenById[p.kundeId]?.firma || '')}</div>
                 ${p.mitarbeiterIds?.length ? `<div class="meta">${p.mitarbeiterIds.map((id) => escapeHtml(mitarbeiterById[id]?.name || '')).filter(Boolean).join(', ')}</div>` : ''}
@@ -137,10 +139,19 @@ export async function render(container) {
   }
   container.querySelector('#btn-new-col').addEventListener('click', addColumn);
   container.querySelector('#btn-new-card').addEventListener('click', () => openCardForm());
+  container.querySelector('#btn-status-manage').addEventListener('click', () => {
+    openStatusManager({
+      title: 'Projekt-Status verwalten',
+      store: 'kanbanSpalten',
+      items: spalten,
+      canDelete: (it) => !projekte.some((p) => p.status === it.id),
+      onChange: () => render(container),
+    });
+  });
 
   function openCardForm(p) {
     const isEdit = !!p;
-    const data = p || { id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '', start: '', ende: '', mitarbeiterIds: [], createdAt: new Date().toISOString() };
+    const data = p || { id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '', start: '', ende: '', mitarbeiterIds: [], farbe: '', createdAt: new Date().toISOString() };
     const { body, close } = openModal({
       title: isEdit ? 'Projekt bearbeiten' : 'Neues Projekt',
       bodyHtml: `
@@ -153,6 +164,7 @@ export async function render(container) {
             <div class="field"><label>Status</label>
               <select name="status">${spalten.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
+            <div class="field"><label>Farbe</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || '#2b7fd6')}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
           </div>
           <div class="modal-actions">
@@ -178,7 +190,7 @@ export async function render(container) {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
-      for (const key of ['titel', 'kundeId', 'status', 'beschreibung']) {
+      for (const key of ['titel', 'kundeId', 'status', 'beschreibung', 'farbe']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.titel) return;

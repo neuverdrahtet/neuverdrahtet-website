@@ -1,4 +1,4 @@
-import { openDB, ensureSeeded } from './db.js';
+import { openDB, ensureSeeded, getSettings } from './db.js';
 import { initLock } from './auth.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
@@ -71,9 +71,15 @@ async function router() {
 
 window.addEventListener('hashchange', router);
 
+export async function applyTheme() {
+  const settings = await getSettings();
+  document.documentElement.dataset.theme = settings.theme === 'light' ? 'light' : 'dark';
+}
+
 async function boot() {
   await openDB();
   await ensureSeeded();
+  await applyTheme();
   await initLock();
   document.getElementById('app').hidden = false;
   router();

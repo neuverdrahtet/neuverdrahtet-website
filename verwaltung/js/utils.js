@@ -137,3 +137,37 @@ export function debounce(fn, wait = 250) {
     t = setTimeout(() => fn(...args), wait);
   };
 }
+
+function csvCellToText(cell) {
+  if (cell == null) return '';
+  if (typeof cell === 'number') return String(cell).replace('.', ',');
+  return String(cell).trim();
+}
+
+export async function excelFileToCsvText(file) {
+  if (!window.XLSX) throw new Error('Excel-Bibliothek konnte nicht geladen werden.');
+  const buf = await file.arrayBuffer();
+  const wb = window.XLSX.read(buf, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' });
+  return rows.map((row) => row.map(csvCellToText).join(';')).join('\n');
+}
+
+function csvEscapeField(v) {
+  const s = String(v ?? '');
+  return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+export function toCsv(rows) {
+  return rows.map((row) => row.map(csvEscapeField).join(';')).join('\n');
+}
+
+export function downloadTextFile(filename, text, mime = 'text/csv;charset=utf-8') {
+  const blob = new Blob(['﻿' + text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

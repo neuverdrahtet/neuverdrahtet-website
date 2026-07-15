@@ -184,6 +184,7 @@ let editor = createPositionsEditor({
           settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
+          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
           introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
           positionen: editor.getPositionen(), totals,
           closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',

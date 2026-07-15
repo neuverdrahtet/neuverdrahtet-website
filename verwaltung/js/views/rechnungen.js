@@ -204,6 +204,7 @@ let editor = createPositionsEditor({
           settings, art: 'Rechnung', nummer: data.nummer, datum: data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
+          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
           introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
           positionen: editor.getPositionen(), totals,
           closingText: (data.notizen || '') + `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,

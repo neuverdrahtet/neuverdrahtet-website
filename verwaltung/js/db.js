@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 
 const STORES = {
   kunden: 'id',
@@ -22,6 +22,7 @@ const STORES = {
   nachrichten: 'id',
   geraete: 'id',
   flotten: 'id',
+  terminStatus: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -134,6 +135,7 @@ const DEFAULT_SETTINGS = {
   iban: '',
   bic: '',
   bank: '',
+  inhaber: '',
   kleinunternehmer: false,
   standardSteuersatz: 19,
   angebotPrefix: 'AN-',
@@ -157,6 +159,8 @@ const DEFAULT_SETTINGS = {
   wetterOrt: 'Essen',
   wetterLat: 51.4556,
   wetterLng: 7.0116,
+  logoDataUrl: '',
+  theme: 'dark',
 };
 
 export const DEFAULT_KANBAN_SPALTEN = [
@@ -210,6 +214,14 @@ export const TERMIN_TYPEN = [
   { id: 'urlaub', titel: 'Urlaub', farbe: '#1f8a4c' },
 ];
 
+export const DEFAULT_TERMIN_STATUS = [
+  { id: 'geplant', titel: 'Geplant', farbe: '#2b7fd6', reihenfolge: 0 },
+  { id: 'dokumentiert', titel: 'Dokumentiert', farbe: '#8e44ad', reihenfolge: 1 },
+  { id: 'abgerechnet', titel: 'Abgerechnet', farbe: '#f0a020', reihenfolge: 2 },
+  { id: 'bezahlt', titel: 'Bezahlt', farbe: '#1f8a4c', reihenfolge: 3 },
+  { id: 'storniert', titel: 'Storniert', farbe: '#c0392b', reihenfolge: 4 },
+];
+
 export async function ensureSeeded() {
   const settingsRows = await getAll('einstellungen');
   if (settingsRows.length === 0) {
@@ -228,6 +240,12 @@ export async function ensureSeeded() {
     for (const k of DEFAULT_KATEGORIEN) {
       await put('kategorien', k);
     }
+  }
+  const terminStatus = await getAll('terminStatus');
+  const terminStatusIds = new Set(terminStatus.map((s) => s.id));
+  const missingTerminStatus = DEFAULT_TERMIN_STATUS.filter((s) => !terminStatusIds.has(s.id));
+  for (const s of missingTerminStatus) {
+    await put('terminStatus', s);
   }
 }
 

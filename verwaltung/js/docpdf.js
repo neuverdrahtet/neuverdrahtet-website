@@ -1,5 +1,38 @@
 import { formatCurrency, formatDate } from './utils.js';
 
+function logoFormat(dataUrl) {
+  const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
+  if (!m) return null;
+  return /jpe?g/i.test(m[1]) ? 'JPEG' : 'PNG';
+}
+
+function addFooter(doc, settings, marginX, rightX) {
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(210);
+    doc.line(marginX, 279, rightX, 279);
+    doc.setFontSize(7.5);
+    doc.setTextColor(120);
+    const col1 = [settings.firmenname, settings.strasse, settings.plzOrt, settings.telefon, settings.email, settings.website].filter(Boolean);
+    const col2 = [
+      settings.ustId ? `USt-IdNr.: ${settings.ustId}` : '',
+      settings.steuernummer ? `Steuernummer: ${settings.steuernummer}` : '',
+      settings.inhaber ? `Inhaber: ${settings.inhaber}` : '',
+    ].filter(Boolean);
+    const col3 = [
+      settings.inhaber, settings.bank,
+      settings.iban ? `IBAN: ${settings.iban}` : '',
+      settings.bic ? `BIC: ${settings.bic}` : '',
+    ].filter(Boolean);
+    const colX = [marginX, marginX + 62, marginX + 124];
+    [col1, col2, col3].forEach((col, ci) => {
+      col.forEach((line, li) => doc.text(String(line), colX[ci], 283 + li * 3.6));
+    });
+    doc.text(`Seite ${i}/${pageCount}`, rightX, 283, { align: 'right' });
+  }
+}
+
 export function buildDocPdfBlob(opts) {
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
@@ -10,10 +43,52 @@ export function buildDocPdfBlob(opts) {
   const rightX = 192;
   let y = 20;
 
-  const absender = [opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt].filter(Boolean).join(' · ');
+  // --- Header: logo (top-left) + title & meta box (top-right) ---
+  const fmt = logoFormat(opts.settings.logoDataUrl);
+  if (fmt) {
+    try {
+      const props = doc.getImageProperties(opts.settings.logoDataUrl);
+      const maxW = 46, maxH = 22;
+      const scale = Math.min(maxW / props.width, maxH / props.height);
+      doc.addImage(opts.settings.logoDataUrl, fmt, marginX, y - 4, props.width * scale, props.height * scale);
+    } catch (err) { /* ignore broken logo data */ }
+  } else {
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(opts.settings.firmenname || '', marginX, y + 4);
+    doc.setFont(undefined, 'normal');
+  }
+
+  doc.setFontSize(15);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(20);
+  doc.text(opts.art, rightX, y, { align: 'right' });
+  doc.setFont(undefined, 'normal');
+
+  const metaRows = [
+    [`${opts.art}-Nr.:`, opts.nummer],
+    opts.kunde?.kundennummer ? ['Kundennr.:', opts.kunde.kundennummer] : null,
+    ['Datum:', formatDate(opts.datum)],
+    opts.refLabel ? [`${opts.refLabel}:`, opts.refValue] : null,
+  ].filter(Boolean);
   doc.setFontSize(9);
-  doc.setTextColor(100);
+  doc.setTextColor(60);
+  metaRows.forEach((row, i) => {
+    const my = y + 6 + i * 4.6;
+    doc.text(row[0], rightX - 32, my, { align: 'left' });
+    doc.text(String(row[1] ?? ''), rightX, my, { align: 'right' });
+  });
+
+  y += 30;
+
+  // --- Sender line + recipient ---
+  const absender = [opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt].filter(Boolean).join(' · ');
+  doc.setFontSize(8);
+  doc.setTextColor(110);
   doc.text(absender, marginX, y);
+  doc.setDrawColor(180);
+  doc.line(marginX, y + 1, marginX + doc.getTextWidth(absender), y + 1);
 
   const kundeLines = [
     opts.kunde?.firma, opts.kunde?.ansprechpartner, opts.kunde?.strasse,
@@ -21,40 +96,25 @@ export function buildDocPdfBlob(opts) {
   ].filter(Boolean);
   doc.setFontSize(10.5);
   doc.setTextColor(20);
-  kundeLines.forEach((line, i) => doc.text(String(line), marginX, y + 10 + i * 5));
+  kundeLines.forEach((line, i) => doc.text(String(line), marginX, y + 8 + i * 5));
 
-  const rightLines = [
-    opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt,
-    opts.settings.telefon, opts.settings.email,
-    opts.settings.ustId ? `USt-ID: ${opts.settings.ustId}` : '',
-  ].filter(Boolean);
-  doc.setFontSize(9);
-  rightLines.forEach((line, i) => doc.text(String(line), rightX, 20 + i * 5, { align: 'right' }));
-
-  y = 20 + Math.max(kundeLines.length + 2, rightLines.length) * 5 + 12;
-
-  doc.setFontSize(16);
-  doc.setFont(undefined, 'bold');
-  doc.setTextColor(20);
-  doc.text(`${opts.art} ${opts.nummer}`, marginX, y);
-  doc.setFont(undefined, 'normal');
-  y += 8;
-
-  doc.setFontSize(10);
-  doc.text(`Datum: ${formatDate(opts.datum)}`, marginX, y);
-  if (opts.refLabel) {
-    y += 5;
-    doc.text(`${opts.refLabel}: ${opts.refValue}`, marginX, y);
-  }
-  y += 9;
+  y += 8 + kundeLines.length * 5 + 12;
 
   if (opts.betreff) {
-    doc.setFont(undefined, 'bold');
-    doc.text(opts.betreff, marginX, y);
-    doc.setFont(undefined, 'normal');
-    y += 7;
+    doc.setFontSize(10);
+    doc.setTextColor(20);
+    doc.text(`Gerne bieten wir Ihnen an: ${opts.betreff}`, marginX, y);
+    y += 5.5;
   }
+  if (opts.projekt) {
+    doc.setFontSize(10);
+    doc.text(`Für das Projekt: ${opts.projekt}`, marginX, y);
+    y += 5.5;
+  }
+  y += 4;
+
   if (opts.introText) {
+    doc.setFontSize(10);
     const lines = doc.splitTextToSize(opts.introText, 174);
     doc.text(lines, marginX, y);
     y += lines.length * 5 + 4;
@@ -63,19 +123,19 @@ export function buildDocPdfBlob(opts) {
   if (opts.positionen && opts.positionen.length) {
     doc.autoTable({
       startY: y,
-      margin: { left: marginX, right: marginX },
-      head: [['#', 'Bezeichnung', 'Menge', 'Einheit', 'Einzelpreis', 'USt.', 'Netto']],
+      margin: { left: marginX, right: marginX, bottom: 24 },
+      head: [['Pos.', 'Bezeichnung', 'Menge', 'Einheit', 'Einzel €', 'Gesamt €']],
       body: opts.positionen.map((p, i) => [
-        String(i + 1),
+        p.posNr || String(i + 1),
         p.bezeichnung || '',
         String(p.menge ?? ''),
         p.einheit || '',
         formatCurrency(p.einzelpreis),
-        `${p.steuersatz}%`,
         formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
       ]),
-      styles: { fontSize: 9, cellPadding: 2 },
+      styles: { fontSize: 9, cellPadding: 2.2 },
       headStyles: { fillColor: [15, 27, 45] },
+      columnStyles: { 0: { cellWidth: 14 } },
     });
     y = doc.lastAutoTable.finalY + 8;
   }
@@ -108,15 +168,7 @@ export function buildDocPdfBlob(opts) {
     doc.text(lines, marginX, y);
   }
 
-  doc.setFontSize(8);
-  doc.setTextColor(120);
-  const footer = [
-    opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt,
-    opts.settings.iban ? `IBAN: ${opts.settings.iban}` : '',
-    opts.settings.bic ? `BIC: ${opts.settings.bic}` : '',
-    opts.settings.steuernummer ? `Steuernr.: ${opts.settings.steuernummer}` : '',
-  ].filter(Boolean).join(' · ');
-  doc.text(doc.splitTextToSize(footer, 174), marginX, 287);
+  addFooter(doc, opts.settings, marginX, rightX);
 
   return doc.output('blob');
 }

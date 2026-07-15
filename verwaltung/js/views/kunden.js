@@ -1,8 +1,29 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, el, formatDate, toast } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
+
+const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
+const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
+
+function parseKundenCsv(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const delimiter = line.includes(';') ? ';' : ',';
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^firma/i.test(cols[0] || '')) continue;
+    const [firma, ansprechpartner, strasse, plz, ort, telefon, email, notizen] = cols;
+    if (!firma) { errors.push(line); continue; }
+    rows.push({
+      id: uid(), firma, ansprechpartner: ansprechpartner || '', strasse: strasse || '',
+      plz: plz || '', ort: ort || '', telefon: telefon || '', email: email || '', notizen: notizen || '',
+    });
+  }
+  return { rows, errors };
+}
 
 export async function render(container) {
   let [kunden, projekte, spalten] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten')]);
@@ -15,6 +36,8 @@ export async function render(container) {
     <div class="view-header">
       <h1>Kunden</h1>
       <div class="actions">
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
+        <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Kunde</button>
       </div>
     </div>
@@ -66,6 +89,59 @@ export async function render(container) {
   });
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const rows = [KUNDEN_HEADER, ...kunden.map((k) => KUNDEN_FELDER.map((f) => k[f] || ''))];
+    downloadTextFile(`neuverdrahtet-kunden-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
+  container.querySelector('#btn-import').addEventListener('click', () => openImport());
+
+  function openImport() {
+    const { body, close } = openModal({
+      title: 'Kunden importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Firma;Ansprechpartner;Straße;PLZ;Ort;Telefon;E-Mail;Notizen</code> – nur Firma/Name ist Pflicht. Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Mustermann GmbH;Max Mustermann;Musterstr. 1;45357;Essen;0201123456;info@mustermann.de"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = parseKundenCsv(text);
+      if (rows.length === 0) {
+        body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      for (const row of rows) await put('kunden', row);
+      toast(`${rows.length} Kunde(n) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      render(container);
+    });
+  }
 
   function openForm(kunde) {
     const isEdit = !!kunde;
