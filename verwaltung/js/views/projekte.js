@@ -3,14 +3,17 @@ import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js'
 import { openModal, confirmDelete } from '../ui.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderDokumenteSection } from '../dokumente.js';
+import { renderNachkalkulation } from '../nachkalkulation.js';
+import { renderTeamchat } from '../teamchat.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
 
 export async function render(container) {
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
+    getAll('ausgaben'), getAll('zeiterfassung'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -157,6 +160,10 @@ export async function render(container) {
             <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
             ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
             <div class="divider"></div>
+            <div id="nk-host"></div>
+            <div class="divider"></div>
+            <div id="tc-host"></div>
+            <div class="divider"></div>
             <div id="foto-host"></div>
             <div class="divider"></div>
             <div id="dok-host"></div>
@@ -183,6 +190,10 @@ export async function render(container) {
         close();
         render(container);
       });
+      renderNachkalkulation(body.querySelector('#nk-host'), {
+        projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
+      });
+      renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
         title: 'Dokumente (Berichte, Stundenzettel, ...)',

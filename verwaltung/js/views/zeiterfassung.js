@@ -1,8 +1,23 @@
 import { getAll, put, remove, getSettings } from '../db.js';
-import { uid, escapeHtml, formatDate, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
+const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const TIMER_KEY = 'nv-running-timer';
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  const offset = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - offset);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+function toDateOnly(iso) {
+  return (iso || '').slice(0, 10);
+}
+function mapsUrl(ort) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ort)}`;
+}
 
 function loadRunningTimer() {
   try { return JSON.parse(localStorage.getItem(TIMER_KEY) || 'null'); } catch { return null; }
@@ -18,29 +33,165 @@ function formatDuration(minutes) {
 }
 
 export async function render(container) {
-  let [eintraege, projekte, mitarbeiter, settings] = await Promise.all([
-    getAll('zeiterfassung'), getAll('projekte'), getAll('mitarbeiter'), getSettings(),
+  let [eintraege, projekte, mitarbeiter, settings, termine, kunden] = await Promise.all([
+    getAll('zeiterfassung'), getAll('projekte'), getAll('mitarbeiter'), getSettings(), getAll('termine'), getAll('kunden'),
   ]);
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   eintraege.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = eintraege;
   let tickInterval = null;
+  let mode = 'einsaetze';
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Zeiterfassung</h1>
       <div class="actions"><button class="btn btn-primary" id="btn-new">+ Eintrag erfassen</button></div>
     </div>
-
-    <div class="card" id="timer-card"></div>
-
-    <div class="search-bar">
-      <select id="filter-projekt"><option value="">Alle Projekte</option>${projekte.map((p) => `<option value="${p.id}">${escapeHtml(p.titel)}</option>`).join('')}</select>
-      <select id="filter-mitarbeiter"><option value="">Alle Mitarbeiter</option>${mitarbeiter.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>
+    <div class="tabs" id="mode-tabs">
+      <button type="button" class="tab-item" data-mode="einsaetze">📱 Einsätze</button>
+      <button type="button" class="tab-item" data-mode="liste">📋 Liste</button>
     </div>
-    <div id="table-host"></div>
+    <div id="einsaetze-view"></div>
+    <div id="liste-view" hidden>
+      <div class="card" id="timer-card"></div>
+      <div class="search-bar">
+        <select id="filter-projekt"><option value="">Alle Projekte</option>${projekte.map((p) => `<option value="${p.id}">${escapeHtml(p.titel)}</option>`).join('')}</select>
+        <select id="filter-mitarbeiter"><option value="">Alle Mitarbeiter</option>${mitarbeiter.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>
+      </div>
+      <div id="table-host"></div>
+    </div>
   `;
+
+  function setMode(m) {
+    mode = m;
+    container.querySelectorAll('#mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
+    container.querySelector('#einsaetze-view').hidden = m !== 'einsaetze';
+    container.querySelector('#liste-view').hidden = m !== 'liste';
+    if (m === 'einsaetze') renderEinsaetze();
+    if (m === 'liste') renderTable();
+  }
+  container.querySelectorAll('#mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  // --- Mobile "Einsätze" view ---
+  const einsaetzeHost = container.querySelector('#einsaetze-view');
+  let selectedDay = toDateOnly(new Date().toISOString());
+
+  function renderEinsaetze() {
+    let currentMa = getCurrentMitarbeiterId();
+    if (!currentMa && mitarbeiter.length) currentMa = mitarbeiter[0].id;
+    const weekStart = startOfWeek(new Date(selectedDay + 'T00:00:00'));
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      return toDateOnly(d.toISOString());
+    });
+    const todayStr = toDateOnly(new Date().toISOString());
+    const running = loadRunningTimer();
+
+    const einsaetze = termine
+      .filter((t) => currentMa && t.mitarbeiterIds?.includes(currentMa))
+      .filter((t) => {
+        const start = toDateOnly(t.start);
+        const ende = toDateOnly(t.ende) || start;
+        return selectedDay >= start && selectedDay <= ende;
+      })
+      .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+
+    einsaetzeHost.innerHTML = `
+      <div class="search-bar">
+        <label class="text-mute" style="display:flex;align-items:center;gap:6px;font-size:12.5px">
+          Ich bin:
+          <select id="es-ich-bin">
+            <option value="">– auswählen –</option>
+            ${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === currentMa ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+      <div class="es-daystrip">
+        ${days.map((d, i) => `
+          <button type="button" class="es-day ${d === selectedDay ? 'active' : ''} ${d === todayStr ? 'is-today' : ''}" data-date="${d}">
+            <span class="es-dow">${DOW[i]}</span><span class="es-num">${Number(d.slice(8, 10))}</span>
+          </button>
+        `).join('')}
+      </div>
+      <div class="es-list">
+        ${einsaetze.length === 0 ? '<p class="text-mute" style="padding:20px 0">Keine Einsätze an diesem Tag.</p>' : einsaetze.map((t) => {
+          const projekt = projekteById[t.projektId];
+          const kunde = kundenById[t.kundeId] || kundenById[projekt?.kundeId];
+          const isRunningHere = running && running.terminId === t.id;
+          return `
+            <div class="es-card" data-id="${t.id}">
+              <div class="es-card-head">
+                <strong>${escapeHtml(projekt?.titel || t.titel)}</strong>
+                <span class="text-mute">${(t.start || '').slice(11, 16)}</span>
+              </div>
+              ${kunde ? `<div class="text-mute" style="font-size:12.5px">${escapeHtml(kunde.firma)}</div>` : ''}
+              ${t.ort ? `<div class="text-mute" style="font-size:12.5px">📍 ${escapeHtml(t.ort)}</div>` : ''}
+              <textarea class="es-notiz" data-id="${t.id}" placeholder="Notiz hinzufügen ...">${escapeHtml(t.notizen || '')}</textarea>
+              <div class="es-progress-row">
+                <span class="text-mute" style="font-size:12px">Fortschritt</span>
+                <input type="range" min="0" max="100" step="5" class="es-fortschritt" data-id="${t.id}" value="${t.fortschritt || 0}">
+                <span class="es-fortschritt-val">${t.fortschritt || 0}%</span>
+              </div>
+              <div class="es-actions">
+                ${t.ort ? `<a class="btn btn-sm" href="${mapsUrl(t.ort)}" target="_blank" rel="noopener">📍 Standort</a>` : ''}
+                ${kunde?.telefon ? `<a class="btn btn-sm" href="tel:${escapeHtml(kunde.telefon)}">📞 Anruf</a>` : ''}
+                ${t.projektId ? `<button type="button" class="btn btn-sm ${isRunningHere ? 'btn-danger' : 'btn-primary'} es-timer-btn" data-id="${t.id}" data-projekt="${t.projektId}">${isRunningHere ? '⏹️ Stopp' : '▶️ Start'}</button>` : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+
+    einsaetzeHost.querySelector('#es-ich-bin').addEventListener('change', (e) => {
+      setCurrentMitarbeiterId(e.target.value);
+      renderEinsaetze();
+    });
+    einsaetzeHost.querySelectorAll('.es-day').forEach((btn) => {
+      btn.addEventListener('click', () => { selectedDay = btn.dataset.date; renderEinsaetze(); });
+    });
+    einsaetzeHost.querySelectorAll('.es-notiz').forEach((ta) => {
+      ta.addEventListener('blur', async () => {
+        const t = termine.find((x) => x.id === ta.dataset.id);
+        if (!t) return;
+        t.notizen = ta.value;
+        await put('termine', t);
+      });
+    });
+    einsaetzeHost.querySelectorAll('.es-fortschritt').forEach((range) => {
+      range.addEventListener('input', () => {
+        range.parentElement.querySelector('.es-fortschritt-val').textContent = `${range.value}%`;
+      });
+      range.addEventListener('change', async () => {
+        const t = termine.find((x) => x.id === range.dataset.id);
+        if (!t) return;
+        t.fortschritt = Number(range.value);
+        await put('termine', t);
+      });
+    });
+    einsaetzeHost.querySelectorAll('.es-timer-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const runningNow = loadRunningTimer();
+        if (runningNow && runningNow.terminId === btn.dataset.id) {
+          const minutes = Math.max(1, Math.round((Date.now() - new Date(runningNow.startedAt).getTime()) / 60000));
+          saveRunningTimer(null);
+          const neu = {
+            id: uid(), projektId: runningNow.projektId, mitarbeiterId: currentMa,
+            datum: runningNow.startedAt.slice(0, 10), dauerMinuten: minutes, beschreibung: '', abgerechnet: false,
+          };
+          await put('zeiterfassung', neu);
+          eintraege.unshift(neu);
+          toast(`Zeit gespeichert: ${minutes} Min.`, 'success');
+        } else {
+          saveRunningTimer({ projektId: btn.dataset.projekt, mitarbeiterId: currentMa, startedAt: new Date().toISOString(), terminId: btn.dataset.id });
+        }
+        renderEinsaetze();
+      });
+    });
+  }
 
   // --- Timer widget ---
   const timerCard = container.querySelector('#timer-card');
@@ -197,6 +348,7 @@ export async function render(container) {
 
   renderTimer();
   renderTable();
+  setMode('einsaetze');
 
   return () => { if (tickInterval) clearInterval(tickInterval); };
 }
