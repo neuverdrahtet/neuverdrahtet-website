@@ -17,11 +17,12 @@ import * as vorlagen from './views/vorlagen.js';
 import * as ausgaben from './views/ausgaben.js';
 import * as buchhaltung from './views/buchhaltung.js';
 import * as aufgaben from './views/aufgaben.js';
+import * as geraete from './views/geraete.js';
 
 const routes = {
   dashboard, kunden, kanban, projekte, kalender, plantafel, mitarbeiter,
   katalog, angebote, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, buchhaltung, aufgaben,
+  ausgaben, buchhaltung, aufgaben, geraete,
 };
 
 const viewEl = document.getElementById('view');

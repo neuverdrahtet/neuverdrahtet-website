@@ -2,6 +2,9 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
+const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät' };
+const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn' };
+
 function parseNumber(str) {
   const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
   return Number.isFinite(n) ? n : 0;
@@ -32,7 +35,8 @@ function parseKatalogCsv(text, standardSteuersatz) {
     if (/^typ$/i.test(cols[0] || '') || /^bezeichnung$/i.test(cols[1] || '')) continue;
     const [typRaw, bezeichnung, einheit, preisRaw, ustRaw, beschreibungRaw] = cols;
     if (!bezeichnung) { errors.push(line); continue; }
-    const typ = /^leistung$/i.test((typRaw || '').trim()) ? 'leistung' : 'artikel';
+    const typRawTrim = (typRaw || '').trim();
+    const typ = /^leistung$/i.test(typRawTrim) ? 'leistung' : /^ger[äa]t/i.test(typRawTrim) ? 'geraet' : 'artikel';
     rows.push({
       id: uid(),
       typ,
@@ -65,8 +69,9 @@ export async function render(container) {
       <input type="search" id="search" placeholder="Suche ...">
       <select id="type-filter">
         <option value="">Alle Typen</option>
-        <option value="artikel">Artikel</option>
+        <option value="artikel">Material</option>
         <option value="leistung">Leistung</option>
+        <option value="geraet">Gerät</option>
       </select>
     </div>
     <div id="table-host"></div>
@@ -90,14 +95,16 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th>Preis (netto)</th><th>USt.</th></tr></thead>
+        <thead><tr><th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th></tr></thead>
         <tbody>
           ${filtered.map((i) => `
             <tr data-id="${i.id}">
-              <td><span class="badge ${i.typ === 'artikel' ? 'badge-accent' : 'badge-success'}">${i.typ === 'artikel' ? 'Artikel' : 'Leistung'}</span></td>
+              <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
               <td>${escapeHtml(i.bezeichnung)}</td>
               <td>${escapeHtml(i.einheit || '')}</td>
-              <td>${formatCurrency(i.preis)}</td>
+              <td class="text-right">${i.einkaufspreis ? formatCurrency(i.einkaufspreis) : '–'}</td>
+              <td class="text-right">${i.einkaufspreis ? `${i.aufschlagProzent || 0}%` : '–'}</td>
+              <td class="text-right">${formatCurrency(i.preis)}</td>
               <td>${i.steuersatz}%</td>
             </tr>
           `).join('')}
@@ -122,7 +129,7 @@ export async function render(container) {
       title: 'Material / Leistungen importieren',
       wide: true,
       bodyHtml: `
-        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Typ;Bezeichnung;Einheit;Preis;USt;Beschreibung</code> (Beschreibung optional) – Typ ist "Material"/"Artikel" oder "Leistung". Eine optionale Kopfzeile wird erkannt.</p>
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Typ;Bezeichnung;Einheit;Preis;USt;Beschreibung</code> (Beschreibung optional) – Typ ist "Material", "Leistung" oder "Gerät". Eine optionale Kopfzeile wird erkannt.</p>
         <div class="field" style="margin-bottom:10px">
           <label>CSV- oder Excel-Datei</label>
           <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
@@ -167,7 +174,10 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
 
   function openForm(item) {
     const isEdit = !!item;
-    const data = item || { id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.', preis: 0, steuersatz: settings.standardSteuersatz };
+    const data = item || {
+      id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.',
+      einkaufspreis: 0, aufschlagProzent: 20, preis: 0, steuersatz: settings.standardSteuersatz,
+    };
     const { body, close } = openModal({
       title: isEdit ? 'Eintrag bearbeiten' : 'Neuer Artikel / Leistung',
       bodyHtml: `
@@ -176,13 +186,16 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
             <div class="field"><label>Typ</label>
               <select name="typ">
                 <option value="leistung" ${data.typ === 'leistung' ? 'selected' : ''}>Leistung</option>
-                <option value="artikel" ${data.typ === 'artikel' ? 'selected' : ''}>Artikel</option>
+                <option value="artikel" ${data.typ === 'artikel' ? 'selected' : ''}>Material</option>
+                <option value="geraet" ${data.typ === 'geraet' ? 'selected' : ''}>Gerät</option>
               </select>
             </div>
             <div class="field"><label>Einheit</label><input name="einheit" placeholder="Std., Stk., pauschal ..." value="${escapeHtml(data.einheit || '')}"></div>
             <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
-            <div class="field"><label>Preis netto (€)</label><input type="number" step="0.01" min="0" name="preis" value="${data.preis}"></div>
+            <div class="field"><label>Einkaufspreis EK (€, optional)</label><input type="number" step="0.01" min="0" name="einkaufspreis" id="f-ek" value="${data.einkaufspreis || ''}"></div>
+            <div class="field"><label>Zuschlag (%)</label><input type="number" step="1" min="0" name="aufschlagProzent" id="f-zuschlag" value="${data.aufschlagProzent ?? 20}"></div>
+            <div class="field"><label>Verkaufspreis VK netto (€) *</label><input type="number" step="0.01" min="0" name="preis" id="f-vk" required value="${data.preis}"></div>
             <div class="field"><label>USt.-Satz (%)</label>
               <select name="steuersatz">
                 <option value="19" ${Number(data.steuersatz) === 19 ? 'selected' : ''}>19%</option>
@@ -191,6 +204,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
               </select>
             </div>
           </div>
+          <p class="hint">EK + Zuschlag berechnen den VK automatisch (VK = EK × (1 + Zuschlag/100)). Der VK bleibt trotzdem direkt editierbar.</p>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             <span class="spacer"></span>
@@ -200,6 +214,15 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
         </form>
       `,
     });
+    function recalcVk() {
+      const ek = Number(body.querySelector('#f-ek').value) || 0;
+      const zuschlag = Number(body.querySelector('#f-zuschlag').value) || 0;
+      if (ek > 0) {
+        body.querySelector('#f-vk').value = (Math.round(ek * (1 + zuschlag / 100) * 100) / 100).toFixed(2);
+      }
+    }
+    body.querySelector('#f-ek').addEventListener('input', recalcVk);
+    body.querySelector('#f-zuschlag').addEventListener('input', recalcVk);
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
@@ -216,6 +239,8 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
       const updated = { ...data };
       for (const [k, v] of fd.entries()) updated[k] = v.trim ? v.trim() : v;
       updated.preis = Number(updated.preis) || 0;
+      updated.einkaufspreis = Number(updated.einkaufspreis) || 0;
+      updated.aufschlagProzent = Number(updated.aufschlagProzent) || 0;
       updated.steuersatz = Number(updated.steuersatz) || 0;
       if (!updated.bezeichnung) return;
       await put('katalog', updated);
