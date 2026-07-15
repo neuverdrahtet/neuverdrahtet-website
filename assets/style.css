@@ -130,6 +130,7 @@ h1,h2,h3,h4{
   height:80px;
 }
 .brand{ display:flex; align-items:center; gap:12px; text-decoration:none; }
+.brand-logo{ height:38px; width:auto; display:block; }
 .brand-mark{ width:42px; height:auto; flex:none; border-radius:8px; box-shadow:0 0 0 1px rgba(255,255,255,0.08); }
 .brand-name{
   font-family:var(--font-display);
@@ -284,6 +285,16 @@ h1,h2,h3,h4{
   pointer-events:none;
 }
 .hero-slide.is-active{ opacity:1; transform:translateX(0); pointer-events:auto; }
+.hero-slide-photo{
+  position:absolute; inset:0; width:100%; height:100%;
+  object-fit:cover; z-index:0;
+}
+.hero-slide.has-photo::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(0deg, rgba(12,24,38,0.92) 0%, rgba(12,24,38,0.55) 45%, rgba(12,24,38,0.1) 75%);
+  z-index:1;
+}
+.hero-slide.has-photo > *:not(.hero-slide-photo){ position:relative; z-index:2; }
 .hero-slide-icon{ color:var(--orange-2); margin-bottom:auto; }
 .hero-slide-code{ font-family:var(--font-mono); font-size:11.5px; color:rgba(255,255,255,0.45); letter-spacing:0.08em; text-transform:uppercase; }
 .hero-slide h3{ font-size:22px; color:#fff; }

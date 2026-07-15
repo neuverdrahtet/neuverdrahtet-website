@@ -1,730 +1,446 @@
-/* =========================================================
-   neuverdrahtet — Elektro Fachbetrieb Essen
-   Design tokens — light, engineering-forward style
-   ========================================================= */
-:root{
-  --navy:        #13243A;
-  --navy-2:      #1C3350;
-  --navy-3:      #0C1826;
-  --orange:      #E8850C;
-  --orange-2:    #FFA940;
-  --orange-soft: rgba(232,133,12,0.16);
-  --copper:      #E0975A;
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DGUV V3 Prüfung — neuverdrahtet Essen</title>
+<meta name="description" content="DGUV V3 Prüfung in Essen — ortsveränderliche und ortsfeste Geräte geprüft, für Arbeitssicherheit und Nachweispflicht.">
+<link rel="canonical" href="https://neuverdrahtet.com/dguv-v3.html">
+<link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="neuverdrahtet">
+<meta property="og:title" content="DGUV V3 Prüfung — neuverdrahtet Essen">
+<meta property="og:description" content="DGUV V3 Prüfung in Essen — ortsveränderliche und ortsfeste Geräte geprüft, für Arbeitssicherheit und Nachweispflicht.">
+<meta property="og:url" content="https://neuverdrahtet.com/dguv-v3.html">
+<meta property="og:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
+<meta property="og:locale" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="DGUV V3 Prüfung — neuverdrahtet Essen">
+<meta name="twitter:description" content="DGUV V3 Prüfung in Essen — ortsveränderliche und ortsfeste Geräte geprüft, für Arbeitssicherheit und Nachweispflicht.">
+<meta name="twitter:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
+<meta name="geo.region" content="DE-NW">
+<meta name="geo.placename" content="Essen">
+<meta name="geo.position" content="51.4556;7.0116">
+<meta name="ICBM" content="51.4556, 7.0116">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
 
-  --paper:       #0C1826;
-  --surface:     #16283F;
-  --surface-2:   #23395A;
-  --line:        rgba(255,255,255,0.12);
-
-  --ink:         #F4F6F8;
-  --ink-soft:    rgba(244,246,248,0.68);
-  --ink-faint:   rgba(244,246,248,0.42);
-  --ok:          #4FBE82;
-  --err:         #FF7A63;
-
-  --font-display: 'Poppins', 'Arial Narrow', sans-serif;
-  --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono:    'IBM Plex Mono', 'SFMono-Regular', monospace;
-
-  --maxw: 1180px;
-  --radius: 10px;
-  --radius-sm: 6px;
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://neuverdrahtet.com/#website",
+      "url": "https://neuverdrahtet.com/",
+      "name": "neuverdrahtet",
+      "publisher": {
+        "@id": "https://neuverdrahtet.com/#business"
+      },
+      "inLanguage": "de-DE"
+    },
+    {
+      "@type": "Electrician",
+      "@id": "https://neuverdrahtet.com/#business",
+      "name": "neuverdrahtet UG (haftungsbeschränkt)",
+      "url": "https://neuverdrahtet.com/",
+      "image": "https://neuverdrahtet.com/assets/og-image.jpg",
+      "telephone": "+49-170-6398575",
+      "email": "neuverdrahtet@gmail.com",
+      "priceRange": "€€",
+      "slogan": "Smarte Elektrokonzepte für Alt & Neubau",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Donnerstr. 131",
+        "addressLocality": "Essen",
+        "postalCode": "45357",
+        "addressRegion": "NRW",
+        "addressCountry": "DE"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 51.4556,
+        "longitude": 7.0116
+      },
+      "areaServed": [
+        {
+          "@type": "City",
+          "name": "Essen"
+        },
+        {
+          "@type": "City",
+          "name": "Bochum"
+        },
+        {
+          "@type": "City",
+          "name": "Mülheim an der Ruhr"
+        },
+        {
+          "@type": "City",
+          "name": "Oberhausen"
+        },
+        {
+          "@type": "City",
+          "name": "Gelsenkirchen"
+        }
+      ],
+      "founder": {
+        "@type": "Person",
+        "name": "Danny Berger"
+      },
+      "sameAs": [
+        "https://www.facebook.com/neuverdrahtetug/",
+        "https://www.instagram.com/neuverdrahtet/"
+      ]
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://neuverdrahtet.com/dguv-v3.html#webpage",
+      "url": "https://neuverdrahtet.com/dguv-v3.html",
+      "name": "DGUV V3 Prüfung — neuverdrahtet Essen",
+      "description": "DGUV V3 Prüfung in Essen — ortsveränderliche und ortsfeste Geräte geprüft, für Arbeitssicherheit und Nachweispflicht.",
+      "isPartOf": {
+        "@id": "https://neuverdrahtet.com/#website"
+      },
+      "about": {
+        "@id": "https://neuverdrahtet.com/#business"
+      },
+      "inLanguage": "de-DE"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Start",
+          "item": "https://neuverdrahtet.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Leistungen",
+          "item": "https://neuverdrahtet.com/leistungen.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "DGUV V3 Prüfung",
+          "item": "https://neuverdrahtet.com/dguv-v3.html"
+        }
+      ]
+    },
+    {
+      "@type": "Service",
+      "serviceType": "DGUV V3 Prüfung",
+      "name": "DGUV V3 Prüfung — neuverdrahtet",
+      "description": "DGUV V3 Prüfung in Essen — ortsveränderliche und ortsfeste Geräte geprüft, für Arbeitssicherheit und Nachweispflicht.",
+      "provider": {
+        "@id": "https://neuverdrahtet.com/#business"
+      },
+      "areaServed": {
+        "@type": "City",
+        "name": "Essen"
+      },
+      "url": "https://neuverdrahtet.com/dguv-v3.html"
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Wie oft muss die DGUV V3 Prüfung wiederholt werden?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Das Intervall richtet sich nach Gerätetyp und Einsatzbedingungen — von jährlich bis alle vier Jahre. Das wird individuell festgelegt."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Was passiert bei einem Arbeitsunfall ohne gültige Prüfung?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Ohne gültigen Nachweis drohen Haftungsrisiken für den Betrieb. Die regelmäßige Prüfung schützt davor."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Können Prüfungen außerhalb der Geschäftszeiten stattfinden?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Ja, Termine lassen sich nach Absprache auch außerhalb der regulären Betriebszeiten legen."
+          }
+        }
+      ]
+    }
+  ]
 }
+</script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a href="index.html" class="brand">
+      <img class="brand-logo" src="assets/logo/header-logo.jpg" alt="neuverdrahtet">
+    </a>
 
-*,*::before,*::after{ box-sizing:border-box; }
-html{ scroll-behavior:smooth; }
-@media (prefers-reduced-motion: reduce){
-  html{ scroll-behavior:auto; }
-  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
-}
+    <nav class="main-nav" aria-label="Hauptnavigation">
+      <div class="nav-item-dropdown">
+        <a>Leistungen <svg width="11" height="7" viewBox="0 0 11 7" fill="none"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+        <div class="nav-dropdown">
+          <a href="elektroinstallation.html"><span class="code">01</span>Elektroinstallation</a>
+          <a href="zaehlerschrank.html"><span class="code">02</span>Zählerschrank &amp; Verteilung</a>
+          <a href="wallbox.html"><span class="code">03</span>Wallbox-Installation</a>
+          <a href="smart-home.html"><span class="code">04</span>Smart Home</a>
+          <a href="e-check.html"><span class="code">05</span>E-Check</a>
+          <a href="dguv-v3.html"><span class="code">06</span>DGUV V3 Prüfung</a>
+          <a href="beleuchtung.html"><span class="code">07</span>Beleuchtungstechnik</a>
+          <a href="stoerungsbehebung.html"><span class="code">08</span>Störungsbehebung</a>
+          <a href="waermepumpe.html"><span class="code">09</span>Wärmepumpe</a>
+          <a href="photovoltaik.html"><span class="code">10</span>Photovoltaik</a>
+          <div class="col-foot"><a href="leistungen.html">Alle Leistungen im Überblick →</a></div>
+        </div>
+      </div>
+      <div class="nav-item-dropdown">
+        <a>Tools <svg width="11" height="7" viewBox="0 0 11 7" fill="none"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+        <div class="nav-dropdown" style="width:340px;grid-template-columns:1fr;">
+          <a href="kosten-rechner.html"><span class="code">€</span>Kosten-Konfigurator — Projektkosten schätzen</a>
+          <a href="ki-check.html"><span class="code">KI</span>KI-Check Unterverteilung — per Foto prüfen</a>
+        </div>
+      </div>
+      <a href="index.html#ueber-uns">Über uns</a>
+      <a href="index.html#einsatzgebiet">Einsatzgebiet</a>
+      <a href="index.html#kontakt">Kontakt</a>
+    </nav>
 
-body{
-  margin:0;
-  background:var(--paper);
-  color:var(--ink);
-  font-family:var(--font-body);
-  font-size:16px;
-  line-height:1.6;
-  -webkit-font-smoothing:antialiased;
-}
+    <div class="header-cta">
+      <div class="header-icons">
+        <a href="https://wa.me/491706398575" target="_blank" rel="noopener" aria-label="WhatsApp" title="WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.36a9.9 9.9 0 0 0 4.62 1.15h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.72 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1.02.24-3.43-.72-2.9-1.16-4.76-4.14-4.9-4.33-.14-.19-1.17-1.56-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.61 2 1.11.99 2.04 1.3 2.33 1.45.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.38-.24.63-.14.26.1 1.64.77 1.92.91.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg></a>
+        <a href="tel:+491706398575" aria-label="Anrufen" title="Anrufen: 01706398575"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
+        <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" aria-label="Instagram" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
+        <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" aria-label="Facebook" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+      </div>
+      <a class="btn btn-primary btn-sm" href="index.html#kontakt">Angebot anfragen</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+<div class="mobile-drawer" id="mobileDrawer">
+  <div class="mobile-drawer-head">
+    <img src="assets/logo/header-logo.jpg" alt="neuverdrahtet" style="height:32px;width:auto;">
+    <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
+  </div>
+  <a href="index.html#leistungen">Leistungen</a>
+  <a class="mobile-sub" href="elektroinstallation.html">Elektroinstallation</a>
+  <a class="mobile-sub" href="zaehlerschrank.html">Zählerschrank &amp; Verteilung</a>
+  <a class="mobile-sub" href="wallbox.html">Wallbox-Installation</a>
+  <a class="mobile-sub" href="smart-home.html">Smart Home</a>
+  <a class="mobile-sub" href="e-check.html">E-Check</a>
+  <a class="mobile-sub" href="dguv-v3.html">DGUV V3 Prüfung</a>
+  <a class="mobile-sub" href="beleuchtung.html">Beleuchtungstechnik</a>
+  <a class="mobile-sub" href="stoerungsbehebung.html">Störungsbehebung</a>
+  <a class="mobile-sub" href="waermepumpe.html">Wärmepumpe</a>
+  <a class="mobile-sub" href="photovoltaik.html">Photovoltaik</a>
+  <a href="kosten-rechner.html">Kosten-Konfigurator</a>
+  <a href="ki-check.html">KI-Check Unterverteilung</a>
+  <a href="index.html#ueber-uns">Über uns</a>
+  <a href="index.html#einsatzgebiet">Einsatzgebiet</a>
+  <a href="index.html#kontakt">Kontakt</a>
+</div>
+<main>
 
-img{ max-width:100%; display:block; }
-a{ color:inherit; }
+  <section class="page-hero hero">
+    <div class="wrap">
+      <div>
+        <div class="breadcrumb"><a href="index.html">Start</a> · <a href="leistungen.html">Leistungen</a> · DGUV V3 Prüfung</div>
+        <p class="eyebrow">Leistung 06 · V3</p>
+        <h1>DGUV V3 Prüfung</h1>
+        <p class="hero-lede">Die DGUV V3 Prüfung ist für Betriebe Pflicht: elektrische Geräte und Anlagen müssen regelmäßig auf Sicherheit geprüft werden. Das schützt Mitarbeitende — und schafft den rechtssicheren Nachweis gegenüber Berufsgenossenschaft und Versicherung.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="index.html#kontakt">Angebot anfragen</a>
+          <a class="btn btn-outline" href="kosten-rechner.html">Kosten schätzen</a>
+        </div>
+      </div>
+      <div class="hero-slider" data-autoplay="6000">
+        <div class="hero-slider-track">
+          <div class="hero-slide is-active has-photo">
+            <img class="hero-slide-photo" src="assets/photos/dguv-v3.jpg" alt="Prüfgerät für die DGUV V3 Prüfung im Einsatz" loading="lazy">
+            <div class="hero-slide-code">Pflicht</div>
+            <h3>Gesetzlich vorgeschrieben</h3>
+            <p>Regelmäßige Prüfung nach DGUV Vorschrift 3 für Betriebe.</p>
+          </div>
+          <div class="hero-slide has-photo">
+            <img class="hero-slide-photo" src="assets/photos/thermografie-1.jpg" alt="Wärmebildaufnahme einer Elektroverteilung" loading="lazy">
+            <div class="hero-slide-code">Thermografie</div>
+            <h3>Erwärmung sichtbar gemacht</h3>
+            <p>Wärmebildaufnahmen zeigen Belastungsstellen, bevor sie zum Problem werden.</p>
+          </div>
+          <div class="hero-slide">
+            
+            <div class="hero-slide-code">Nachweis</div>
+            <h3>Rechtssicher dokumentiert</h3>
+            <p>Prüfprotokoll als Nachweis gegenüber Berufsgenossenschaft und Versicherung.</p>
+          </div>
+        </div>
+        <div class="hero-slider-arrows">
+          <button class="arrow prev" aria-label="Vorherige Folie">‹</button>
+          <button class="arrow next" aria-label="Nächste Folie">›</button>
+        </div>
+        <div class="hero-slider-dots">
+          <button class="dot is-active" data-index="0" aria-label="Folie 1"></button>
+            <button class="dot" data-index="1" aria-label="Folie 2"></button>
+            <button class="dot" data-index="2" aria-label="Folie 3"></button>
+        </div>
+      </div>
+    </div>
+  </section>
 
-.wrap{
-  max-width:var(--maxw);
-  margin:0 auto;
-  padding:0 28px;
-}
+  <section style="padding-top:0;">
+    <div class="wrap">
+      <div class="photo-grid">
+        <figure><img src="assets/photos/dguv-v3.jpg" alt="Prüfgerät für die DGUV V3 Prüfung im Einsatz" loading="lazy"><figcaption>Prüfgerät für die DGUV V3 Prüfung im Einsatz</figcaption></figure>
+        <figure><img src="assets/photos/thermografie-1.jpg" alt="Wärmebildaufnahme einer Elektroverteilung" loading="lazy"><figcaption>Wärmebildaufnahme einer Elektroverteilung</figcaption></figure>
+      </div>
+    </div>
+  </section>
 
-h1,h2,h3,h4{
-  font-family:var(--font-display);
-  font-weight:700;
-  line-height:1.1;
-  margin:0;
-  letter-spacing:-0.01em;
-  color:var(--ink);
-}
+  <section class="section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Im Detail</p>
+        <h2>Was zu DGUV V3 Prüfung gehört</h2>
+      </div>
+      <ul class="feature-list">
+        <li>Prüfung ortsveränderlicher Geräte (Werkzeug, Bürogeräte)</li>
+        <li>Prüfung ortsfester Anlagen</li>
+        <li>Prüfplakette mit nächstem Prüftermin</li>
+        <li>Vollständige, nachvollziehbare Dokumentation</li>
+        <li>Individuelle Prüfintervalle nach Gefährdung</li>
+        <li>Terminplanung ohne Betriebsunterbrechung</li>
+        <li>Optional: Thermografie zur Erkennung von Erwärmungsstellen</li>
+      </ul>
+    </div>
+  </section>
 
-.eyebrow{
-  font-family:var(--font-mono);
-  font-size:12.5px;
-  letter-spacing:0.14em;
-  text-transform:uppercase;
-  color:var(--orange);
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-bottom:14px;
-}
-.eyebrow::before{
-  content:"";
-  width:22px; height:1.5px;
-  background:var(--orange);
-  display:inline-block;
-}
-.eyebrow.on-dark{ color:var(--orange-2); }
+  <section>
+    <div class="wrap">
+      <div class="section-head center">
+        <p class="eyebrow">Häufige Fragen</p>
+        <h2>Gut zu wissen</h2>
+      </div>
+      <div class="faq-list" style="margin:0 auto;">
+        <div class="faq-item">
+        <button class="faq-q"><span>Wie oft muss die DGUV V3 Prüfung wiederholt werden?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Das Intervall richtet sich nach Gerätetyp und Einsatzbedingungen — von jährlich bis alle vier Jahre. Das wird individuell festgelegt.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>Was passiert bei einem Arbeitsunfall ohne gültige Prüfung?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Ohne gültigen Nachweis drohen Haftungsrisiken für den Betrieb. Die regelmäßige Prüfung schützt davor.</p></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q"><span>Können Prüfungen außerhalb der Geschäftszeiten stattfinden?</span><span class="plus">+</span></button>
+        <div class="faq-a"><p>Ja, Termine lassen sich nach Absprache auch außerhalb der regulären Betriebszeiten legen.</p></div>
+      </div>
+      </div>
+    </div>
+  </section>
 
-.rule{ height:1px; background:var(--line); border:none; margin:22px 0; }
+  <section class="section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Weitere Leistungen</p>
+        <h2>Passt oft dazu</h2>
+      </div>
+      <div class="related-grid">
+        <a class="service-card" href="elektroinstallation.html">
+        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+        <h3>Elektroinstallation</h3>
+        <p>Komplette Elektrik für Neubau, Altbau und Sanierung.</p>
+        <span class="more">Mehr erfahren →</span>
+      </a>
+      <a class="service-card" href="zaehlerschrank.html">
+        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 8h6M9 12h6M9 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+        <h3>Zählerschrank &amp; Verteilung</h3>
+        <p>Erneuerung nach aktueller Norm, mehr Sicherheit und Reserve für später.</p>
+        <span class="more">Mehr erfahren →</span>
+      </a>
+      <a class="service-card" href="wallbox.html">
+        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7" width="12" height="13" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M16 11h2.5l1.5 3v5h-2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="20" r="1.4" fill="currentColor"/><circle cx="16" cy="20" r="1.4" fill="currentColor"/></svg></div>
+        <h3>Wallbox-Installation</h3>
+        <p>Ladepunkt für E-Autos fachgerecht angeschlossen.</p>
+        <span class="more">Mehr erfahren →</span>
+      </a>
+      </div>
+    </div>
+  </section>
 
-.btn{
-  display:inline-flex;
-  align-items:center;
-  gap:10px;
-  font-family:var(--font-body);
-  font-weight:600;
-  font-size:15px;
-  padding:14px 26px;
-  border-radius:100px;
-  border:1.5px solid transparent;
-  cursor:pointer;
-  text-decoration:none;
-  transition:transform .15s ease, background .2s ease, border-color .2s ease, color .2s ease, box-shadow .2s ease;
-}
-.btn:hover{ transform:translateY(-1px); }
-.btn:focus-visible{ outline:3px solid var(--orange-2); outline-offset:2px; }
+  <section>
+    <div class="wrap">
+      <div class="cta-banner">
+        <h2>Bereit für DGUV V3 Prüfung?</h2>
+        <p>Kurz beschreiben, worum es geht — Rückmeldung kommt persönlich von Danny Berger.</p>
+        <a class="btn btn-primary" href="index.html#kontakt">Jetzt anfragen</a>
+      </div>
+    </div>
+  </section>
 
-.btn-primary{ background:var(--orange); color:#fff; box-shadow:0 10px 24px -8px rgba(232,133,12,0.55); }
-.btn-primary:hover{ background:#D67A0A; }
-
-.btn-outline{ background:transparent; border-color:var(--line); color:var(--ink); }
-.btn-outline:hover{ border-color:var(--ink); }
-
-.btn-ghost{ background:transparent; border-color:rgba(255,255,255,0.35); color:#fff; }
-.btn-ghost:hover{ border-color:#fff; }
-
-.btn-sm{ padding:10px 18px; font-size:13.5px; }
-.btn-block{ width:100%; justify-content:center; }
-
-/* =========================================================
-   Header
-   ========================================================= */
-.site-header{
-  position:sticky; top:0; z-index:50;
-  background:rgba(12,24,38,0.92);
-  backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--line);
-}
-.site-header .wrap{
-  display:flex; align-items:center; justify-content:space-between;
-  height:80px;
-}
-.brand{ display:flex; align-items:center; gap:12px; text-decoration:none; }
-.brand-logo{ height:38px; width:auto; display:block; }
-.brand-mark{ width:42px; height:auto; flex:none; border-radius:8px; box-shadow:0 0 0 1px rgba(255,255,255,0.08); }
-.brand-name{
-  font-family:var(--font-display);
-  font-weight:700;
-  font-size:19px;
-  color:var(--ink);
-  letter-spacing:0;
-}
-.brand-name em{ font-style:normal; color:var(--orange); }
-
-.main-nav{ display:flex; align-items:center; gap:8px; }
-.main-nav a{
-  color:var(--ink-soft);
-  text-decoration:none;
-  font-size:14.5px;
-  font-weight:500;
-  padding:10px 14px;
-  border-radius:100px;
-  transition:color .2s ease, background .2s ease;
-}
-.main-nav a:hover{ color:var(--ink); background:var(--surface-2); }
-
-.nav-item-dropdown{ position:relative; }
-.nav-item-dropdown > a{ display:flex; align-items:center; gap:6px; cursor:pointer; }
-.nav-item-dropdown > a svg{ transition:transform .2s ease; }
-.nav-item-dropdown:hover > a svg,
-.nav-item-dropdown.is-open > a svg{ transform:rotate(180deg); }
-
-.nav-dropdown{
-  position:absolute; top:calc(100% + 12px); left:50%; transform:translateX(-50%) translateY(4px);
-  width:600px;
-  background:var(--navy-2);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:16px;
-  display:grid; grid-template-columns:1fr 1fr; gap:2px;
-  opacity:0; visibility:hidden; pointer-events:none;
-  transition:opacity .18s ease, transform .18s ease;
-  box-shadow:0 24px 48px -12px rgba(0,0,0,0.55);
-}
-.nav-item-dropdown:hover .nav-dropdown,
-.nav-item-dropdown.is-open .nav-dropdown{
-  opacity:1; visibility:visible; pointer-events:auto; transform:translateX(-50%) translateY(0);
-}
-.nav-dropdown a{
-  display:flex; align-items:baseline; gap:10px;
-  padding:11px 12px; border-radius:8px;
-  color:var(--ink-soft); text-decoration:none;
-  font-family:var(--font-body); font-size:14px; font-weight:500;
-}
-.nav-dropdown a:hover{ background:var(--surface-2); color:var(--ink); }
-.nav-dropdown a .code{ font-family:var(--font-mono); font-size:10.5px; color:var(--orange); flex:none; }
-.nav-dropdown .col-foot{ grid-column:1 / -1; border-top:1px solid var(--line); margin-top:8px; padding-top:10px; }
-@media (max-width:1080px){ .nav-dropdown{ width:460px; } }
-
-.header-cta{ display:flex; align-items:center; gap:14px; }
-.header-icons{ display:flex; align-items:center; gap:8px; }
-.header-icons a{
-  width:36px; height:36px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  background:var(--surface); color:var(--ink-soft);
-  transition:background .2s ease, color .2s ease, transform .2s ease;
-}
-.header-icons a svg{ width:17px; height:17px; }
-.header-icons a:hover{ transform:translateY(-1px); color:#fff; }
-.header-icons a.fab-whatsapp:hover, .header-icons a:nth-child(1):hover{ background:#25D366; }
-.header-icons a:nth-child(2):hover{ background:var(--orange); }
-.header-icons a:nth-child(3):hover{ background:linear-gradient(135deg,#fd5949,#d6249f,#285AEB); }
-.header-icons a:nth-child(4):hover{ background:#1877F2; }
-@media (max-width:980px){ .header-icons{ display:none; } }
-.nav-toggle{ display:none; }
-
-@media (max-width:980px){
-  .main-nav{ display:none; }
-  .nav-toggle{
-    display:flex; background:none; border:1px solid var(--line);
-    color:var(--ink); border-radius:var(--radius-sm); padding:9px 12px; cursor:pointer;
-  }
-}
-
-/* =========================================================
-   Mobile nav drawer
-   ========================================================= */
-.mobile-drawer{
-  position:fixed; inset:0; z-index:100;
-  background:var(--navy-3);
-  display:none; flex-direction:column;
-  padding:26px 28px; overflow-y:auto;
-}
-.mobile-drawer.is-open{ display:flex; }
-.mobile-drawer-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:32px; }
-.mobile-drawer a{ color:#fff; text-decoration:none; font-family:var(--font-display); font-size:20px; font-weight:600; padding:12px 0; border-bottom:1px solid rgba(255,255,255,0.1); }
-.mobile-drawer .mobile-sub a{ font-size:15px; font-weight:400; color:rgba(255,255,255,0.7); padding:9px 0 9px 14px; }
-.mobile-close{ background:none; border:1px solid rgba(255,255,255,0.3); color:#fff; border-radius:var(--radius-sm); padding:8px 12px; cursor:pointer; }
-
-/* =========================================================
-   Hero
-   ========================================================= */
-.hero{
-  position:relative;
-  background:
-    radial-gradient(ellipse at 85% -10%, rgba(232,133,12,0.16), transparent 45%),
-    var(--paper);
-  overflow:hidden;
-  padding:76px 0 0;
-}
-.hero .wrap{ display:grid; grid-template-columns:1.05fr 0.95fr; gap:56px; align-items:center; padding-bottom:56px; }
-@media (max-width:900px){ .hero .wrap{ grid-template-columns:1fr; } }
-
-.hero h1{
-  font-size:clamp(34px, 4.6vw, 54px);
-  margin-bottom:20px;
-}
-.hero h1 .accent{ color:var(--orange); }
-.hero-lede{
-  font-size:18px;
-  color:var(--ink-soft);
-  max-width:48ch;
-  margin-bottom:30px;
-}
-.hero-actions{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:36px; }
-
-.pill-row{ display:flex; gap:10px; flex-wrap:wrap; }
-.pill{
-  display:inline-flex; align-items:center; gap:8px;
-  font-size:13px; font-weight:500; color:var(--ink);
-  background:var(--surface);
-  border:1px solid var(--line);
-  padding:8px 14px; border-radius:100px;
-}
-.pill svg{ color:var(--orange); flex:none; }
-
-/* =========================================================
-   Hero slider (used on every page hero)
-   ========================================================= */
-.hero-slider{
-  position:relative;
-  background:linear-gradient(160deg, var(--navy-2), var(--navy-3));
-  border:1px solid rgba(255,255,255,0.08);
-  border-radius:var(--radius);
-  min-height:420px;
-  overflow:hidden;
-  box-shadow:0 30px 60px -20px rgba(0,0,0,0.55);
-}
-.hero-slider-track{ position:relative; height:100%; min-height:420px; }
-.hero-slide{
-  position:absolute; inset:0;
-  padding:32px;
-  display:flex; flex-direction:column; justify-content:flex-end; gap:14px;
-  opacity:0; transform:translateX(18px);
-  transition:opacity .5s ease, transform .5s ease;
-  pointer-events:none;
-}
-.hero-slide.is-active{ opacity:1; transform:translateX(0); pointer-events:auto; }
-.hero-slide-photo{
-  position:absolute; inset:0; width:100%; height:100%;
-  object-fit:cover; z-index:0;
-}
-.hero-slide.has-photo::after{
-  content:""; position:absolute; inset:0;
-  background:linear-gradient(0deg, rgba(12,24,38,0.92) 0%, rgba(12,24,38,0.55) 45%, rgba(12,24,38,0.1) 75%);
-  z-index:1;
-}
-.hero-slide.has-photo > *:not(.hero-slide-photo){ position:relative; z-index:2; }
-.hero-slide-icon{ color:var(--orange-2); margin-bottom:auto; }
-.hero-slide-code{ font-family:var(--font-mono); font-size:11.5px; color:rgba(255,255,255,0.45); letter-spacing:0.08em; text-transform:uppercase; }
-.hero-slide h3{ font-size:22px; color:#fff; }
-.hero-slide p{ font-size:14.5px; color:rgba(255,255,255,0.68); margin:0; max-width:38ch; }
-
-.hero-slider-dots{ position:absolute; bottom:24px; right:28px; z-index:5; display:flex; gap:8px; }
-.hero-slider-dots .dot{
-  width:22px; height:4px; border-radius:2px; border:none;
-  background:rgba(255,255,255,0.25); cursor:pointer; padding:0;
-  transition:background .2s ease, width .2s ease;
-}
-.hero-slider-dots .dot.is-active{ background:var(--orange-2); width:32px; }
-.hero-slider-dots .dot:focus-visible{ outline:2px solid var(--orange-2); outline-offset:2px; }
-
-.hero-slider-arrows{ position:absolute; inset:0; display:flex; justify-content:space-between; align-items:center; padding:0 10px; pointer-events:none; z-index:5; }
-.hero-slider-arrows .arrow{
-  pointer-events:auto;
-  width:36px; height:36px; border-radius:50%;
-  background:rgba(255,255,255,0.1);
-  border:1px solid rgba(255,255,255,0.2);
-  color:#fff; font-size:18px; line-height:1;
-  cursor:pointer; display:flex; align-items:center; justify-content:center;
-  transition:background .2s ease, border-color .2s ease;
-}
-.hero-slider-arrows .arrow:hover{ background:var(--orange); border-color:var(--orange); }
-.hero-slider-arrows .arrow:focus-visible{ outline:2px solid var(--orange-2); outline-offset:2px; }
-
-/* =========================================================
-   Section scaffolding
-   ========================================================= */
-section{ padding:88px 0; }
-.section-head{ max-width:640px; margin-bottom:52px; }
-.section-head.center{ margin-left:auto; margin-right:auto; text-align:center; }
-.section-head.center .eyebrow{ justify-content:center; }
-.section-head.center .eyebrow::before{ display:none; }
-.section-head h2{ font-size:clamp(28px, 3.2vw, 38px); }
-.section-head p{ color:var(--ink-soft); font-size:17px; margin-top:16px; }
-.section-alt{ background:var(--surface); }
-.section-dark{ background:var(--navy); color:#fff; }
-.section-dark h2, .section-dark h3{ color:#fff; }
-.section-dark p{ color:rgba(255,255,255,0.72); }
-
-/* =========================================================
-   Value grid (icon feature list)
-   ========================================================= */
-.value-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:28px; }
-@media (max-width:900px){ .value-grid{ grid-template-columns:1fr 1fr; } }
-@media (max-width:560px){ .value-grid{ grid-template-columns:1fr; } }
-.value-item{ padding-top:8px; border-top:2px solid var(--orange); }
-.value-item .icon{ color:var(--orange); margin-bottom:16px; }
-.value-item h3{ font-size:17px; margin-bottom:8px; }
-.value-item p{ color:var(--ink-soft); font-size:14.5px; margin:0; }
-
-/* =========================================================
-   Service cards
-   ========================================================= */
-.service-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
-@media (max-width:980px){ .service-grid{ grid-template-columns:1fr 1fr; } }
-@media (max-width:560px){ .service-grid{ grid-template-columns:1fr; } }
-.service-card{
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-  padding:28px 24px; text-decoration:none; color:var(--ink);
-  display:flex; flex-direction:column;
-  transition:border-color .2s ease, transform .2s ease, box-shadow .2s ease, background .2s ease;
-}
-.service-card:hover{ border-color:var(--orange); background:var(--surface-2); transform:translateY(-3px); box-shadow:0 20px 36px -18px rgba(0,0,0,0.5); }
-.service-card .icon-badge{
-  width:46px; height:46px; border-radius:12px;
-  background:var(--orange-soft); color:var(--orange);
-  display:flex; align-items:center; justify-content:center;
-  margin-bottom:18px;
-}
-.service-card h3{ font-size:17px; margin-bottom:8px; }
-.service-card p{ color:var(--ink-soft); font-size:14px; margin:0 0 16px; flex:1; }
-.service-card .more{ font-size:13px; font-weight:600; color:var(--orange); font-family:var(--font-body); }
-
-.service-grid-full{ grid-template-columns:repeat(3,1fr); }
-@media (max-width:900px){ .service-grid-full{ grid-template-columns:1fr 1fr; } }
-@media (max-width:560px){ .service-grid-full{ grid-template-columns:1fr; } }
-
-/* =========================================================
-   Tool promo cards (Kostenrechner / KI-Check)
-   ========================================================= */
-.tool-grid{ display:grid; grid-template-columns:1fr 1fr; gap:24px; }
-@media (max-width:860px){ .tool-grid{ grid-template-columns:1fr; } }
-.tool-card{
-  background:var(--navy); color:#fff; border-radius:var(--radius);
-  padding:36px; position:relative; overflow:hidden;
-  display:flex; flex-direction:column;
-}
-.tool-card::before{
-  content:""; position:absolute; top:-40%; right:-20%; width:280px; height:280px;
-  background:radial-gradient(circle, rgba(232,133,12,0.28), transparent 70%);
-  pointer-events:none;
-}
-.tool-card .tag{
-  display:inline-flex; align-self:flex-start; gap:6px; align-items:center;
-  font-family:var(--font-mono); font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
-  color:var(--orange-2); background:rgba(232,133,12,0.14);
-  padding:6px 12px; border-radius:100px; margin-bottom:18px;
-}
-.tool-card h3{ color:#fff; font-size:23px; margin-bottom:10px; }
-.tool-card p{ color:rgba(255,255,255,0.7); font-size:14.5px; margin-bottom:24px; flex:1; }
-
-/* =========================================================
-   Calculator (Kostenrechner)
-   ========================================================= */
-.calc-panel{
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-  padding:32px;
-}
-.calc-field{ margin-bottom:26px; }
-.calc-field label{ display:block; font-size:13.5px; font-weight:600; color:var(--ink); margin-bottom:12px; }
-.calc-toggle{ display:flex; gap:10px; flex-wrap:wrap; }
-.calc-toggle button{
-  flex:1; min-width:120px;
-  padding:12px 14px; border-radius:var(--radius-sm);
-  border:1.5px solid var(--line); background:var(--surface-2); color:var(--ink-soft);
-  font-family:var(--font-body); font-size:14px; font-weight:500; cursor:pointer;
-  transition:border-color .2s ease, color .2s ease, background .2s ease;
-}
-.calc-toggle button.is-active{ border-color:var(--orange); color:var(--orange-2); background:rgba(232,133,12,0.16); font-weight:600; }
-.calc-toggle button:focus-visible{ outline:2px solid var(--orange); outline-offset:2px; }
-
-.calc-slider{ display:flex; align-items:center; gap:16px; }
-.calc-slider input[type="range"]{ flex:1; accent-color:var(--orange); height:4px; }
-.calc-slider .val{ font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--ink); min-width:64px; text-align:right; }
-
-.calc-result{
-  margin-top:8px; padding:26px; border-radius:var(--radius-sm);
-  background:var(--navy-3); border:1px solid var(--line); color:#fff; text-align:center;
-}
-.calc-result .label{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(255,255,255,0.55); margin-bottom:10px; }
-.calc-result .range{ font-family:var(--font-display); font-size:clamp(26px,4vw,36px); font-weight:700; }
-.calc-result .range .dash{ color:var(--orange-2); margin:0 10px; }
-.calc-result .note{ font-size:12.5px; color:rgba(255,255,255,0.5); margin-top:10px; }
-
-/* =========================================================
-   KI photo check tool
-   ========================================================= */
-.upload-panel{
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-  padding:32px;
-}
-.dropzone{
-  border:1.5px dashed var(--line); border-radius:var(--radius-sm);
-  padding:36px 20px; text-align:center; cursor:pointer;
-  transition:border-color .2s ease, background .2s ease;
-}
-.dropzone:hover, .dropzone.is-drag{ border-color:var(--orange); background:var(--orange-soft); }
-.dropzone .icon{ color:var(--orange); margin:0 auto 14px; }
-.dropzone p{ margin:0; color:var(--ink-soft); font-size:14.5px; }
-.dropzone strong{ color:var(--ink); }
-.dropzone input{ display:none; }
-
-.preview-wrap{ margin-top:20px; display:none; }
-.preview-wrap.is-visible{ display:block; }
-.preview-wrap img{ width:100%; border-radius:var(--radius-sm); border:1px solid var(--line); max-height:320px; object-fit:cover; }
-
-.ai-result{
-  margin-top:22px; padding:22px; border-radius:var(--radius-sm);
-  background:var(--surface); border:1px solid var(--line);
-  display:none; font-size:14.5px; line-height:1.7; color:var(--ink);
-}
-.ai-result.is-visible{ display:block; }
-.ai-result h4{ font-size:15px; margin-bottom:10px; color:var(--ink); }
-.ai-result .status-line{ display:flex; align-items:center; gap:10px; font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); margin-bottom:14px; }
-.ai-result .status-line .dot{ width:8px; height:8px; border-radius:50%; background:var(--ok); flex:none; }
-.ai-error{ color:var(--err); }
-
-/* =========================================================
-   Process timeline
-   ========================================================= */
-.timeline{ position:relative; }
-.timeline-track{
-  display:grid; grid-template-columns:repeat(6,1fr); gap:16px;
-  position:relative;
-}
-@media (max-width:980px){ .timeline-track{ grid-template-columns:1fr 1fr; } }
-@media (max-width:560px){ .timeline-track{ grid-template-columns:1fr; } }
-.timeline-step{
-  background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
-  padding:24px 20px; position:relative;
-}
-.timeline-step .step-num{ font-family:var(--font-mono); font-size:11.5px; color:var(--orange); margin-bottom:14px; display:block; }
-.timeline-step h3{ font-size:15.5px; margin-bottom:8px; }
-.timeline-step p{ font-size:13.5px; color:var(--ink-soft); margin:0; }
-.timeline-step .marker{
-  position:absolute; top:-11px; left:20px;
-  font-family:var(--font-mono); font-size:10px; letter-spacing:0.06em; text-transform:uppercase;
-  background:var(--orange); color:var(--navy-3); padding:3px 9px; border-radius:100px;
-}
-
-/* =========================================================
-   Trust list (only real, verifiable claims)
-   ========================================================= */
-.trust-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; }
-@media (max-width:780px){ .trust-grid{ grid-template-columns:1fr; } }
-.trust-item{ background:var(--surface); padding:32px 28px; }
-.trust-item .num{ font-family:var(--font-mono); font-size:13px; color:var(--orange); margin-bottom:14px; }
-.trust-item h3{ font-size:17px; margin-bottom:10px; }
-.trust-item p{ color:var(--ink-soft); font-size:14.5px; margin:0; }
-
-/* =========================================================
-   FAQ accordion
-   ========================================================= */
-.faq-list{ max-width:820px; }
-.faq-item{ border-bottom:1px solid var(--line); }
-.faq-q{
-  width:100%; display:flex; justify-content:space-between; align-items:center; gap:20px;
-  background:none; border:none; text-align:left; cursor:pointer;
-  padding:22px 4px; font-family:var(--font-display); font-weight:600; font-size:16.5px; color:var(--ink);
-}
-.faq-q .plus{ flex:none; font-size:20px; color:var(--orange); transition:transform .25s ease; font-family:var(--font-body); }
-.faq-item.is-open .faq-q .plus{ transform:rotate(45deg); }
-.faq-a{ max-height:0; overflow:hidden; transition:max-height .3s ease; }
-.faq-a p{ padding:0 4px 22px; color:var(--ink-soft); font-size:15px; margin:0; }
-.faq-q:focus-visible{ outline:2px solid var(--orange); outline-offset:2px; }
-
-/* =========================================================
-   CTA banner
-   ========================================================= */
-.cta-banner{
-  background:linear-gradient(135deg, var(--navy), var(--navy-3));
-  border-radius:var(--radius); color:#fff;
-  padding:56px 48px; text-align:center;
-  position:relative; overflow:hidden;
-}
-.cta-banner::before{
-  content:""; position:absolute; inset:0;
-  background:radial-gradient(ellipse at 20% 0%, rgba(232,133,12,0.22), transparent 55%);
-}
-.cta-banner *{ position:relative; }
-.cta-banner h2{ color:#fff; margin-bottom:14px; }
-.cta-banner p{ color:rgba(255,255,255,0.72); max-width:52ch; margin:0 auto 28px; font-size:16px; }
-
-/* =========================================================
-   About / Über uns
-   ========================================================= */
-.about-grid{ display:grid; grid-template-columns:0.95fr 1.05fr; gap:64px; align-items:center; }
-@media (max-width:860px){ .about-grid{ grid-template-columns:1fr; gap:40px; } }
-.about-card{
-  background:var(--surface);
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  padding:34px;
-}
-.about-card .tag{
-  display:inline-block;
-  font-family:var(--font-mono); font-size:11.5px; letter-spacing:0.08em;
-  text-transform:uppercase; color:var(--copper);
-  background:var(--surface-2);
-  border:1px solid var(--line);
-  padding:5px 10px; border-radius:3px;
-  margin-bottom:18px;
-}
-.about-card h3{ font-size:22px; margin-bottom:8px; }
-.about-card .role{ font-family:var(--font-mono); font-size:13.5px; color:var(--ink-soft); margin-bottom:20px; }
-.about-card p{ color:var(--ink-soft); font-size:15.5px; }
-.about-list{ list-style:none; padding:0; margin:24px 0 0; display:flex; flex-direction:column; gap:12px; }
-.about-list li{ display:flex; align-items:flex-start; gap:12px; font-size:15px; color:var(--ink); }
-.about-list li::before{
-  content:""; width:8px; height:8px; margin-top:6px; flex:none;
-  background:var(--orange); border-radius:1px; transform:rotate(45deg);
-}
-.about-copy p{ color:var(--ink-soft); font-size:16.5px; margin-bottom:18px; }
-
-/* =========================================================
-   Einsatzgebiet
-   ========================================================= */
-.area .wrap{ display:grid; grid-template-columns:1fr 1fr; gap:56px; align-items:center; }
-@media (max-width:860px){ .area .wrap{ grid-template-columns:1fr; } }
-.area-tags{ display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
-.area-tags span{
-  font-family:var(--font-mono); font-size:13px;
-  border:1px solid rgba(255,255,255,0.22);
-  padding:7px 13px; border-radius:100px;
-  color:rgba(255,255,255,0.85);
-}
-.radar{ position:relative; width:100%; aspect-ratio:1; max-width:360px; margin:0 auto; }
-.radar svg{ width:100%; height:100%; }
-
-/* =========================================================
-   Kontakt
-   ========================================================= */
-.contact-grid{ display:grid; grid-template-columns:0.9fr 1.1fr; gap:60px; }
-@media (max-width:900px){ .contact-grid{ grid-template-columns:1fr; } }
-.contact-detail{ display:flex; gap:16px; padding:18px 0; border-top:1px solid var(--line); }
-.contact-detail:last-of-type{ border-bottom:1px solid var(--line); }
-.contact-detail strong{ display:block; font-size:14px; color:var(--ink); margin-bottom:3px; }
-.contact-detail a, .contact-detail span{ font-size:14.5px; color:var(--ink-soft); text-decoration:none; }
-.contact-detail a:hover{ color:var(--orange); }
-
-.form-panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:36px; }
-.form-row{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-@media (max-width:520px){ .form-row{ grid-template-columns:1fr; } }
-.field{ margin-bottom:18px; }
-.field label{ display:block; font-size:13px; font-weight:600; color:var(--ink); margin-bottom:7px; }
-.field input, .field select, .field textarea{
-  width:100%; padding:12px 14px;
-  border:1.5px solid var(--line); border-radius:var(--radius-sm);
-  background:var(--surface-2); font-family:var(--font-body); font-size:15px; color:var(--ink);
-}
-.field textarea{ resize:vertical; min-height:110px; }
-.field input:focus, .field select:focus, .field textarea:focus{ outline:none; border-color:var(--orange); }
-.form-note{ font-size:12.5px; color:var(--ink-soft); margin-top:10px; }
-.form-status{ font-family:var(--font-mono); font-size:13.5px; margin-top:14px; }
-.form-status.ok{ color:var(--ok); }
-.form-status.err{ color:var(--err); }
-
-/* =========================================================
-   Wire trace divider (signature element, used sparingly)
-   ========================================================= */
-.wire-trace{ display:block; width:100%; height:56px; background:var(--paper); }
-.wire-trace.on-alt{ background:var(--surface); }
-.wire-trace svg{ width:100%; height:100%; display:block; }
-.wire-trace path{ fill:none; stroke:var(--line); stroke-width:2; stroke-dasharray:6 8; }
-.wire-trace circle{ fill:var(--orange); }
-
-/* =========================================================
-   Footer
-   ========================================================= */
-.site-footer{ background:var(--navy-3); color:rgba(255,255,255,0.65); padding:56px 0 30px; }
-.footer-top{ display:flex; justify-content:space-between; gap:40px; flex-wrap:wrap; margin-bottom:40px; }
-.footer-brand{ max-width:320px; }
-.footer-logo{ width:200px; height:auto; margin-bottom:16px; border-radius:6px; }
-.footer-brand p{ font-size:14px; line-height:1.7; }
-.footer-social{ display:flex; gap:10px; margin-top:18px; }
-.footer-social a{
-  width:38px; height:38px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.8);
-  transition:background .2s ease, color .2s ease, transform .2s ease;
-}
-.footer-social a:hover{ background:var(--orange); color:#fff; transform:translateY(-2px); }
-.footer-cols{ display:flex; gap:56px; flex-wrap:wrap; }
-.footer-col h4{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:16px; }
-.footer-col a{ display:block; font-size:14px; color:rgba(255,255,255,0.7); text-decoration:none; margin-bottom:10px; }
-.footer-col a:hover{ color:var(--orange-2); }
-.footer-bottom{ border-top:1px solid rgba(255,255,255,0.1); padding-top:24px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:12.5px; font-family:var(--font-mono); color:rgba(255,255,255,0.4); }
-.footer-bottom a{ color:rgba(255,255,255,0.55); text-decoration:none; }
-.footer-bottom a:hover{ color:#fff; }
-
-/* =========================================================
-   Detail page scaffolding (Leistungen subpages)
-   ========================================================= */
-.page-hero{ padding-top:44px; }
-.page-hero .wrap{ padding-bottom:64px; }
-.breadcrumb{ font-family:var(--font-mono); font-size:12.5px; color:var(--ink-faint); margin-bottom:18px; }
-.breadcrumb a{ color:var(--ink-faint); text-decoration:none; }
-.breadcrumb a:hover{ color:var(--orange); }
-
-.feature-list{ list-style:none; padding:0; margin:0; display:grid; grid-template-columns:1fr 1fr; gap:14px 28px; }
-@media (max-width:600px){ .feature-list{ grid-template-columns:1fr; } }
-.feature-list li{ display:flex; align-items:flex-start; gap:12px; font-size:15px; color:var(--ink); }
-.feature-list li::before{
-  content:""; width:9px; height:9px; margin-top:6px; flex:none;
-  background:var(--orange); border-radius:1px; transform:rotate(45deg);
-}
-
-.related-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-@media (max-width:860px){ .related-grid{ grid-template-columns:1fr; } }
-
-.photo-single{ border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
-.photo-single img{ width:100%; max-height:460px; object-fit:cover; display:block; }
-
-.photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-@media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
-.photo-grid figure{ margin:0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--surface); }
-.photo-grid img{ width:100%; height:220px; object-fit:cover; display:block; }
-.photo-grid figcaption{ padding:10px 12px; font-size:12.5px; color:var(--ink-soft); }
-
-.about-portrait{
-  width:96px; height:96px; border-radius:50%; object-fit:cover;
-  border:2px solid var(--orange); margin-bottom:18px;
-}
-
-/* =========================================================
-   Legal pages
-   ========================================================= */
-.legal-hero{ background:var(--navy); color:#fff; padding:64px 0 48px; }
-.legal-hero h1{ color:#fff; font-size:clamp(28px,4vw,40px); }
-.legal-hero p{ color:rgba(255,255,255,0.65); margin-top:12px; font-family:var(--font-mono); font-size:13.5px; }
-.legal-body{ padding:64px 0 96px; }
-.legal-body .wrap{ max-width:820px; }
-.legal-body h2{ font-size:22px; margin:40px 0 14px; }
-.legal-body h2:first-child{ margin-top:0; }
-.legal-body p, .legal-body li{ color:var(--ink-soft); font-size:15.5px; line-height:1.75; }
-.legal-body ul{ padding-left:20px; }
-.legal-body a{ color:var(--copper); }
-.legal-placeholder{
-  display:inline-block;
-  background:var(--orange-soft);
-  color:var(--copper);
-  border:1px dashed var(--copper);
-  padding:1px 8px;
-  border-radius:3px;
-  font-family:var(--font-mono);
-  font-size:0.92em;
-}
-.back-link{ display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:13.5px; color:rgba(255,255,255,0.7); text-decoration:none; margin-bottom:18px; }
-.back-link:hover{ color:#fff; }
-
-/* =========================================================
-   Reveal on scroll
-   ========================================================= */
-.reveal{ opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; }
-.reveal.is-visible{ opacity:1; transform:translateY(0); }
-
-/* =========================================================
-   Floating contact buttons (WhatsApp / Phone / Instagram / Facebook)
-   ========================================================= */
-.contact-fab{
-  position:fixed; right:20px; bottom:20px; z-index:70;
-  display:flex; flex-direction:column; gap:12px;
-}
-.fab{
-  width:50px; height:50px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; box-shadow:0 10px 24px -6px rgba(0,0,0,0.5);
-  transition:transform .18s ease, box-shadow .18s ease;
-}
-.fab:hover{ transform:translateY(-3px) scale(1.05); }
-.fab:focus-visible{ outline:2px solid var(--orange-2); outline-offset:3px; }
-.fab-whatsapp{ background:#25D366; }
-.fab-phone{ background:var(--orange); }
-.fab-instagram{ background:radial-gradient(circle at 30% 110%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
-.fab-facebook{ background:#1877F2; }
-
-@media (max-width:640px){
-  .contact-fab{ right:14px; bottom:14px; gap:10px; }
-  .fab{ width:46px; height:46px; }
-}
+</main>
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <img class="footer-logo" src="assets/logo/hauptlogo_dunkel.jpg" alt="neuverdrahtet Logo">
+        <p>Elektro-Fachbetrieb in Essen. Smarte Elektrokonzepte für Alt &amp; Neubau — von der Elektroinstallation bis zu Wärmepumpe und Photovoltaik.</p>
+        <div class="footer-social">
+          <a href="https://wa.me/491706398575" target="_blank" rel="noopener" aria-label="WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.36a9.9 9.9 0 0 0 4.62 1.15h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.72 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1.02.24-3.43-.72-2.9-1.16-4.76-4.14-4.9-4.33-.14-.19-1.17-1.56-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.61 2 1.11.99 2.04 1.3 2.33 1.45.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.38-.24.63-.14.26.1 1.64.77 1.92.91.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg></a>
+          <a href="tel:+491706398575" aria-label="Anrufen"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
+          <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
+          <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+        </div>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h4>Leistungen</h4>
+          <a href="elektroinstallation.html">Elektroinstallation</a>
+      <a href="zaehlerschrank.html">Zählerschrank &amp; Verteilung</a>
+      <a href="wallbox.html">Wallbox-Installation</a>
+      <a href="smart-home.html">Smart Home</a>
+      <a href="e-check.html">E-Check</a>
+      <a href="dguv-v3.html">DGUV V3 Prüfung</a>
+          <a href="leistungen.html">Alle Leistungen →</a>
+        </div>
+        <div class="footer-col">
+          <h4>Tools</h4>
+          <a href="kosten-rechner.html">Kosten-Konfigurator</a>
+          <a href="ki-check.html">KI-Check Unterverteilung</a>
+        </div>
+        <div class="footer-col">
+          <h4>Unternehmen</h4>
+          <a href="index.html#ueber-uns">Über uns</a>
+          <a href="index.html#einsatzgebiet">Einsatzgebiet</a>
+          <a href="index.html#kontakt">Kontakt</a>
+        </div>
+        <div class="footer-col">
+          <h4>Rechtliches</h4>
+          <a href="impressum.html">Impressum</a>
+          <a href="datenschutz.html">Datenschutz</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 neuverdrahtet UG (haftungsbeschränkt), Essen</span>
+      <span>Smarte Elektrokonzepte für Alt &amp; Neubau</span>
+    </div>
+  </div>
+</footer>
+<div class="contact-fab">
+  <a href="https://wa.me/491706398575" target="_blank" rel="noopener" class="fab fab-whatsapp" aria-label="WhatsApp schreiben" title="WhatsApp schreiben"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.36a9.9 9.9 0 0 0 4.62 1.15h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.72 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1.02.24-3.43-.72-2.9-1.16-4.76-4.14-4.9-4.33-.14-.19-1.17-1.56-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.61 2 1.11.99 2.04 1.3 2.33 1.45.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.38-.24.63-.14.26.1 1.64.77 1.92.91.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg></a>
+  <a href="tel:+491706398575" class="fab fab-phone" aria-label="Anrufen" title="Anrufen"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
+  <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" class="fab fab-instagram" aria-label="Instagram" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
+  <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" class="fab fab-facebook" aria-label="Facebook" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+</div>
+<script src="assets/script.js"></script>
+</body>
+</html>
