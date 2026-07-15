@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 6;
+const DB_VERSION = 8;
 
 const STORES = {
   kunden: 'id',
@@ -23,6 +23,8 @@ const STORES = {
   geraete: 'id',
   flotten: 'id',
   terminStatus: 'id',
+  textbausteine: 'id',
+  lohnabrechnungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -221,6 +223,54 @@ export const DEFAULT_TERMIN_STATUS = [
   { id: 'bezahlt', titel: 'Bezahlt', farbe: '#1f8a4c', reihenfolge: 3 },
   { id: 'storniert', titel: 'Storniert', farbe: '#c0392b', reihenfolge: 4 },
 ];
+
+export const ZUGRIFFSROLLEN = [
+  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen, Lohn/Gehalt und Buchhaltung.' },
+  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen, Lohn/Gehalt und Buchhaltungs-Export.' },
+  { id: 'mitarbeiter', titel: 'Mitarbeiter', beschreibung: 'Nur Zeiterfassung, eigene Aufgaben, Kalender/Plantafel und Geräte – keine Finanz- oder Personaldaten.' },
+];
+
+export const ROUTE_ROLLEN = {
+  dashboard: ['admin', 'buero', 'mitarbeiter'],
+  kunden: ['admin', 'buero'],
+  kanban: ['admin', 'buero'],
+  projekte: ['admin', 'buero', 'mitarbeiter'],
+  kalender: ['admin', 'buero', 'mitarbeiter'],
+  plantafel: ['admin', 'buero', 'mitarbeiter'],
+  zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
+  aufgaben: ['admin', 'buero', 'mitarbeiter'],
+  mitarbeiter: ['admin', 'buero'],
+  geraete: ['admin', 'buero', 'mitarbeiter'],
+  katalog: ['admin', 'buero'],
+  vorlagen: ['admin', 'buero'],
+  angebote: ['admin', 'buero'],
+  rechnungen: ['admin', 'buero'],
+  mahnungen: ['admin', 'buero'],
+  ausgaben: ['admin', 'buero'],
+  buchhaltung: ['admin'],
+  lohn: ['admin'],
+  einstellungen: ['admin'],
+};
+
+export const STEUERARTEN = [
+  { id: 'regel', titel: 'Regelbesteuerung (USt. je Position)', hinweis: '' },
+  { id: 'kleinunternehmer', titel: 'Kleinunternehmer § 19 UStG (keine USt.)', hinweis: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' },
+  { id: 'reverse-charge', titel: 'Bauleistungen – Steuerschuldnerschaft des Leistungsempfängers § 13b UStG', hinweis: 'Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG. Der Rechnungsbetrag ist ohne Umsatzsteuer zu zahlen; die Umsatzsteuer schuldet der Leistungsempfänger.' },
+  { id: 'ig-lieferung', titel: 'Innergemeinschaftliche Lieferung § 4 Nr. 1b UStG (steuerfrei)', hinweis: 'Steuerfreie innergemeinschaftliche Lieferung gemäß § 4 Nr. 1b i.V.m. § 6a UStG.' },
+  { id: 'export', titel: 'Ausfuhrlieferung / Drittland § 4 Nr. 1a UStG (steuerfrei)', hinweis: 'Steuerfreie Ausfuhrlieferung gemäß § 4 Nr. 1a UStG.' },
+];
+
+export const TEXTBAUSTEIN_KATEGORIEN = [
+  { id: 'beide', titel: 'Angebote & Rechnungen' },
+  { id: 'angebot', titel: 'Nur Angebote' },
+  { id: 'rechnung', titel: 'Nur Rechnungen' },
+];
+
+export function hasRouteAccess(role, route) {
+  const allowed = ROUTE_ROLLEN[route];
+  if (!allowed) return true;
+  return allowed.includes(role);
+}
 
 export async function ensureSeeded() {
   const settingsRows = await getAll('einstellungen');

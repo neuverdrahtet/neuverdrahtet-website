@@ -2,8 +2,8 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
-const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät' };
-const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn' };
+const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
+const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
 
 function parseNumber(str) {
   const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
@@ -57,6 +57,7 @@ export async function render(container) {
         <option value="artikel">Material</option>
         <option value="leistung">Leistung</option>
         <option value="geraet">Gerät</option>
+        <option value="paket">Paket</option>
       </select>
     </div>
     <div id="table-host"></div>
@@ -161,23 +162,45 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     const isEdit = !!item;
     const data = item || {
       id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.',
-      einkaufspreis: 0, aufschlagProzent: 20, preis: 0, steuersatz: settings.standardSteuersatz,
+      einkaufspreis: 0, aufschlagProzent: 20, preis: 0, steuersatz: settings.standardSteuersatz, komponenten: [],
     };
+    const komponentenAuswahl = items.filter((i) => i.typ !== 'paket' && i.id !== data.id);
+    let kompState = (data.komponenten || []).map((k) => ({ ...k }));
     const { body, close } = openModal({
       title: isEdit ? 'Eintrag bearbeiten' : 'Neuer Artikel / Leistung',
+      wide: true,
       bodyHtml: `
         <form id="kat-form">
           <div class="form-grid">
             <div class="field"><label>Typ</label>
-              <select name="typ">
+              <select name="typ" id="f-typ">
                 <option value="leistung" ${data.typ === 'leistung' ? 'selected' : ''}>Leistung</option>
                 <option value="artikel" ${data.typ === 'artikel' ? 'selected' : ''}>Material</option>
                 <option value="geraet" ${data.typ === 'geraet' ? 'selected' : ''}>Gerät</option>
+                <option value="paket" ${data.typ === 'paket' ? 'selected' : ''}>Paket (Leistung + Material + Gerät kombiniert)</option>
               </select>
             </div>
             <div class="field"><label>Einheit</label><input name="einheit" placeholder="Std., Stk., pauschal ..." value="${escapeHtml(data.einheit || '')}"></div>
             <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
+          </div>
+
+          <div id="komp-section" ${data.typ === 'paket' ? '' : 'hidden'}>
+            <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">Komponenten des Pakets</h2>
+            <p class="hint">Kombiniere bestehende Leistungen, Material und Geräte zu einem Gesamtpaket – der Einkaufspreis unten wird automatisch aus den Komponenten berechnet.</p>
+            <div id="komp-list" style="margin-bottom:10px"></div>
+            <div class="flex-row flex-wrap">
+              <select id="komp-add-select">
+                <option value="">Komponente wählen ...</option>
+                ${komponentenAuswahl.map((k) => `<option value="${k.id}">${escapeHtml(TYP_LABEL[k.typ] || '')}: ${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})</option>`).join('')}
+              </select>
+              <button type="button" class="btn btn-sm" id="btn-komp-add">+ hinzufügen</button>
+            </div>
+          </div>
+
+          <div class="divider"></div>
+          <div class="form-grid">
             <div class="field"><label>Einkaufspreis EK (€, optional)</label><input type="number" step="0.01" min="0" name="einkaufspreis" id="f-ek" value="${data.einkaufspreis || ''}"></div>
             <div class="field"><label>Zuschlag (%)</label><input type="number" step="1" min="0" name="aufschlagProzent" id="f-zuschlag" value="${data.aufschlagProzent ?? 20}"></div>
             <div class="field"><label>Verkaufspreis VK netto (€) *</label><input type="number" step="0.01" min="0" name="preis" id="f-vk" required value="${data.preis}"></div>
@@ -206,6 +229,58 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
         body.querySelector('#f-vk').value = (Math.round(ek * (1 + zuschlag / 100) * 100) / 100).toFixed(2);
       }
     }
+    function renderKomp() {
+      const host = body.querySelector('#komp-list');
+      host.innerHTML = kompState.map((k, i) => {
+        const komp = items.find((it) => it.id === k.katalogId);
+        const zeilensumme = (komp?.preis || 0) * (Number(k.menge) || 0);
+        return `
+          <div class="flex-row" data-i="${i}" style="align-items:center;margin-bottom:6px">
+            <span style="flex:1">${escapeHtml(komp?.bezeichnung || '(gelöscht)')}</span>
+            <input type="number" step="0.01" min="0" class="komp-menge" value="${k.menge ?? 1}" style="width:80px">
+            <span style="width:90px;text-align:right">${formatCurrency(zeilensumme)}</span>
+            <button type="button" class="btn btn-sm btn-ghost komp-del" title="Entfernen">✕</button>
+          </div>
+        `;
+      }).join('') || '<p class="text-mute">Noch keine Komponenten hinzugefügt.</p>';
+      host.querySelectorAll('[data-i]').forEach((row) => {
+        const i = Number(row.dataset.i);
+        row.querySelector('.komp-menge').addEventListener('input', (e) => {
+          kompState[i].menge = Number(e.target.value);
+          const komp = items.find((it) => it.id === kompState[i].katalogId);
+          row.querySelector('span:last-of-type').textContent = formatCurrency((komp?.preis || 0) * (Number(kompState[i].menge) || 0));
+          updateEkFromKomp();
+        });
+        row.querySelector('.komp-del').addEventListener('click', () => {
+          kompState.splice(i, 1);
+          renderKomp();
+          updateEkFromKomp();
+        });
+      });
+    }
+    function updateEkFromKomp() {
+      const sum = kompState.reduce((s, k) => {
+        const komp = items.find((it) => it.id === k.katalogId);
+        return s + (komp?.preis || 0) * (Number(k.menge) || 0);
+      }, 0);
+      body.querySelector('#f-ek').value = sum.toFixed(2);
+      recalcVk();
+    }
+    if (data.typ === 'paket') updateEkFromKomp();
+    renderKomp();
+    body.querySelector('#f-typ').addEventListener('change', (e) => {
+      const isPaket = e.target.value === 'paket';
+      body.querySelector('#komp-section').hidden = !isPaket;
+      if (isPaket) updateEkFromKomp();
+    });
+    body.querySelector('#btn-komp-add').addEventListener('click', () => {
+      const select = body.querySelector('#komp-add-select');
+      if (!select.value) return;
+      kompState.push({ katalogId: select.value, menge: 1 });
+      select.value = '';
+      renderKomp();
+      updateEkFromKomp();
+    });
     body.querySelector('#f-ek').addEventListener('input', recalcVk);
     body.querySelector('#f-zuschlag').addEventListener('input', recalcVk);
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -227,6 +302,15 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
       updated.einkaufspreis = Number(updated.einkaufspreis) || 0;
       updated.aufschlagProzent = Number(updated.aufschlagProzent) || 0;
       updated.steuersatz = Number(updated.steuersatz) || 0;
+      if (updated.typ === 'paket') {
+        updated.komponenten = kompState;
+        updated.einkaufspreis = kompState.reduce((s, k) => {
+          const komp = items.find((it) => it.id === k.katalogId);
+          return s + (komp?.preis || 0) * (Number(k.menge) || 0);
+        }, 0);
+      } else {
+        updated.komponenten = [];
+      }
       if (!updated.bezeichnung) return;
       await put('katalog', updated);
       toast(isEdit ? 'Eintrag aktualisiert' : 'Eintrag angelegt', 'success');

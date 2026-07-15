@@ -1,4 +1,4 @@
-import { getAll, put, remove } from '../db.js';
+import { getAll, put, remove, ZUGRIFFSROLLEN } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
@@ -74,6 +74,7 @@ export async function render(container) {
       stundenlohn: '', gehaltMonatlich: '', urlaubsanspruchTage: 30,
       iban: '', steuerId: '', sozialversicherungsnummer: '', krankenkasse: '',
       notfallkontaktName: '', notfallkontaktTelefon: '', notizen: '',
+      zugangscode: '', zugriffsrolle: 'mitarbeiter',
     };
     const urlaubGenommen = isEdit ? currentYearCount(termine, data.id, 'urlaub') : 0;
     const krankTage = isEdit ? currentYearCount(termine, data.id, 'krank') : 0;
@@ -131,6 +132,16 @@ export async function render(container) {
             ` : '<p class="text-mute col-span-2">Urlaub/Krank/Schulung werden nach dem Anlegen aus der Plantafel berechnet.</p>'}
           </div>
           <p class="hint">Trage Urlaub, Krankheit, Schulungen und Baustellen-Einsätze über Kalender oder Plantafel ein – sie werden hier automatisch gezählt.</p>
+
+          <div class="divider"></div>
+          <h2 style="font-size:14px;margin:0 0 8px">Zugang zur Verwaltung</h2>
+          <div class="form-grid">
+            <div class="field"><label>Eigener Zugangscode (optional)</label><input name="zugangscode" placeholder="leer = kein eigener Login" value="${escapeHtml(data.zugangscode || '')}"></div>
+            <div class="field"><label>Zugriffsrolle</label>
+              <select name="zugriffsrolle">${ZUGRIFFSROLLEN.map((r) => `<option value="${r.id}" ${r.id === (data.zugriffsrolle || 'mitarbeiter') ? 'selected' : ''}>${escapeHtml(r.titel)}</option>`).join('')}</select>
+            </div>
+            <p class="hint col-span-2">${escapeHtml(ZUGRIFFSROLLEN.find((r) => r.id === (data.zugriffsrolle || 'mitarbeiter'))?.beschreibung || '')} Wichtig: Diese App läuft rein lokal im Browser – der Code ist eine einfache Bedienungssperre, kein vollwertiger Server-Login.</p>
+          </div>
 
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Notfallkontakt</h2>

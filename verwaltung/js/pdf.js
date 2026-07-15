@@ -34,6 +34,7 @@ export function buildDocHtml({
   positionen,
   totals,
   closingText,
+  steuerHinweis,
   showPositions = true,
 }) {
   const absender = [
@@ -101,7 +102,7 @@ export function buildDocHtml({
     ${introText ? `<p style="white-space:pre-wrap">${escapeHtml(introText)}</p>` : ''}
     ${positionsHtml}
     ${totalsHtml}
-    ${settings.kleinunternehmer ? '<p style="font-size:11px;margin-top:10px">Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.</p>' : ''}
+    ${(steuerHinweis || (settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '')) ? `<p style="font-size:11px;margin-top:10px">${escapeHtml(steuerHinweis || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.')}</p>` : ''}
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
     <div class="print-footer">
       ${escapeHtml(settings.firmenname || '')} · ${escapeHtml(settings.strasse || '')} · ${escapeHtml(settings.plzOrt || '')}
