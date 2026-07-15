@@ -156,10 +156,12 @@ export function buildDocPdfBlob(opts) {
     y += 10;
   }
 
-  if (opts.settings.kleinunternehmer) {
+  const steuerHinweisText = opts.steuerHinweis || (opts.settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '');
+  if (steuerHinweisText) {
     doc.setFontSize(8);
-    doc.text('Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.', marginX, y);
-    y += 6;
+    const hinweisLines = doc.splitTextToSize(steuerHinweisText, 174);
+    doc.text(hinweisLines, marginX, y);
+    y += hinweisLines.length * 3.6 + 4;
   }
 
   if (opts.closingText) {

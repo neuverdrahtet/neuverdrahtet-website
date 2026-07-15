@@ -13,11 +13,37 @@ function totalsHtml(totals) {
   `;
 }
 
-export function createPositionsEditor({ host, katalog, positionen, defaultSteuersatz = 19, vorlagen = [] }) {
+export function createPositionsEditor({ host, katalog, positionen, defaultSteuersatz = 19, vorlagen = [], readOnly = false }) {
   let posState = (positionen || []).map((p) => ({ ...p, id: p.id || uid() }));
 
   function render() {
     const totals = calcTotals(posState);
+    if (readOnly) {
+      host.innerHTML = `
+        <p class="hint">🔒 Diese Rechnung wurde bereits versendet und ist zur GoBD-konformen Nachvollziehbarkeit gesperrt. Änderungen nur über eine Stornorechnung.</p>
+        <table class="pos-table">
+          <thead><tr>
+            <th class="col-posnr">Pos.</th><th>Bezeichnung</th><th class="col-menge">Menge</th><th>Einheit</th>
+            <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th>
+          </tr></thead>
+          <tbody>
+            ${posState.map((p, i) => `
+              <tr>
+                <td class="col-posnr">${escapeHtml(p.posNr || String(i + 1))}</td>
+                <td>${escapeHtml(p.bezeichnung || '')}</td>
+                <td class="col-menge">${p.menge ?? 1}</td>
+                <td>${escapeHtml(p.einheit || '')}</td>
+                <td class="col-preis">${formatCurrency(p.einzelpreis)}</td>
+                <td class="col-steuer">${p.steuersatz ?? defaultSteuersatz}%</td>
+                <td class="col-sum">${formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="totals-box">${totalsHtml(totals)}</div>
+      `;
+      return;
+    }
     host.innerHTML = `
       <table class="pos-table">
         <thead><tr>
@@ -120,5 +146,6 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
   return {
     getPositionen: () => posState,
     getTotals: () => calcTotals(posState),
+    refresh: () => render(),
   };
 }

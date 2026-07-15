@@ -1,6 +1,6 @@
-import { getSettings, setSettings, exportAll, importAll } from '../db.js';
-import { escapeHtml, toast, compressImage } from '../utils.js';
-import { confirmDelete } from '../ui.js';
+import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, TEXTBAUSTEIN_KATEGORIEN } from '../db.js';
+import { uid, escapeHtml, toast, compressImage } from '../utils.js';
+import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 
 function blobToDataUrl(blob) {
@@ -14,6 +14,8 @@ function blobToDataUrl(blob) {
 
 export async function render(container) {
   const settings = await getSettings();
+  const textbausteine = await getAll('textbausteine');
+  textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
 
   container.innerHTML = `
     <div class="view-header"><h1>Einstellungen</h1></div>
@@ -154,6 +156,13 @@ export async function render(container) {
     </div>
 
     <div class="card">
+      <h2>Textbausteine (Schlusstexte)</h2>
+      <p class="hint">Wiederverwendbare Schlusstexte für Angebote/Rechnungen – dort per Mehrfachauswahl in die Notizen einfügbar.</p>
+      <div id="tb-list"></div>
+      <button class="btn btn-sm" id="btn-tb-new" style="margin-top:8px">+ Neuer Textbaustein</button>
+    </div>
+
+    <div class="card">
       <h2>Datensicherung / Geräte-Sync</h2>
       <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
       <div class="flex-row flex-wrap">
@@ -163,6 +172,78 @@ export async function render(container) {
       </div>
     </div>
   `;
+
+  const tbListHost = container.querySelector('#tb-list');
+  function renderTbList() {
+    tbListHost.innerHTML = textbausteine.length === 0
+      ? '<p class="text-mute">Noch keine Textbausteine angelegt.</p>'
+      : `<ul class="cal-event-list">${textbausteine.map((t) => `
+          <li data-id="${t.id}">
+            <div>
+              <strong>${escapeHtml(t.titel)}</strong>
+              <div class="text-mute">${escapeHtml(TEXTBAUSTEIN_KATEGORIEN.find((k) => k.id === t.kategorie)?.titel || '')} · ${escapeHtml((t.text || '').slice(0, 60))}${(t.text || '').length > 60 ? '…' : ''}</div>
+            </div>
+            <div class="flex-row">
+              <button type="button" class="btn btn-sm btn-ghost btn-tb-edit">Bearbeiten</button>
+              <button type="button" class="btn btn-sm btn-ghost btn-tb-del">Löschen</button>
+            </div>
+          </li>
+        `).join('')}</ul>`;
+    tbListHost.querySelectorAll('.btn-tb-edit').forEach((btn) => {
+      btn.addEventListener('click', () => openTbForm(textbausteine.find((t) => t.id === btn.closest('li').dataset.id)));
+    });
+    tbListHost.querySelectorAll('.btn-tb-del').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('li').dataset.id;
+        const t = textbausteine.find((x) => x.id === id);
+        if (!confirmDelete(`Textbaustein "${t.titel}" wirklich löschen?`)) return;
+        await remove('textbausteine', id);
+        const i = textbausteine.findIndex((x) => x.id === id);
+        textbausteine.splice(i, 1);
+        renderTbList();
+        toast('Textbaustein gelöscht');
+      });
+    });
+  }
+  function openTbForm(t) {
+    const isEdit = !!t;
+    const data = t || { id: uid(), titel: '', text: '', kategorie: 'beide' };
+    const { body, close } = openModal({
+      title: isEdit ? 'Textbaustein bearbeiten' : 'Neuer Textbaustein',
+      bodyHtml: `
+        <form id="tb-form">
+          <div class="form-grid">
+            <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
+            <div class="field col-span-2"><label>Verwendung</label>
+              <select name="kategorie">${TEXTBAUSTEIN_KATEGORIEN.map((k) => `<option value="${k.id}" ${k.id === data.kategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field col-span-2"><label>Text *</label><textarea name="text" required style="min-height:100px">${escapeHtml(data.text)}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#tb-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = { ...data, titel: (fd.get('titel') || '').toString().trim(), text: (fd.get('text') || '').toString().trim(), kategorie: fd.get('kategorie') || 'beide' };
+      if (!updated.titel || !updated.text) return;
+      await put('textbausteine', updated);
+      if (!isEdit) textbausteine.push(updated);
+      else Object.assign(t, updated);
+      textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
+      toast(isEdit ? 'Textbaustein aktualisiert' : 'Textbaustein angelegt', 'success');
+      close();
+      renderTbList();
+    });
+  }
+  renderTbList();
+  container.querySelector('#btn-tb-new').addEventListener('click', () => openTbForm());
 
   container.querySelector('#theme-form').addEventListener('submit', async (e) => {
     e.preventDefault();
