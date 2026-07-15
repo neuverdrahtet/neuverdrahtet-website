@@ -183,8 +183,7 @@
 <header class="site-header">
   <div class="wrap">
     <a href="index.html" class="brand">
-      <img class="brand-mark" src="assets/logo/icon-navy.png" alt="neuverdrahtet Logo">
-      <span class="brand-name">neuverdrahtet<em>.</em></span>
+      <img class="brand-logo" src="assets/logo/header-logo.jpg" alt="neuverdrahtet">
     </a>
 
     <nav class="main-nav" aria-label="Hauptnavigation">
@@ -230,7 +229,7 @@
 </header>
 <div class="mobile-drawer" id="mobileDrawer">
   <div class="mobile-drawer-head">
-    <span class="brand-name" style="color:#fff">neuverdrahtet</span>
+    <img src="assets/logo/header-logo.jpg" alt="neuverdrahtet" style="height:32px;width:auto;">
     <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
   </div>
   <a href="index.html#leistungen">Leistungen</a>
@@ -266,20 +265,23 @@
       </div>
       <div class="hero-slider" data-autoplay="6000">
         <div class="hero-slider-track">
-          <div class="hero-slide is-active">
+          <div class="hero-slide is-active has-photo">
+            <img class="hero-slide-photo" src="assets/photos/thermografie-2.jpg" alt="Wärmebildaufnahme zur Fehlerortung" loading="lazy">
             <div class="hero-slide-code">Diagnose</div>
             <h3>Ursache statt Symptom</h3>
             <p>Erst die Fehlerquelle finden, dann reparieren — kein Rätselraten.</p>
           </div>
+          <div class="hero-slide has-photo">
+            <img class="hero-slide-photo" src="assets/photos/thermografie-3.jpg" alt="Wärmebildaufnahme einer Zählertafel" loading="lazy">
+            <div class="hero-slide-code">Thermografie</div>
+            <h3>Heiße Stellen sichtbar</h3>
+            <p>Wärmebildkamera zeigt überlastete Kontakte, bevor sie ausfallen.</p>
+          </div>
           <div class="hero-slide">
+            
             <div class="hero-slide-code">Reparatur</div>
             <h3>Vor Ort behoben</h3>
             <p>Die meisten Störungen lassen sich direkt beim ersten Termin beheben.</p>
-          </div>
-          <div class="hero-slide">
-            <div class="hero-slide-code">Erklärung</div>
-            <h3>Nachvollziehbar erklärt</h3>
-            <p>Sie erfahren, was die Ursache war und wie sich das künftig vermeiden lässt.</p>
           </div>
         </div>
         <div class="hero-slider-arrows">
@@ -300,6 +302,8 @@
       <div class="photo-grid">
         <figure><img src="assets/photos/stoerungsbehebung.jpg" alt="Elektroverteilung bei der Fehlersuche" loading="lazy"><figcaption>Elektroverteilung bei der Fehlersuche</figcaption></figure>
         <figure><img src="assets/photos/stoerungsbehebung-2.jpg" alt="Sauber dokumentierte Verteilung" loading="lazy"><figcaption>Sauber dokumentierte Verteilung</figcaption></figure>
+        <figure><img src="assets/photos/thermografie-2.jpg" alt="Wärmebildaufnahme zur Fehlerortung" loading="lazy"><figcaption>Wärmebildaufnahme zur Fehlerortung</figcaption></figure>
+        <figure><img src="assets/photos/thermografie-3.jpg" alt="Wärmebildaufnahme einer Zählertafel" loading="lazy"><figcaption>Wärmebildaufnahme einer Zählertafel</figcaption></figure>
       </div>
     </div>
   </section>
@@ -317,6 +321,7 @@
         <li>Kurzfristige Terminvereinbarung</li>
         <li>Verständliche Erklärung der Ursache</li>
         <li>Empfehlung, falls Erneuerung sinnvoller ist</li>
+        <li>Optional: Thermografie zur schnellen Fehlerortung</li>
       </ul>
     </div>
   </section>
