@@ -186,6 +186,20 @@ h1,h2,h3,h4{
 @media (max-width:1080px){ .nav-dropdown{ width:460px; } }
 
 .header-cta{ display:flex; align-items:center; gap:14px; }
+.header-icons{ display:flex; align-items:center; gap:8px; }
+.header-icons a{
+  width:36px; height:36px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--surface); color:var(--ink-soft);
+  transition:background .2s ease, color .2s ease, transform .2s ease;
+}
+.header-icons a svg{ width:17px; height:17px; }
+.header-icons a:hover{ transform:translateY(-1px); color:#fff; }
+.header-icons a.fab-whatsapp:hover, .header-icons a:nth-child(1):hover{ background:#25D366; }
+.header-icons a:nth-child(2):hover{ background:var(--orange); }
+.header-icons a:nth-child(3):hover{ background:linear-gradient(135deg,#fd5949,#d6249f,#285AEB); }
+.header-icons a:nth-child(4):hover{ background:#1877F2; }
+@media (max-width:980px){ .header-icons{ display:none; } }
 .nav-toggle{ display:none; }
 
 @media (max-width:980px){
@@ -595,9 +609,16 @@ section{ padding:88px 0; }
 .site-footer{ background:var(--navy-3); color:rgba(255,255,255,0.65); padding:56px 0 30px; }
 .footer-top{ display:flex; justify-content:space-between; gap:40px; flex-wrap:wrap; margin-bottom:40px; }
 .footer-brand{ max-width:320px; }
-.footer-brand .brand-name{ margin-bottom:12px; color:#fff; }
-.footer-brand .brand-name em{ color:var(--orange-2); }
+.footer-logo{ width:200px; height:auto; margin-bottom:16px; border-radius:6px; }
 .footer-brand p{ font-size:14px; line-height:1.7; }
+.footer-social{ display:flex; gap:10px; margin-top:18px; }
+.footer-social a{
+  width:38px; height:38px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.8);
+  transition:background .2s ease, color .2s ease, transform .2s ease;
+}
+.footer-social a:hover{ background:var(--orange); color:#fff; transform:translateY(-2px); }
 .footer-cols{ display:flex; gap:56px; flex-wrap:wrap; }
 .footer-col h4{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:16px; }
 .footer-col a{ display:block; font-size:14px; color:rgba(255,255,255,0.7); text-decoration:none; margin-bottom:10px; }
@@ -625,6 +646,20 @@ section{ padding:88px 0; }
 
 .related-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
 @media (max-width:860px){ .related-grid{ grid-template-columns:1fr; } }
+
+.photo-single{ border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
+.photo-single img{ width:100%; max-height:460px; object-fit:cover; display:block; }
+
+.photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+@media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
+.photo-grid figure{ margin:0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--surface); }
+.photo-grid img{ width:100%; height:220px; object-fit:cover; display:block; }
+.photo-grid figcaption{ padding:10px 12px; font-size:12.5px; color:var(--ink-soft); }
+
+.about-portrait{
+  width:96px; height:96px; border-radius:50%; object-fit:cover;
+  border:2px solid var(--orange); margin-bottom:18px;
+}
 
 /* =========================================================
    Legal pages
@@ -657,3 +692,28 @@ section{ padding:88px 0; }
    ========================================================= */
 .reveal{ opacity:0; transform:translateY(18px); transition:opacity .6s ease, transform .6s ease; }
 .reveal.is-visible{ opacity:1; transform:translateY(0); }
+
+/* =========================================================
+   Floating contact buttons (WhatsApp / Phone / Instagram / Facebook)
+   ========================================================= */
+.contact-fab{
+  position:fixed; right:20px; bottom:20px; z-index:70;
+  display:flex; flex-direction:column; gap:12px;
+}
+.fab{
+  width:50px; height:50px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; box-shadow:0 10px 24px -6px rgba(0,0,0,0.5);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+.fab:hover{ transform:translateY(-3px) scale(1.05); }
+.fab:focus-visible{ outline:2px solid var(--orange-2); outline-offset:3px; }
+.fab-whatsapp{ background:#25D366; }
+.fab-phone{ background:var(--orange); }
+.fab-instagram{ background:radial-gradient(circle at 30% 110%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+.fab-facebook{ background:#1877F2; }
+
+@media (max-width:640px){
+  .contact-fab{ right:14px; bottom:14px; gap:10px; }
+  .fab{ width:46px; height:46px; }
+}

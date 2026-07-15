@@ -154,7 +154,7 @@ if (contactForm) {
         throw new Error('send-failed');
       }
     } catch (err) {
-      formStatus.textContent = 'Senden hat nicht geklappt. Bitte per E-Mail an info@neuverdrahtet.com.';
+      formStatus.textContent = 'Senden hat nicht geklappt. Bitte per E-Mail an neuverdrahtet@gmail.com.';
       formStatus.classList.add('err');
     } finally {
       submitBtn.disabled = false;
