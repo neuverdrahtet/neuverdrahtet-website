@@ -183,8 +183,7 @@
 <header class="site-header">
   <div class="wrap">
     <a href="index.html" class="brand">
-      <img class="brand-mark" src="assets/logo/icon-navy.png" alt="neuverdrahtet Logo">
-      <span class="brand-name">neuverdrahtet<em>.</em></span>
+      <img class="brand-logo" src="assets/logo/header-logo.jpg" alt="neuverdrahtet">
     </a>
 
     <nav class="main-nav" aria-label="Hauptnavigation">
@@ -230,7 +229,7 @@
 </header>
 <div class="mobile-drawer" id="mobileDrawer">
   <div class="mobile-drawer-head">
-    <span class="brand-name" style="color:#fff">neuverdrahtet</span>
+    <img src="assets/logo/header-logo.jpg" alt="neuverdrahtet" style="height:32px;width:auto;">
     <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
   </div>
   <a href="index.html#leistungen">Leistungen</a>
@@ -266,17 +265,20 @@
       </div>
       <div class="hero-slider" data-autoplay="6000">
         <div class="hero-slider-track">
-          <div class="hero-slide is-active">
+          <div class="hero-slide is-active has-photo">
+            <img class="hero-slide-photo" src="assets/photos/zaehlerschrank-2.jpg" alt="Technikflur mit Verteilerschränken" loading="lazy">
             <div class="hero-slide-code">Zustand</div>
             <h3>Erst prüfen, dann planen</h3>
             <p>Vor-Ort-Check des bestehenden Schranks — Alter, Schutzschalter, Kapazität.</p>
           </div>
-          <div class="hero-slide">
+          <div class="hero-slide has-photo">
+            <img class="hero-slide-photo" src="assets/photos/zaehlerschrank.jpg" alt="Erneuerter Zählerschrank mit Verteilung" loading="lazy">
             <div class="hero-slide-code">Norm</div>
             <h3>Sicherheit nach Vorschrift</h3>
             <p>Erneuerung inklusive FI-Schutzschaltern nach aktuellem Stand der Technik.</p>
           </div>
           <div class="hero-slide">
+            
             <div class="hero-slide-code">Reserve</div>
             <h3>Platz für morgen</h3>
             <p>Freie Plätze für Wallbox, PV-Einspeisung oder Wärmepumpe von Beginn an.</p>
@@ -297,7 +299,10 @@
 
   <section style="padding-top:0;">
     <div class="wrap">
-      <div class="photo-single"><img src="assets/photos/zaehlerschrank.jpg" alt="Erneuerter Zählerschrank mit Verteilung" loading="lazy"></div>
+      <div class="photo-grid">
+        <figure><img src="assets/photos/zaehlerschrank.jpg" alt="Erneuerter Zählerschrank mit Verteilung" loading="lazy"><figcaption>Erneuerter Zählerschrank mit Verteilung</figcaption></figure>
+        <figure><img src="assets/photos/zaehlerschrank-2.jpg" alt="Technikflur mit Verteilerschränken" loading="lazy"><figcaption>Technikflur mit Verteilerschränken</figcaption></figure>
+      </div>
     </div>
   </section>
 

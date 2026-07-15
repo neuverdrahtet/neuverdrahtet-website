@@ -183,8 +183,7 @@
 <header class="site-header">
   <div class="wrap">
     <a href="index.html" class="brand">
-      <img class="brand-mark" src="assets/logo/icon-navy.png" alt="neuverdrahtet Logo">
-      <span class="brand-name">neuverdrahtet<em>.</em></span>
+      <img class="brand-logo" src="assets/logo/header-logo.jpg" alt="neuverdrahtet">
     </a>
 
     <nav class="main-nav" aria-label="Hauptnavigation">
@@ -230,7 +229,7 @@
 </header>
 <div class="mobile-drawer" id="mobileDrawer">
   <div class="mobile-drawer-head">
-    <span class="brand-name" style="color:#fff">neuverdrahtet</span>
+    <img src="assets/logo/header-logo.jpg" alt="neuverdrahtet" style="height:32px;width:auto;">
     <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
   </div>
   <a href="index.html#leistungen">Leistungen</a>
@@ -266,17 +265,20 @@
       </div>
       <div class="hero-slider" data-autoplay="6000">
         <div class="hero-slider-track">
-          <div class="hero-slide is-active">
+          <div class="hero-slide is-active has-photo">
+            <img class="hero-slide-photo" src="assets/photos/smart-home-2.jpg" alt="Smart-Home-Verteilung mit Busch-free@home Aktoren" loading="lazy">
             <div class="hero-slide-code">Konzept</div>
             <h3>Erst der Alltag, dann die Technik</h3>
             <p>Was soll leichter werden? Darauf baut die Planung auf.</p>
           </div>
-          <div class="hero-slide">
+          <div class="hero-slide has-photo">
+            <img class="hero-slide-photo" src="assets/photos/smart-home.jpg" alt="KNX-Verteilung mit Aktoren" loading="lazy">
             <div class="hero-slide-code">Vernetzung</div>
             <h3>Licht, Wärme, Sicherheit</h3>
             <p>Ein System für die wichtigsten Bereiche, statt Insellösungen.</p>
           </div>
           <div class="hero-slide">
+            
             <div class="hero-slide-code">Einweisung</div>
             <h3>Verständlich übergeben</h3>
             <p>Am Ende steht eine persönliche Einweisung, keine Bedienungsanleitung.</p>
@@ -297,7 +299,10 @@
 
   <section style="padding-top:0;">
     <div class="wrap">
-      <div class="photo-single"><img src="assets/photos/smart-home.jpg" alt="Smart-Home-Verteilung mit KNX-Aktoren" loading="lazy"></div>
+      <div class="photo-grid">
+        <figure><img src="assets/photos/smart-home.jpg" alt="Smart-Home-Verteilung mit KNX-Aktoren" loading="lazy"><figcaption>Smart-Home-Verteilung mit KNX-Aktoren</figcaption></figure>
+        <figure><img src="assets/photos/smart-home-2.jpg" alt="Smart-Home-Verteilung mit Busch-free@home Aktoren" loading="lazy"><figcaption>Smart-Home-Verteilung mit Busch-free@home Aktoren</figcaption></figure>
+      </div>
     </div>
   </section>
 
