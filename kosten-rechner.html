@@ -3,15 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kosten-Konfigurator — Elektroinstallation Kosten schätzen | neuverdrahtet</title>
-<meta name="description" content="Kostenlose Kostenschätzung für Ihre Elektroinstallation: Projektart, Wohnfläche und Ausstattung eingeben, sofortigen Richtwert erhalten.">
-<link rel="canonical" href="https://neuverdrahtet.com/kosten-rechner.html">
+<title>Impressum — neuverdrahtet</title>
+<meta name="description" content="Impressum der neuverdrahtet UG (haftungsbeschränkt), Essen.">
+<link rel="canonical" href="https://neuverdrahtet.com/impressum.html">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
-
+<meta name="robots" content="noindex, follow">
 </head>
 <body>
 <header class="site-header">
@@ -51,6 +51,7 @@
     </nav>
 
     <div class="header-cta">
+      <a class="header-phone" href="tel:+491706398575">01706398575</a>
       <a class="btn btn-primary btn-sm" href="index.html#kontakt">Angebot anfragen</a>
       <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
     </div>
@@ -80,90 +81,48 @@
 </div>
 <main>
 
-  <section class="page-hero hero">
-    <div class="wrap" style="grid-template-columns:1fr;">
-      <div style="max-width:680px;">
-        <div class="breadcrumb"><a href="index.html">Start</a> · Kosten-Konfigurator</div>
-        <p class="eyebrow">Tools · Kostenlos &amp; unverbindlich</p>
-        <h1>Was kostet Ihre Elektroinstallation?</h1>
-        <p class="hero-lede">Projektart, Wohnfläche und Ausstattung eingeben und in Sekunden einen ersten Richtwert erhalten — transparent und unverbindlich.</p>
-      </div>
+  <section class="legal-hero">
+    <div class="wrap">
+      <a class="back-link" href="index.html">← Zurück zur Startseite</a>
+      <h1>Impressum</h1>
+      <p>Angaben gemäß § 5 TMG</p>
     </div>
   </section>
 
-  <section style="padding-top:0;">
+  <section class="legal-body">
     <div class="wrap">
-      <div class="calc-panel" style="max-width:720px;margin:0 auto;">
+      <h2>Anbieter</h2>
+      <p>neuverdrahtet UG (haftungsbeschränkt)<br>Donnerstr. 131<br>45357 Essen<br>Deutschland</p>
 
-        <div class="calc-field">
-          <label>Projektart</label>
-          <div class="calc-toggle" id="calcProjectType">
-            <button type="button" data-value="neubau" class="is-active">Neubau <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">vom Rohbau an</span></button>
-            <button type="button" data-value="sanierung">Sanierung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">inkl. Demontage</span></button>
-          </div>
-        </div>
+      <h2>Vertreten durch</h2>
+      <p>Geschäftsführer: Danny Berger</p>
 
-        <div class="calc-field">
-          <label>Wohnfläche</label>
-          <div class="calc-slider">
-            <input type="range" id="calcArea" min="40" max="400" step="10" value="130">
-            <span class="val" id="calcAreaVal">130 m²</span>
-          </div>
-        </div>
+      <h2>Kontakt</h2>
+      <p>E-Mail: <a href="mailto:neuverdrahtet@gmail.com">neuverdrahtet@gmail.com</a><br>Telefon: <a href="tel:+491706398575">01706398575</a></p>
 
-        <div class="calc-field">
-          <label>Ausstattung</label>
-          <div class="calc-toggle" id="calcTier">
-            <button type="button" data-value="standard">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">solide Basis</span></button>
-            <button type="button" data-value="premium" class="is-active">Premium <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">smart-ready</span></button>
-            <button type="button" data-value="exklusiv">Exklusiv <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Smart Home / KNX</span></button>
-          </div>
-        </div>
+      <h2>Registereintrag</h2>
+      <p>Eintragung im Handelsregister<br>Registergericht: <span class="legal-placeholder">Amtsgericht ergänzen</span><br>Registernummer: <span class="legal-placeholder">HRB-Nr. ergänzen</span></p>
 
-        <div class="calc-field">
-          <label>Zusätzlich geplant (optional)</label>
-          <div class="calc-toggle" id="calcExtras" data-multi="true">
-            <button type="button" data-value="wallbox">Wallbox</button>
-            <button type="button" data-value="pv">Photovoltaik</button>
-            <button type="button" data-value="waermepumpe">Wärmepumpen-Anschluss</button>
-          </div>
-        </div>
+      <h2>Umsatzsteuer-ID</h2>
+      <p>Umsatzsteuer-Identifikationsnummer gemäß § 27 a Umsatzsteuergesetz:<br><span class="legal-placeholder">USt-IdNr. ergänzen</span></p>
 
-        <div class="calc-result">
-          <div class="label">Geschätzte Gesamtinvestition</div>
-          <div class="range"><span id="calcMin">–</span><span class="dash">bis</span><span id="calcMax">–</span></div>
-          <div class="note">Grober Richtwert auf Basis üblicher Marktpreise — kein verbindliches Angebot.</div>
-        </div>
+      <h2>Berufsrechtliche Angaben</h2>
+      <p>Ausgeübtes Gewerbe: Elektrohandwerk<br>Zuständige Handwerkskammer: <span class="legal-placeholder">Handwerkskammer ergänzen</span></p>
 
-        <p class="form-note" style="margin-top:18px;text-align:center;">Für ein verbindliches Angebot: <a href="index.html#kontakt">Anfrage stellen</a>.</p>
-      </div>
-    </div>
-  </section>
+      <h2>Redaktionell verantwortlich</h2>
+      <p>Danny Berger, Donnerstr. 131, 45357 Essen</p>
 
-  <section class="section-alt">
-    <div class="wrap">
-      <div class="section-head center">
-        <p class="eyebrow">Wichtig zu wissen</p>
-        <h2>Wie diese Schätzung zustande kommt</h2>
-      </div>
-      <div class="feature-list" style="max-width:720px;margin:0 auto;">
-        <li>Berechnung auf Basis von Erfahrungswerten pro Quadratmeter</li>
-        <li>Zuschläge für Sanierung (Demontage, Stemmarbeiten)</li>
-        <li>Ausstattungsstufe verändert Material- und Zeitaufwand</li>
-        <li>Zusatzoptionen wie Wallbox oder PV werden pauschal aufgeschlagen</li>
-        <li>Ersetzt keine Vor-Ort-Begehung und kein individuelles Angebot</li>
-        <li>Alle Angaben unverbindlich, ohne Gewähr</li>
-      </div>
-    </div>
-  </section>
+      <h2>EU-Streitschlichtung</h2>
+      <p>Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit: <a href="https://ec.europa.eu/consumers/odr/" target="_blank" rel="noopener">https://ec.europa.eu/consumers/odr/</a>. Wir sind nicht verpflichtet und nicht bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
 
-  <section>
-    <div class="wrap">
-      <div class="cta-banner">
-        <h2>Genauer wissen, woran Sie sind?</h2>
-        <p>Ein kurzes Gespräch reicht für eine erste realistische Einschätzung — mit Vor-Ort-Termin und Festpreis-Angebot.</p>
-        <a class="btn btn-primary" href="index.html#kontakt">Angebot anfragen</a>
-      </div>
+      <h2>Haftung für Inhalte</h2>
+      <p>Als Diensteanbieter sind wir gemäß § 7 Abs. 1 TMG für eigene Inhalte auf diesen Seiten nach den allgemeinen Gesetzen verantwortlich. Nach §§ 8 bis 10 TMG sind wir als Diensteanbieter jedoch nicht verpflichtet, übermittelte oder gespeicherte fremde Informationen zu überwachen oder nach Umständen zu forschen, die auf eine rechtswidrige Tätigkeit hinweisen.</p>
+
+      <h2>Haftung für Links</h2>
+      <p>Unser Angebot enthält Links zu externen Websites Dritter, auf deren Inhalte wir keinen Einfluss haben. Für die Inhalte der verlinkten Seiten ist stets der jeweilige Anbieter verantwortlich.</p>
+
+      <h2>Urheberrecht</h2>
+      <p>Die durch die Seitenbetreiber erstellten Inhalte und Werke auf diesen Seiten unterliegen dem deutschen Urheberrecht. Vervielfältigung, Bearbeitung, Verbreitung und jede Art der Verwertung außerhalb der Grenzen des Urheberrechtes bedürfen der schriftlichen Zustimmung des jeweiligen Autors bzw. Erstellers.</p>
     </div>
   </section>
 

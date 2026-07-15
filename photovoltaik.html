@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Photovoltaik — neuverdrahtet Essen</title>
-<meta name="description" content="Elektro-Anschluss für Photovoltaik in Essen — Zählerschrank-Vorbereitung, Einspeisung und Speicher-Anbindung.">
-<link rel="canonical" href="https://neuverdrahtet.com/photovoltaik.html">
+<title>KI-Check Unterverteilung — Sicherungskasten per Foto prüfen | neuverdrahtet</title>
+<meta name="description" content="Kostenloser KI-Check: Foto der Unterverteilung hochladen und eine erste Einschätzung zu Zustand und Modernisierungsbedarf erhalten.">
+<link rel="canonical" href="https://neuverdrahtet.com/ki-check.html">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,6 +51,7 @@
     </nav>
 
     <div class="header-cta">
+      <a class="header-phone" href="tel:+491706398575">01706398575</a>
       <a class="btn btn-primary btn-sm" href="index.html#kontakt">Angebot anfragen</a>
       <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
     </div>
@@ -83,41 +84,61 @@
   <section class="page-hero hero">
     <div class="wrap">
       <div>
-        <div class="breadcrumb"><a href="index.html">Start</a> · <a href="leistungen.html">Leistungen</a> · Photovoltaik</div>
-        <p class="eyebrow">Leistung 10 · PV</p>
-        <h1>Photovoltaik</h1>
-        <p class="hero-lede">Photovoltaik erzeugt Strom — der elektrische Anschluss entscheidet, ob er auch sicher und effizient genutzt wird. Von der Zählerschrank-Vorbereitung über die Einspeisung bis zur Speicher-Anbindung wird die Elektro-Seite Ihrer PV-Anlage fachgerecht umgesetzt.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="index.html#kontakt">Angebot anfragen</a>
-          <a class="btn btn-outline" href="kosten-rechner.html">Kosten schätzen</a>
-        </div>
+        <div class="breadcrumb"><a href="index.html">Start</a> · KI-Check Unterverteilung</div>
+        <p class="eyebrow">Tools · KI-gestützt &amp; kostenlos</p>
+        <h1>Unterverteilung per Foto prüfen lassen</h1>
+        <p class="hero-lede">Laden Sie ein Foto Ihres Sicherungskastens hoch und erhalten Sie eine erste, KI-gestützte Einschätzung — mit Hinweisen auf veralteten Aufbau, fehlende FI-Schutzschalter und möglichen Modernisierungsbedarf.</p>
       </div>
       <div class="hero-slider" data-autoplay="6000">
         <div class="hero-slider-track">
           <div class="hero-slide is-active">
-            <div class="hero-slide-code">Vorbereitung</div>
-            <h3>Zählerschrank PV-ready</h3>
-            <p>Der Zählerschrank wird für Einspeisung und Zweirichtungszähler vorbereitet.</p>
+            <div class="hero-slide-code">Schritt 1</div>
+            <h3>Foto hochladen</h3>
+            <p>Ein klares Foto der geöffneten Unterverteilung reicht für die erste Einschätzung.</p>
           </div>
           <div class="hero-slide">
-            <div class="hero-slide-code">Speicher</div>
-            <h3>Strom sinnvoll nutzen</h3>
-            <p>Fachgerechte Anbindung von Batteriespeichern für mehr Eigenverbrauch.</p>
+            <div class="hero-slide-code">Schritt 2</div>
+            <h3>KI-Analyse</h3>
+            <p>Die Aufnahme wird automatisch auf typische Merkmale und Auffälligkeiten geprüft.</p>
           </div>
           <div class="hero-slide">
-            <div class="hero-slide-code">Kopplung</div>
-            <h3>Mit Wallbox & Wärmepumpe</h3>
-            <p>Energiemanagement verteilt den PV-Strom dahin, wo er gebraucht wird.</p>
+            <div class="hero-slide-code">Schritt 3</div>
+            <h3>Ergebnis &amp; Einordnung</h3>
+            <p>Sie erhalten direkt eine erste Einschätzung — als Ausgangspunkt für ein persönliches Gespräch.</p>
           </div>
         </div>
-        <div class="hero-slider-arrows">
-          <button class="arrow prev" aria-label="Vorherige Folie">‹</button>
-          <button class="arrow next" aria-label="Nächste Folie">›</button>
-        </div>
+        <div class="hero-slider-arrows"><button class="arrow prev" aria-label="Vorherige Folie">‹</button><button class="arrow next" aria-label="Nächste Folie">›</button></div>
         <div class="hero-slider-dots">
           <button class="dot is-active" data-index="0" aria-label="Folie 1"></button>
-            <button class="dot" data-index="1" aria-label="Folie 2"></button>
-            <button class="dot" data-index="2" aria-label="Folie 3"></button>
+          <button class="dot" data-index="1" aria-label="Folie 2"></button>
+          <button class="dot" data-index="2" aria-label="Folie 3"></button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:0;">
+    <div class="wrap">
+      <div class="upload-panel" style="max-width:640px;margin:0 auto;">
+        <form id="kiForm">
+          <label class="dropzone" id="dropzone" for="kiFile">
+            <svg class="icon" width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M12 16V4M12 4 7 9M12 4l5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <p><strong>Foto hierher ziehen</strong> oder klicken zum Auswählen</p>
+            <p style="margin-top:6px;font-size:12.5px;">JPG oder PNG, max. 10 MB</p>
+            <input type="file" id="kiFile" accept="image/png, image/jpeg">
+          </label>
+
+          <div class="preview-wrap" id="previewWrap">
+            <img id="previewImg" alt="Vorschau der hochgeladenen Unterverteilung">
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block" id="kiSubmit" style="margin-top:20px;" disabled>KI-Check starten</button>
+          <p class="form-note">Das Foto wird ausschließlich zur Analyse verwendet und nicht dauerhaft gespeichert. Ersetzt keine Prüfung durch eine Elektrofachkraft.</p>
+        </form>
+
+        <div class="ai-result" id="aiResult">
+          <div class="status-line"><span class="dot"></span><span id="aiStatusText">Analyse läuft …</span></div>
+          <div id="aiResultBody"></div>
         </div>
       </div>
     </div>
@@ -125,69 +146,17 @@
 
   <section class="section-alt">
     <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Im Detail</p>
-        <h2>Was zu Photovoltaik gehört</h2>
-      </div>
-      <ul class="feature-list">
-        <li>Zählerschrank-Vorbereitung für PV-Einspeisung</li>
-        <li>Abstimmung mit PV-Installateur/Hersteller</li>
-        <li>Anbindung von Batteriespeichern</li>
-        <li>Energiemanagement für Eigenverbrauch</li>
-        <li>Kopplung mit Wallbox oder Wärmepumpe</li>
-        <li>Anmeldung beim Netzbetreiber</li>
-      </ul>
-    </div>
-  </section>
-
-  <section>
-    <div class="wrap">
       <div class="section-head center">
-        <p class="eyebrow">Häufige Fragen</p>
-        <h2>Gut zu wissen</h2>
+        <p class="eyebrow">Gut zu wissen</p>
+        <h2>Was der KI-Check kann — und was nicht</h2>
       </div>
-      <div class="faq-list" style="margin:0 auto;">
-        <div class="faq-item">
-        <button class="faq-q"><span>Übernehmen Sie auch die Montage der Solarmodule?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Die Modulmontage kommt vom PV-Fachbetrieb — wir übernehmen den elektrischen Anschluss, Zählerschrank und Speicher-Anbindung, in Abstimmung mit dem Installateur.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Lohnt sich ein Batteriespeicher?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Das hängt vom Verbrauchsprofil ab. In der Beratung wird geschaut, ob sich ein Speicher für Ihre Situation rechnet.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Kann ich meine Wallbox mit der PV-Anlage koppeln?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Ja, mit passendem Energiemanagement lässt sich die Ladeleistung am PV-Ertrag ausrichten.</p></div>
-      </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section-alt">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Weitere Leistungen</p>
-        <h2>Passt oft dazu</h2>
-      </div>
-      <div class="related-grid">
-        <a class="service-card" href="elektroinstallation.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-        <h3>Elektroinstallation</h3>
-        <p>Komplette Elektrik für Neubau, Altbau und Sanierung.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
-      <a class="service-card" href="zaehlerschrank.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 8h6M9 12h6M9 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
-        <h3>Zählerschrank &amp; Verteilung</h3>
-        <p>Erneuerung nach aktueller Norm, mehr Sicherheit und Reserve für später.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
-      <a class="service-card" href="wallbox.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7" width="12" height="13" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M16 11h2.5l1.5 3v5h-2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="20" r="1.4" fill="currentColor"/><circle cx="16" cy="20" r="1.4" fill="currentColor"/></svg></div>
-        <h3>Wallbox-Installation</h3>
-        <p>Ladepunkt für E-Autos fachgerecht angeschlossen.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
+      <div class="feature-list" style="max-width:720px;margin:0 auto;">
+        <li>Erste optische Einschätzung anhand des Fotos</li>
+        <li>Hinweise auf typische Auffälligkeiten (z. B. fehlende FI-Schutzschalter)</li>
+        <li>Kein Ersatz für eine E-Check- oder DGUV-V3-Prüfung vor Ort</li>
+        <li>Keine Messung, keine Aussage zu verdeckten Mängeln</li>
+        <li>Ergebnis ist ein Gesprächseinstieg, kein Prüfprotokoll</li>
+        <li>Foto wird nur zur Analyse verarbeitet, nicht dauerhaft gespeichert</li>
       </div>
     </div>
   </section>
@@ -195,9 +164,9 @@
   <section>
     <div class="wrap">
       <div class="cta-banner">
-        <h2>Bereit für Photovoltaik?</h2>
-        <p>Kurz beschreiben, worum es geht — Rückmeldung kommt persönlich von Danny Berger.</p>
-        <a class="btn btn-primary" href="index.html#kontakt">Jetzt anfragen</a>
+        <h2>Auffälligkeiten gefunden?</h2>
+        <p>Für eine verbindliche Prüfung vor Ort: E-Check oder DGUV V3 Prüfung anfragen.</p>
+        <a class="btn btn-primary" href="e-check.html">E-Check ansehen</a>
       </div>
     </div>
   </section>

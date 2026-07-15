@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Home — neuverdrahtet Essen</title>
-<meta name="description" content="Smart Home Installation in Essen — Licht, Heizung und Sicherheit vernetzt gesteuert, nachrüstbar oder neu geplant.">
-<link rel="canonical" href="https://neuverdrahtet.com/smart-home.html">
+<title>Kosten-Konfigurator — Elektroinstallation Kosten schätzen | neuverdrahtet</title>
+<meta name="description" content="Kostenlose Kostenschätzung für Ihre Elektroinstallation: Projektart, Wohnfläche und Ausstattung eingeben, sofortigen Richtwert erhalten.">
+<link rel="canonical" href="https://neuverdrahtet.com/kosten-rechner.html">
 <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -51,6 +51,7 @@
     </nav>
 
     <div class="header-cta">
+      <a class="header-phone" href="tel:+491706398575">01706398575</a>
       <a class="btn btn-primary btn-sm" href="index.html#kontakt">Angebot anfragen</a>
       <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
     </div>
@@ -81,113 +82,78 @@
 <main>
 
   <section class="page-hero hero">
-    <div class="wrap">
-      <div>
-        <div class="breadcrumb"><a href="index.html">Start</a> · <a href="leistungen.html">Leistungen</a> · Smart Home</div>
-        <p class="eyebrow">Leistung 04 · SH</p>
-        <h1>Smart Home</h1>
-        <p class="hero-lede">Smart Home heißt nicht: alles auf einmal. Es heißt: Licht, Heizung und Sicherheit so vernetzen, dass sie tatsächlich den Alltag leichter machen — nachrüstbar im Bestand oder von Grund auf im Neubau geplant.</p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="index.html#kontakt">Angebot anfragen</a>
-          <a class="btn btn-outline" href="kosten-rechner.html">Kosten schätzen</a>
-        </div>
+    <div class="wrap" style="grid-template-columns:1fr;">
+      <div style="max-width:680px;">
+        <div class="breadcrumb"><a href="index.html">Start</a> · Kosten-Konfigurator</div>
+        <p class="eyebrow">Tools · Kostenlos &amp; unverbindlich</p>
+        <h1>Was kostet Ihre Elektroinstallation?</h1>
+        <p class="hero-lede">Projektart, Wohnfläche und Ausstattung eingeben und in Sekunden einen ersten Richtwert erhalten — transparent und unverbindlich.</p>
       </div>
-      <div class="hero-slider" data-autoplay="6000">
-        <div class="hero-slider-track">
-          <div class="hero-slide is-active">
-            <div class="hero-slide-code">Konzept</div>
-            <h3>Erst der Alltag, dann die Technik</h3>
-            <p>Was soll leichter werden? Darauf baut die Planung auf.</p>
-          </div>
-          <div class="hero-slide">
-            <div class="hero-slide-code">Vernetzung</div>
-            <h3>Licht, Wärme, Sicherheit</h3>
-            <p>Ein System für die wichtigsten Bereiche, statt Insellösungen.</p>
-          </div>
-          <div class="hero-slide">
-            <div class="hero-slide-code">Einweisung</div>
-            <h3>Verständlich übergeben</h3>
-            <p>Am Ende steht eine persönliche Einweisung, keine Bedienungsanleitung.</p>
+    </div>
+  </section>
+
+  <section style="padding-top:0;">
+    <div class="wrap">
+      <div class="calc-panel" style="max-width:720px;margin:0 auto;">
+
+        <div class="calc-field">
+          <label>Projektart</label>
+          <div class="calc-toggle" id="calcProjectType">
+            <button type="button" data-value="neubau" class="is-active">Neubau <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">vom Rohbau an</span></button>
+            <button type="button" data-value="sanierung">Sanierung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">inkl. Demontage</span></button>
           </div>
         </div>
-        <div class="hero-slider-arrows">
-          <button class="arrow prev" aria-label="Vorherige Folie">‹</button>
-          <button class="arrow next" aria-label="Nächste Folie">›</button>
+
+        <div class="calc-field">
+          <label>Wohnfläche</label>
+          <div class="calc-slider">
+            <input type="range" id="calcArea" min="40" max="400" step="10" value="130">
+            <span class="val" id="calcAreaVal">130 m²</span>
+          </div>
         </div>
-        <div class="hero-slider-dots">
-          <button class="dot is-active" data-index="0" aria-label="Folie 1"></button>
-            <button class="dot" data-index="1" aria-label="Folie 2"></button>
-            <button class="dot" data-index="2" aria-label="Folie 3"></button>
+
+        <div class="calc-field">
+          <label>Ausstattung</label>
+          <div class="calc-toggle" id="calcTier">
+            <button type="button" data-value="standard">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">solide Basis</span></button>
+            <button type="button" data-value="premium" class="is-active">Premium <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">smart-ready</span></button>
+            <button type="button" data-value="exklusiv">Exklusiv <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Smart Home / KNX</span></button>
+          </div>
         </div>
+
+        <div class="calc-field">
+          <label>Zusätzlich geplant (optional)</label>
+          <div class="calc-toggle" id="calcExtras" data-multi="true">
+            <button type="button" data-value="wallbox">Wallbox</button>
+            <button type="button" data-value="pv">Photovoltaik</button>
+            <button type="button" data-value="waermepumpe">Wärmepumpen-Anschluss</button>
+          </div>
+        </div>
+
+        <div class="calc-result">
+          <div class="label">Geschätzte Gesamtinvestition</div>
+          <div class="range"><span id="calcMin">–</span><span class="dash">bis</span><span id="calcMax">–</span></div>
+          <div class="note">Grober Richtwert auf Basis üblicher Marktpreise — kein verbindliches Angebot.</div>
+        </div>
+
+        <p class="form-note" style="margin-top:18px;text-align:center;">Für ein verbindliches Angebot: <a href="index.html#kontakt">Anfrage stellen</a>.</p>
       </div>
     </div>
   </section>
 
   <section class="section-alt">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Im Detail</p>
-        <h2>Was zu Smart Home gehört</h2>
-      </div>
-      <ul class="feature-list">
-        <li>Bedarfsanalyse statt Technik um der Technik willen</li>
-        <li>Lichtsteuerung, Beschattung, Heizungsregelung</li>
-        <li>Sicherheits- und Anwesenheitssimulation</li>
-        <li>Sprachsteuerung und App-Anbindung</li>
-        <li>Nachrüstbar im Bestand oder ab Rohbau geplant</li>
-        <li>Einweisung, damit die Technik auch genutzt wird</li>
-      </ul>
-    </div>
-  </section>
-
-  <section>
     <div class="wrap">
       <div class="section-head center">
-        <p class="eyebrow">Häufige Fragen</p>
-        <h2>Gut zu wissen</h2>
+        <p class="eyebrow">Wichtig zu wissen</p>
+        <h2>Wie diese Schätzung zustande kommt</h2>
       </div>
-      <div class="faq-list" style="margin:0 auto;">
-        <div class="faq-item">
-        <button class="faq-q"><span>Ist Smart Home auch im Altbau nachrüstbar?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Ja, mit funkbasierten Komponenten lässt sich vieles ohne größere Stemmarbeiten nachrüsten. Verkabelte Lösungen sind bei Sanierungen mit offener Wand ebenfalls möglich.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Bin ich an einen Hersteller gebunden?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Die Systemwahl richtet sich nach Ihrem Bedarf und Budget — es wird vorher besprochen, welches System zu Ihrem Vorhaben passt.</p></div>
-      </div>
-      <div class="faq-item">
-        <button class="faq-q"><span>Was passiert, wenn das WLAN ausfällt?</span><span class="plus">+</span></button>
-        <div class="faq-a"><p>Grundfunktionen wie Lichtschalter sollten immer auch klassisch bedienbar bleiben — das wird bei der Planung berücksichtigt.</p></div>
-      </div>
-      </div>
-    </div>
-  </section>
-
-  <section class="section-alt">
-    <div class="wrap">
-      <div class="section-head">
-        <p class="eyebrow">Weitere Leistungen</p>
-        <h2>Passt oft dazu</h2>
-      </div>
-      <div class="related-grid">
-        <a class="service-card" href="elektroinstallation.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-        <h3>Elektroinstallation</h3>
-        <p>Komplette Elektrik für Neubau, Altbau und Sanierung.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
-      <a class="service-card" href="zaehlerschrank.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="5" y="3" width="14" height="18" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M9 8h6M9 12h6M9 16h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
-        <h3>Zählerschrank &amp; Verteilung</h3>
-        <p>Erneuerung nach aktueller Norm, mehr Sicherheit und Reserve für später.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
-      <a class="service-card" href="wallbox.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="7" width="12" height="13" rx="1.5" stroke="currentColor" stroke-width="1.6"/><path d="M16 11h2.5l1.5 3v5h-2" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="20" r="1.4" fill="currentColor"/><circle cx="16" cy="20" r="1.4" fill="currentColor"/></svg></div>
-        <h3>Wallbox-Installation</h3>
-        <p>Ladepunkt für E-Autos fachgerecht angeschlossen.</p>
-        <span class="more">Mehr erfahren →</span>
-      </a>
+      <div class="feature-list" style="max-width:720px;margin:0 auto;">
+        <li>Berechnung auf Basis von Erfahrungswerten pro Quadratmeter</li>
+        <li>Zuschläge für Sanierung (Demontage, Stemmarbeiten)</li>
+        <li>Ausstattungsstufe verändert Material- und Zeitaufwand</li>
+        <li>Zusatzoptionen wie Wallbox oder PV werden pauschal aufgeschlagen</li>
+        <li>Ersetzt keine Vor-Ort-Begehung und kein individuelles Angebot</li>
+        <li>Alle Angaben unverbindlich, ohne Gewähr</li>
       </div>
     </div>
   </section>
@@ -195,9 +161,9 @@
   <section>
     <div class="wrap">
       <div class="cta-banner">
-        <h2>Bereit für Smart Home?</h2>
-        <p>Kurz beschreiben, worum es geht — Rückmeldung kommt persönlich von Danny Berger.</p>
-        <a class="btn btn-primary" href="index.html#kontakt">Jetzt anfragen</a>
+        <h2>Genauer wissen, woran Sie sind?</h2>
+        <p>Ein kurzes Gespräch reicht für eine erste realistische Einschätzung — mit Vor-Ort-Termin und Festpreis-Angebot.</p>
+        <a class="btn btn-primary" href="index.html#kontakt">Angebot anfragen</a>
       </div>
     </div>
   </section>
