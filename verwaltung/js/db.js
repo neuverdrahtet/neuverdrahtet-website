@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 const STORES = {
   kunden: 'id',
@@ -19,7 +19,16 @@ const STORES = {
   aufgaben: 'id',
   dokumente: 'id',
   kategorien: 'id',
+  nachrichten: 'id',
 };
+
+export const KALK_KATEGORIEN = [
+  { id: 'material', titel: 'Material', farbe: '#4d8bf0' },
+  { id: 'lohn', titel: 'Lohn', farbe: '#a463f2' },
+  { id: 'fremdleistung', titel: 'Fremdleistungen', farbe: '#ef4444' },
+  { id: 'geraete', titel: 'Geräte', farbe: '#14b8a6' },
+  { id: 'sonstige', titel: 'Sonstige', farbe: '#8a8a94' },
+];
 
 export const STORE_NAMES = Object.keys(STORES);
 

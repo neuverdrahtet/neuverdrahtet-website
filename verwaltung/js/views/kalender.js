@@ -3,6 +3,7 @@ import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
+import { suggestSlot } from '../terminvorschlag.js';
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
@@ -70,7 +71,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
   }
 
   function terminsOnDay(dateStr) {
-    return termine.filter((t) => (t.start || '').slice(0, 10) === dateStr).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    return termine.filter((t) => {
+      const start = (t.start || '').slice(0, 10);
+      const ende = (t.ende || '').slice(0, 10) || start;
+      return dateStr >= start && dateStr <= ende;
+    }).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
   }
 
   function renderGrid() {
@@ -143,6 +148,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
             </div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
+            <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${(data.ende || '').slice(0, 10)}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
@@ -158,6 +164,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
                   </label>
                 `).join('') || '<span class="text-mute">Keine Mitarbeiter angelegt.</span>'}
               </div>
+              <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
             </div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
@@ -169,6 +176,16 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
         </form>
       `,
+    });
+    body.querySelector('#btn-vorschlag').addEventListener('click', async () => {
+      const checked = body.querySelector('input[name="mitarbeiterIds"]:checked');
+      if (!checked) { toast('Bitte zuerst einen Mitarbeiter auswählen', 'danger'); return; }
+      const alleTermine = await getAll('termine');
+      const vorschlag = suggestSlot(alleTermine.filter((t) => t.id !== data.id), checked.value);
+      if (!vorschlag) { toast('Kein freier Termin in den nächsten 3 Wochen gefunden', 'danger'); return; }
+      body.querySelector('input[name="datum"]').value = vorschlag.datum;
+      body.querySelector('input[name="uhrzeit"]').value = vorschlag.uhrzeit;
+      toast(`Vorschlag: ${vorschlag.datum} um ${vorschlag.uhrzeit} Uhr`, 'success');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
@@ -188,6 +205,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
       updated.titel = (fd.get('titel') || '').toString().trim();
       updated.typ = fd.get('typ') || 'termin';
       updated.start = `${fd.get('datum')}T${fd.get('uhrzeit') || '00:00'}`;
+      const enddatum = (fd.get('enddatum') || '').toString().trim();
+      updated.ende = enddatum && enddatum >= fd.get('datum') ? enddatum : '';
       updated.ort = (fd.get('ort') || '').toString().trim();
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';

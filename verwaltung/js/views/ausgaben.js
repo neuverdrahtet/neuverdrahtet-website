@@ -1,11 +1,13 @@
-import { getAll, put, remove, getSettings } from '../db.js';
+import { getAll, put, remove, getSettings, KALK_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
 const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
+const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
 
 export async function render(container) {
-  let [ausgaben, settings] = await Promise.all([getAll('ausgaben'), getSettings()]);
+  let [ausgaben, settings, projekte] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte')]);
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
 
@@ -42,14 +44,14 @@ export async function render(container) {
     tableHost.innerHTML = `
       <p class="hint">Summe: ${formatCurrency(summe)}</p>
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Lieferant</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
+        <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
         <tbody>
           ${filtered.map((a) => `
             <tr data-id="${a.id}">
               <td>${formatDate(a.datum)}</td>
               <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
               <td>${escapeHtml(a.beschreibung || '')}</td>
-              <td>${escapeHtml(a.lieferant || '')}</td>
+              <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
               <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
               <td>${a.beleg ? '📎' : ''}</td>
             </tr>
@@ -75,6 +77,7 @@ export async function render(container) {
     const data = a || {
       id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
+      projektId: '', kalkKategorie: '',
     };
     const { body, close } = openModal({
       title: isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe',
@@ -103,6 +106,15 @@ export async function render(container) {
                 <option value="0" ${Number(data.steuersatz) === 0 ? 'selected' : ''}>0%</option>
               </select>
             </div>
+            <div class="field"><label>Projekt (für Nachkalkulation)</label>
+              <select name="projektId" id="ausgabe-projekt"><option value="">– keinem Projekt zugeordnet –</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Kalkulations-Kategorie</label>
+              <select name="kalkKategorie" id="ausgabe-kalkkategorie" ${data.projektId ? '' : 'disabled'}>
+                <option value="">–</option>
+                ${KALK_KATEGORIEN_AUSGABEN.map((k) => `<option value="${k.id}" ${k.id === data.kalkKategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}
+              </select>
+            </div>
             <div class="field col-span-2"><label>Beleg-Foto</label>
               <input type="file" accept="image/*" id="beleg-input">
               <div id="beleg-preview">${data.beleg ? '<span class="badge badge-success">Beleg vorhanden</span>' : ''}</div>
@@ -116,6 +128,10 @@ export async function render(container) {
           </div>
         </form>
       `,
+    });
+
+    body.querySelector('#ausgabe-projekt').addEventListener('change', (e) => {
+      body.querySelector('#ausgabe-kalkkategorie').disabled = !e.target.value;
     });
 
     let belegBlob = data.beleg || null;
@@ -153,6 +169,8 @@ export async function render(container) {
       updated.steuersatz = Number(fd.get('steuersatz')) || 0;
       updated.betragBrutto = calcBrutto(updated.betragNetto, updated.steuersatz);
       updated.beleg = belegBlob;
+      updated.projektId = fd.get('projektId') || '';
+      updated.kalkKategorie = updated.projektId ? (fd.get('kalkKategorie') || '') : '';
       await put('ausgaben', updated);
       toast(isEdit ? 'Ausgabe aktualisiert' : 'Ausgabe erfasst', 'success');
       close();
