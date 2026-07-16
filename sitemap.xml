@@ -6,73 +6,68 @@
     <changefreq>weekly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/elektro.html</loc>
+    <loc>https://neuverdrahtet.com/elektroinstallation.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/bodenleger.html</loc>
+    <loc>https://neuverdrahtet.com/zaehlerschrank.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/fliesen.html</loc>
+    <loc>https://neuverdrahtet.com/wallbox.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/maler.html</loc>
+    <loc>https://neuverdrahtet.com/smart-home.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/trockenbau.html</loc>
+    <loc>https://neuverdrahtet.com/e-check.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/komplettbad.html</loc>
+    <loc>https://neuverdrahtet.com/dguv-v3.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/hausmeisterservice.html</loc>
+    <loc>https://neuverdrahtet.com/beleuchtung.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/abbruch.html</loc>
+    <loc>https://neuverdrahtet.com/stoerungsbehebung.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/entruempelung.html</loc>
+    <loc>https://neuverdrahtet.com/waermepumpe.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
-    <loc>https://neuverdrahtet.com/gebaeudereinigung.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/gartenpflege.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/umzuege.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/wohnungsrenovierung.html</loc>
+    <loc>https://neuverdrahtet.com/photovoltaik.html</loc>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/leistungen.html</loc>
     <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/kosten-rechner.html</loc>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ki-check.html</loc>
+    <priority>0.6</priority>
     <changefreq>monthly</changefreq>
   </url>
 </urlset>
