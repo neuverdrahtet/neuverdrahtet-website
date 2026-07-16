@@ -21,6 +21,11 @@ function kundeAdresse(kunde) {
   ].filter(Boolean).map(escapeHtml).join('<br>');
 }
 
+/**
+ * Baut die HTML-Druckvorschau (Browser-Druckdialog). Muss optisch dem
+ * echten PDF aus docpdf.js entsprechen (gleicher Aufbau: Logo/Meta-Box,
+ * Absender-Zeile, Empfänger, Positionstabelle, Summenblock, Fußzeile).
+ */
 export function buildDocHtml({
   settings,
   art,
@@ -30,6 +35,7 @@ export function buildDocHtml({
   refValue,
   kunde,
   betreff,
+  projekt,
   introText,
   positionen,
   totals,
@@ -37,11 +43,14 @@ export function buildDocHtml({
   steuerHinweis,
   showPositions = true,
 }) {
-  const absender = [
-    settings.firmenname,
-    settings.strasse,
-    settings.plzOrt,
-  ].filter(Boolean).map(escapeHtml).join(' · ');
+  const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
+
+  const metaRows = [
+    [`${art}-Nr.:`, nummer],
+    kunde?.kundennummer ? ['Kundennr.:', kunde.kundennummer] : null,
+    ['Datum:', formatDate(datum)],
+    refLabel ? [`${refLabel}:`, refValue] : null,
+  ].filter(Boolean);
 
   let positionsHtml = '';
   if (showPositions && positionen && positionen.length) {
@@ -50,17 +59,16 @@ export function buildDocHtml({
       const preis = Number(p.einzelpreis) || 0;
       const summe = menge * preis;
       return `<tr>
-        <td>${i + 1}</td>
+        <td>${escapeHtml(p.posNr || String(i + 1))}</td>
         <td>${escapeHtml(p.bezeichnung)}${p.beschreibung ? `<br><span style="color:#666;font-size:11px">${escapeHtml(p.beschreibung)}</span>` : ''}</td>
         <td>${menge}</td>
         <td>${escapeHtml(p.einheit || '')}</td>
         <td>${formatCurrency(preis)}</td>
-        <td>${p.steuersatz}%</td>
         <td style="text-align:right">${formatCurrency(summe)}</td>
       </tr>`;
     }).join('');
     positionsHtml = `<table>
-      <thead><tr><th>#</th><th>Bezeichnung</th><th>Menge</th><th>Einheit</th><th>Einzelpreis</th><th>USt.</th><th style="text-align:right">Netto</th></tr></thead>
+      <thead><tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Einheit</th><th>Einzel €</th><th style="text-align:right">Gesamt €</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
   }
@@ -74,42 +82,45 @@ export function buildDocHtml({
     totalsHtml = `<div class="print-totals">
       <div class="row"><span>Netto</span><span>${formatCurrency(totals.netto)}</span></div>
       ${steuerRows}
-      <div class="row grand"><span>Gesamt${art === 'RECHNUNG' || art === 'MAHNUNG' ? ' (brutto)' : ''}</span><span>${formatCurrency(totals.brutto)}</span></div>
+      <div class="row grand"><span>Gesamt</span><span>${formatCurrency(totals.brutto)}</span></div>
     </div>`;
   }
 
+  const logoOrName = settings.logoDataUrl
+    ? `<img src="${settings.logoDataUrl}" alt="${escapeHtml(settings.firmenname || '')}" class="print-logo">`
+    : `<div class="print-firmenname">${escapeHtml(settings.firmenname || '')}</div>`;
+
   return `
     <div class="print-header">
-      <div>
-        <div style="font-size:11px;color:#666;margin-bottom:16px">${absender}</div>
-        <div style="font-size:13px;line-height:1.5">${kundeAdresse(kunde)}</div>
-      </div>
-      <div style="text-align:right;font-size:12px;line-height:1.6">
-        <div><strong>${escapeHtml(settings.firmenname || '')}</strong></div>
-        <div>${escapeHtml(settings.strasse || '')}</div>
-        <div>${escapeHtml(settings.plzOrt || '')}</div>
-        <div>${escapeHtml(settings.telefon || '')}</div>
-        <div>${escapeHtml(settings.email || '')}</div>
-        ${settings.ustId ? `<div>USt-ID: ${escapeHtml(settings.ustId)}</div>` : ''}
+      ${logoOrName}
+      <div class="print-meta">
+        <div class="print-meta-title">${escapeHtml(art)}</div>
+        ${metaRows.map((row) => `<div class="row"><span>${escapeHtml(row[0])}</span><span>${escapeHtml(String(row[1] ?? ''))}</span></div>`).join('')}
       </div>
     </div>
-    <h1>${escapeHtml(art)} ${escapeHtml(nummer)}</h1>
-    <div style="font-size:13px;margin-bottom:10px">
-      <div><strong>Datum:</strong> ${formatDate(datum)}</div>
-      ${refLabel ? `<div><strong>${escapeHtml(refLabel)}:</strong> ${escapeHtml(refValue)}</div>` : ''}
-    </div>
-    ${betreff ? `<p><strong>${escapeHtml(betreff)}</strong></p>` : ''}
+    <div class="print-absender">${absender}</div>
+    <div class="print-empfaenger">${kundeAdresse(kunde)}</div>
+    ${betreff ? `<p>Gerne bieten wir Ihnen an: <strong>${escapeHtml(betreff)}</strong></p>` : ''}
+    ${projekt ? `<p>Für das Projekt: <strong>${escapeHtml(projekt)}</strong></p>` : ''}
     ${introText ? `<p style="white-space:pre-wrap">${escapeHtml(introText)}</p>` : ''}
     ${positionsHtml}
     ${totalsHtml}
     ${(steuerHinweis || (settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '')) ? `<p style="font-size:11px;margin-top:10px">${escapeHtml(steuerHinweis || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.')}</p>` : ''}
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
     <div class="print-footer">
-      ${escapeHtml(settings.firmenname || '')} · ${escapeHtml(settings.strasse || '')} · ${escapeHtml(settings.plzOrt || '')}
-      ${settings.iban ? ` · IBAN: ${escapeHtml(settings.iban)}` : ''}
-      ${settings.bic ? ` · BIC: ${escapeHtml(settings.bic)}` : ''}
-      ${settings.bank ? ` · ${escapeHtml(settings.bank)}` : ''}
-      ${settings.steuernummer ? ` · Steuernr.: ${escapeHtml(settings.steuernummer)}` : ''}
+      <div>
+        ${[settings.firmenname, settings.strasse, settings.plzOrt, settings.telefon, settings.email].filter(Boolean).map(escapeHtml).join('<br>')}
+      </div>
+      <div>
+        ${settings.ustId ? `USt-IdNr.: ${escapeHtml(settings.ustId)}<br>` : ''}
+        ${settings.steuernummer ? `Steuernummer: ${escapeHtml(settings.steuernummer)}<br>` : ''}
+        ${settings.inhaber ? `Inhaber: ${escapeHtml(settings.inhaber)}` : ''}
+      </div>
+      <div>
+        ${[settings.inhaber, settings.bank].filter(Boolean).map(escapeHtml).join('<br>')}
+        ${settings.iban ? `<br>IBAN: ${escapeHtml(settings.iban)}` : ''}
+        ${settings.bic ? `<br>BIC: ${escapeHtml(settings.bic)}` : ''}
+      </div>
     </div>
   `;
 }
