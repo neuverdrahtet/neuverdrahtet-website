@@ -3,11 +3,7 @@ Allow: /
 Disallow: /impressum.html
 Disallow: /datenschutz.html
 
-<<<<<<< HEAD
 # KI-Crawler explizit erlaubt (fuer ChatGPT, Claude, Gemini, Perplexity, Copilot)
-=======
-# KI-Crawler explizit erlaubt (für ChatGPT, Claude, Gemini, Perplexity, Copilot)
->>>>>>> 833ca444de5c9cb87f1e8c2d8c34e61392875ce1
 User-agent: GPTBot
 Allow: /
 

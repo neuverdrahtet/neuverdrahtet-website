@@ -306,9 +306,18 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Wohnungsrenovierung?</h2>
-        <p>Wohnfläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistung, Wohnfläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
-      <div class="calc-panel calc-embedded" data-unit-min="20" data-unit-max="250" data-unit-default="70" data-unit-step="10" data-unit-suffix="m²" data-period="">
+      <div class="calc-panel calc-embedded calc-multi">
+        <div class="calc-field">
+          <label>Leistung</label>
+          <div class="calc-toggle calc-service-select">
+            <button type="button" data-service-target="renovierung" class="is-active">Renovierung</button>
+            <button type="button" data-service-target="modernisierung" class="">Modernisierung</button>
+            <button type="button" data-service-target="kernsanierung" class="">Kernsanierung</button>
+          </div>
+        </div>
+        <div class="calc-service-wrap" data-service-wrap="renovierung" style=""><div class="calc-service-panel" data-unit-min="20" data-unit-max="250" data-unit-default="70" data-unit-step="10" data-unit-suffix="m²" data-period="">
         <div class="calc-field">
           <label>Wohnfläche</label>
           <div class="calc-slider">
@@ -319,16 +328,56 @@
         <div class="calc-field">
           <label>Ausführung</label>
           <div class="calc-toggle calc-tier">
-            <button type="button" data-value="renovierung" data-low="150" data-high="300" class="">Renovierung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Boden, Farbe</span></button>
-            <button type="button" data-value="modernisierung" data-low="300" data-high="550" class="is-active">Modernisierung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">+ Technik, Teilbereiche</span></button>
-            <button type="button" data-value="kernsanierung" data-low="550" data-high="900" class="">Kernsanierung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Komplett</span></button>
+            <button type="button" data-value="standard" data-low="150" data-high="300" class="is-active">Pauschal <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Boden, Farbe</span></button>
           </div>
         </div>
         <div class="calc-result">
           <div class="label">Geschätzte Kosten</div>
           <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für die Gesamtmaßnahme inkl. aller Gewerke.</div>
+          <div class="note">Grober Richtwert für optische Renovierung.</div>
         </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="modernisierung" style="display:none;"><div class="calc-service-panel" data-unit-min="20" data-unit-max="250" data-unit-default="70" data-unit-step="10" data-unit-suffix="m²" data-period="">
+        <div class="calc-field">
+          <label>Wohnfläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="20" max="250" step="10" value="70">
+            <span class="val calc-area-val">70 m²</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="300" data-high="550" class="is-active">Pauschal <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">+ Technik, Teilbereiche</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für die Modernisierung.</div>
+        </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="kernsanierung" style="display:none;"><div class="calc-service-panel" data-unit-min="20" data-unit-max="250" data-unit-default="70" data-unit-step="10" data-unit-suffix="m²" data-period="">
+        <div class="calc-field">
+          <label>Wohnfläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="20" max="250" step="10" value="70">
+            <span class="val calc-area-val">70 m²</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="550" data-high="900" class="is-active">Pauschal <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Komplett inkl. aller Gewerke</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für die Gesamtmaßnahme.</div>
+        </div>
+      </div></div>
+        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
       </div>
     </div>
   </section>

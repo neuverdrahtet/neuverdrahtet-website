@@ -158,13 +158,13 @@ if (contactForm) {
 
 
 /* =========================================================
-   Kosten-Konfigurator (generisch, pro Gewerke-Seite)
+   Kosten-Konfigurator (generisch, pro Gewerke-Seite, mit Mehrfach-Leistungen)
    ========================================================= */
 function fmtEUR(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
-document.querySelectorAll('.calc-embedded').forEach(panel => {
+function initCalcPanel(panel) {
   const areaInput = panel.querySelector('.calc-area');
   const areaVal = panel.querySelector('.calc-area-val');
   const tierButtons = panel.querySelectorAll('.calc-tier button');
@@ -172,6 +172,7 @@ document.querySelectorAll('.calc-embedded').forEach(panel => {
   const maxEl = panel.querySelector('.calc-max');
   const suffix = panel.dataset.unitSuffix || '';
   const period = panel.dataset.period || '';
+  if (!areaInput) return;
 
   function activeTier() {
     return Array.from(tierButtons).find(b => b.classList.contains('is-active')) || tierButtons[0];
@@ -196,6 +197,23 @@ document.querySelectorAll('.calc-embedded').forEach(panel => {
     });
   });
   areaInput.addEventListener('input', recalc);
-
   recalc();
+}
+
+document.querySelectorAll('.calc-service-panel').forEach(initCalcPanel);
+
+// Service switcher for multi-service calculators (e.g. Elektro)
+document.querySelectorAll('.calc-multi').forEach(calc => {
+  const serviceButtons = calc.querySelectorAll('.calc-service-select button');
+  const wraps = calc.querySelectorAll('.calc-service-wrap');
+  serviceButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      serviceButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      const target = btn.dataset.serviceTarget;
+      wraps.forEach(w => {
+        w.style.display = (w.dataset.serviceWrap === target) ? '' : 'none';
+      });
+    });
+  });
 });

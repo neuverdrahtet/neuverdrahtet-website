@@ -302,9 +302,18 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Umzüge?</h2>
-        <p>Zimmeranzahl und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistung, Zimmeranzahl und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
-      <div class="calc-panel calc-embedded" data-unit-min="1" data-unit-max="8" data-unit-default="3" data-unit-step="1" data-unit-suffix="Zimmer" data-period=" pro Zimmer">
+      <div class="calc-panel calc-embedded calc-multi">
+        <div class="calc-field">
+          <label>Leistung</label>
+          <div class="calc-toggle calc-service-select">
+            <button type="button" data-service-target="privat" class="is-active">Privatumzug</button>
+            <button type="button" data-service-target="gewerbe" class="">Gewerbeumzug</button>
+            <button type="button" data-service-target="einlagerung" class="">Einlagerung</button>
+          </div>
+        </div>
+        <div class="calc-service-wrap" data-service-wrap="privat" style=""><div class="calc-service-panel" data-unit-min="1" data-unit-max="8" data-unit-default="3" data-unit-step="1" data-unit-suffix="Zimmer" data-period=" pro Zimmer">
         <div class="calc-field">
           <label>Zimmeranzahl</label>
           <div class="calc-slider">
@@ -323,8 +332,51 @@
         <div class="calc-result">
           <div class="label">Geschätzte Kosten pro Zimmer</div>
           <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert, abhängig von Entfernung und Zugänglichkeit.</div>
+          <div class="note">Grober Richtwert, abhängig von Entfernung.</div>
         </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="gewerbe" style="display:none;"><div class="calc-service-panel" data-unit-min="1" data-unit-max="50" data-unit-default="10" data-unit-step="1" data-unit-suffix="Plätze" data-period=" pro Arbeitsplatz">
+        <div class="calc-field">
+          <label>Arbeitsplätze</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="1" max="50" step="1" value="10">
+            <span class="val calc-area-val">10 Plätze</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="basis" data-low="150" data-high="250" class="">Basis <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Möbeltransport</span></button>
+            <button type="button" data-value="komplett" data-low="250" data-high="400" class="is-active">Komplett <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">inkl. IT & Aufbau</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten pro Arbeitsplatz</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für Büro-/Praxisumzüge.</div>
+        </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="einlagerung" style="display:none;"><div class="calc-service-panel" data-unit-min="1" data-unit-max="50" data-unit-default="10" data-unit-step="1" data-unit-suffix="m³" data-period=" pro Monat">
+        <div class="calc-field">
+          <label>Lagervolumen</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="1" max="50" step="1" value="10">
+            <span class="val calc-area-val">10 m³</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="15" data-high="25" class="is-active">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">sicher gelagert</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten pro Monat</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für die monatliche Lagermiete.</div>
+        </div>
+      </div></div>
+        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
       </div>
     </div>
   </section>

@@ -302,9 +302,19 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Gebäudereinigung?</h2>
-        <p>Fläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistung, Fläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
-      <div class="calc-panel calc-embedded" data-unit-min="20" data-unit-max="1000" data-unit-default="150" data-unit-step="10" data-unit-suffix="m²" data-period=" pro Reinigung">
+      <div class="calc-panel calc-embedded calc-multi">
+        <div class="calc-field">
+          <label>Leistung</label>
+          <div class="calc-toggle calc-service-select">
+            <button type="button" data-service-target="unterhalt" class="is-active">Unterhaltsreinigung</button>
+            <button type="button" data-service-target="grund" class="">Grundreinigung</button>
+            <button type="button" data-service-target="bau" class="">Baureinigung</button>
+            <button type="button" data-service-target="fenster" class="">Fensterreinigung</button>
+          </div>
+        </div>
+        <div class="calc-service-wrap" data-service-wrap="unterhalt" style=""><div class="calc-service-panel" data-unit-min="20" data-unit-max="1000" data-unit-default="150" data-unit-step="10" data-unit-suffix="m²" data-period=" pro Reinigung">
         <div class="calc-field">
           <label>Fläche</label>
           <div class="calc-slider">
@@ -315,9 +325,7 @@
         <div class="calc-field">
           <label>Ausführung</label>
           <div class="calc-toggle calc-tier">
-            <button type="button" data-value="unterhalt" data-low="1.5" data-high="3" class="">Unterhaltsreinigung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">pro Reinigung</span></button>
-            <button type="button" data-value="grund" data-low="3" data-high="6" class="is-active">Grundreinigung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Intensivreinigung</span></button>
-            <button type="button" data-value="bau" data-low="4" data-high="8" class="">Baureinigung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">nach Sanierung</span></button>
+            <button type="button" data-value="standard" data-low="1.5" data-high="3" class="is-active">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">je Reinigung</span></button>
           </div>
         </div>
         <div class="calc-result">
@@ -325,6 +333,68 @@
           <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
           <div class="note">Grober Richtwert pro Reinigungsdurchgang.</div>
         </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="grund" style="display:none;"><div class="calc-service-panel" data-unit-min="20" data-unit-max="1000" data-unit-default="150" data-unit-step="10" data-unit-suffix="m²" data-period="">
+        <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="20" max="1000" step="10" value="150">
+            <span class="val calc-area-val">150 m²</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="3" data-high="6" class="is-active">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Intensivreinigung</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für eine einmalige Grundreinigung.</div>
+        </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="bau" style="display:none;"><div class="calc-service-panel" data-unit-min="20" data-unit-max="1000" data-unit-default="150" data-unit-step="10" data-unit-suffix="m²" data-period="">
+        <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="20" max="1000" step="10" value="150">
+            <span class="val calc-area-val">150 m²</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="4" data-high="8" class="is-active">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">nach Sanierung</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert für die Bauschlussreinigung.</div>
+        </div>
+      </div></div>
+        <div class="calc-service-wrap" data-service-wrap="fenster" style="display:none;"><div class="calc-service-panel" data-unit-min="5" data-unit-max="100" data-unit-default="20" data-unit-step="5" data-unit-suffix="Fenster" data-period=" pro Reinigung">
+        <div class="calc-field">
+          <label>Anzahl Fenster</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="5" max="100" step="5" value="20">
+            <span class="val calc-area-val">20 Fenster</span>
+          </div>
+        </div>
+        <div class="calc-field">
+          <label>Ausführung</label>
+          <div class="calc-toggle calc-tier">
+            <button type="button" data-value="standard" data-low="3" data-high="6" class="is-active">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">innen & außen</span></button>
+          </div>
+        </div>
+        <div class="calc-result">
+          <div class="label">Geschätzte Kosten pro Reinigung</div>
+          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
+          <div class="note">Grober Richtwert je Fenster.</div>
+        </div>
+      </div></div>
+        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
       </div>
     </div>
   </section>
