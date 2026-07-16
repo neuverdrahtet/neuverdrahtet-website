@@ -1042,20 +1042,45 @@ table.data-table tbody tr { cursor: pointer; }
   color: var(--text-mute);
 }
 
-/* Print */
+/* Print — Aufbau folgt bewusst dem gleichen Layout wie das echte PDF (docpdf.js):
+   Logo/Firmenname links, Titel+Meta-Box rechts, Absender-Zeile, Empfänger,
+   Positionstabelle, Summenblock, 3-spaltige Fußzeile. */
 .print-root { display: none; }
 @media print {
+  html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
-  .print-root { display: block !important; }
-  .print-doc { padding: 10mm; font-family: Arial, Helvetica, sans-serif; color: #111; }
-  .print-doc h1 { font-size: 20px; }
+  .print-root { display: block !important; background: #fff !important; }
+  .print-doc { padding: 10mm; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 13px; background: #fff; }
+  .print-doc * { color: #111; }
   .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
-  .print-doc .print-header { display: flex; justify-content: space-between; margin-bottom: 24px; }
+  .print-doc th { background: #0f1b2d; color: #fff; }
+
+  .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .print-doc .print-logo { max-width: 46mm; max-height: 22mm; object-fit: contain; }
+  .print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
+  .print-doc .print-meta { text-align: right; min-width: 55mm; }
+  .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #333; padding: 1px 0; }
+
+  .print-doc .print-absender { font-size: 10px; color: #666; border-bottom: 1px solid #bbb; display: inline-block; margin-bottom: 10px; padding-bottom: 1px; }
+  .print-doc .print-empfaenger { font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+
   .print-doc .print-totals { width: 260px; margin-left: auto; }
   .print-doc .print-totals .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
   .print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
-  .print-doc .print-footer { margin-top: 40px; font-size: 11px; color: #444; }
+
+  .print-doc .print-footer {
+    margin-top: 40px;
+    padding-top: 6px;
+    border-top: 1px solid #ccc;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    font-size: 9.5px;
+    color: #444;
+    line-height: 1.5;
+  }
 }
 
 .text-mute { color: var(--text-mute); }
