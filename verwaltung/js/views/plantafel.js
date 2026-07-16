@@ -1,8 +1,18 @@
-import { getAll, put, remove, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { suggestSlot } from '../terminvorschlag.js';
+import { mountKarte, KARTE_TAB_HTML } from '../karte.js';
+import { openStatusManager } from '../statusManager.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const LANE_HEIGHT = 24;
+
+const RES_TYPES = [
+  { type: 'mitarbeiter', field: 'mitarbeiterIds', label: 'Mitarbeiter', nameKey: 'name', colorFallback: '#f0a020' },
+  { type: 'geraet', field: 'geraeteIds', label: 'Geräte', nameKey: 'name', colorFallback: '#14b8a6' },
+  { type: 'flotte', field: 'flottenIds', label: 'Flotten', nameKey: 'bezeichnung', colorFallback: '#4d8bf0' },
+];
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
@@ -16,11 +26,32 @@ function startOfWeek(d) {
   return date;
 }
 
+function toDateOnly(iso) {
+  return (iso || '').slice(0, 10);
+}
+
+function addDaysStr(dateStr, days) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function daysBetweenStr(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+
 export async function render(container) {
-  let [termine, kunden, projekte, mitarbeiter] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'),
+  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
+  terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const activeStatusFilter = new Set();
+
+  const resourceLists = { mitarbeiter, geraet: geraete, flotte: flotten };
 
   let weekStart = startOfWeek(new Date());
 
@@ -32,31 +63,139 @@ export async function render(container) {
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
-    <div class="card">
-      <div class="cal-header">
-        <button class="btn btn-sm" id="btn-prev">← Woche</button>
-        <div class="cal-title" id="week-title"></div>
-        <button class="btn btn-sm" id="btn-today">Heute</button>
-        <button class="btn btn-sm" id="btn-next">Woche →</button>
-      </div>
-      <div id="plantafel-host"></div>
+    <div class="status-pill-bar" id="status-pill-bar"></div>
+    <div class="tabs" id="pt-mode-tabs">
+      <button type="button" class="tab-item active" data-mode="woche">🗓️ Woche</button>
+      <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
     </div>
+    <div id="woche-view">
+      <div class="card">
+        <div class="cal-header">
+          <button class="btn btn-sm" id="btn-prev">← Woche</button>
+          <div class="cal-title" id="week-title"></div>
+          <button class="btn btn-sm" id="btn-today">Heute</button>
+          <button class="btn btn-sm" id="btn-next">Woche →</button>
+        </div>
+        <p class="hint">Balken ziehen zum Verschieben (auch auf andere Zeilen), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
+        <div id="plantafel-host"></div>
+      </div>
+    </div>
+    ${KARTE_TAB_HTML}
   `;
 
   const host = container.querySelector('#plantafel-host');
   const weekTitle = container.querySelector('#week-title');
+  const karte = mountKarte(container, { termine, kundenById, settings });
+
+  function setMode(mode) {
+    container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    container.querySelector('#woche-view').hidden = mode !== 'woche';
+    container.querySelector('#karte-view').hidden = mode !== 'karte';
+    if (mode === 'karte') karte.refresh();
+  }
+  container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
   function fmtDay(d) {
     return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(d);
   }
 
-  function renderGrid() {
-    const days = Array.from({ length: 7 }, (_, i) => {
+  function weekDays() {
+    return Array.from({ length: 7 }, (_, i) => {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + i);
       return d;
     });
+  }
+
+  // Lane-packing: assign each termin (clipped to the visible week) a lane index so overlapping bars stack instead of collide.
+  function packLanes(items) {
+    const lanes = []; // lanes[i] = last occupied day-index (0-6)
+    for (const it of items) {
+      let lane = lanes.findIndex((lastDay) => lastDay < it.startIdx);
+      if (lane === -1) { lane = lanes.length; lanes.push(-1); }
+      lanes[lane] = it.endIdx;
+      it.lane = lane;
+    }
+    return lanes.length;
+  }
+
+  function buildRow(resource, resType, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr) {
+    const items = termine
+      .filter((t) => t[field]?.includes(resource.id))
+      .filter((t) => !activeStatusFilter.size || activeStatusFilter.has(t.status || 'geplant'))
+      .map((t) => {
+        const start = toDateOnly(t.start);
+        const ende = toDateOnly(t.ende) || start;
+        if (ende < weekStartStr || start > weekEndStr) return null;
+        const clipStart = start < weekStartStr ? weekStartStr : start;
+        const clipEnd = ende > weekEndStr ? weekEndStr : ende;
+        return { termin: t, startIdx: daysBetweenStr(weekStartStr, clipStart), endIdx: daysBetweenStr(weekStartStr, clipEnd) };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.startIdx - b.startIdx);
+    const laneCount = packLanes(items);
+    const rowHeight = Math.max(56, laneCount * LANE_HEIGHT + 14);
+
+    return `
+      <div class="plantafel-row">
+        <div class="plantafel-cell plantafel-name">
+          <span class="dot" style="background:${resource.farbe || colorFallback}"></span>${escapeHtml(resource[nameKey] || '')}
+        </div>
+        <div class="plantafel-days" data-restype="${resType}" data-resid="${resource.id}" style="min-height:${rowHeight}px">
+          ${weekDays().map((d, i) => {
+            const dateStr = toDateOnly(d.toISOString());
+            return `<div class="plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-idx="${i}" data-date="${dateStr}"></div>`;
+          }).join('')}
+          <div class="plantafel-bars">
+            ${items.map((it) => {
+              const farbe = it.termin.farbe || typInfo(it.termin.typ).farbe;
+              const span = it.endIdx - it.startIdx + 1;
+              return `
+                <div class="plantafel-bar" data-id="${it.termin.id}"
+                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
+                  <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderStatusPills() {
+    const bar = container.querySelector('#status-pill-bar');
+    bar.innerHTML = terminStatus.map((s) => `
+      <label class="status-pill ${activeStatusFilter.has(s.id) ? 'active' : ''}" style="--pill-color:${s.farbe}" data-id="${s.id}">
+        <input type="checkbox" value="${s.id}" ${activeStatusFilter.has(s.id) ? 'checked' : ''}>
+        <span class="dot" style="background:${s.farbe}"></span>${escapeHtml(s.titel)}
+      </label>
+    `).join('') + `<button type="button" class="status-pill manage-btn" id="btn-status-manage">⚙️ Status verwalten</button>`;
+    bar.querySelectorAll('.status-pill[data-id]').forEach((label) => {
+      label.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) activeStatusFilter.add(label.dataset.id);
+        else activeStatusFilter.delete(label.dataset.id);
+        label.classList.toggle('active', e.target.checked);
+        renderGrid();
+      });
+    });
+    bar.querySelector('#btn-status-manage').addEventListener('click', () => {
+      openStatusManager({
+        title: 'Termin-Status verwalten',
+        store: 'terminStatus',
+        items: terminStatus,
+        canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
+        onChange: () => render(container),
+      });
+    });
+  }
+
+  function renderGrid() {
+    const days = weekDays();
     const weekEnd = days[6];
+    const weekStartStr = toDateOnly(days[0].toISOString());
+    const weekEndStr = toDateOnly(days[6].toISOString());
     weekTitle.textContent = `${fmtDay(weekStart)} – ${fmtDay(weekEnd)} ${weekEnd.getFullYear()}`;
 
     if (mitarbeiter.length === 0) {
@@ -64,43 +203,148 @@ export async function render(container) {
       return;
     }
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = toDateOnly(new Date().toISOString());
 
     host.innerHTML = `
-      <div class="plantafel-grid" style="grid-template-columns: 160px repeat(7, 1fr);">
-        <div class="plantafel-cell plantafel-head"></div>
-        ${days.map((d) => {
-          const dateStr = d.toISOString().slice(0, 10);
-          return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">${DOW[(d.getDay() + 6) % 7]}<br>${fmtDay(d)}</div>`;
-        }).join('')}
-        ${mitarbeiter.map((m) => `
-          <div class="plantafel-cell plantafel-name">
-            <span class="dot" style="background:${m.farbe || '#f0a020'}"></span>${escapeHtml(m.name)}
+      <div class="plantafel-grid">
+        <div class="plantafel-rowhead">
+          <div class="plantafel-cell plantafel-head"></div>
+          <div class="plantafel-days-head">
+            ${days.map((d) => {
+              const dateStr = toDateOnly(d.toISOString());
+              return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">${DOW[(d.getDay() + 6) % 7]}<br>${fmtDay(d)}</div>`;
+            }).join('')}
           </div>
-          ${days.map((d) => {
-            const dateStr = d.toISOString().slice(0, 10);
-            const dayTermine = termine.filter((t) => t.mitarbeiterIds?.includes(m.id) && (t.start || '').slice(0, 10) === dateStr);
-            return `
-              <div class="plantafel-cell plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-ma="${m.id}" data-date="${dateStr}">
-                ${dayTermine.map((t) => {
-                  const ti = typInfo(t.typ);
-                  return `<div class="plantafel-chip" data-id="${t.id}" style="background:${ti.farbe}22;color:${ti.farbe};border-color:${ti.farbe}55" title="${escapeHtml(t.titel)}">${escapeHtml(t.titel)}</div>`;
-                }).join('')}
-              </div>
-            `;
-          }).join('')}
-        `).join('')}
+        </div>
+        ${RES_TYPES.map(({ type, field, label, nameKey, colorFallback }) => {
+          const list = resourceLists[type];
+          if (list.length === 0) return '';
+          return `
+            <div class="plantafel-section-label">${label}</div>
+            ${list.map((r) => buildRow(r, type, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr)).join('')}
+          `;
+        }).join('')}
       </div>
     `;
 
-    host.querySelectorAll('.plantafel-chip').forEach((chip) => {
-      chip.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openForm(termine.find((t) => t.id === chip.dataset.id));
+    wireInteractions(weekStartStr);
+  }
+
+  function wireInteractions(weekStartStr) {
+    // Click empty day cell -> new termin for that resource/day
+    host.querySelectorAll('.plantafel-day').forEach((cell) => {
+      cell.addEventListener('click', () => {
+        const row = cell.closest('.plantafel-days');
+        openForm(null, { date: cell.dataset.date, resType: row.dataset.restype, resId: row.dataset.resid });
       });
     });
-    host.querySelectorAll('.plantafel-day').forEach((cell) => {
-      cell.addEventListener('click', () => openForm(null, { date: cell.dataset.date, mitarbeiterId: cell.dataset.ma }));
+
+    // Click bar -> edit; drag handled separately (dragstart won't fire the click after a real drag)
+    host.querySelectorAll('.plantafel-bar-label').forEach((label) => {
+      label.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bar = label.closest('.plantafel-bar');
+        openForm(termine.find((t) => t.id === bar.dataset.id));
+      });
+    });
+
+    // Verschieben per Pointer Events (funktioniert einheitlich mit Maus, Touch/Tablet und Stift –
+    // natives HTML5-Drag&Drop wird auf iOS/Touch-Geräten nicht unterstützt).
+    async function moveTerminTo(termin, row, clientX) {
+      const rect = row.getBoundingClientRect();
+      const dayIdx = Math.max(0, Math.min(6, Math.floor(((clientX - rect.left) / rect.width) * 7)));
+      const start = toDateOnly(termin.start);
+      const ende = toDateOnly(termin.ende) || start;
+      const duration = daysBetweenStr(start, ende);
+      const newStart = addDaysStr(weekStartStr, dayIdx);
+      const newEnde = addDaysStr(newStart, duration);
+      const time = (termin.start || '').slice(11, 16) || '00:00';
+      termin.start = `${newStart}T${time}`;
+      termin.ende = newEnde;
+      const resType = row.dataset.restype;
+      const resId = row.dataset.resid;
+      const resDef = RES_TYPES.find((r) => r.type === resType);
+      if (resDef && resId && !termin[resDef.field]?.includes(resId)) {
+        termin[resDef.field] = [resId];
+      }
+      termin.aktualisiertAm = new Date().toISOString();
+      await put('termine', termin);
+      toast('Termin verschoben', 'success');
+      renderGrid();
+    }
+
+    host.querySelectorAll('.plantafel-bar').forEach((bar) => {
+      bar.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.plantafel-bar-handle')) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let dragging = false;
+
+        function onMove(ev) {
+          if (!dragging && (Math.abs(ev.clientX - startX) > 6 || Math.abs(ev.clientY - startY) > 6)) {
+            dragging = true;
+            bar.classList.add('dragging');
+            // Erst jetzt capturen: setPointerCapture würde sonst auch den Klick eines
+            // einfachen Taps auf .plantafel-bar-label auf die Bar umleiten und die
+            // Bearbeitung verhindern.
+            bar.setPointerCapture(e.pointerId);
+          }
+        }
+        async function onUp(ev) {
+          bar.removeEventListener('pointermove', onMove);
+          bar.removeEventListener('pointerup', onUp);
+          bar.removeEventListener('pointercancel', onUp);
+          bar.classList.remove('dragging');
+          if (!dragging) return; // einfacher Tap -> Klick auf .plantafel-bar-label öffnet die Bearbeitung
+          const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.plantafel-days');
+          const termin = termine.find((t) => t.id === bar.dataset.id);
+          if (target && termin) await moveTerminTo(termin, target, ev.clientX);
+        }
+        bar.addEventListener('pointermove', onMove);
+        bar.addEventListener('pointerup', onUp);
+        bar.addEventListener('pointercancel', onUp);
+      });
+    });
+
+    // Verlängern/Verkürzen per Handle (rechter Rand), ebenfalls über Pointer Events.
+    host.querySelectorAll('.plantafel-bar-handle').forEach((handle) => {
+      handle.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const bar = handle.closest('.plantafel-bar');
+        const row = bar.closest('.plantafel-days');
+        const termin = termine.find((t) => t.id === handle.dataset.id);
+        if (!termin) return;
+        handle.setPointerCapture(e.pointerId);
+        const rect = row.getBoundingClientRect();
+        const dayWidth = rect.width / 7;
+        const startDate = toDateOnly(termin.start);
+        const originalEnde = toDateOnly(termin.ende) || startDate;
+        let currentEnde = originalEnde;
+
+        function onMove(ev) {
+          const deltaPx = ev.clientX - e.clientX;
+          const deltaDays = Math.round(deltaPx / dayWidth);
+          let newEnde = addDaysStr(originalEnde, deltaDays);
+          if (newEnde < startDate) newEnde = startDate;
+          currentEnde = newEnde;
+          const span = daysBetweenStr(startDate, newEnde) + 1;
+          const startIdx = Math.max(0, daysBetweenStr(weekStartStr, startDate));
+          bar.style.width = `calc(${Math.min(span, 7 - startIdx)}/7*100% - 4px)`;
+        }
+        function onUp() {
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
+          termin.ende = currentEnde;
+          termin.aktualisiertAm = new Date().toISOString();
+          put('termine', termin).then(() => renderGrid());
+        }
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
+      });
     });
   }
 
@@ -123,13 +367,18 @@ export async function render(container) {
     const todayStr = new Date().toISOString().slice(0, 10);
     const data = t || {
       id: uid(), titel: '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
-      ort: '', kundeId: '', projektId: '', mitarbeiterIds: prefill?.mitarbeiterId ? [prefill.mitarbeiterId] : [], notizen: '',
+      ort: '', kundeId: '', projektId: '',
+      mitarbeiterIds: prefill?.resType === 'mitarbeiter' ? [prefill.resId] : [],
+      geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
+      flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
+      notizen: '', farbe: '', status: terminStatus[0]?.id || 'geplant',
     };
     const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
 
     const { body, close } = openModal({
       title: isEdit ? 'Termin bearbeiten' : 'Neuer Termin',
+      wide: true,
       bodyHtml: `
         <form id="pt-form">
           <div class="form-grid">
@@ -137,9 +386,14 @@ export async function render(container) {
             <div class="field"><label>Art</label>
               <select name="typ">${TERMIN_TYPEN.map((tt) => `<option value="${tt.id}" ${tt.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(tt.titel)}</option>`).join('')}</select>
             </div>
-            <div class="field"><label>Datum</label><input type="date" name="datum" value="${startDate}" required></div>
+            <div class="field"><label>Status</label>
+              <select name="status">${terminStatus.map((s) => `<option value="${s.id}" ${s.id === (data.status || terminStatus[0]?.id) ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
+            <div class="field"><label>Von</label><input type="date" name="datum" value="${startDate}" required></div>
+            <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${toDateOnly(data.ende) || ''}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            <div class="field"><label>Farbe (optional, überschreibt Art-Farbe)</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || typInfo(data.typ || 'termin').farbe)}"></div>
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
@@ -154,7 +408,30 @@ export async function render(container) {
                   </label>
                 `).join('') || '<span class="text-mute">Keine Mitarbeiter angelegt.</span>'}
               </div>
+              <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
             </div>
+            ${geraete.length ? `
+              <div class="field col-span-2"><label>Geräte</label>
+                <div class="tag-list">
+                  ${geraete.map((g) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="geraeteIds" value="${g.id}" ${data.geraeteIds?.includes(g.id) ? 'checked' : ''}> ${escapeHtml(g.name)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            ${flotten.length ? `
+              <div class="field col-span-2"><label>Flotten</label>
+                <div class="tag-list">
+                  ${flotten.map((f) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="flottenIds" value="${f.id}" ${data.flottenIds?.includes(f.id) ? 'checked' : ''}> ${escapeHtml(f.bezeichnung)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           <div class="modal-actions">
@@ -165,6 +442,22 @@ export async function render(container) {
           </div>
         </form>
       `,
+    });
+    let farbeCustom = !!data.farbe;
+    body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });
+    body.querySelector('select[name="typ"]').addEventListener('change', (e) => {
+      if (farbeCustom) return;
+      body.querySelector('input[name="farbe"]').value = typInfo(e.target.value).farbe;
+    });
+    body.querySelector('#btn-vorschlag').addEventListener('click', async () => {
+      const checked = body.querySelector('input[name="mitarbeiterIds"]:checked');
+      if (!checked) { toast('Bitte zuerst einen Mitarbeiter auswählen', 'danger'); return; }
+      const alleTermine = await getAll('termine');
+      const vorschlag = suggestSlot(alleTermine.filter((x) => x.id !== data.id), checked.value);
+      if (!vorschlag) { toast('Kein freier Termin in den nächsten 3 Wochen gefunden', 'danger'); return; }
+      body.querySelector('input[name="datum"]').value = vorschlag.datum;
+      body.querySelector('input[name="uhrzeit"]').value = vorschlag.uhrzeit;
+      toast(`Vorschlag: ${vorschlag.datum} um ${vorschlag.uhrzeit} Uhr`, 'success');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
@@ -183,10 +476,16 @@ export async function render(container) {
       updated.titel = (fd.get('titel') || '').toString().trim();
       updated.typ = fd.get('typ') || 'termin';
       updated.start = `${fd.get('datum')}T${fd.get('uhrzeit') || '00:00'}`;
+      const enddatum = (fd.get('enddatum') || '').toString().trim();
+      updated.ende = enddatum && enddatum >= fd.get('datum') ? enddatum : '';
       updated.ort = (fd.get('ort') || '').toString().trim();
+      updated.farbe = (fd.get('farbe') || '').toString().trim();
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
+      updated.status = fd.get('status') || terminStatus[0]?.id || 'geplant';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
+      updated.geraeteIds = fd.getAll('geraeteIds');
+      updated.flottenIds = fd.getAll('flottenIds');
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.aktualisiertAm = new Date().toISOString();
       if (!updated.titel) return;
@@ -197,5 +496,6 @@ export async function render(container) {
     });
   }
 
+  renderStatusPills();
   renderGrid();
 }

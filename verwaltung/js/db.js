@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 3;
+const DB_VERSION = 8;
 
 const STORES = {
   kunden: 'id',
@@ -19,7 +19,21 @@ const STORES = {
   aufgaben: 'id',
   dokumente: 'id',
   kategorien: 'id',
+  nachrichten: 'id',
+  geraete: 'id',
+  flotten: 'id',
+  terminStatus: 'id',
+  textbausteine: 'id',
+  lohnabrechnungen: 'id',
 };
+
+export const KALK_KATEGORIEN = [
+  { id: 'material', titel: 'Material', farbe: '#4d8bf0' },
+  { id: 'lohn', titel: 'Lohn', farbe: '#a463f2' },
+  { id: 'fremdleistung', titel: 'Fremdleistungen', farbe: '#ef4444' },
+  { id: 'geraete', titel: 'Geräte', farbe: '#14b8a6' },
+  { id: 'sonstige', titel: 'Sonstige', farbe: '#8a8a94' },
+];
 
 export const STORE_NAMES = Object.keys(STORES);
 
@@ -123,6 +137,7 @@ const DEFAULT_SETTINGS = {
   iban: '',
   bic: '',
   bank: '',
+  inhaber: '',
   kleinunternehmer: false,
   standardSteuersatz: 19,
   angebotPrefix: 'AN-',
@@ -143,6 +158,11 @@ const DEFAULT_SETTINGS = {
   datevAufwandKonto: '4900',
   aiWorkerUrl: '',
   aiAppSecret: '',
+  wetterOrt: 'Essen',
+  wetterLat: 51.4556,
+  wetterLng: 7.0116,
+  logoDataUrl: '',
+  theme: 'dark',
 };
 
 export const DEFAULT_KANBAN_SPALTEN = [
@@ -196,6 +216,62 @@ export const TERMIN_TYPEN = [
   { id: 'urlaub', titel: 'Urlaub', farbe: '#1f8a4c' },
 ];
 
+export const DEFAULT_TERMIN_STATUS = [
+  { id: 'geplant', titel: 'Geplant', farbe: '#2b7fd6', reihenfolge: 0 },
+  { id: 'dokumentiert', titel: 'Dokumentiert', farbe: '#8e44ad', reihenfolge: 1 },
+  { id: 'abgerechnet', titel: 'Abgerechnet', farbe: '#f0a020', reihenfolge: 2 },
+  { id: 'bezahlt', titel: 'Bezahlt', farbe: '#1f8a4c', reihenfolge: 3 },
+  { id: 'storniert', titel: 'Storniert', farbe: '#c0392b', reihenfolge: 4 },
+];
+
+export const ZUGRIFFSROLLEN = [
+  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen, Lohn/Gehalt und Buchhaltung.' },
+  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen, Lohn/Gehalt und Buchhaltungs-Export.' },
+  { id: 'mitarbeiter', titel: 'Mitarbeiter', beschreibung: 'Nur Zeiterfassung, eigene Aufgaben, Kalender/Plantafel und Geräte – keine Finanz- oder Personaldaten.' },
+];
+
+export const ROUTE_ROLLEN = {
+  dashboard: ['admin', 'buero', 'mitarbeiter'],
+  kunden: ['admin', 'buero'],
+  kanban: ['admin', 'buero'],
+  projekte: ['admin', 'buero', 'mitarbeiter'],
+  kalender: ['admin', 'buero', 'mitarbeiter'],
+  plantafel: ['admin', 'buero', 'mitarbeiter'],
+  zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
+  aufgaben: ['admin', 'buero', 'mitarbeiter'],
+  mitarbeiter: ['admin', 'buero'],
+  geraete: ['admin', 'buero', 'mitarbeiter'],
+  katalog: ['admin', 'buero'],
+  vorlagen: ['admin', 'buero'],
+  angebote: ['admin', 'buero'],
+  rechnungen: ['admin', 'buero'],
+  mahnungen: ['admin', 'buero'],
+  ausgaben: ['admin', 'buero'],
+  buchhaltung: ['admin'],
+  lohn: ['admin'],
+  einstellungen: ['admin'],
+};
+
+export const STEUERARTEN = [
+  { id: 'regel', titel: 'Regelbesteuerung (USt. je Position)', hinweis: '' },
+  { id: 'kleinunternehmer', titel: 'Kleinunternehmer § 19 UStG (keine USt.)', hinweis: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' },
+  { id: 'reverse-charge', titel: 'Bauleistungen – Steuerschuldnerschaft des Leistungsempfängers § 13b UStG', hinweis: 'Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG. Der Rechnungsbetrag ist ohne Umsatzsteuer zu zahlen; die Umsatzsteuer schuldet der Leistungsempfänger.' },
+  { id: 'ig-lieferung', titel: 'Innergemeinschaftliche Lieferung § 4 Nr. 1b UStG (steuerfrei)', hinweis: 'Steuerfreie innergemeinschaftliche Lieferung gemäß § 4 Nr. 1b i.V.m. § 6a UStG.' },
+  { id: 'export', titel: 'Ausfuhrlieferung / Drittland § 4 Nr. 1a UStG (steuerfrei)', hinweis: 'Steuerfreie Ausfuhrlieferung gemäß § 4 Nr. 1a UStG.' },
+];
+
+export const TEXTBAUSTEIN_KATEGORIEN = [
+  { id: 'beide', titel: 'Angebote & Rechnungen' },
+  { id: 'angebot', titel: 'Nur Angebote' },
+  { id: 'rechnung', titel: 'Nur Rechnungen' },
+];
+
+export function hasRouteAccess(role, route) {
+  const allowed = ROUTE_ROLLEN[route];
+  if (!allowed) return true;
+  return allowed.includes(role);
+}
+
 export async function ensureSeeded() {
   const settingsRows = await getAll('einstellungen');
   if (settingsRows.length === 0) {
@@ -214,6 +290,12 @@ export async function ensureSeeded() {
     for (const k of DEFAULT_KATEGORIEN) {
       await put('kategorien', k);
     }
+  }
+  const terminStatus = await getAll('terminStatus');
+  const terminStatusIds = new Set(terminStatus.map((s) => s.id));
+  const missingTerminStatus = DEFAULT_TERMIN_STATUS.filter((s) => !terminStatusIds.has(s.id));
+  for (const s of missingTerminStatus) {
+    await put('terminStatus', s);
   }
 }
 

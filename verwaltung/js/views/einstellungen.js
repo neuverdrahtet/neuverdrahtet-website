@@ -1,18 +1,60 @@
-import { getSettings, setSettings, exportAll, importAll } from '../db.js';
-import { escapeHtml, toast } from '../utils.js';
-import { confirmDelete } from '../ui.js';
+import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, TEXTBAUSTEIN_KATEGORIEN } from '../db.js';
+import { uid, escapeHtml, toast, compressImage } from '../utils.js';
+import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Logo konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 export async function render(container) {
   const settings = await getSettings();
+  const textbausteine = await getAll('textbausteine');
+  textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
 
   container.innerHTML = `
     <div class="view-header"><h1>Einstellungen</h1></div>
 
     <div class="card">
+      <h2>Darstellung</h2>
+      <form id="theme-form">
+        <div class="form-grid">
+          <div class="field">
+            <label>Farbschema</label>
+            <select name="theme">
+              <option value="dark" ${settings.theme !== 'light' ? 'selected' : ''}>Dunkel</option>
+              <option value="light" ${settings.theme === 'light' ? 'selected' : ''}>Hell</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Firmendaten</h2>
       <form id="firma-form">
         <div class="form-grid">
+          <div class="field col-span-2">
+            <label>Firmenlogo (für PDFs)</label>
+            <div class="flex-row" style="align-items:flex-start">
+              <div id="logo-preview" style="width:88px;height:88px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card-2);flex-shrink:0">
+                ${settings.logoDataUrl ? `<img src="${settings.logoDataUrl}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span class="text-mute" style="font-size:11px">Kein Logo</span>'}
+              </div>
+              <div class="flex-row flex-wrap">
+                <label class="btn btn-sm" style="cursor:pointer">
+                  Logo hochladen
+                  <input type="file" id="logo-input" accept="image/*" hidden>
+                </label>
+                ${settings.logoDataUrl ? '<button type="button" class="btn btn-sm btn-danger" id="btn-logo-remove">Entfernen</button>' : ''}
+              </div>
+            </div>
+          </div>
           <div class="field col-span-2"><label>Firmenname</label><input name="firmenname" value="${escapeHtml(settings.firmenname)}"></div>
           <div class="field"><label>Straße &amp; Hausnr.</label><input name="strasse" value="${escapeHtml(settings.strasse)}"></div>
           <div class="field"><label>PLZ &amp; Ort</label><input name="plzOrt" value="${escapeHtml(settings.plzOrt)}"></div>
@@ -23,6 +65,7 @@ export async function render(container) {
           <div class="field"><label>IBAN</label><input name="iban" value="${escapeHtml(settings.iban)}"></div>
           <div class="field"><label>BIC</label><input name="bic" value="${escapeHtml(settings.bic)}"></div>
           <div class="field"><label>Bank</label><input name="bank" value="${escapeHtml(settings.bank)}"></div>
+          <div class="field"><label>Inhaber</label><input name="inhaber" value="${escapeHtml(settings.inhaber || '')}"></div>
           <div class="field field-checkbox col-span-2"><input type="checkbox" name="kleinunternehmer" id="ku" ${settings.kleinunternehmer ? 'checked' : ''}><label for="ku">Kleinunternehmer nach §19 UStG (keine USt. ausweisen)</label></div>
         </div>
         <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
@@ -113,6 +156,13 @@ export async function render(container) {
     </div>
 
     <div class="card">
+      <h2>Textbausteine (Schlusstexte)</h2>
+      <p class="hint">Wiederverwendbare Schlusstexte für Angebote/Rechnungen – dort per Mehrfachauswahl in die Notizen einfügbar.</p>
+      <div id="tb-list"></div>
+      <button class="btn btn-sm" id="btn-tb-new" style="margin-top:8px">+ Neuer Textbaustein</button>
+    </div>
+
+    <div class="card">
       <h2>Datensicherung / Geräte-Sync</h2>
       <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
       <div class="flex-row flex-wrap">
@@ -123,11 +173,114 @@ export async function render(container) {
     </div>
   `;
 
+  const tbListHost = container.querySelector('#tb-list');
+  function renderTbList() {
+    tbListHost.innerHTML = textbausteine.length === 0
+      ? '<p class="text-mute">Noch keine Textbausteine angelegt.</p>'
+      : `<ul class="cal-event-list">${textbausteine.map((t) => `
+          <li data-id="${t.id}">
+            <div>
+              <strong>${escapeHtml(t.titel)}</strong>
+              <div class="text-mute">${escapeHtml(TEXTBAUSTEIN_KATEGORIEN.find((k) => k.id === t.kategorie)?.titel || '')} · ${escapeHtml((t.text || '').slice(0, 60))}${(t.text || '').length > 60 ? '…' : ''}</div>
+            </div>
+            <div class="flex-row">
+              <button type="button" class="btn btn-sm btn-ghost btn-tb-edit">Bearbeiten</button>
+              <button type="button" class="btn btn-sm btn-ghost btn-tb-del">Löschen</button>
+            </div>
+          </li>
+        `).join('')}</ul>`;
+    tbListHost.querySelectorAll('.btn-tb-edit').forEach((btn) => {
+      btn.addEventListener('click', () => openTbForm(textbausteine.find((t) => t.id === btn.closest('li').dataset.id)));
+    });
+    tbListHost.querySelectorAll('.btn-tb-del').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('li').dataset.id;
+        const t = textbausteine.find((x) => x.id === id);
+        if (!confirmDelete(`Textbaustein "${t.titel}" wirklich löschen?`)) return;
+        await remove('textbausteine', id);
+        const i = textbausteine.findIndex((x) => x.id === id);
+        textbausteine.splice(i, 1);
+        renderTbList();
+        toast('Textbaustein gelöscht');
+      });
+    });
+  }
+  function openTbForm(t) {
+    const isEdit = !!t;
+    const data = t || { id: uid(), titel: '', text: '', kategorie: 'beide' };
+    const { body, close } = openModal({
+      title: isEdit ? 'Textbaustein bearbeiten' : 'Neuer Textbaustein',
+      bodyHtml: `
+        <form id="tb-form">
+          <div class="form-grid">
+            <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
+            <div class="field col-span-2"><label>Verwendung</label>
+              <select name="kategorie">${TEXTBAUSTEIN_KATEGORIEN.map((k) => `<option value="${k.id}" ${k.id === data.kategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field col-span-2"><label>Text *</label><textarea name="text" required style="min-height:100px">${escapeHtml(data.text)}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#tb-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = { ...data, titel: (fd.get('titel') || '').toString().trim(), text: (fd.get('text') || '').toString().trim(), kategorie: fd.get('kategorie') || 'beide' };
+      if (!updated.titel || !updated.text) return;
+      await put('textbausteine', updated);
+      if (!isEdit) textbausteine.push(updated);
+      else Object.assign(t, updated);
+      textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
+      toast(isEdit ? 'Textbaustein aktualisiert' : 'Textbaustein angelegt', 'success');
+      close();
+      renderTbList();
+    });
+  }
+  renderTbList();
+  container.querySelector('#btn-tb-new').addEventListener('click', () => openTbForm());
+
+  container.querySelector('#theme-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const theme = fd.get('theme') === 'light' ? 'light' : 'dark';
+    await setSettings({ theme });
+    document.documentElement.dataset.theme = theme;
+    toast('Darstellung gespeichert', 'success');
+  });
+
+  container.querySelector('#logo-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const blob = await compressImage(file, { maxWidth: 400, quality: 0.9 });
+      const dataUrl = await blobToDataUrl(blob);
+      await setSettings({ logoDataUrl: dataUrl });
+      toast('Logo gespeichert', 'success');
+      render(container);
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  });
+  const logoRemoveBtn = container.querySelector('#btn-logo-remove');
+  if (logoRemoveBtn) {
+    logoRemoveBtn.addEventListener('click', async () => {
+      await setSettings({ logoDataUrl: '' });
+      toast('Logo entfernt');
+      render(container);
+    });
+  }
+
   container.querySelector('#firma-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
     const update = {};
-    for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank']) {
+    for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank', 'inhaber']) {
       update[key] = (fd.get(key) || '').toString().trim();
     }
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';

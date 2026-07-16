@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, setSettings } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
@@ -7,6 +7,7 @@ import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
+import { mountTextbausteinPicker } from '../textbausteine.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -16,8 +17,8 @@ const STATUS_BADGE = {
 };
 
 export async function render(container) {
-  let [angebote, kunden, projekte, katalog, settings, vorlagen] = await Promise.all([
-    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'),
+  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine] = await Promise.all([
+    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
@@ -87,6 +88,7 @@ export async function render(container) {
       id: uid(), nummer: '', kundeId: '', projektId: '', datum: todayISO(),
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
       status: 'entwurf', betreff: '', notizen: '', positionen: [], createdAt: new Date().toISOString(),
+      steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
     };
 
     const { body, close } = openModal({
@@ -104,6 +106,9 @@ export async function render(container) {
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
             <div class="field"><label>Gültig bis</label><input type="date" name="gueltigBis" value="${data.gueltigBis}"></div>
             <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Angebot für Elektroinstallation"></div>
+            <div class="field col-span-2"><label>Steuerart</label>
+              <select name="steuerart" id="f-steuerart">${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
             ${isEdit ? `<div class="field"><label>Status</label>
               <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
             </div>` : ''}
@@ -113,6 +118,7 @@ export async function render(container) {
             <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
           </div>
           <div id="pos-host"></div>
+          <div id="tb-picker-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -134,6 +140,21 @@ let editor = createPositionsEditor({
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
+    });
+
+    mountTextbausteinPicker(body.querySelector('#tb-picker-host'), {
+      textbausteine, kategorie: 'angebot',
+      onInsert: (text) => {
+        const field = body.querySelector('textarea[name="notizen"]');
+        field.value = field.value ? field.value + '\n\n' + text : text;
+      },
+    });
+
+    body.querySelector('#f-steuerart').addEventListener('change', (e) => {
+      if (e.target.value !== 'regel') {
+        for (const p of editor.getPositionen()) p.steuersatz = 0;
+        editor.refresh();
+      }
     });
 
     body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
@@ -184,8 +205,10 @@ let editor = createPositionsEditor({
           settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
+          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
           introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
           positionen: editor.getPositionen(), totals,
+          steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
           closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
         };
       }
@@ -226,7 +249,7 @@ let editor = createPositionsEditor({
           const rechnung = {
             id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
             datum: todayISO(), faelligAm: addDays(todayISO(), rSettings.zahlungszielTage || 14),
-            status: 'offen', betreff: data.betreff, notizen: data.notizen,
+            status: 'offen', betreff: data.betreff, notizen: data.notizen, steuerart: data.steuerart || 'regel',
             positionen: editor.getPositionen(), netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
             createdAt: new Date().toISOString(),
           };
@@ -249,9 +272,13 @@ let editor = createPositionsEditor({
       updated.gueltigBis = fd.get('gueltigBis') || '';
       updated.betreff = (fd.get('betreff') || '').toString().trim();
       updated.notizen = (fd.get('notizen') || '').toString().trim();
+      updated.steuerart = fd.get('steuerart') || 'regel';
       if (isEdit) updated.status = fd.get('status') || data.status;
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
 
+      if (updated.steuerart !== 'regel') {
+        for (const p of editor.getPositionen()) p.steuersatz = 0;
+      }
       updated.positionen = editor.getPositionen();
       const totals = calcTotals(updated.positionen);
       updated.netto = totals.netto;

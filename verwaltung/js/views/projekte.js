@@ -1,16 +1,20 @@
 import { getAll, put, remove, getSettings, BEREICHE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderDokumenteSection } from '../dokumente.js';
+import { renderNachkalkulation } from '../nachkalkulation.js';
+import { renderTeamchat } from '../teamchat.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
 
 export async function render(container) {
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
+    getAll('ausgaben'), getAll('zeiterfassung'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -25,13 +29,20 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Projekte</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neues Projekt</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
+        <button class="btn btn-primary" id="btn-new">+ Neues Projekt</button>
+      </div>
     </div>
     <div class="projekte-layout">
       <div class="projekte-folders" id="folders"></div>
       <div class="projekte-main">
         <div class="search-bar">
           <input type="search" id="search" placeholder="Suche nach Titel oder Kunde ...">
+          <select id="bereich-filter">
+            <option value="">Alle Bereiche</option>
+            ${BEREICHE.map((b) => `<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('')}
+          </select>
         </div>
         <div id="table-host"></div>
       </div>
@@ -50,11 +61,11 @@ export async function render(container) {
     const items = [
       { id: ALLE_OFFEN, titel: 'Alle offenen' },
       { id: ALLE, titel: 'Alle Projekte' },
-      ...spalten.map((s) => ({ id: s.id, titel: s.titel })),
+      ...spalten.map((s) => ({ id: s.id, titel: s.titel, farbe: s.farbe })),
     ];
     foldersHost.innerHTML = items.map((it) => `
       <button type="button" class="folder-item ${folder === it.id ? 'active' : ''}" data-folder="${it.id}">
-        <span>${escapeHtml(it.titel)}</span><span class="count">${folderCount(it.id)}</span>
+        <span>${it.farbe ? `<span class="color-dot" style="background:${escapeHtml(it.farbe)};margin-right:6px"></span>` : ''}${escapeHtml(it.titel)}</span><span class="count">${folderCount(it.id)}</span>
       </button>
     `).join('');
     foldersHost.querySelectorAll('.folder-item').forEach((btn) => {
@@ -68,9 +79,11 @@ export async function render(container) {
   function applyFilter() {
     renderFolders();
     const q = container.querySelector('#search').value.trim().toLowerCase();
+    const bereichFilter = container.querySelector('#bereich-filter').value;
     filtered = projekte.filter((p) => {
       if (folder === ALLE_OFFEN && spaltenById[p.status]?.geschlossen) return false;
       if (folder !== ALLE && folder !== ALLE_OFFEN && p.status !== folder) return false;
+      if (bereichFilter && p.bereich !== bereichFilter) return false;
       if (!q) return true;
       const kunde = kundenById[p.kundeId];
       return [p.titel, kunde?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -85,10 +98,11 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Titel</th><th>Kunde</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr><th></th><th>Titel</th><th>Kunde</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
           ${filtered.map((p) => `
             <tr data-id="${p.id}">
+              <td><span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span></td>
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
@@ -106,13 +120,23 @@ export async function render(container) {
   }
 
   container.querySelector('#search').addEventListener('input', applyFilter);
+  container.querySelector('#bereich-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-status-manage').addEventListener('click', () => {
+    openStatusManager({
+      title: 'Projekt-Status verwalten',
+      store: 'kanbanSpalten',
+      items: spalten,
+      canDelete: (it) => !projekte.some((p) => p.status === it.id),
+      onChange: () => render(container),
+    });
+  });
 
   function openForm(p) {
     const isEdit = !!p;
     const data = p || {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', createdAt: new Date().toISOString(),
+      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', farbe: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
@@ -139,6 +163,7 @@ export async function render(container) {
             </div>
             <div class="field"><label>Start</label><input type="date" name="start" value="${data.start || ''}"></div>
             <div class="field"><label>Ende</label><input type="date" name="ende" value="${data.ende || ''}"></div>
+            <div class="field"><label>Farbe</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || '#2b7fd6')}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
             <div class="field col-span-2"><label>Zugewiesene Mitarbeiter</label>
               <div class="tag-list">
@@ -156,6 +181,10 @@ export async function render(container) {
             ${linkedAngebote.length ? `<ul class="cal-event-list">${linkedAngebote.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Angebote verknüpft.</p>'}
             <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
             ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
+            <div class="divider"></div>
+            <div id="nk-host"></div>
+            <div class="divider"></div>
+            <div id="tc-host"></div>
             <div class="divider"></div>
             <div id="foto-host"></div>
             <div class="divider"></div>
@@ -183,6 +212,10 @@ export async function render(container) {
         close();
         render(container);
       });
+      renderNachkalkulation(body.querySelector('#nk-host'), {
+        projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
+      });
+      renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
         title: 'Dokumente (Berichte, Stundenzettel, ...)',
@@ -194,7 +227,7 @@ export async function render(container) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
-      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId']) {
+      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'farbe']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.titel) return;
