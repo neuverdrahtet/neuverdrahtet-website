@@ -140,6 +140,7 @@ const DEFAULT_SETTINGS = {
   inhaber: '',
   kleinunternehmer: false,
   standardSteuersatz: 19,
+  standardAufschlagProzent: 20,
   angebotPrefix: 'AN-',
   rechnungPrefix: 'RE-',
   naechsteAngebotNr: 1,
@@ -165,22 +166,29 @@ const DEFAULT_SETTINGS = {
   theme: 'dark',
 };
 
+// Gut unterscheidbare Farbfolge für automatisch vergebene Status-/Stufenfarben
+// (Kanban-Spalten, Termin-Status, ...). Wird bei "+ Status hinzufügen" reihum vergeben.
+export const STATUS_AUTO_PALETTE = [
+  '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6',
+  '#d35400', '#4d8bf0', '#a463f2', '#16a085', '#e91e8c', '#6b7280',
+];
+
 export const DEFAULT_KANBAN_SPALTEN = [
-  { id: 'neue-anfrage', titel: 'Neue Anfrage', reihenfolge: 0, geschlossen: false },
-  { id: 'vor-ort-termin', titel: 'Vor-Ort-Termin', reihenfolge: 1, geschlossen: false },
-  { id: 'angebot-erstellt', titel: 'Angebot erstellt', reihenfolge: 2, geschlossen: false },
-  { id: 'angebot-versendet', titel: 'Angebot versendet', reihenfolge: 3, geschlossen: false },
-  { id: 'angebot-abgelehnt', titel: 'Angebot abgelehnt', reihenfolge: 4, geschlossen: false },
-  { id: 'auftragsbestaetigung', titel: 'Auftragsbestätigung', reihenfolge: 5, geschlossen: false },
-  { id: 'abschlagsrechnung', titel: 'Abschlagsrechnung', reihenfolge: 6, geschlossen: false },
-  { id: 'materialbestellung', titel: 'Materialbestellung', reihenfolge: 7, geschlossen: false },
-  { id: 'umsetzungsbeginn', titel: 'Umsetzungsbeginn', reihenfolge: 8, geschlossen: false },
-  { id: 'in-arbeit', titel: 'In Arbeit', reihenfolge: 9, geschlossen: false },
-  { id: 'projekt-erledigt', titel: 'Projekt erledigt', reihenfolge: 10, geschlossen: false },
-  { id: 'kundenrechnung', titel: 'Kundenrechnung', reihenfolge: 11, geschlossen: false },
-  { id: 'reklamation', titel: 'Reklamation', reihenfolge: 12, geschlossen: false },
-  { id: 'abgeschlossen', titel: 'Abgeschlossen', reihenfolge: 13, geschlossen: true },
-  { id: 'archiviert', titel: 'Archiviert', reihenfolge: 14, geschlossen: true },
+  { id: 'neue-anfrage', titel: 'Neue Anfrage', reihenfolge: 0, geschlossen: false, farbe: STATUS_AUTO_PALETTE[0] },
+  { id: 'vor-ort-termin', titel: 'Vor-Ort-Termin', reihenfolge: 1, geschlossen: false, farbe: STATUS_AUTO_PALETTE[7] },
+  { id: 'angebot-erstellt', titel: 'Angebot erstellt', reihenfolge: 2, geschlossen: false, farbe: STATUS_AUTO_PALETTE[5] },
+  { id: 'angebot-versendet', titel: 'Angebot versendet', reihenfolge: 3, geschlossen: false, farbe: STATUS_AUTO_PALETTE[9] },
+  { id: 'angebot-abgelehnt', titel: 'Angebot abgelehnt', reihenfolge: 4, geschlossen: false, farbe: STATUS_AUTO_PALETTE[4] },
+  { id: 'auftragsbestaetigung', titel: 'Auftragsbestätigung', reihenfolge: 5, geschlossen: false, farbe: STATUS_AUTO_PALETTE[8] },
+  { id: 'abschlagsrechnung', titel: 'Abschlagsrechnung', reihenfolge: 6, geschlossen: false, farbe: STATUS_AUTO_PALETTE[3] },
+  { id: 'materialbestellung', titel: 'Materialbestellung', reihenfolge: 7, geschlossen: false, farbe: STATUS_AUTO_PALETTE[6] },
+  { id: 'umsetzungsbeginn', titel: 'Umsetzungsbeginn', reihenfolge: 8, geschlossen: false, farbe: STATUS_AUTO_PALETTE[2] },
+  { id: 'in-arbeit', titel: 'In Arbeit', reihenfolge: 9, geschlossen: false, farbe: STATUS_AUTO_PALETTE[2] },
+  { id: 'projekt-erledigt', titel: 'Projekt erledigt', reihenfolge: 10, geschlossen: false, farbe: STATUS_AUTO_PALETTE[1] },
+  { id: 'kundenrechnung', titel: 'Kundenrechnung', reihenfolge: 11, geschlossen: false, farbe: STATUS_AUTO_PALETTE[10] },
+  { id: 'reklamation', titel: 'Reklamation', reihenfolge: 12, geschlossen: false, farbe: STATUS_AUTO_PALETTE[4] },
+  { id: 'abgeschlossen', titel: 'Abgeschlossen', reihenfolge: 13, geschlossen: true, farbe: STATUS_AUTO_PALETTE[1] },
+  { id: 'archiviert', titel: 'Archiviert', reihenfolge: 14, geschlossen: true, farbe: STATUS_AUTO_PALETTE[11] },
 ];
 
 export const BEREICHE = [
@@ -284,6 +292,13 @@ export async function ensureSeeded() {
   const missingSpalten = DEFAULT_KANBAN_SPALTEN.filter((s) => !spaltenIds.has(s.id));
   for (const s of missingSpalten) {
     await put('kanbanSpalten', { ...s, reihenfolge: spalten.length + missingSpalten.indexOf(s) });
+  }
+  // Bestehende Spalten aus älteren Versionen (vor automatischer Farbvergabe) nachträglich einfärben.
+  for (const s of spalten) {
+    if (!s.farbe) {
+      s.farbe = STATUS_AUTO_PALETTE[(s.reihenfolge ?? 0) % STATUS_AUTO_PALETTE.length];
+      await put('kanbanSpalten', s);
+    }
   }
   const kategorien = await getAll('kategorien');
   if (kategorien.length === 0) {
