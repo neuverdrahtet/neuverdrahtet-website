@@ -162,7 +162,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     const isEdit = !!item;
     const data = item || {
       id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.',
-      einkaufspreis: 0, aufschlagProzent: 20, preis: 0, steuersatz: settings.standardSteuersatz, komponenten: [],
+      einkaufspreis: 0, aufschlagProzent: settings.standardAufschlagProzent ?? 20, preis: 0, steuersatz: settings.standardSteuersatz, komponenten: [],
     };
     const komponentenAuswahl = items.filter((i) => i.typ !== 'paket' && i.id !== data.id);
     let kompState = (data.komponenten || []).map((k) => ({ ...k }));

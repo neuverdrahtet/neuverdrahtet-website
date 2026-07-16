@@ -1,4 +1,4 @@
-import { put, remove } from './db.js';
+import { put, remove, STATUS_AUTO_PALETTE } from './db.js';
 import { uid, escapeHtml, toast } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 
@@ -81,7 +81,8 @@ export function openStatusManager({ title = 'Status verwalten', store, items, co
   bind();
 
   body.querySelector('#sm-add').addEventListener('click', async () => {
-    const neu = { id: uid(), titel: 'Neuer Status', farbe: '#2b7fd6', reihenfolge: list.length };
+    const farbe = STATUS_AUTO_PALETTE[list.length % STATUS_AUTO_PALETTE.length];
+    const neu = { id: uid(), titel: 'Neuer Status', farbe, reihenfolge: list.length };
     await put(store, neu);
     list.push(neu);
     bind();
