@@ -1,5 +1,6 @@
 import { openDB, ensureSeeded, getSettings, hasRouteAccess } from './db.js';
 import { initLock, lockNow } from './auth.js';
+import { applyDeviceClass } from './device.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
 import * as kanban from './views/kanban.js';
@@ -101,12 +102,18 @@ export async function applyTheme() {
 }
 
 async function boot() {
+  const deviceType = applyDeviceClass();
   await openDB();
   await ensureSeeded();
   await applyTheme();
   session = await initLock();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
+  // Auf dem Handy landen Außendienstler meist direkt in der Zeiterfassung
+  // statt im Büro-Dashboard – nur beim allerersten Aufruf ohne Hash.
+  if (!window.location.hash && deviceType === 'phone' && hasRouteAccess(session.role, 'zeiterfassung')) {
+    window.location.hash = '#/zeiterfassung';
+  }
   router();
 }
 
