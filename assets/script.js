@@ -1,11 +1,4 @@
 /* =========================================================
-   Config
-   ========================================================= */
-// TODO(Danny): Nach dem Deploy des Cloudflare Workers (siehe assets/cloudflare-worker.js)
-// hier die echte Worker-URL eintragen, z.B. "https://neuverdrahtet-ki-check.DEIN-SUBDOMAIN.workers.dev"
-const KI_CHECK_ENDPOINT = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
-
-/* =========================================================
    Mobile nav drawer
    ========================================================= */
 const navToggle = document.getElementById('navToggle');
@@ -163,170 +156,112 @@ if (contactForm) {
   });
 }
 
-/* =========================================================
-   Kosten-Konfigurator
-   ========================================================= */
-const calcProjectType = document.getElementById('calcProjectType');
-const calcTier = document.getElementById('calcTier');
-const calcExtras = document.getElementById('calcExtras');
-const calcArea = document.getElementById('calcArea');
-const calcAreaVal = document.getElementById('calcAreaVal');
-const calcMin = document.getElementById('calcMin');
-const calcMax = document.getElementById('calcMax');
-
-if (calcProjectType && calcTier && calcArea) {
-  // price per m², [low, high] band, by project type + tier
-  const PRICE_PER_M2 = {
-    neubau:    { standard: [80, 110], premium: [110, 150], exklusiv: [160, 210] },
-    sanierung: { standard: [100, 130], premium: [130, 180], exklusiv: [185, 245] },
-  };
-  const EXTRAS = {
-    wallbox:      [1200, 2200],
-    pv:           [3500, 7000],
-    waermepumpe:  [1800, 3200],
-  };
-
-  function fmt(n) {
-    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
-  }
-
-  function setActiveSingle(container, target) {
-    container.querySelectorAll('button').forEach(b => b.classList.toggle('is-active', b === target));
-  }
-  function toggleMulti(container, target) {
-    target.classList.toggle('is-active');
-  }
-
-  function currentSelection(container, multi) {
-    const active = Array.from(container.querySelectorAll('button.is-active'));
-    return multi ? active.map(b => b.dataset.value) : (active[0]?.dataset.value || null);
-  }
-
-  function recalc() {
-    const projectType = currentSelection(calcProjectType, false) || 'neubau';
-    const tier = currentSelection(calcTier, false) || 'premium';
-    const extras = calcExtras ? currentSelection(calcExtras, true) : [];
-    const area = parseInt(calcArea.value, 10);
-
-    calcAreaVal.textContent = area + ' m²';
-
-    const [lowM2, highM2] = PRICE_PER_M2[projectType][tier];
-    let low = area * lowM2;
-    let high = area * highM2;
-
-    extras.forEach(ex => {
-      const [exLow, exHigh] = EXTRAS[ex] || [0, 0];
-      low += exLow;
-      high += exHigh;
-    });
-
-    calcMin.textContent = fmt(low);
-    calcMax.textContent = fmt(high);
-  }
-
-  calcProjectType.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { setActiveSingle(calcProjectType, btn); recalc(); });
-  });
-  calcTier.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { setActiveSingle(calcTier, btn); recalc(); });
-  });
-  calcExtras?.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { toggleMulti(calcExtras, btn); recalc(); });
-  });
-  calcArea.addEventListener('input', recalc);
-
-  recalc();
-}
 
 /* =========================================================
-   KI-Check Unterverteilung — upload, preview, analyze
+   Kosten-Konfigurator (Mehrfachauswahl, Raumauswahl, Etagen-Zuschlag)
    ========================================================= */
-const dropzone = document.getElementById('dropzone');
-const kiFile = document.getElementById('kiFile');
-const previewWrap = document.getElementById('previewWrap');
-const previewImg = document.getElementById('previewImg');
-const kiForm = document.getElementById('kiForm');
-const kiSubmit = document.getElementById('kiSubmit');
-const aiResult = document.getElementById('aiResult');
-const aiStatusText = document.getElementById('aiStatusText');
-const aiResultBody = document.getElementById('aiResultBody');
-
-let selectedFile = null;
-
-function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  selectedFile = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    previewImg.src = e.target.result;
-    previewWrap.classList.add('is-visible');
-    kiSubmit.disabled = false;
-  };
-  reader.readAsDataURL(file);
+function fmtEUR(n) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
-kiFile?.addEventListener('change', (e) => handleFile(e.target.files[0]));
+document.querySelectorAll('.calc-multi').forEach(calc => {
+  const items = calc.querySelectorAll('.calc-service-item');
+  const floorButtons = calc.querySelectorAll('.calc-floors button');
+  const grandMinEl = calc.querySelector('.calc-grand-min');
+  const grandMaxEl = calc.querySelector('.calc-grand-max');
 
-['dragover', 'dragenter'].forEach(evt => {
-  dropzone?.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('is-drag'); });
-});
-['dragleave', 'drop'].forEach(evt => {
-  dropzone?.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('is-drag'); });
-});
-dropzone?.addEventListener('drop', (e) => {
-  const file = e.dataTransfer.files[0];
-  if (file) handleFile(file);
-});
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-kiForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!selectedFile) return;
-
-  aiResult.classList.add('is-visible');
-  aiResult.classList.remove('ai-error');
-  aiStatusText.textContent = 'Analyse läuft …';
-  aiResultBody.innerHTML = '';
-  kiSubmit.disabled = true;
-
-  const endpointConfigured = KI_CHECK_ENDPOINT && !KI_CHECK_ENDPOINT.includes('YOUR-WORKER-SUBDOMAIN');
-
-  if (!endpointConfigured) {
-    aiStatusText.textContent = 'KI-Check noch nicht eingerichtet';
-    aiResultBody.innerHTML =
-      '<p>Der KI-Check braucht eine kleine Server-Komponente, die den API-Zugriff sicher übernimmt ' +
-      '(siehe <code>assets/cloudflare-worker.js</code>). Sobald die Worker-URL in ' +
-      '<code>assets/script.js</code> hinterlegt ist, funktioniert der Check automatisch.</p>' +
-      '<p>In der Zwischenzeit gerne direkt <a href="index.html#kontakt">das Foto per Kontaktformular</a> schicken.</p>';
-    kiSubmit.disabled = false;
-    return;
+  function activeFloorFactor() {
+    const btn = Array.from(floorButtons).find(b => b.classList.contains('is-active'));
+    return btn ? parseFloat(btn.dataset.factor) : 1;
   }
 
-  try {
-    const base64 = await fileToBase64(selectedFile);
-    const res = await fetch(KI_CHECK_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64, mediaType: selectedFile.type })
+  function itemArea(item) {
+    const mode = item.dataset.mode;
+    if (mode === 'rooms') {
+      const checks = item.querySelectorAll('.room-check');
+      let total = 0;
+      checks.forEach(chk => {
+        if (chk.checked) {
+          const sizeInput = chk.closest('.room-row').querySelector('.room-size');
+          total += parseFloat(sizeInput.value) || 0;
+        }
+      });
+      const totalEl = item.querySelector('.rooms-total-val');
+      if (totalEl) totalEl.textContent = total + ' ' + (item.dataset.unitSuffix || 'm²');
+      return total;
+    }
+    const areaInput = item.querySelector('.calc-area');
+    const areaVal = item.querySelector('.calc-area-val');
+    const units = areaInput ? parseFloat(areaInput.value) : 0;
+    if (areaVal) areaVal.textContent = units + ' ' + (item.dataset.unitSuffix || '');
+    return units;
+  }
+
+  function itemActiveTier(item) {
+    const tierButtons = item.querySelectorAll('.calc-tier button');
+    return Array.from(tierButtons).find(b => b.classList.contains('is-active')) || tierButtons[0];
+  }
+
+  function recalcAll() {
+    const floorFactor = activeFloorFactor();
+    let grandLow = 0, grandHigh = 0;
+
+    items.forEach(item => {
+      const checkbox = item.querySelector('.calc-service-check');
+      const subtotalEl = item.querySelector('.calc-service-subtotal');
+      const area = itemArea(item);
+      const tier = itemActiveTier(item);
+      let low = 0, high = 0;
+      if (tier && area > 0) {
+        low = parseFloat(tier.dataset.low) * area * floorFactor;
+        high = parseFloat(tier.dataset.high) * area * floorFactor;
+      }
+      if (checkbox.checked) {
+        subtotalEl.textContent = area > 0 ? `${fmtEUR(low)} – ${fmtEUR(high)}` : 'Fläche wählen';
+        grandLow += low;
+        grandHigh += high;
+      } else {
+        subtotalEl.textContent = '–';
+      }
     });
-    if (!res.ok) throw new Error('analysis-failed');
-    const data = await res.json();
 
-    aiStatusText.textContent = 'Analyse abgeschlossen';
-    aiResultBody.innerHTML = `<p>${(data.result || 'Keine Einschätzung erhalten.').replace(/\\n/g, '<br>')}</p>`;
-  } catch (err) {
-    aiResult.classList.add('ai-error');
-    aiStatusText.textContent = 'Analyse fehlgeschlagen';
-    aiResultBody.innerHTML = '<p>Die Analyse konnte nicht durchgeführt werden. Bitte später erneut versuchen oder das Foto per Kontaktformular schicken.</p>';
-  } finally {
-    kiSubmit.disabled = false;
+    grandMinEl.textContent = grandLow > 0 ? fmtEUR(grandLow) : '–';
+    grandMaxEl.textContent = grandHigh > 0 ? fmtEUR(grandHigh) : '–';
   }
+
+  items.forEach(item => {
+    const checkbox = item.querySelector('.calc-service-check');
+    const body = item.querySelector('.calc-service-body');
+    const head = item.querySelector('.calc-service-head');
+
+    checkbox.addEventListener('change', () => {
+      item.classList.toggle('is-checked', checkbox.checked);
+      body.style.display = checkbox.checked ? '' : 'none';
+      recalcAll();
+    });
+    // clicking the head label toggles the checkbox naturally (label wraps input),
+    // but stop clicks inside the body from bubbling up and re-toggling
+    body.addEventListener('click', e => e.stopPropagation());
+
+    item.querySelectorAll('.calc-tier button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        item.querySelectorAll('.calc-tier button').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        recalcAll();
+      });
+    });
+    item.querySelectorAll('.calc-area').forEach(input => input.addEventListener('input', recalcAll));
+    item.querySelectorAll('.room-check').forEach(chk => chk.addEventListener('change', recalcAll));
+    item.querySelectorAll('.room-size').forEach(inp => inp.addEventListener('input', recalcAll));
+  });
+
+  floorButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      floorButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      recalcAll();
+    });
+  });
+
+  recalcAll();
 });
