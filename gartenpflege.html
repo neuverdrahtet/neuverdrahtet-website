@@ -302,82 +302,93 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Gartenpflege?</h2>
-        <p>Leistung, Gartenfläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistungen, Räume und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
       <div class="calc-panel calc-embedded calc-multi">
-        <div class="calc-field">
-          <label>Leistung</label>
-          <div class="calc-toggle calc-service-select">
-            <button type="button" data-service-target="rasen" class="is-active">Rasenpflege</button>
-            <button type="button" data-service-target="hecke" class="">Heckenschnitt</button>
-            <button type="button" data-service-target="neuanlage" class="">Neuanlage</button>
-          </div>
-        </div>
-        <div class="calc-service-wrap" data-service-wrap="rasen" style=""><div class="calc-service-panel" data-unit-min="50" data-unit-max="2000" data-unit-default="300" data-unit-step="50" data-unit-suffix="m²" data-period=" pro Einsatz">
-        <div class="calc-field">
+      <div class="calc-field">
+        <label>Leistungen auswählen <span class="calc-floors-hint">(Mehrfachauswahl möglich)</span></label>
+      </div>
+      <div class="calc-service-list">
+        <div class="calc-service-item is-checked" data-service="rasen" data-mode="unit" data-unit-suffix="m²" data-period=" pro Einsatz">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check" checked>
+          <span class="calc-service-label">Rasenpflege</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body">
+          <div class="calc-field">
           <label>Gartenfläche</label>
           <div class="calc-slider">
             <input type="range" class="calc-area" min="50" max="2000" step="50" value="300">
             <span class="val calc-area-val">300 m²</span>
           </div>
         </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="1" data-high="2" class="">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Mahd & Pflege</span></button>
-            <button type="button" data-value="intensiv" data-low="2" data-high="3" class="is-active">Intensiv <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">+ Düngung, Vertikutieren</span></button>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="1" data-high="2" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Mahd & Pflege</span></button>
+            <button type="button" data-value="intensiv" data-low="2" data-high="3" class="is-active">Intensiv <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">+ Düngung, Vertikutieren</span></button>
+            </div>
           </div>
+          <p class="calc-service-note">Grober Richtwert pro Pflegeeinsatz.</p>
         </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten pro Einsatz</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert pro Pflegeeinsatz.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="hecke" style="display:none;"><div class="calc-service-panel" data-unit-min="5" data-unit-max="100" data-unit-default="20" data-unit-step="5" data-unit-suffix="lfm" data-period=" pro Schnitt">
-        <div class="calc-field">
+      </div>
+      <div class="calc-service-item" data-service="hecke" data-mode="unit" data-unit-suffix="lfm" data-period=" pro Schnitt">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Heckenschnitt</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
           <label>Heckenlänge</label>
           <div class="calc-slider">
             <input type="range" class="calc-area" min="5" max="100" step="5" value="20">
             <span class="val calc-area-val">20 lfm</span>
           </div>
         </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="4" data-high="8" class="">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">bis 2m Höhe</span></button>
-            <button type="button" data-value="hoch" data-low="8" data-high="14" class="is-active">Hoch <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">über 2m Höhe</span></button>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="4" data-high="8" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">bis 2m Höhe</span></button>
+            <button type="button" data-value="hoch" data-low="8" data-high="14" class="is-active">Hoch <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">über 2m Höhe</span></button>
+            </div>
           </div>
+          <p class="calc-service-note">Grober Richtwert pro Schnitttermin.</p>
         </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten pro Schnitt</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert pro Schnitttermin.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="neuanlage" style="display:none;"><div class="calc-service-panel" data-unit-min="20" data-unit-max="500" data-unit-default="100" data-unit-step="10" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
+      </div>
+      <div class="calc-service-item" data-service="neuanlage" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Neuanlage</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
           <label>Fläche</label>
           <div class="calc-slider">
             <input type="range" class="calc-area" min="20" max="500" step="10" value="100">
             <span class="val calc-area-val">100 m²</span>
           </div>
         </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="25" data-high="45" class="">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Grünfläche & Bepflanzung</span></button>
-            <button type="button" data-value="gehoben" data-low="45" data-high="70" class="is-active">Gehoben <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">mit Wegen, Elementen</span></button>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="25" data-high="45" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Grünfläche & Bepflanzung</span></button>
+            <button type="button" data-value="gehoben" data-low="45" data-high="70" class="is-active">Gehoben <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">mit Wegen, Elementen</span></button>
+            </div>
           </div>
+          <p class="calc-service-note">Grober Richtwert für die Neugestaltung.</p>
         </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für die Neugestaltung.</div>
-        </div>
-      </div></div>
-        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
       </div>
+      </div>
+      
+      <div class="calc-result calc-grand-total">
+        <div class="label">Geschätzte Gesamtkosten</div>
+        <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="note">Grober Richtwert für alle gewählten Leistungen zusammen — kein verbindliches Angebot.</div>
+      </div>
+    </div>
     </div>
   </section>
 

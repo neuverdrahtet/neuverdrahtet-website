@@ -313,103 +313,229 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Bodenleger?</h2>
-        <p>Leistung, Fläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistungen, Räume und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
       <div class="calc-panel calc-embedded calc-multi">
-        <div class="calc-field">
-          <label>Leistung</label>
-          <div class="calc-toggle calc-service-select">
-            <button type="button" data-service-target="laminat" class="is-active">Laminat</button>
-            <button type="button" data-service-target="vinyl" class="">Vinyl</button>
-            <button type="button" data-service-target="parkett" class="">Parkett</button>
-            <button type="button" data-service-target="entsorgung" class="">Altbelag-Entsorgung</button>
-          </div>
-        </div>
-        <div class="calc-service-wrap" data-service-wrap="laminat" style=""><div class="calc-service-panel" data-unit-min="10" data-unit-max="200" data-unit-default="40" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="10" max="200" step="5" value="40">
-            <span class="val calc-area-val">40 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="basis" data-low="20" data-high="30" class="">Basis <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">einfache Optik</span></button>
-            <button type="button" data-value="premium" data-low="30" data-high="45" class="is-active">Premium <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">hochwertige Optik</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert inkl. Verlegung.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="vinyl" style="display:none;"><div class="calc-service-panel" data-unit-min="10" data-unit-max="200" data-unit-default="40" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="10" max="200" step="5" value="40">
-            <span class="val calc-area-val">40 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="basis" data-low="28" data-high="38" class="">Basis <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">robust & pflegeleicht</span></button>
-            <button type="button" data-value="premium" data-low="38" data-high="55" class="is-active">Premium <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Klick-Vinyl hochwertig</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert inkl. Verlegung.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="parkett" style="display:none;"><div class="calc-service-panel" data-unit-min="10" data-unit-max="200" data-unit-default="40" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="10" max="200" step="5" value="40">
-            <span class="val calc-area-val">40 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="basis" data-low="50" data-high="70" class="">Basis <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Landhausdiele</span></button>
-            <button type="button" data-value="premium" data-low="70" data-high="95" class="is-active">Premium <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Massivholz</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert inkl. Verlegung.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="entsorgung" style="display:none;"><div class="calc-service-panel" data-unit-min="10" data-unit-max="200" data-unit-default="40" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="10" max="200" step="5" value="40">
-            <span class="val calc-area-val">40 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="5" data-high="12" class="is-active">Pauschal <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Entfernung & Entsorgung</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für die Entsorgung des Altbelags.</div>
-        </div>
-      </div></div>
-        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
+      <div class="calc-field">
+        <label>Leistungen auswählen <span class="calc-floors-hint">(Mehrfachauswahl möglich)</span></label>
       </div>
+      <div class="calc-service-list">
+        <div class="calc-service-item is-checked" data-service="laminat" data-mode="rooms" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check" checked>
+          <span class="calc-service-label">Laminat</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body">
+          <div class="calc-field">
+          <label>Räume auswählen</label>
+          <div class="calc-rooms">
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="wohnzimmer">
+              <span class="room-name">Wohnzimmer</span>
+              <input type="number" class="room-size" value="20" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="schlafzimmer">
+              <span class="room-name">Schlafzimmer</span>
+              <input type="number" class="room-size" value="14" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="kueche">
+              <span class="room-name">Küche</span>
+              <input type="number" class="room-size" value="12" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="bad">
+              <span class="room-name">Bad</span>
+              <input type="number" class="room-size" value="8" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="flur">
+              <span class="room-name">Flur/Diele</span>
+              <input type="number" class="room-size" value="6" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="sonstiges">
+              <span class="room-name">Weiterer Raum</span>
+              <input type="number" class="room-size" value="10" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+          </div>
+          <div class="calc-rooms-total">Gewählte Fläche: <span class="rooms-total-val">0 m²</span></div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="basis" data-low="20" data-high="30" class="">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">einfache Optik</span></button>
+            <button type="button" data-value="premium" data-low="30" data-high="45" class="is-active">Premium <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">hochwertige Optik</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert inkl. Verlegung.</p>
+        </div>
+      </div>
+      <div class="calc-service-item" data-service="vinyl" data-mode="rooms" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Vinyl</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
+          <label>Räume auswählen</label>
+          <div class="calc-rooms">
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="wohnzimmer">
+              <span class="room-name">Wohnzimmer</span>
+              <input type="number" class="room-size" value="20" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="schlafzimmer">
+              <span class="room-name">Schlafzimmer</span>
+              <input type="number" class="room-size" value="14" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="kueche">
+              <span class="room-name">Küche</span>
+              <input type="number" class="room-size" value="12" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="bad">
+              <span class="room-name">Bad</span>
+              <input type="number" class="room-size" value="8" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="flur">
+              <span class="room-name">Flur/Diele</span>
+              <input type="number" class="room-size" value="6" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="sonstiges">
+              <span class="room-name">Weiterer Raum</span>
+              <input type="number" class="room-size" value="10" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+          </div>
+          <div class="calc-rooms-total">Gewählte Fläche: <span class="rooms-total-val">0 m²</span></div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="basis" data-low="28" data-high="38" class="">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">robust & pflegeleicht</span></button>
+            <button type="button" data-value="premium" data-low="38" data-high="55" class="is-active">Premium <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Klick-Vinyl hochwertig</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert inkl. Verlegung.</p>
+        </div>
+      </div>
+      <div class="calc-service-item" data-service="parkett" data-mode="rooms" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Parkett</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
+          <label>Räume auswählen</label>
+          <div class="calc-rooms">
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="wohnzimmer">
+              <span class="room-name">Wohnzimmer</span>
+              <input type="number" class="room-size" value="20" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="schlafzimmer">
+              <span class="room-name">Schlafzimmer</span>
+              <input type="number" class="room-size" value="14" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="kueche">
+              <span class="room-name">Küche</span>
+              <input type="number" class="room-size" value="12" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="bad">
+              <span class="room-name">Bad</span>
+              <input type="number" class="room-size" value="8" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="flur">
+              <span class="room-name">Flur/Diele</span>
+              <input type="number" class="room-size" value="6" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+            <label class="room-row">
+              <input type="checkbox" class="room-check" data-room="sonstiges">
+              <span class="room-name">Weiterer Raum</span>
+              <input type="number" class="room-size" value="10" min="1" max="150">
+              <span class="room-unit">m²</span>
+            </label>
+          </div>
+          <div class="calc-rooms-total">Gewählte Fläche: <span class="rooms-total-val">0 m²</span></div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="basis" data-low="50" data-high="70" class="">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Landhausdiele</span></button>
+            <button type="button" data-value="premium" data-low="70" data-high="95" class="is-active">Premium <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Massivholz</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert inkl. Verlegung.</p>
+        </div>
+      </div>
+      <div class="calc-service-item" data-service="entsorgung" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Altbelag-Entsorgung</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="10" max="200" step="5" value="40">
+            <span class="val calc-area-val">40 m²</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="5" data-high="12" class="is-active">Pauschal <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Entfernung & Entsorgung</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert für die Entsorgung des Altbelags.</p>
+        </div>
+      </div>
+      </div>
+      <div class="calc-field calc-floors-field">
+          <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
+          <div class="calc-toggle calc-floors">
+            <button type="button" data-floor="eg" data-factor="1.0" class="is-active">EG</button>
+            <button type="button" data-floor="og1" data-factor="1.05" class="">1. OG</button>
+            <button type="button" data-floor="og2" data-factor="1.1" class="">2. OG</button>
+            <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
+          </div>
+        </div>
+      <div class="calc-result calc-grand-total">
+        <div class="label">Geschätzte Gesamtkosten</div>
+        <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="note">Grober Richtwert für alle gewählten Leistungen zusammen — kein verbindliches Angebot.</div>
+      </div>
+    </div>
     </div>
   </section>
 

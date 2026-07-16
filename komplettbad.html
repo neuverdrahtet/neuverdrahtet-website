@@ -313,61 +313,78 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Komplettbad?</h2>
-        <p>Leistung, Badgröße und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistungen, Räume und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
       <div class="calc-panel calc-embedded calc-multi">
-        <div class="calc-field">
-          <label>Leistung</label>
-          <div class="calc-toggle calc-service-select">
-            <button type="button" data-service-target="komplett" class="is-active">Komplettsanierung</button>
-            <button type="button" data-service-target="teil" class="">Teilsanierung</button>
-          </div>
-        </div>
-        <div class="calc-service-wrap" data-service-wrap="komplett" style=""><div class="calc-service-panel" data-unit-min="4" data-unit-max="25" data-unit-default="8" data-unit-step="1" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
+      <div class="calc-field">
+        <label>Leistungen auswählen <span class="calc-floors-hint">(Mehrfachauswahl möglich)</span></label>
+      </div>
+      <div class="calc-service-list">
+        <div class="calc-service-item is-checked" data-service="komplett" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check" checked>
+          <span class="calc-service-label">Komplettsanierung</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body">
+          <div class="calc-field">
           <label>Badgröße</label>
           <div class="calc-slider">
             <input type="range" class="calc-area" min="4" max="25" step="1" value="8">
             <span class="val calc-area-val">8 m²</span>
           </div>
         </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="800" data-high="1200" class="">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">solide Ausstattung</span></button>
-            <button type="button" data-value="komfort" data-low="1200" data-high="1800" class="is-active">Komfort <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">hochwertige Ausstattung</span></button>
-            <button type="button" data-value="luxus" data-low="1800" data-high="2800" class="">Luxus <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Premium-Ausstattung</span></button>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="800" data-high="1200" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">solide Ausstattung</span></button>
+            <button type="button" data-value="komfort" data-low="1200" data-high="1800" class="is-active">Komfort <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">hochwertige Ausstattung</span></button>
+            <button type="button" data-value="luxus" data-low="1800" data-high="2800" class="">Luxus <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Premium-Ausstattung</span></button>
+            </div>
           </div>
+          <p class="calc-service-note">Grober Richtwert für die Gesamtsanierung inkl. aller Gewerke.</p>
         </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für die Gesamtsanierung inkl. aller Gewerke.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="teil" style="display:none;"><div class="calc-service-panel" data-unit-min="1" data-unit-max="6" data-unit-default="2" data-unit-step="1" data-unit-suffix="Objekte" data-period="">
-        <div class="calc-field">
+      </div>
+      <div class="calc-service-item" data-service="teil" data-mode="unit" data-unit-suffix="Objekte" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Teilsanierung</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
           <label>Anzahl Objekte</label>
           <div class="calc-slider">
             <input type="range" class="calc-area" min="1" max="6" step="1" value="2">
             <span class="val calc-area-val">2 Objekte</span>
           </div>
         </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="austausch" data-low="400" data-high="800" class="">Austausch <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">z. B. WC, Waschtisch</span></button>
-            <button type="button" data-value="mitFliesen" data-low="800" data-high="1500" class="is-active">Mit Fliesenarbeiten <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">inkl. Anschlussbereich</span></button>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="austausch" data-low="400" data-high="800" class="">Austausch <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">z. B. WC, Waschtisch</span></button>
+            <button type="button" data-value="mitFliesen" data-low="800" data-high="1500" class="is-active">Mit Fliesenarbeiten <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">inkl. Anschlussbereich</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert je erneuertem Objekt (WC, Dusche, Waschtisch).</p>
+        </div>
+      </div>
+      </div>
+      <div class="calc-field calc-floors-field">
+          <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
+          <div class="calc-toggle calc-floors">
+            <button type="button" data-floor="eg" data-factor="1.0" class="is-active">EG</button>
+            <button type="button" data-floor="og1" data-factor="1.05" class="">1. OG</button>
+            <button type="button" data-floor="og2" data-factor="1.1" class="">2. OG</button>
+            <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
           </div>
         </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert je erneuertem Objekt (WC, Dusche, Waschtisch).</div>
-        </div>
-      </div></div>
-        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
+      <div class="calc-result calc-grand-total">
+        <div class="label">Geschätzte Gesamtkosten</div>
+        <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="note">Grober Richtwert für alle gewählten Leistungen zusammen — kein verbindliches Angebot.</div>
       </div>
+    </div>
     </div>
   </section>
 

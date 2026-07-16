@@ -310,82 +310,101 @@
       <div class="section-head">
         <p class="eyebrow">Kosten-Konfigurator</p>
         <h2>Was kostet Trockenbau?</h2>
-        <p>Leistung, Fläche und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
+        <p>Leistungen, Räume und Ausführung wählen — sofortigen Richtwert erhalten. Kostenlos und unverbindlich.</p>
       </div>
       <div class="calc-panel calc-embedded calc-multi">
-        <div class="calc-field">
-          <label>Leistung</label>
-          <div class="calc-toggle calc-service-select">
-            <button type="button" data-service-target="waende" class="is-active">Trennwände</button>
-            <button type="button" data-service-target="decken" class="">Abgehängte Decken</button>
-            <button type="button" data-service-target="daemmung" class="">Dämmung</button>
-          </div>
-        </div>
-        <div class="calc-service-wrap" data-service-wrap="waende" style=""><div class="calc-service-panel" data-unit-min="5" data-unit-max="150" data-unit-default="25" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
-            <span class="val calc-area-val">25 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="einfach" data-low="35" data-high="50" class="">Einfach <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Standardaufbau</span></button>
-            <button type="button" data-value="daemmung" data-low="50" data-high="70" class="is-active">Mit Dämmung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Schallschutz</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für Material und Montage.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="decken" style="display:none;"><div class="calc-service-panel" data-unit-min="5" data-unit-max="150" data-unit-default="25" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
-            <span class="val calc-area-val">25 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="einfach" data-low="30" data-high="45" class="">Einfach <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Standardaufbau</span></button>
-            <button type="button" data-value="beleuchtung" data-low="45" data-high="65" class="is-active">Mit Beleuchtung <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Einbauspots vorbereitet</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für Material und Montage.</div>
-        </div>
-      </div></div>
-        <div class="calc-service-wrap" data-service-wrap="daemmung" style="display:none;"><div class="calc-service-panel" data-unit-min="5" data-unit-max="150" data-unit-default="25" data-unit-step="5" data-unit-suffix="m²" data-period="">
-        <div class="calc-field">
-          <label>Fläche</label>
-          <div class="calc-slider">
-            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
-            <span class="val calc-area-val">25 m²</span>
-          </div>
-        </div>
-        <div class="calc-field">
-          <label>Ausführung</label>
-          <div class="calc-toggle calc-tier">
-            <button type="button" data-value="standard" data-low="25" data-high="40" class="">Standard <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">Schall-/Wärmeschutz</span></button>
-            <button type="button" data-value="erhoeht" data-low="40" data-high="60" class="is-active">Erhöht <span style="display:block;font-size:11.5px;font-weight:400;opacity:.7;">stärkere Dämmwirkung</span></button>
-          </div>
-        </div>
-        <div class="calc-result">
-          <div class="label">Geschätzte Kosten</div>
-          <div class="range"><span class="calc-min">–</span><span class="dash">bis</span><span class="calc-max">–</span></div>
-          <div class="note">Grober Richtwert für Material und Montage.</div>
-        </div>
-      </div></div>
-        <p class="form-note" style="margin-top:6px;">Leistung wählen — jede hat eigene Preislogik. Kein verbindliches Angebot.</p>
+      <div class="calc-field">
+        <label>Leistungen auswählen <span class="calc-floors-hint">(Mehrfachauswahl möglich)</span></label>
       </div>
+      <div class="calc-service-list">
+        <div class="calc-service-item is-checked" data-service="waende" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check" checked>
+          <span class="calc-service-label">Trennwände</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body">
+          <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
+            <span class="val calc-area-val">25 m²</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="einfach" data-low="35" data-high="50" class="">Einfach <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Standardaufbau</span></button>
+            <button type="button" data-value="daemmung" data-low="50" data-high="70" class="is-active">Mit Dämmung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Schallschutz</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert für Material und Montage.</p>
+        </div>
+      </div>
+      <div class="calc-service-item" data-service="decken" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Abgehängte Decken</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
+            <span class="val calc-area-val">25 m²</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="einfach" data-low="30" data-high="45" class="">Einfach <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Standardaufbau</span></button>
+            <button type="button" data-value="beleuchtung" data-low="45" data-high="65" class="is-active">Mit Beleuchtung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Einbauspots vorbereitet</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert für Material und Montage.</p>
+        </div>
+      </div>
+      <div class="calc-service-item" data-service="daemmung" data-mode="unit" data-unit-suffix="m²" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Dämmung</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none;">
+          <div class="calc-field">
+          <label>Fläche</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" min="5" max="150" step="5" value="25">
+            <span class="val calc-area-val">25 m²</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Ausführung</label>
+            <div class="calc-toggle calc-tier">
+              <button type="button" data-value="standard" data-low="25" data-high="40" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Schall-/Wärmeschutz</span></button>
+            <button type="button" data-value="erhoeht" data-low="40" data-high="60" class="is-active">Erhöht <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">stärkere Dämmwirkung</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Grober Richtwert für Material und Montage.</p>
+        </div>
+      </div>
+      </div>
+      <div class="calc-field calc-floors-field">
+          <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
+          <div class="calc-toggle calc-floors">
+            <button type="button" data-floor="eg" data-factor="1.0" class="is-active">EG</button>
+            <button type="button" data-floor="og1" data-factor="1.05" class="">1. OG</button>
+            <button type="button" data-floor="og2" data-factor="1.1" class="">2. OG</button>
+            <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
+          </div>
+        </div>
+      <div class="calc-result calc-grand-total">
+        <div class="label">Geschätzte Gesamtkosten</div>
+        <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="note">Grober Richtwert für alle gewählten Leistungen zusammen — kein verbindliches Angebot.</div>
+      </div>
+    </div>
     </div>
   </section>
 

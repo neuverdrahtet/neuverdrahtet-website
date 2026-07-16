@@ -422,6 +422,52 @@ section{ padding:88px 0; }
 .calc-service-select{ margin-bottom:4px; }
 .calc-service-select button{ flex:none; min-width:auto; padding:9px 16px; font-size:13.5px; }
 .calc-service-wrap{ padding-top:6px; }
+
+/* Multi-select service list */
+.calc-service-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+.calc-service-item{
+  border:1.5px solid var(--line); border-radius:var(--radius-sm);
+  background:var(--surface-2); overflow:hidden;
+  transition:border-color .2s ease;
+}
+.calc-service-item.is-checked{ border-color:var(--orange); }
+.calc-service-head{
+  display:flex; align-items:center; gap:12px;
+  padding:14px 16px; cursor:pointer;
+}
+.calc-service-check{ width:18px; height:18px; accent-color:var(--orange); flex:none; cursor:pointer; }
+.calc-service-label{ flex:1; font-weight:600; font-size:14.5px; color:var(--ink); }
+.calc-service-subtotal{ font-family:var(--font-mono); font-size:13px; color:var(--ink-soft); }
+.calc-service-item.is-checked .calc-service-subtotal{ color:var(--orange-2); }
+.calc-service-body{ padding:0 16px 18px; border-top:1px solid var(--line); }
+.calc-service-body .calc-field{ margin-top:16px; margin-bottom:0; }
+.calc-service-body .calc-field + .calc-field{ margin-top:16px; }
+.calc-service-note{ font-size:12px; color:var(--ink-faint); margin:12px 0 0; }
+
+/* Room selector */
+.calc-rooms{ display:flex; flex-direction:column; gap:8px; }
+.room-row{
+  display:flex; align-items:center; gap:10px;
+  padding:9px 12px; border:1px solid var(--line); border-radius:var(--radius-sm);
+  background:var(--paper); cursor:pointer;
+}
+.room-row input.room-check{ width:16px; height:16px; accent-color:var(--orange); flex:none; cursor:pointer; }
+.room-name{ flex:1; font-size:13.5px; color:var(--ink); }
+.room-size{
+  width:60px; padding:6px 8px; border:1px solid var(--line); border-radius:4px;
+  background:var(--surface-2); color:var(--ink); font-family:var(--font-mono); font-size:13px; text-align:right;
+}
+.room-unit{ font-size:12.5px; color:var(--ink-faint); width:24px; }
+.calc-rooms-total{ margin-top:10px; font-family:var(--font-mono); font-size:12.5px; color:var(--ink-soft); }
+.calc-rooms-total .rooms-total-val{ color:var(--orange-2); font-weight:600; }
+
+/* Floor surcharge selector */
+.calc-floors-field{ margin-top:8px; padding-top:18px; border-top:1px solid var(--line); }
+.calc-floors-hint{ font-weight:400; color:var(--ink-faint); font-size:11.5px; }
+.calc-floors button{ flex:none; min-width:auto; padding:9px 16px; font-size:13.5px; }
+
+/* Grand total */
+.calc-grand-total{ margin-top:4px; }
 .calc-slider input[type="range"]{ flex:1; accent-color:var(--orange); height:4px; }
 .calc-slider .val{ font-family:var(--font-mono); font-size:15px; font-weight:600; color:var(--ink); min-width:64px; text-align:right; }
 

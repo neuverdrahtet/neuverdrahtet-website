@@ -158,62 +158,110 @@ if (contactForm) {
 
 
 /* =========================================================
-   Kosten-Konfigurator (generisch, pro Gewerke-Seite, mit Mehrfach-Leistungen)
+   Kosten-Konfigurator (Mehrfachauswahl, Raumauswahl, Etagen-Zuschlag)
    ========================================================= */
 function fmtEUR(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
 }
 
-function initCalcPanel(panel) {
-  const areaInput = panel.querySelector('.calc-area');
-  const areaVal = panel.querySelector('.calc-area-val');
-  const tierButtons = panel.querySelectorAll('.calc-tier button');
-  const minEl = panel.querySelector('.calc-min');
-  const maxEl = panel.querySelector('.calc-max');
-  const suffix = panel.dataset.unitSuffix || '';
-  const period = panel.dataset.period || '';
-  if (!areaInput) return;
+document.querySelectorAll('.calc-multi').forEach(calc => {
+  const items = calc.querySelectorAll('.calc-service-item');
+  const floorButtons = calc.querySelectorAll('.calc-floors button');
+  const grandMinEl = calc.querySelector('.calc-grand-min');
+  const grandMaxEl = calc.querySelector('.calc-grand-max');
 
-  function activeTier() {
+  function activeFloorFactor() {
+    const btn = Array.from(floorButtons).find(b => b.classList.contains('is-active'));
+    return btn ? parseFloat(btn.dataset.factor) : 1;
+  }
+
+  function itemArea(item) {
+    const mode = item.dataset.mode;
+    if (mode === 'rooms') {
+      const checks = item.querySelectorAll('.room-check');
+      let total = 0;
+      checks.forEach(chk => {
+        if (chk.checked) {
+          const sizeInput = chk.closest('.room-row').querySelector('.room-size');
+          total += parseFloat(sizeInput.value) || 0;
+        }
+      });
+      const totalEl = item.querySelector('.rooms-total-val');
+      if (totalEl) totalEl.textContent = total + ' ' + (item.dataset.unitSuffix || 'm²');
+      return total;
+    }
+    const areaInput = item.querySelector('.calc-area');
+    const areaVal = item.querySelector('.calc-area-val');
+    const units = areaInput ? parseFloat(areaInput.value) : 0;
+    if (areaVal) areaVal.textContent = units + ' ' + (item.dataset.unitSuffix || '');
+    return units;
+  }
+
+  function itemActiveTier(item) {
+    const tierButtons = item.querySelectorAll('.calc-tier button');
     return Array.from(tierButtons).find(b => b.classList.contains('is-active')) || tierButtons[0];
   }
 
-  function recalc() {
-    const units = parseFloat(areaInput.value);
-    areaVal.textContent = units + ' ' + suffix;
-    const tier = activeTier();
-    if (!tier) return;
-    const low = parseFloat(tier.dataset.low) * units;
-    const high = parseFloat(tier.dataset.high) * units;
-    minEl.textContent = fmtEUR(low);
-    maxEl.textContent = fmtEUR(high) + (period || '');
+  function recalcAll() {
+    const floorFactor = activeFloorFactor();
+    let grandLow = 0, grandHigh = 0;
+
+    items.forEach(item => {
+      const checkbox = item.querySelector('.calc-service-check');
+      const subtotalEl = item.querySelector('.calc-service-subtotal');
+      const area = itemArea(item);
+      const tier = itemActiveTier(item);
+      let low = 0, high = 0;
+      if (tier && area > 0) {
+        low = parseFloat(tier.dataset.low) * area * floorFactor;
+        high = parseFloat(tier.dataset.high) * area * floorFactor;
+      }
+      if (checkbox.checked) {
+        subtotalEl.textContent = area > 0 ? `${fmtEUR(low)} – ${fmtEUR(high)}` : 'Fläche wählen';
+        grandLow += low;
+        grandHigh += high;
+      } else {
+        subtotalEl.textContent = '–';
+      }
+    });
+
+    grandMinEl.textContent = grandLow > 0 ? fmtEUR(grandLow) : '–';
+    grandMaxEl.textContent = grandHigh > 0 ? fmtEUR(grandHigh) : '–';
   }
 
-  tierButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      tierButtons.forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      recalc();
+  items.forEach(item => {
+    const checkbox = item.querySelector('.calc-service-check');
+    const body = item.querySelector('.calc-service-body');
+    const head = item.querySelector('.calc-service-head');
+
+    checkbox.addEventListener('change', () => {
+      item.classList.toggle('is-checked', checkbox.checked);
+      body.style.display = checkbox.checked ? '' : 'none';
+      recalcAll();
     });
-  });
-  areaInput.addEventListener('input', recalc);
-  recalc();
-}
+    // clicking the head label toggles the checkbox naturally (label wraps input),
+    // but stop clicks inside the body from bubbling up and re-toggling
+    body.addEventListener('click', e => e.stopPropagation());
 
-document.querySelectorAll('.calc-service-panel').forEach(initCalcPanel);
-
-// Service switcher for multi-service calculators (e.g. Elektro)
-document.querySelectorAll('.calc-multi').forEach(calc => {
-  const serviceButtons = calc.querySelectorAll('.calc-service-select button');
-  const wraps = calc.querySelectorAll('.calc-service-wrap');
-  serviceButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      serviceButtons.forEach(b => b.classList.remove('is-active'));
-      btn.classList.add('is-active');
-      const target = btn.dataset.serviceTarget;
-      wraps.forEach(w => {
-        w.style.display = (w.dataset.serviceWrap === target) ? '' : 'none';
+    item.querySelectorAll('.calc-tier button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        item.querySelectorAll('.calc-tier button').forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        recalcAll();
       });
     });
+    item.querySelectorAll('.calc-area').forEach(input => input.addEventListener('input', recalcAll));
+    item.querySelectorAll('.room-check').forEach(chk => chk.addEventListener('change', recalcAll));
+    item.querySelectorAll('.room-size').forEach(inp => inp.addEventListener('input', recalcAll));
   });
+
+  floorButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      floorButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      recalcAll();
+    });
+  });
+
+  recalcAll();
 });
