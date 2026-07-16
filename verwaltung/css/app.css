@@ -185,6 +185,27 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 }
 .sidebar-backdrop[hidden] { display: none; }
 
+/* Geräteerkennung (device.js setzt data-device/data-touch auf <html>) */
+[data-touch="1"] .btn,
+[data-touch="1"] select,
+[data-touch="1"] input,
+[data-touch="1"] .status-pill,
+[data-touch="1"] .folder-item,
+[data-touch="1"] .sidebar-nav a {
+  min-height: 40px;
+}
+[data-touch="1"] .btn-sm { min-height: 34px; }
+[data-touch="1"] input[type="checkbox"],
+[data-touch="1"] input[type="radio"] { width: 20px; height: 20px; }
+[data-touch="1"] .data-table tbody tr { min-height: 44px; }
+[data-touch="1"] .data-table td { padding: 12px 10px; }
+[data-touch="1"] .kanban-card { padding: 14px; }
+[data-touch="1"] .plantafel-bar-handle { width: 14px; }
+[data-touch="1"] .cal-event, [data-touch="1"] .plantafel-bar { min-height: 30px; }
+
+[data-device="phone"] .view-header h1 { font-size: 18px; }
+[data-device="phone"] .card { padding: 14px; }
+
 @media (max-width: 880px) {
   .mobile-menu-btn { display: flex; }
   .sidebar {
@@ -648,8 +669,10 @@ table.data-table tbody tr { cursor: pointer; }
   cursor: grab;
   pointer-events: auto;
   overflow: hidden;
+  touch-action: none;
 }
 .plantafel-bar:active { cursor: grabbing; }
+.plantafel-bar.dragging { opacity: 0.6; box-shadow: var(--shadow); z-index: 5; }
 .plantafel-bar-label {
   flex: 1;
   overflow: hidden;
@@ -663,6 +686,7 @@ table.data-table tbody tr { cursor: pointer; }
   flex-shrink: 0;
   border-left: 1px solid currentColor;
   opacity: 0.5;
+  touch-action: none;
 }
 @media (max-width: 600px) {
   .plantafel-grid { min-width: 680px; }

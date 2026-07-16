@@ -151,7 +151,7 @@ export async function render(container) {
               const farbe = it.termin.farbe || typInfo(it.termin.typ).farbe;
               const span = it.endIdx - it.startIdx + 1;
               return `
-                <div class="plantafel-bar" draggable="true" data-id="${it.termin.id}"
+                <div class="plantafel-bar" data-id="${it.termin.id}"
                   style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
                   <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
@@ -248,55 +248,75 @@ export async function render(container) {
       });
     });
 
-    // Move via native drag & drop
+    // Verschieben per Pointer Events (funktioniert einheitlich mit Maus, Touch/Tablet und Stift –
+    // natives HTML5-Drag&Drop wird auf iOS/Touch-Geräten nicht unterstützt).
+    async function moveTerminTo(termin, row, clientX) {
+      const rect = row.getBoundingClientRect();
+      const dayIdx = Math.max(0, Math.min(6, Math.floor(((clientX - rect.left) / rect.width) * 7)));
+      const start = toDateOnly(termin.start);
+      const ende = toDateOnly(termin.ende) || start;
+      const duration = daysBetweenStr(start, ende);
+      const newStart = addDaysStr(weekStartStr, dayIdx);
+      const newEnde = addDaysStr(newStart, duration);
+      const time = (termin.start || '').slice(11, 16) || '00:00';
+      termin.start = `${newStart}T${time}`;
+      termin.ende = newEnde;
+      const resType = row.dataset.restype;
+      const resId = row.dataset.resid;
+      const resDef = RES_TYPES.find((r) => r.type === resType);
+      if (resDef && resId && !termin[resDef.field]?.includes(resId)) {
+        termin[resDef.field] = [resId];
+      }
+      termin.aktualisiertAm = new Date().toISOString();
+      await put('termine', termin);
+      toast('Termin verschoben', 'success');
+      renderGrid();
+    }
+
     host.querySelectorAll('.plantafel-bar').forEach((bar) => {
-      bar.addEventListener('dragstart', (e) => {
-        e.dataTransfer.setData('text/plain', bar.dataset.id);
-        e.dataTransfer.effectAllowed = 'move';
-      });
-    });
-    host.querySelectorAll('.plantafel-days').forEach((row) => {
-      row.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-      });
-      row.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        const id = e.dataTransfer.getData('text/plain');
-        const termin = termine.find((t) => t.id === id);
-        if (!termin) return;
-        const rect = row.getBoundingClientRect();
-        const dayIdx = Math.max(0, Math.min(6, Math.floor(((e.clientX - rect.left) / rect.width) * 7)));
-        const start = toDateOnly(termin.start);
-        const ende = toDateOnly(termin.ende) || start;
-        const duration = daysBetweenStr(start, ende);
-        const newStart = addDaysStr(weekStartStr, dayIdx);
-        const newEnde = addDaysStr(newStart, duration);
-        const time = (termin.start || '').slice(11, 16) || '00:00';
-        termin.start = `${newStart}T${time}`;
-        termin.ende = newEnde;
-        const resType = row.dataset.restype;
-        const resId = row.dataset.resid;
-        const resDef = RES_TYPES.find((r) => r.type === resType);
-        if (resDef && resId && !termin[resDef.field]?.includes(resId)) {
-          termin[resDef.field] = [resId];
+      bar.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.plantafel-bar-handle')) return;
+        if (e.button !== undefined && e.button !== 0) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let dragging = false;
+
+        function onMove(ev) {
+          if (!dragging && (Math.abs(ev.clientX - startX) > 6 || Math.abs(ev.clientY - startY) > 6)) {
+            dragging = true;
+            bar.classList.add('dragging');
+            // Erst jetzt capturen: setPointerCapture würde sonst auch den Klick eines
+            // einfachen Taps auf .plantafel-bar-label auf die Bar umleiten und die
+            // Bearbeitung verhindern.
+            bar.setPointerCapture(e.pointerId);
+          }
         }
-        termin.aktualisiertAm = new Date().toISOString();
-        await put('termine', termin);
-        toast('Termin verschoben', 'success');
-        renderGrid();
+        async function onUp(ev) {
+          bar.removeEventListener('pointermove', onMove);
+          bar.removeEventListener('pointerup', onUp);
+          bar.removeEventListener('pointercancel', onUp);
+          bar.classList.remove('dragging');
+          if (!dragging) return; // einfacher Tap -> Klick auf .plantafel-bar-label öffnet die Bearbeitung
+          const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.plantafel-days');
+          const termin = termine.find((t) => t.id === bar.dataset.id);
+          if (target && termin) await moveTerminTo(termin, target, ev.clientX);
+        }
+        bar.addEventListener('pointermove', onMove);
+        bar.addEventListener('pointerup', onUp);
+        bar.addEventListener('pointercancel', onUp);
       });
     });
 
-    // Resize via handle (right edge drag)
+    // Verlängern/Verkürzen per Handle (rechter Rand), ebenfalls über Pointer Events.
     host.querySelectorAll('.plantafel-bar-handle').forEach((handle) => {
-      handle.addEventListener('mousedown', (e) => {
+      handle.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         e.stopPropagation();
         const bar = handle.closest('.plantafel-bar');
         const row = bar.closest('.plantafel-days');
         const termin = termine.find((t) => t.id === handle.dataset.id);
         if (!termin) return;
+        handle.setPointerCapture(e.pointerId);
         const rect = row.getBoundingClientRect();
         const dayWidth = rect.width / 7;
         const startDate = toDateOnly(termin.start);
@@ -314,14 +334,16 @@ export async function render(container) {
           bar.style.width = `calc(${Math.min(span, 7 - startIdx)}/7*100% - 4px)`;
         }
         function onUp() {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
+          handle.removeEventListener('pointermove', onMove);
+          handle.removeEventListener('pointerup', onUp);
+          handle.removeEventListener('pointercancel', onUp);
           termin.ende = currentEnde;
           termin.aktualisiertAm = new Date().toISOString();
           put('termine', termin).then(() => renderGrid());
         }
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        handle.addEventListener('pointermove', onMove);
+        handle.addEventListener('pointerup', onUp);
+        handle.addEventListener('pointercancel', onUp);
       });
     });
   }
