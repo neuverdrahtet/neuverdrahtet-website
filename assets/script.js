@@ -1,11 +1,4 @@
 /* =========================================================
-   Config
-   ========================================================= */
-// TODO(Danny): Nach dem Deploy des Cloudflare Workers (siehe assets/cloudflare-worker.js)
-// hier die echte Worker-URL eintragen, z.B. "https://neuverdrahtet-ki-check.DEIN-SUBDOMAIN.workers.dev"
-const KI_CHECK_ENDPOINT = "https://YOUR-WORKER-SUBDOMAIN.workers.dev";
-
-/* =========================================================
    Mobile nav drawer
    ========================================================= */
 const navToggle = document.getElementById('navToggle');
@@ -163,170 +156,46 @@ if (contactForm) {
   });
 }
 
+
 /* =========================================================
-   Kosten-Konfigurator
+   Kosten-Konfigurator (generisch, pro Gewerke-Seite)
    ========================================================= */
-const calcProjectType = document.getElementById('calcProjectType');
-const calcTier = document.getElementById('calcTier');
-const calcExtras = document.getElementById('calcExtras');
-const calcArea = document.getElementById('calcArea');
-const calcAreaVal = document.getElementById('calcAreaVal');
-const calcMin = document.getElementById('calcMin');
-const calcMax = document.getElementById('calcMax');
+function fmtEUR(n) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
+}
 
-if (calcProjectType && calcTier && calcArea) {
-  // price per m², [low, high] band, by project type + tier
-  const PRICE_PER_M2 = {
-    neubau:    { standard: [80, 110], premium: [110, 150], exklusiv: [160, 210] },
-    sanierung: { standard: [100, 130], premium: [130, 180], exklusiv: [185, 245] },
-  };
-  const EXTRAS = {
-    wallbox:      [1200, 2200],
-    pv:           [3500, 7000],
-    waermepumpe:  [1800, 3200],
-  };
+document.querySelectorAll('.calc-embedded').forEach(panel => {
+  const areaInput = panel.querySelector('.calc-area');
+  const areaVal = panel.querySelector('.calc-area-val');
+  const tierButtons = panel.querySelectorAll('.calc-tier button');
+  const minEl = panel.querySelector('.calc-min');
+  const maxEl = panel.querySelector('.calc-max');
+  const suffix = panel.dataset.unitSuffix || '';
+  const period = panel.dataset.period || '';
 
-  function fmt(n) {
-    return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(n);
-  }
-
-  function setActiveSingle(container, target) {
-    container.querySelectorAll('button').forEach(b => b.classList.toggle('is-active', b === target));
-  }
-  function toggleMulti(container, target) {
-    target.classList.toggle('is-active');
-  }
-
-  function currentSelection(container, multi) {
-    const active = Array.from(container.querySelectorAll('button.is-active'));
-    return multi ? active.map(b => b.dataset.value) : (active[0]?.dataset.value || null);
+  function activeTier() {
+    return Array.from(tierButtons).find(b => b.classList.contains('is-active')) || tierButtons[0];
   }
 
   function recalc() {
-    const projectType = currentSelection(calcProjectType, false) || 'neubau';
-    const tier = currentSelection(calcTier, false) || 'premium';
-    const extras = calcExtras ? currentSelection(calcExtras, true) : [];
-    const area = parseInt(calcArea.value, 10);
-
-    calcAreaVal.textContent = area + ' m²';
-
-    const [lowM2, highM2] = PRICE_PER_M2[projectType][tier];
-    let low = area * lowM2;
-    let high = area * highM2;
-
-    extras.forEach(ex => {
-      const [exLow, exHigh] = EXTRAS[ex] || [0, 0];
-      low += exLow;
-      high += exHigh;
-    });
-
-    calcMin.textContent = fmt(low);
-    calcMax.textContent = fmt(high);
+    const units = parseFloat(areaInput.value);
+    areaVal.textContent = units + ' ' + suffix;
+    const tier = activeTier();
+    if (!tier) return;
+    const low = parseFloat(tier.dataset.low) * units;
+    const high = parseFloat(tier.dataset.high) * units;
+    minEl.textContent = fmtEUR(low);
+    maxEl.textContent = fmtEUR(high) + (period || '');
   }
 
-  calcProjectType.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { setActiveSingle(calcProjectType, btn); recalc(); });
+  tierButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tierButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      recalc();
+    });
   });
-  calcTier.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { setActiveSingle(calcTier, btn); recalc(); });
-  });
-  calcExtras?.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', () => { toggleMulti(calcExtras, btn); recalc(); });
-  });
-  calcArea.addEventListener('input', recalc);
+  areaInput.addEventListener('input', recalc);
 
   recalc();
-}
-
-/* =========================================================
-   KI-Check Unterverteilung — upload, preview, analyze
-   ========================================================= */
-const dropzone = document.getElementById('dropzone');
-const kiFile = document.getElementById('kiFile');
-const previewWrap = document.getElementById('previewWrap');
-const previewImg = document.getElementById('previewImg');
-const kiForm = document.getElementById('kiForm');
-const kiSubmit = document.getElementById('kiSubmit');
-const aiResult = document.getElementById('aiResult');
-const aiStatusText = document.getElementById('aiStatusText');
-const aiResultBody = document.getElementById('aiResultBody');
-
-let selectedFile = null;
-
-function handleFile(file) {
-  if (!file || !file.type.startsWith('image/')) return;
-  selectedFile = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    previewImg.src = e.target.result;
-    previewWrap.classList.add('is-visible');
-    kiSubmit.disabled = false;
-  };
-  reader.readAsDataURL(file);
-}
-
-kiFile?.addEventListener('change', (e) => handleFile(e.target.files[0]));
-
-['dragover', 'dragenter'].forEach(evt => {
-  dropzone?.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('is-drag'); });
-});
-['dragleave', 'drop'].forEach(evt => {
-  dropzone?.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('is-drag'); });
-});
-dropzone?.addEventListener('drop', (e) => {
-  const file = e.dataTransfer.files[0];
-  if (file) handleFile(file);
-});
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result.split(',')[1]);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-kiForm?.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  if (!selectedFile) return;
-
-  aiResult.classList.add('is-visible');
-  aiResult.classList.remove('ai-error');
-  aiStatusText.textContent = 'Analyse läuft …';
-  aiResultBody.innerHTML = '';
-  kiSubmit.disabled = true;
-
-  const endpointConfigured = KI_CHECK_ENDPOINT && !KI_CHECK_ENDPOINT.includes('YOUR-WORKER-SUBDOMAIN');
-
-  if (!endpointConfigured) {
-    aiStatusText.textContent = 'KI-Check noch nicht eingerichtet';
-    aiResultBody.innerHTML =
-      '<p>Der KI-Check braucht eine kleine Server-Komponente, die den API-Zugriff sicher übernimmt ' +
-      '(siehe <code>assets/cloudflare-worker.js</code>). Sobald die Worker-URL in ' +
-      '<code>assets/script.js</code> hinterlegt ist, funktioniert der Check automatisch.</p>' +
-      '<p>In der Zwischenzeit gerne direkt <a href="index.html#kontakt">das Foto per Kontaktformular</a> schicken.</p>';
-    kiSubmit.disabled = false;
-    return;
-  }
-
-  try {
-    const base64 = await fileToBase64(selectedFile);
-    const res = await fetch(KI_CHECK_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: base64, mediaType: selectedFile.type })
-    });
-    if (!res.ok) throw new Error('analysis-failed');
-    const data = await res.json();
-
-    aiStatusText.textContent = 'Analyse abgeschlossen';
-    aiResultBody.innerHTML = `<p>${(data.result || 'Keine Einschätzung erhalten.').replace(/\\n/g, '<br>')}</p>`;
-  } catch (err) {
-    aiResult.classList.add('ai-error');
-    aiStatusText.textContent = 'Analyse fehlgeschlagen';
-    aiResultBody.innerHTML = '<p>Die Analyse konnte nicht durchgeführt werden. Bitte später erneut versuchen oder das Foto per Kontaktformular schicken.</p>';
-  } finally {
-    kiSubmit.disabled = false;
-  }
 });

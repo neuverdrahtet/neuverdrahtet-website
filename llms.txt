@@ -1,7 +1,8 @@
 # neuverdrahtet
 
-> Elektro-Fachbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
-> Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
+> Handwerksbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
+> Slogan: "Handwerk mit System".
+> 13 Gewerke unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
 - Adresse: Donnerstr. 131, 45357 Essen
@@ -9,23 +10,22 @@
 - E-Mail: neuverdrahtet@gmail.com
 - Einsatzgebiet: Essen und Ruhrgebiet (u. a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen)
 
-## Leistungen
-- [Elektroinstallation](https://neuverdrahtet.com/elektroinstallation.html): Komplette Elektrik für Neubau, Altbau und Sanierung.
-- [Zählerschrank & Verteilung](https://neuverdrahtet.com/zaehlerschrank.html): Erneuerung nach aktueller Norm, mehr Sicherheit und Reserve für später.
-- [Wallbox-Installation](https://neuverdrahtet.com/wallbox.html): Ladepunkt für E-Autos fachgerecht angeschlossen.
-- [Smart Home](https://neuverdrahtet.com/smart-home.html): Licht, Heizung und Sicherheit vernetzt gesteuert.
-- [E-Check](https://neuverdrahtet.com/e-check.html): Sicherheitsprüfung nach DIN VDE 0701-0702 mit Protokoll.
-- [DGUV V3 Prüfung](https://neuverdrahtet.com/dguv-v3.html): Ortsveränderliche und ortsfeste Geräte geprüft.
-- [Beleuchtungstechnik](https://neuverdrahtet.com/beleuchtung.html): Von der Wohnraumleuchte bis zur LED-Umrüstung.
-- [Störungsbehebung](https://neuverdrahtet.com/stoerungsbehebung.html): Fehlersuche und Reparatur bei Ausfällen vor Ort.
-- [Wärmepumpe](https://neuverdrahtet.com/waermepumpe.html): Elektro-Anbindung und Inbetriebnahme für Wärmepumpen.
-- [Photovoltaik](https://neuverdrahtet.com/photovoltaik.html): Elektro-Anschluss für PV-Anlage und Speicher.
-
-## Tools
-- [Kosten-Konfigurator](https://neuverdrahtet.com/kosten-rechner.html): Kostenlose, unverbindliche Kostenschätzung für Elektroinstallationen.
-- [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check.html): Kostenloser KI-gestützter Foto-Check der Unterverteilung.
+## Gewerke
+- [Elektro](https://neuverdrahtet.com/elektro.html): Elektroinstallation, Smart Home, Wallbox, E-Check und mehr. (inkl. Kosten-Konfigurator)
+- [Bodenleger](https://neuverdrahtet.com/bodenleger.html): Laminat, Vinyl und Parkett fachgerecht verlegt. (inkl. Kosten-Konfigurator)
+- [Fliesen](https://neuverdrahtet.com/fliesen.html): Fliesenverlegung für Bad, Küche und Boden. (inkl. Kosten-Konfigurator)
+- [Maler](https://neuverdrahtet.com/maler.html): Streichen, Tapezieren und Fassadenanstrich. (inkl. Kosten-Konfigurator)
+- [Trockenbau](https://neuverdrahtet.com/trockenbau.html): Wände, Decken und Dämmung im Trockenbau. (inkl. Kosten-Konfigurator)
+- [Komplettbad](https://neuverdrahtet.com/komplettbad.html): Badsanierung aus einer Hand, von Planung bis Abnahme. (inkl. Kosten-Konfigurator)
+- [Hausmeisterservice](https://neuverdrahtet.com/hausmeisterservice.html): Regelmäßige Betreuung für Haus und Grundstück. (inkl. Kosten-Konfigurator)
+- [Abbruch](https://neuverdrahtet.com/abbruch.html): Entkernung und Teil- bis Komplettabbruch. (inkl. Kosten-Konfigurator)
+- [Entrümpelung](https://neuverdrahtet.com/entruempelung.html): Haushalts- und Objektauflösung, besenrein übergeben. (inkl. Kosten-Konfigurator)
+- [Gebäudereinigung](https://neuverdrahtet.com/gebaeudereinigung.html): Unterhalts-, Grund- und Baureinigung. (inkl. Kosten-Konfigurator)
+- [Gartenpflege](https://neuverdrahtet.com/gartenpflege.html): Rasenpflege, Heckenschnitt und Neuanlage. (inkl. Kosten-Konfigurator)
+- [Umzüge](https://neuverdrahtet.com/umzuege.html): Privat- und Gewerbeumzüge, mit oder ohne Verpackung. (inkl. Kosten-Konfigurator)
+- [Wohnungsrenovierung](https://neuverdrahtet.com/wohnungsrenovierung.html): Renovierung, Modernisierung und Sanierung aus einer Hand. (inkl. Kosten-Konfigurator)
 
 ## Weitere Seiten
-- [Alle Leistungen im Überblick](https://neuverdrahtet.com/leistungen.html)
+- [Alle Gewerke im Überblick](https://neuverdrahtet.com/leistungen.html)
 - [Impressum](https://neuverdrahtet.com/impressum.html)
 - [Datenschutz](https://neuverdrahtet.com/datenschutz.html)

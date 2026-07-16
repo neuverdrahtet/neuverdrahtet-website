@@ -129,8 +129,8 @@ h1,h2,h3,h4{
   display:flex; align-items:center; justify-content:space-between;
   height:80px;
 }
-.brand{ display:flex; align-items:center; gap:12px; text-decoration:none; }
-.brand-logo{ height:38px; width:auto; display:block; }
+.brand{ display:flex; align-items:center; gap:12px; text-decoration:none; flex-shrink:0; }
+.brand-logo{ height:38px; width:auto; display:block; flex-shrink:0; }
 .brand-mark{ width:42px; height:auto; flex:none; border-radius:8px; box-shadow:0 0 0 1px rgba(255,255,255,0.08); }
 .brand-name{
   font-family:var(--font-display);
