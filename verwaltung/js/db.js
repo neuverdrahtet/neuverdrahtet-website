@@ -512,6 +512,41 @@ export const TEXTBAUSTEIN_KATEGORIEN = [
   { id: 'rechnung', titel: 'Nur Rechnungen' },
 ];
 
+export const DEFAULT_TEXTBAUSTEINE = [
+  {
+    id: 'tb-angebotseinleitung', titel: 'Begrüßung / Angebotseinleitung', kategorie: 'angebot',
+    text: 'Vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
+  },
+  {
+    id: 'tb-gueltigkeit', titel: 'Gültigkeit & Ansprechbereitschaft', kategorie: 'angebot',
+    text: 'Dieses Angebot ist freibleibend und 30 Tage ab Ausstellungsdatum gültig. Die angegebenen Preise verstehen sich zzgl. der gesetzlichen Mehrwertsteuer.\n\nWir würden uns freuen, den Auftrag für Sie ausführen zu dürfen, und stehen für Rückfragen gerne zur Verfügung.',
+  },
+  {
+    id: 'tb-zugaenglichkeit', titel: 'Zugänglichkeit der Arbeitsstelle', kategorie: 'beide',
+    text: 'Alle zu bearbeitenden Flächen müssen frei zugänglich sein, ohne Installationen, Leitungen, Heizkörper oder Mobiliar. Die Arbeitsstelle ist besenrein zu übergeben.',
+  },
+  {
+    id: 'tb-strom-wasser', titel: 'Strom & Wasser bauseits', kategorie: 'beide',
+    text: 'Die Bereitstellung von Strom und Wasser erfolgt bauseits durch den Auftraggeber.',
+  },
+  {
+    id: 'tb-staub-laerm', titel: 'Staub- und Lärmbelastung', kategorie: 'beide',
+    text: 'Baubedingte Staub- und Lärmbelastungen sind unvermeidbar. Wir empfehlen, empfindliche Gegenstände und Möbel abzudecken oder zu entfernen.',
+  },
+  {
+    id: 'tb-endreinigung', titel: 'Endreinigung', kategorie: 'beide',
+    text: 'Eine eventuell notwendige Endreinigung ist nicht im Leistungsumfang enthalten und wird bauseits durchgeführt.',
+  },
+  {
+    id: 'tb-altbausubstanz', titel: 'Altbausubstanz / Mehrarbeiten', kategorie: 'beide',
+    text: 'Bei Arbeiten an Altbausubstanz können unvorhergesehene Mehrarbeiten erforderlich werden, die wir vor Ausführung mit Ihnen abstimmen.',
+  },
+  {
+    id: 'tb-abrechnung-aufwand', titel: 'Abrechnung nach Aufwand', kategorie: 'beide',
+    text: 'Die Abrechnung erfolgt nach tatsächlichem Arbeitsaufwand. Fahrtzeit ist Arbeitszeit. Materialbeschaffung und Rüstzeit sind ebenfalls Arbeitszeit. Abweichungen zur Angebotsmenge sind daher möglich.',
+  },
+];
+
 export function hasRouteAccess(role, route) {
   const allowed = ROUTE_ROLLEN[route];
   if (!allowed) return true;
@@ -564,6 +599,12 @@ export async function ensureSeeded() {
   const missingDokuVorlagen = DEFAULT_DOKU_VORLAGEN.filter((v) => !dokuVorlagenIds.has(v.id));
   for (const v of missingDokuVorlagen) {
     await put('vorlagen', v);
+  }
+  const textbausteine = await getAll('textbausteine');
+  const textbausteinIds = new Set(textbausteine.map((t) => t.id));
+  const missingTextbausteine = DEFAULT_TEXTBAUSTEINE.filter((t) => !textbausteinIds.has(t.id));
+  for (const t of missingTextbausteine) {
+    await put('textbausteine', t);
   }
 }
 
