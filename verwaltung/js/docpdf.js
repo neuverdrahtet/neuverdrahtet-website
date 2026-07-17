@@ -174,3 +174,73 @@ export function buildDocPdfBlob(opts) {
 
   return doc.output('blob');
 }
+
+export function buildBerichtPdfBlob({ settings, titel, untertitel, text }) {
+  if (!window.jspdf) {
+    throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const marginX = 18;
+  const rightX = 192;
+  let y = 20;
+
+  const fmt = logoFormat(settings.logoDataUrl);
+  if (fmt) {
+    try {
+      const props = doc.getImageProperties(settings.logoDataUrl);
+      const maxW = 46, maxH = 22;
+      const scale = Math.min(maxW / props.width, maxH / props.height);
+      doc.addImage(settings.logoDataUrl, fmt, marginX, y - 4, props.width * scale, props.height * scale);
+    } catch (err) { /* ignore broken logo data */ }
+  } else {
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(settings.firmenname || '', marginX, y + 4);
+    doc.setFont(undefined, 'normal');
+  }
+
+  doc.setFontSize(8);
+  doc.setTextColor(110);
+  doc.text(formatDate(new Date().toISOString()), rightX, y, { align: 'right' });
+
+  y += 24;
+  doc.setDrawColor(180);
+  doc.line(marginX, y, rightX, y);
+  y += 10;
+
+  doc.setFontSize(15);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(20);
+  doc.text(titel || 'Bericht', marginX, y);
+  doc.setFont(undefined, 'normal');
+  y += 7;
+
+  if (untertitel) {
+    doc.setFontSize(10);
+    doc.setTextColor(90);
+    doc.text(untertitel, marginX, y);
+    y += 8;
+  } else {
+    y += 3;
+  }
+
+  doc.setFontSize(10);
+  doc.setTextColor(20);
+  const bodyLines = doc.splitTextToSize(text || '', rightX - marginX);
+  const lineHeight = 5;
+  const maxY = 270;
+  bodyLines.forEach((line) => {
+    if (y > maxY) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(line, marginX, y);
+    y += lineHeight;
+  });
+
+  addFooter(doc, settings, marginX, rightX);
+
+  return doc.output('blob');
+}

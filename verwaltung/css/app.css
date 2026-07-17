@@ -994,6 +994,28 @@ table.data-table tbody tr { cursor: pointer; }
 .tc-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .tc-input-row textarea { flex: 1; resize: vertical; min-height: 40px; }
 
+/* Kundenakte */
+.akte-bereich { margin-bottom: 6px; }
+.akte-projekte-list { display: flex; flex-direction: column; gap: 8px; }
+.akte-projekt {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 0;
+}
+.akte-projekt summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.akte-projekt summary::-webkit-details-marker { display: none; }
+.akte-projekt summary strong { flex: 1; min-width: 120px; }
+.akte-projekt-body { padding: 0 12px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 12px; }
+
 /* Dokumente */
 .dok-list { display: flex; flex-direction: column; gap: 6px; }
 .dok-row {

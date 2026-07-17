@@ -5,7 +5,6 @@ import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
 import * as kanban from './views/kanban.js';
 import * as projekte from './views/projekte.js';
-import * as kalender from './views/kalender.js';
 import * as plantafel from './views/plantafel.js';
 import * as mitarbeiter from './views/mitarbeiter.js';
 import * as katalog from './views/katalog.js';
@@ -19,12 +18,11 @@ import * as ausgaben from './views/ausgaben.js';
 import * as buchhaltung from './views/buchhaltung.js';
 import * as aufgaben from './views/aufgaben.js';
 import * as geraete from './views/geraete.js';
-import * as lohn from './views/lohn.js';
 
 const routes = {
-  dashboard, kunden, kanban, projekte, kalender, plantafel, mitarbeiter,
+  dashboard, kunden, kanban, projekte, plantafel, mitarbeiter,
   katalog, angebote, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, buchhaltung, aufgaben, geraete, lohn,
+  ausgaben, buchhaltung, aufgaben, geraete,
 };
 
 const viewEl = document.getElementById('view');

@@ -200,7 +200,7 @@ export async function render(container) {
         <div class="card">
           <h2>Schnellzugriff</h2>
           <div class="dash-quicklinks">
-            <a class="btn" href="#/kalender">📅 Neuer Termin</a>
+            <a class="btn" href="#/plantafel">📅 Neuer Termin</a>
             <a class="btn" href="#/kunden">👥 Neuer Kunde</a>
             <a class="btn" href="#/projekte">📁 Neues Projekt</a>
           </div>
@@ -245,7 +245,7 @@ export async function render(container) {
               ${heute.map((t) => `
                 <li>
                   <div><strong>${escapeHtml(t.titel)}</strong><div class="text-mute">${(t.start || '').slice(11, 16)}${t.kundeId && kundenById[t.kundeId] ? ' · ' + escapeHtml(kundenById[t.kundeId].firma) : ''}</div></div>
-                  <a class="btn btn-sm" href="#/kalender">Öffnen</a>
+                  <a class="btn btn-sm" href="#/plantafel">Öffnen</a>
                 </li>
               `).join('')}
             </ul>

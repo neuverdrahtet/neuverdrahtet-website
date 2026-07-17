@@ -24,7 +24,6 @@ const STORES = {
   flotten: 'id',
   terminStatus: 'id',
   textbausteine: 'id',
-  lohnabrechnungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -216,6 +215,181 @@ export const DEFAULT_KATEGORIEN = [
   { id: 'wartung-sonstiges', bereich: 'wartung', titel: 'Sonstiges', reihenfolge: 5 },
 ];
 
+export const DEFAULT_DOKU_VORLAGEN = [
+  {
+    id: 'vorlage-echeck', typ: 'dokumentation', name: 'E-Check-Prüfprotokoll',
+    textVorlage: `E-CHECK PRÜFPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum der Prüfung: {{datum}}
+
+Geprüfte Anlage/Geräte:
+
+
+Prüfgrundlage: DIN VDE 0100 / DIN VDE 0701-0702
+
+1. Sichtprüfung
+   Zustand Leitungen/Anschlüsse: i.O. / n.i.O.
+   Kennzeichnung/Beschriftung: i.O. / n.i.O.
+
+2. Messungen
+   Isolationswiderstand:
+   Schutzleiterwiderstand:
+   Schleifenimpedanz:
+   Auslösung RCD (falls vorhanden):
+
+3. Funktionsprüfung
+   Ergebnis:
+
+Festgestellte Mängel:
+
+
+Empfohlene Maßnahmen:
+
+
+Prüfergebnis: bestanden / nicht bestanden
+
+Nächste Prüfung fällig am:
+
+Ort, Datum: {{datum}}
+Unterschrift Prüfer:`,
+  },
+  {
+    id: 'vorlage-dguv-v3', typ: 'dokumentation', name: 'Wiederkehrende Prüfung (DGUV V3)',
+    textVorlage: `PRÜFPROTOKOLL – WIEDERKEHRENDE PRÜFUNG NACH DGUV VORSCHRIFT 3
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Prüfdatum: {{datum}}
+
+Geprüfte elektrische Anlage/Betriebsmittel:
+
+Prüfintervall: ☐ ortsfest  ☐ ortsveränderlich
+
+Prüfergebnisse:
+   Sichtprüfung: i.O. / n.i.O.
+   Erprobung/Funktionsprüfung: i.O. / n.i.O.
+   Messung: i.O. / n.i.O.
+
+Festgestellte Mängel:
+
+
+Gesamtergebnis: keine Mängel / Mängel beseitigt / Mängel vorhanden (Nachprüfung erforderlich)
+
+Nächste Prüfung fällig am:
+
+Ort, Datum: {{datum}}
+Unterschrift Prüfer:`,
+  },
+  {
+    id: 'vorlage-wartung', typ: 'dokumentation', name: 'Wartungsprotokoll',
+    textVorlage: `WARTUNGSPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Durchgeführte Wartungsarbeiten:
+-
+-
+-
+
+Verbrauchsmaterial/Ersatzteile:
+
+
+Festgestellter Zustand der Anlage:
+
+
+Empfehlungen für den Kunden:
+
+
+Nächster Wartungstermin:
+
+Ort, Datum: {{datum}}
+Unterschrift Techniker:`,
+  },
+  {
+    id: 'vorlage-abnahme', typ: 'dokumentation', name: 'Abnahmeprotokoll',
+    textVorlage: `ABNAHMEPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum der Abnahme: {{datum}}
+
+Umfang der abgenommenen Leistung:
+
+
+Die Leistung wurde geprüft und:
+☐ ohne Mängel abgenommen
+☐ mit folgenden Mängeln abgenommen (siehe unten)
+
+Festgestellte Mängel:
+
+
+Frist zur Mängelbeseitigung:
+
+Der Auftragnehmer bestätigt die fach- und normgerechte Ausführung der Arbeiten.
+Der Auftraggeber bestätigt die Übernahme der Leistung.
+
+Ort, Datum: {{datum}}
+
+Unterschrift Auftragnehmer:                     Unterschrift Auftraggeber/Kunde:`,
+  },
+  {
+    id: 'vorlage-maengel', typ: 'dokumentation', name: 'Mängelprotokoll',
+    textVorlage: `MÄNGELPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Festgestellte Mängel:
+Nr. | Beschreibung | Ort/Bauteil | Priorität (hoch/mittel/niedrig)
+1.
+2.
+3.
+
+Vereinbarte Frist zur Beseitigung:
+
+Zuständiger Mitarbeiter:
+
+Bemerkungen:
+
+
+Ort, Datum: {{datum}}
+Unterschrift:`,
+  },
+  {
+    id: 'vorlage-aufmass', typ: 'dokumentation', name: 'Aufmaßprotokoll',
+    textVorlage: `AUFMASSPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Aufmaß (Raum/Bereich, Maße, Besonderheiten):
+Raum/Bereich | Länge (m) | Breite (m) | Höhe (m) | Fläche/Menge | Bemerkung
+
+
+
+
+Besondere Hinweise (Untergrund, Zugänglichkeit, Vorarbeiten):
+
+
+Aufgemessen von:
+
+Ort, Datum: {{datum}}
+Unterschrift:`,
+  },
+];
+
 export const TERMIN_TYPEN = [
   { id: 'termin', titel: 'Termin', farbe: '#2b7fd6' },
   { id: 'baustelle', titel: 'Baustelle', farbe: '#f0a020' },
@@ -233,8 +407,8 @@ export const DEFAULT_TERMIN_STATUS = [
 ];
 
 export const ZUGRIFFSROLLEN = [
-  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen, Lohn/Gehalt und Buchhaltung.' },
-  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen, Lohn/Gehalt und Buchhaltungs-Export.' },
+  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen und Buchhaltung.' },
+  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen und Buchhaltungs-Export.' },
   { id: 'mitarbeiter', titel: 'Mitarbeiter', beschreibung: 'Nur Zeiterfassung, eigene Aufgaben, Kalender/Plantafel und Geräte – keine Finanz- oder Personaldaten.' },
 ];
 
@@ -243,7 +417,6 @@ export const ROUTE_ROLLEN = {
   kunden: ['admin', 'buero'],
   kanban: ['admin', 'buero'],
   projekte: ['admin', 'buero', 'mitarbeiter'],
-  kalender: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
@@ -256,7 +429,6 @@ export const ROUTE_ROLLEN = {
   mahnungen: ['admin', 'buero'],
   ausgaben: ['admin', 'buero'],
   buchhaltung: ['admin'],
-  lohn: ['admin'],
   einstellungen: ['admin'],
 };
 
@@ -311,6 +483,12 @@ export async function ensureSeeded() {
   const missingTerminStatus = DEFAULT_TERMIN_STATUS.filter((s) => !terminStatusIds.has(s.id));
   for (const s of missingTerminStatus) {
     await put('terminStatus', s);
+  }
+  const vorlagen = await getAll('vorlagen');
+  const dokuVorlagenIds = new Set(vorlagen.filter((v) => v.typ === 'dokumentation').map((v) => v.id));
+  const missingDokuVorlagen = DEFAULT_DOKU_VORLAGEN.filter((v) => !dokuVorlagenIds.has(v.id));
+  for (const v of missingDokuVorlagen) {
+    await put('vorlagen', v);
   }
 }
 

@@ -219,7 +219,7 @@ export async function render(container) {
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
         title: 'Dokumente (Berichte, Stundenzettel, ...)',
-        berichtContext: { firma: settings.firmenname, kunde: kundenById[data.kundeId]?.firma || '', projekt: data.titel },
+        berichtContext: { settings, kunde: kundenById[data.kundeId] || null, projekt: data.titel },
       });
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
