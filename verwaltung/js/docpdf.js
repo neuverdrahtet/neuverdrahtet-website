@@ -182,7 +182,7 @@ export function buildDocPdfBlob(opts) {
   return doc.output('blob');
 }
 
-export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, unterschriftKunde, unterschriftMitarbeiter }) {
+export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, raeume, fotos, unterschriftKunde, unterschriftMitarbeiter }) {
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }
@@ -246,6 +246,47 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
     doc.text(line, marginX, y);
     y += lineHeight;
   });
+
+  const raeumeGefuellt = (raeume || []).filter((r) => r.raum || r.beschreibung);
+  if (raeumeGefuellt.length) {
+    if (y > maxY - 20) { doc.addPage(); y = 20; }
+    y += 4;
+    doc.autoTable({
+      startY: y,
+      margin: { left: marginX, right: marginX, bottom: 24 },
+      head: [['Raum / Bereich', 'Beschreibung / Zustand']],
+      body: raeumeGefuellt.map((r) => [r.raum || '', r.beschreibung || '']),
+      styles: { fontSize: 9, cellPadding: 2.2 },
+      headStyles: { fillColor: [15, 27, 45] },
+      columnStyles: { 0: { cellWidth: 50 } },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  const fotosGefuellt = (fotos || []).filter(Boolean);
+  if (fotosGefuellt.length) {
+    if (y > maxY - 20) { doc.addPage(); y = 20; }
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text('Fotos', marginX, y);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+    const fotoW = (rightX - marginX - 6) / 2;
+    const fotoH = 55;
+    fotosGefuellt.forEach((dataUrl, i) => {
+      const col = i % 2;
+      if (col === 0 && y + fotoH > maxY) { doc.addPage(); y = 20; }
+      const x = marginX + col * (fotoW + 6);
+      try {
+        const fmtFoto = logoFormat(dataUrl) || 'JPEG';
+        doc.addImage(dataUrl, fmtFoto, x, y, fotoW, fotoH, undefined, 'FAST');
+      } catch (err) { /* ignore broken photo data */ }
+      if (col === 1) y += fotoH + 6;
+    });
+    if (fotosGefuellt.length % 2 === 1) y += fotoH + 6;
+    y += 2;
+  }
 
   if (unterschriftKunde || unterschriftMitarbeiter) {
     const sigW = 70, sigH = 26;

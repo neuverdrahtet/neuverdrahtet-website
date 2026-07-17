@@ -1,5 +1,5 @@
 import { getAll, put, remove } from './db.js';
-import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast } from './utils.js';
+import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
@@ -8,6 +8,86 @@ import { mountSignaturePad } from './signature.js';
 
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Foto konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Repeatable Raum/Zeile-Editor für Berichte (z.B. je Raum eine Zustandsnotiz). */
+function mountRaeumeEditor(host) {
+  let rows = [];
+  function render() {
+    host.innerHTML = `
+      <div class="rz-list">
+        ${rows.map((r, i) => `
+          <div class="flex-row" data-i="${i}" style="align-items:center;margin-bottom:6px">
+            <input type="text" class="rz-raum" placeholder="Raum/Bereich" value="${escapeHtml(r.raum || '')}" style="flex:1">
+            <input type="text" class="rz-beschreibung" placeholder="Beschreibung/Zustand" value="${escapeHtml(r.beschreibung || '')}" style="flex:2">
+            <button type="button" class="btn btn-sm btn-ghost rz-del" title="Entfernen">✕</button>
+          </div>
+        `).join('') || '<p class="text-mute" style="font-size:12px">Noch keine Räume/Zeilen.</p>'}
+      </div>
+      <button type="button" class="btn btn-sm rz-add" style="margin-top:4px">+ Raum/Zeile hinzufügen</button>
+    `;
+    host.querySelectorAll('[data-i]').forEach((row) => {
+      const i = Number(row.dataset.i);
+      row.querySelector('.rz-raum').addEventListener('input', (e) => { rows[i].raum = e.target.value; });
+      row.querySelector('.rz-beschreibung').addEventListener('input', (e) => { rows[i].beschreibung = e.target.value; });
+      row.querySelector('.rz-del').addEventListener('click', () => { rows.splice(i, 1); render(); });
+    });
+    host.querySelector('.rz-add').addEventListener('click', () => { rows.push({ raum: '', beschreibung: '' }); render(); });
+  }
+  render();
+  return { getRaeume: () => rows.filter((r) => r.raum || r.beschreibung) };
+}
+
+/** Foto-Aufnahme/-Upload für Berichte; komprimiert und embedded als DataURL. */
+function mountFotoEditor(host) {
+  let fotos = [];
+  function render() {
+    host.innerHTML = `
+      <div class="foto-grid tag-list" style="margin-bottom:6px">
+        ${fotos.map((f, i) => `
+          <div class="foto-thumb" data-i="${i}">
+            <img src="${f}" alt="Foto">
+            <button type="button" class="btn btn-sm btn-danger foto-del" title="Entfernen">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <label class="btn btn-sm" style="cursor:pointer">
+        📷 Foto(s) hinzufügen
+        <input type="file" accept="image/*" capture="environment" multiple hidden class="foto-input">
+      </label>
+    `;
+    host.querySelectorAll('.foto-del').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.closest('.foto-thumb').dataset.i);
+        fotos.splice(i, 1);
+        render();
+      });
+    });
+    host.querySelector('.foto-input').addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      for (const file of files) {
+        try {
+          const compressed = await compressImage(file, { maxWidth: 1000, quality: 0.75 });
+          fotos.push(await blobToDataUrl(compressed));
+        } catch (err) {
+          toast(err.message, 'danger');
+        }
+      }
+      e.target.value = '';
+      render();
+    });
+  }
+  render();
+  return { getFotos: () => fotos };
 }
 
 /**
@@ -125,6 +205,12 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         </div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
         <div class="divider"></div>
+        <div class="field col-span-2"><label>Räume / Zeilen (optional, erscheinen als Tabelle im PDF)</label></div>
+        <div id="ber-raeume-host"></div>
+        <div class="divider"></div>
+        <div class="field col-span-2"><label>Fotos (optional)</label></div>
+        <div id="ber-fotos-host"></div>
+        <div class="divider"></div>
         <div class="form-grid">
           <div id="ber-sig-kunde-host"></div>
           <div id="ber-sig-mitarbeiter-host"></div>
@@ -164,6 +250,8 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       items: materialItems, label: 'Material – Auswahl (zusätzlich frei im Text ergänzbar)',
       placeholder: 'Material suchen ...', onInsert: appendToText,
     });
+    const raeumeEditor = mountRaeumeEditor(body.querySelector('#ber-raeume-host'));
+    const fotoEditor = mountFotoEditor(body.querySelector('#ber-fotos-host'));
     const sigKunde = mountSignaturePad(body.querySelector('#ber-sig-kunde-host'), { label: 'Unterschrift Kunde' });
     const sigMitarbeiter = mountSignaturePad(body.querySelector('#ber-sig-mitarbeiter-host'), { label: 'Unterschrift Mitarbeiter' });
 
@@ -197,6 +285,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       return buildBerichtPdfBlob({
         settings, titel: titelInput.value || 'Bericht',
         untertitel: currentUntertitel(), text: textArea.value, datum: currentDatumIso(),
+        raeume: raeumeEditor.getRaeume(), fotos: fotoEditor.getFotos(),
         unterschriftKunde: sigKunde.getDataUrl(), unterschriftMitarbeiter: sigMitarbeiter.getDataUrl(),
       });
     }
