@@ -14,7 +14,13 @@ function addFooter(doc, settings, marginX, rightX) {
     doc.line(marginX, 279, rightX, 279);
     doc.setFontSize(7.5);
     doc.setTextColor(120);
-    const col1 = [settings.firmenname, settings.strasse, settings.plzOrt, settings.telefon, settings.email, settings.website].filter(Boolean);
+    const col1 = [
+      settings.firmenname,
+      [settings.strasse, settings.plzOrt].filter(Boolean).join(', '),
+      settings.telefon,
+      settings.email,
+      settings.website,
+    ].filter(Boolean);
     const col2 = [
       settings.ustId ? `USt-IdNr.: ${settings.ustId}` : '',
       settings.steuernummer ? `Steuernummer: ${settings.steuernummer}` : '',
@@ -26,10 +32,11 @@ function addFooter(doc, settings, marginX, rightX) {
       settings.bic ? `BIC: ${settings.bic}` : '',
     ].filter(Boolean);
     const colX = [marginX, marginX + 62, marginX + 124];
+    const footerLineHeight = 3.3;
     [col1, col2, col3].forEach((col, ci) => {
-      col.forEach((line, li) => doc.text(String(line), colX[ci], 283 + li * 3.6));
+      col.forEach((line, li) => doc.text(String(line), colX[ci], 282 + li * footerLineHeight));
     });
-    doc.text(`Seite ${i}/${pageCount}`, rightX, 283, { align: 'right' });
+    doc.text(`Seite ${i}/${pageCount}`, rightX, 282, { align: 'right' });
   }
 }
 
@@ -175,7 +182,7 @@ export function buildDocPdfBlob(opts) {
   return doc.output('blob');
 }
 
-export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum }) {
+export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, unterschriftKunde, unterschriftMitarbeiter }) {
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }
@@ -239,6 +246,31 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum }
     doc.text(line, marginX, y);
     y += lineHeight;
   });
+
+  if (unterschriftKunde || unterschriftMitarbeiter) {
+    const sigW = 70, sigH = 26;
+    const col1X = marginX, col2X = marginX + sigW + 16;
+    if (y + sigH + 12 > maxY) {
+      doc.addPage();
+      y = 20;
+    }
+    y += 8;
+    if (unterschriftKunde) {
+      try { doc.addImage(unterschriftKunde, 'PNG', col1X, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+    }
+    if (unterschriftMitarbeiter) {
+      try { doc.addImage(unterschriftMitarbeiter, 'PNG', col2X, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+    }
+    y += sigH + 2;
+    doc.setDrawColor(160);
+    doc.line(col1X, y, col1X + sigW, y);
+    doc.line(col2X, y, col2X + sigW, y);
+    y += 4;
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text('Unterschrift Kunde', col1X, y);
+    doc.text('Unterschrift Mitarbeiter', col2X, y);
+  }
 
   addFooter(doc, settings, marginX, rightX);
 

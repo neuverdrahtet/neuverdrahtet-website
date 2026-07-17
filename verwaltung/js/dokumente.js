@@ -4,9 +4,46 @@ import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
+import { mountSignaturePad } from './signature.js';
 
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
+}
+
+/**
+ * Multi-select checklist (mit Suche) über Katalog-Einträge; ausgewählte Bezeichnungen
+ * werden als Aufzählung an den Bericht-Text übergeben. Bleibt danach frei editierbar.
+ */
+function mountKatalogPicker(host, { items, label, placeholder, onInsert }) {
+  host.innerHTML = `
+    <div class="field col-span-2">
+      <label>${escapeHtml(label)}</label>
+      <input type="text" class="qp-search" placeholder="${escapeHtml(placeholder || 'Suchen ...')}" style="margin-bottom:6px">
+      <div class="qp-list tag-list"></div>
+      <button type="button" class="btn btn-sm qp-insert" style="margin-top:6px;align-self:flex-start">+ Ausgewählte in Text einfügen</button>
+    </div>
+  `;
+  const listHost = host.querySelector('.qp-list');
+  function renderList(filter) {
+    const q = (filter || '').trim().toLowerCase();
+    const filtered = items.filter((it) => !q || (it.bezeichnung || '').toLowerCase().includes(q));
+    listHost.innerHTML = filtered.length === 0
+      ? '<p class="text-mute" style="font-size:12px">Keine Treffer.</p>'
+      : filtered.slice(0, 60).map((it) => `
+          <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+            <input type="checkbox" class="qp-check" value="${escapeHtml(it.id)}"> ${escapeHtml(it.bezeichnung)}
+          </label>
+        `).join('');
+  }
+  renderList('');
+  host.querySelector('.qp-search').addEventListener('input', (e) => renderList(e.target.value));
+  host.querySelector('.qp-insert').addEventListener('click', () => {
+    const checked = Array.from(host.querySelectorAll('.qp-check:checked')).map((c) => c.value);
+    if (checked.length === 0) return;
+    const lines = checked.map((id) => items.find((it) => it.id === id)?.bezeichnung).filter(Boolean).map((b) => `- ${b}`);
+    onInsert(lines.join('\n'));
+    host.querySelectorAll('.qp-check:checked').forEach((c) => { c.checked = false; });
+  });
 }
 
 export const DOKUMENT_KATEGORIEN = [
@@ -52,7 +89,8 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
   const zeigeBerichtsVorlage = berichtContext && kategorien.some((k) => k.id === 'bericht');
 
   async function openBerichtVorlage() {
-    const vorlagen = (await getAll('vorlagen')).filter((v) => v.typ === 'dokumentation');
+    const [vorlagenAlle, katalog] = await Promise.all([getAll('vorlagen'), getAll('katalog')]);
+    const vorlagen = vorlagenAlle.filter((v) => v.typ === 'dokumentation');
     if (vorlagen.length === 0) {
       toast('Noch keine Dokumentations-Vorlage angelegt (siehe Menü Vorlagen).', 'danger');
       return;
@@ -60,6 +98,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const settings = berichtContext.settings || {};
     const kunde = berichtContext.kunde || null;
     const projekt = berichtContext.projekt || '';
+    const arbeitenItems = katalog.filter((k) => k.typ === 'leistung');
+    const materialItems = katalog.filter((k) => k.typ === 'artikel');
+    const zeitPresets = ['0.25', '0.5', '0.75', '1', '1.5', '2', '2.5', '3', '4', '5', '6', '7', '8'];
 
     const { body, close } = openModal({
       title: 'Bericht aus Vorlage erstellen',
@@ -72,9 +113,22 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <div class="field col-span-2"><label>Titel</label><input id="ber-titel" type="text"></div>
           <div class="field"><label>Datum</label><input id="ber-datum" type="date" value="${todayISO()}"></div>
           <div class="field"><label>Uhrzeit</label><input id="ber-uhrzeit" type="time" value="${nowHHMM()}"></div>
+          <div class="field"><label>Arbeitszeit (Std.)</label><input id="ber-arbeitszeit" type="number" step="0.25" min="0" list="ber-zeit-presets" placeholder="frei wählbar oder eingeben"></div>
+          <div class="field"><label>Fahrtzeit (Std.)</label><input id="ber-fahrtzeit" type="number" step="0.25" min="0" list="ber-zeit-presets" placeholder="frei wählbar oder eingeben"></div>
+          <datalist id="ber-zeit-presets">${zeitPresets.map((z) => `<option value="${z}"></option>`).join('')}</datalist>
+          <div class="field col-span-2"><button type="button" class="btn btn-sm" id="btn-zeit-insert" style="align-self:flex-start">+ Arbeits-/Fahrtzeit in Text einfügen</button></div>
         </div>
         <div class="divider"></div>
+        <div class="form-grid">
+          <div id="ber-arbeiten-picker"></div>
+          <div id="ber-material-picker"></div>
+        </div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
+        <div class="divider"></div>
+        <div class="form-grid">
+          <div id="ber-sig-kunde-host"></div>
+          <div id="ber-sig-mitarbeiter-host"></div>
+        </div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -89,6 +143,29 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const datumInput = body.querySelector('#ber-datum');
     const uhrzeitInput = body.querySelector('#ber-uhrzeit');
     const textArea = body.querySelector('#ber-text');
+
+    function appendToText(str) {
+      if (!str) return;
+      textArea.value = (textArea.value ? textArea.value.replace(/\s+$/, '') + '\n' : '') + str + '\n';
+    }
+    body.querySelector('#btn-zeit-insert').addEventListener('click', () => {
+      const az = body.querySelector('#ber-arbeitszeit').value;
+      const fz = body.querySelector('#ber-fahrtzeit').value;
+      const lines = [];
+      if (az) lines.push(`Arbeitszeit: ${az} Std.`);
+      if (fz) lines.push(`Fahrtzeit: ${fz} Std.`);
+      appendToText(lines.join('\n'));
+    });
+    mountKatalogPicker(body.querySelector('#ber-arbeiten-picker'), {
+      items: arbeitenItems, label: 'Ausgeführte Arbeiten – Auswahl (zusätzlich frei im Text ergänzbar)',
+      placeholder: 'Leistung suchen ...', onInsert: appendToText,
+    });
+    mountKatalogPicker(body.querySelector('#ber-material-picker'), {
+      items: materialItems, label: 'Material – Auswahl (zusätzlich frei im Text ergänzbar)',
+      placeholder: 'Material suchen ...', onInsert: appendToText,
+    });
+    const sigKunde = mountSignaturePad(body.querySelector('#ber-sig-kunde-host'), { label: 'Unterschrift Kunde' });
+    const sigMitarbeiter = mountSignaturePad(body.querySelector('#ber-sig-mitarbeiter-host'), { label: 'Unterschrift Mitarbeiter' });
 
     function substitute(text) {
       return (text || '')
@@ -120,6 +197,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       return buildBerichtPdfBlob({
         settings, titel: titelInput.value || 'Bericht',
         untertitel: currentUntertitel(), text: textArea.value, datum: currentDatumIso(),
+        unterschriftKunde: sigKunde.getDataUrl(), unterschriftMitarbeiter: sigMitarbeiter.getDataUrl(),
       });
     }
 

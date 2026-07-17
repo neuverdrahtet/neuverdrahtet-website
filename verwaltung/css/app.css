@@ -1113,3 +1113,10 @@ table.data-table tbody tr { cursor: pointer; }
 .flex-row { display: flex; gap: 8px; align-items: center; }
 .flex-wrap { flex-wrap: wrap; }
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* Unterschrift-Pad */
+.sig-pad-wrap { border: 1px solid var(--border); border-radius: 8px; background: #fff; display: inline-block; line-height: 0; }
+.sig-pad-canvas { width: 100%; max-width: 360px; height: 140px; touch-action: none; cursor: crosshair; display: block; }
+
+/* Quick-Picker (Bericht: Arbeiten/Material) */
+.qp-list { max-height: 150px; overflow-y: auto; }
