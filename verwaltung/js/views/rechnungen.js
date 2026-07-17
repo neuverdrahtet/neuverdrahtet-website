@@ -11,6 +11,7 @@ import { mountTextbausteinPicker } from '../textbausteine.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
+const RECHNUNGSTYP_LABEL = { rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung' };
 
 export async function render(container) {
   let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine] = await Promise.all([
@@ -55,21 +56,23 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Fällig am</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
+        <thead><tr><th>Nummer</th><th>Kunde</th><th>Typ</th><th>Datum</th><th>Fällig am</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
         <tbody>
           ${filtered.map((r) => {
             const overdue = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < today;
+            const abschlagsSumme = (r.verrechneteAbschlaege || []).reduce((s, a) => s + (a.betrag || 0), 0);
             return `
             <tr data-id="${r.id}">
               <td>${escapeHtml(r.nummer)}</td>
               <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
+              <td><span class="badge ${r.rechnungstyp === 'abschlag' ? 'badge-warn' : ''}">${escapeHtml(RECHNUNGSTYP_LABEL[r.rechnungstyp] || 'Rechnung')}</span>${r.verrechnetIn ? `<div class="text-mute" style="font-size:11px">verrechnet in ${escapeHtml(r.verrechnetIn)}</div>` : ''}</td>
               <td>${formatDate(r.datum)}</td>
               <td>${formatDate(r.faelligAm)}</td>
               <td>
                 <span class="badge ${STATUS_BADGE[r.status] || 'badge'}">${STATUS_LABEL[r.status] || r.status}</span>
                 ${overdue ? '<span class="badge badge-danger">überfällig</span>' : ''}
               </td>
-              <td class="text-right">${formatCurrency(r.brutto)}</td>
+              <td class="text-right">${formatCurrency(r.brutto)}${abschlagsSumme ? `<div class="text-mute" style="font-size:11px">Rest: ${formatCurrency(r.brutto - abschlagsSumme)}</div>` : ''}</td>
             </tr>
           `; }).join('')}
         </tbody>
@@ -92,8 +95,10 @@ export async function render(container) {
       status: 'offen', betreff: '', notizen: '', positionen: [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
+      rechnungstyp: 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
     };
     const locked = isEdit && !!data.versendet;
+    const abschlaegeChecked = new Set((data.verrechneteAbschlaege || []).map((a) => a.rechnungId));
 
     const { body, close } = openModal({
       title: isEdit ? `Rechnung ${data.nummer}` : 'Neue Rechnung',
@@ -111,8 +116,14 @@ export async function render(container) {
             <div class="field"><label>Rechnungsdatum</label><input type="date" name="datum" value="${data.datum}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm}" ${locked ? 'disabled' : ''}></div>
             <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" ${locked ? 'disabled' : ''}></div>
-            <div class="field col-span-2"><label>Steuerart</label>
+            <div class="field"><label>Steuerart</label>
               <select name="steuerart" id="f-steuerart" ${locked ? 'disabled' : ''}>${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Rechnungsart</label>
+              <select name="rechnungstyp" id="f-rechnungstyp" ${locked ? 'disabled' : ''}>
+                <option value="rechnung" ${(data.rechnungstyp || 'rechnung') === 'rechnung' ? 'selected' : ''}>Rechnung / Schlussrechnung</option>
+                <option value="abschlag" ${data.rechnungstyp === 'abschlag' ? 'selected' : ''}>Abschlagsrechnung</option>
+              </select>
             </div>
             ${isEdit ? `
               <div class="field"><label>Status</label>
@@ -130,6 +141,7 @@ export async function render(container) {
           ` : ''}
           <div id="pos-host"></div>
           ${!locked ? '<div id="tb-picker-host"></div>' : ''}
+          <div id="abschlaege-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen" ${locked ? 'disabled' : ''}>${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="modal-actions">
             ${isEdit && !locked ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -168,6 +180,40 @@ let editor = createPositionsEditor({
           editor.refresh();
         }
       });
+
+      function renderAbschlaegeHost() {
+        const host = body.querySelector('#abschlaege-host');
+        const typ = body.querySelector('#f-rechnungstyp').value;
+        const projektId = body.querySelector('select[name="projektId"]').value;
+        if (typ !== 'rechnung') { host.innerHTML = ''; return; }
+        const kandidaten = rechnungen.filter((r) =>
+          r.rechnungstyp === 'abschlag' && r.id !== data.id && r.status !== 'storniert' &&
+          (!projektId || r.projektId === projektId) && (!r.verrechnetIn || r.verrechnetIn === data.nummer)
+        );
+        if (kandidaten.length === 0) { host.innerHTML = ''; return; }
+        host.innerHTML = `
+          <div class="divider"></div>
+          <h2 style="font-size:13px;margin:0 0 8px">Abschlagszahlungen berücksichtigen (Schlussrechnung)</h2>
+          <div class="tag-list">
+            ${kandidaten.map((r) => `
+              <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                <input type="checkbox" class="abschlag-check" value="${r.id}" ${abschlaegeChecked.has(r.id) ? 'checked' : ''}>
+                ${escapeHtml(r.nummer)} · ${formatCurrency(r.brutto)}
+              </label>
+            `).join('')}
+          </div>
+        `;
+        host.querySelectorAll('.abschlag-check').forEach((chk) => {
+          chk.addEventListener('change', () => {
+            if (chk.checked) abschlaegeChecked.add(chk.value);
+            else abschlaegeChecked.delete(chk.value);
+          });
+        });
+      }
+      renderAbschlaegeHost();
+      body.querySelector('#f-rechnungstyp').addEventListener('change', renderAbschlaegeHost);
+      body.querySelector('select[name="projektId"]').addEventListener('change', renderAbschlaegeHost);
+      body._getAbschlaegeChecked = () => Array.from(abschlaegeChecked);
     }
 
     let uebernommeneZeitIds = [];
@@ -257,8 +303,9 @@ let editor = createPositionsEditor({
       }
       function docOpts() {
         const totals = editor.getTotals();
+        const istAbschlag = data.rechnungstyp === 'abschlag';
         return {
-          settings, art: 'Rechnung', nummer: data.nummer, datum: data.datum,
+          settings, art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
@@ -266,6 +313,7 @@ let editor = createPositionsEditor({
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
           closingText: (data.notizen || '') + `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
+          abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
         };
       }
       async function markVersendetUndSperren() {
@@ -322,6 +370,7 @@ let editor = createPositionsEditor({
         updated.betreff = (fd.get('betreff') || '').toString().trim();
         updated.notizen = (fd.get('notizen') || '').toString().trim();
         updated.steuerart = fd.get('steuerart') || 'regel';
+        updated.rechnungstyp = fd.get('rechnungstyp') || 'rechnung';
       }
       if (isEdit) {
         updated.status = fd.get('status') || data.status;
@@ -342,6 +391,33 @@ let editor = createPositionsEditor({
         const currentSettings = await getSettings();
         updated.nummer = nextNummer(currentSettings.rechnungPrefix, currentSettings.naechsteRechnungNr);
         await setSettings({ naechsteRechnungNr: currentSettings.naechsteRechnungNr + 1 });
+      }
+
+      if (!locked) {
+        const previousIds = (data.verrechneteAbschlaege || []).map((a) => a.rechnungId);
+        if (updated.rechnungstyp === 'rechnung') {
+          const checkedIds = body._getAbschlaegeChecked ? body._getAbschlaegeChecked() : [];
+          updated.verrechneteAbschlaege = checkedIds.map((id) => {
+            const ar = rechnungen.find((r) => r.id === id);
+            return { rechnungId: id, nummer: ar?.nummer || '', betrag: ar?.brutto || 0 };
+          });
+          for (const id of checkedIds) {
+            if (previousIds.includes(id)) continue;
+            const ar = rechnungen.find((r) => r.id === id);
+            if (ar) await put('rechnungen', { ...ar, verrechnetIn: updated.nummer });
+          }
+          for (const id of previousIds) {
+            if (checkedIds.includes(id)) continue;
+            const ar = rechnungen.find((r) => r.id === id);
+            if (ar) await put('rechnungen', { ...ar, verrechnetIn: '' });
+          }
+        } else {
+          updated.verrechneteAbschlaege = [];
+          for (const id of previousIds) {
+            const ar = rechnungen.find((r) => r.id === id);
+            if (ar) await put('rechnungen', { ...ar, verrechnetIn: '' });
+          }
+        }
       }
 
       await put('rechnungen', updated);

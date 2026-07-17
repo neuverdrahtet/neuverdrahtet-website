@@ -160,7 +160,22 @@ export function buildDocPdfBlob(opts) {
     doc.setFont(undefined, 'bold');
     doc.text(`Gesamt: ${formatCurrency(opts.totals.brutto)}`, rightX, y, { align: 'right' });
     doc.setFont(undefined, 'normal');
-    y += 10;
+    y += 8;
+
+    if (opts.abschlaege && opts.abschlaege.length) {
+      doc.setFontSize(9);
+      opts.abschlaege.forEach((a) => {
+        doc.text(`Abzgl. Abschlagsrechnung ${a.nummer}: -${formatCurrency(a.betrag)}`, rightX, y, { align: 'right' });
+        y += 4.5;
+      });
+      const restbetrag = opts.totals.brutto - opts.abschlaege.reduce((s, a) => s + (a.betrag || 0), 0);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'bold');
+      doc.text(`Noch zu zahlen: ${formatCurrency(restbetrag)}`, rightX, y, { align: 'right' });
+      doc.setFont(undefined, 'normal');
+      y += 6;
+    }
+    y += 2;
   }
 
   const steuerHinweisText = opts.steuerHinweis || (opts.settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '');
