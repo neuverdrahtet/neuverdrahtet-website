@@ -265,3 +265,43 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
 
   recalcAll();
 });
+
+/* =========================================================
+   Cookie-Consent (Google Consent Mode v2)
+   ========================================================= */
+(() => {
+  const CONSENT_KEY = 'nv-cookie-consent';
+  const stored = localStorage.getItem(CONSENT_KEY);
+
+  const updateConsent = (granted) => {
+    if (typeof gtag !== 'function') return;
+    gtag('consent', 'update', { analytics_storage: granted ? 'granted' : 'denied' });
+  };
+
+  if (stored === 'granted') {
+    updateConsent(true);
+  } else if (stored !== 'denied') {
+    const banner = document.createElement('div');
+    banner.className = 'cookie-banner';
+    banner.innerHTML = `
+      <div class="cookie-banner-inner">
+        <p>Wir nutzen Google Analytics, um die Website zu verbessern. Cookies werden erst nach Ihrer Zustimmung gesetzt. Mehr dazu in unserer <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
+        <div class="cookie-banner-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="cookieDecline">Ablehnen</button>
+          <button type="button" class="btn btn-primary btn-sm" id="cookieAccept">Akzeptieren</button>
+        </div>
+      </div>`;
+    document.body.appendChild(banner);
+
+    banner.querySelector('#cookieAccept').addEventListener('click', () => {
+      localStorage.setItem(CONSENT_KEY, 'granted');
+      updateConsent(true);
+      banner.remove();
+    });
+    banner.querySelector('#cookieDecline').addEventListener('click', () => {
+      localStorage.setItem(CONSENT_KEY, 'denied');
+      updateConsent(false);
+      banner.remove();
+    });
+  }
+})();
