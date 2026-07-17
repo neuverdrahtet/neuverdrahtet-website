@@ -1,6 +1,7 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { openStatusManager } from '../statusManager.js';
 
 const PRIORITAETEN = [
   { id: 'niedrig', titel: 'Niedrig' },
@@ -16,11 +17,15 @@ const TABS = [
 ];
 
 export async function render(container) {
-  let [aufgaben, mitarbeiter, projekte, kunden] = await Promise.all([
-    getAll('aufgaben'), getAll('mitarbeiter'), getAll('projekte'), getAll('kunden'),
+  let [aufgaben, mitarbeiter, projekte, kunden, aufgabenStatus] = await Promise.all([
+    getAll('aufgaben'), getAll('mitarbeiter'), getAll('projekte'), getAll('kunden'), getAll('aufgabenStatus'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  aufgabenStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const statusById = Object.fromEntries(aufgabenStatus.map((s) => [s.id, s]));
+  const offenStatus = aufgabenStatus.find((s) => !s.geschlossen) || aufgabenStatus[0];
+  const erledigtStatus = aufgabenStatus.find((s) => s.geschlossen) || aufgabenStatus[aufgabenStatus.length - 1];
   aufgaben.sort((a, b) => (a.faelligAm || '9999').localeCompare(b.faelligAm || '9999'));
 
   let currentMa = getCurrentMitarbeiterId();
@@ -31,7 +36,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Aufgaben</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neue Aufgabe</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
+        <button class="btn btn-primary" id="btn-new">+ Neue Aufgabe</button>
+      </div>
     </div>
     <div class="search-bar">
       <label class="text-mute" style="display:flex;align-items:center;gap:6px;font-size:12.5px">
@@ -64,9 +72,9 @@ export async function render(container) {
 
   function applyFilter() {
     filtered = aufgaben.filter((a) => {
-      if (tab === 'meine') return a.zugewiesenAn === currentMa && a.status !== 'erledigt';
+      if (tab === 'meine') return a.zugewiesenAn === currentMa && !statusById[a.status]?.geschlossen;
       if (tab === 'erstellt') return a.erstelltVon === currentMa;
-      if (tab === 'erledigt') return a.status === 'erledigt';
+      if (tab === 'erledigt') return !!statusById[a.status]?.geschlossen;
       return true;
     });
     renderTable();
@@ -81,16 +89,18 @@ export async function render(container) {
       <table class="data-table">
         <thead><tr><th></th><th>Titel</th><th>Zugewiesen an</th><th>Fällig am</th><th>Priorität</th><th>Status</th></tr></thead>
         <tbody>
-          ${filtered.map((a) => `
+          ${filtered.map((a) => {
+            const st = statusById[a.status];
+            return `
             <tr data-id="${a.id}">
-              <td><input type="checkbox" class="chk-erledigt" data-id="${a.id}" ${a.status === 'erledigt' ? 'checked' : ''}></td>
+              <td><input type="checkbox" class="chk-erledigt" data-id="${a.id}" ${st?.geschlossen ? 'checked' : ''}></td>
               <td>${escapeHtml(a.titel)}</td>
               <td>${escapeHtml(mitarbeiterById[a.zugewiesenAn]?.name || '')}</td>
               <td>${formatDate(a.faelligAm)}</td>
               <td><span class="badge ${a.prioritaet === 'hoch' ? 'badge-danger' : a.prioritaet === 'niedrig' ? '' : 'badge-warn'}">${escapeHtml(PRIORITAETEN.find((p) => p.id === a.prioritaet)?.titel || 'Normal')}</span></td>
-              <td><span class="badge ${a.status === 'erledigt' ? 'badge-success' : 'badge-accent'}">${a.status === 'erledigt' ? 'Erledigt' : 'Offen'}</span></td>
+              <td><span class="badge" style="background:${escapeHtml(st?.farbe || 'var(--border)')}22;color:${escapeHtml(st?.farbe || 'var(--text)')}">${escapeHtml(st?.titel || a.status || '')}</span></td>
             </tr>
-          `).join('')}
+          `; }).join('')}
         </tbody>
       </table>
     `;
@@ -104,7 +114,7 @@ export async function render(container) {
       chk.addEventListener('click', (e) => e.stopPropagation());
       chk.addEventListener('change', async () => {
         const a = aufgaben.find((x) => x.id === chk.dataset.id);
-        a.status = chk.checked ? 'erledigt' : 'offen';
+        a.status = chk.checked ? (erledigtStatus?.id || 'erledigt') : (offenStatus?.id || 'offen');
         a.erledigtAm = chk.checked ? new Date().toISOString() : '';
         await put('aufgaben', a);
         toast(chk.checked ? 'Aufgabe erledigt' : 'Aufgabe wieder geöffnet', 'success');
@@ -114,12 +124,21 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-status-manage').addEventListener('click', () => {
+    openStatusManager({
+      title: 'Aufgaben-Status verwalten',
+      store: 'aufgabenStatus',
+      items: aufgabenStatus,
+      canDelete: (it) => !aufgaben.some((a) => a.status === it.id),
+      onChange: () => render(container),
+    });
+  });
 
   function openForm(a) {
     const isEdit = !!a;
     const data = a || {
       id: uid(), titel: '', beschreibung: '', zugewiesenAn: currentMa || '', erstelltVon: currentMa || '',
-      faelligAm: '', prioritaet: 'normal', status: 'offen', projektId: '', kundeId: '', createdAt: new Date().toISOString(), erledigtAm: '',
+      faelligAm: '', prioritaet: 'normal', status: offenStatus?.id || 'offen', projektId: '', kundeId: '', createdAt: new Date().toISOString(), erledigtAm: '',
     };
     const { body, close } = openModal({
       title: isEdit ? 'Aufgabe bearbeiten' : 'Neue Aufgabe',
@@ -135,7 +154,7 @@ export async function render(container) {
               <select name="prioritaet">${PRIORITAETEN.map((p) => `<option value="${p.id}" ${p.id === data.prioritaet ? 'selected' : ''}>${p.titel}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Status</label>
-              <select name="status"><option value="offen" ${data.status !== 'erledigt' ? 'selected' : ''}>Offen</option><option value="erledigt" ${data.status === 'erledigt' ? 'selected' : ''}>Erledigt</option></select>
+              <select name="status">${aufgabenStatus.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Projekt</label>
               <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
@@ -168,12 +187,13 @@ export async function render(container) {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
-      const wasErledigt = data.status === 'erledigt';
+      const wasErledigt = !!statusById[data.status]?.geschlossen;
       for (const key of ['titel', 'zugewiesenAn', 'faelligAm', 'prioritaet', 'status', 'projektId', 'kundeId', 'beschreibung']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
-      if (!wasErledigt && updated.status === 'erledigt') updated.erledigtAm = new Date().toISOString();
-      if (updated.status !== 'erledigt') updated.erledigtAm = '';
+      const nowErledigt = !!statusById[updated.status]?.geschlossen;
+      if (!wasErledigt && nowErledigt) updated.erledigtAm = new Date().toISOString();
+      if (!nowErledigt) updated.erledigtAm = '';
       if (!isEdit) updated.erstelltVon = currentMa || '';
       if (!updated.titel) return;
       await put('aufgaben', updated);

@@ -1,7 +1,20 @@
-import { getAll, put, remove, ZUGRIFFSROLLEN } from '../db.js';
+import { getAll, put, remove, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
+
+const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
+
+function currentStatusFor(termine, mitarbeiterId) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const active = termine.find((t) => {
+    if (!t.mitarbeiterIds?.includes(mitarbeiterId) || !STATUS_TYPEN.includes(t.typ)) return false;
+    const start = (t.start || '').slice(0, 10);
+    const ende = (t.ende || '').slice(0, 10) || start;
+    return start <= todayStr && todayStr <= ende;
+  });
+  return active ? TERMIN_TYPEN.find((tt) => tt.id === active.typ) : null;
+}
 
 const FARBEN = ['#f0a020', '#2b7fd6', '#1f8a4c', '#c0392b', '#8e44ad', '#16a085', '#d35400', '#2c3e50'];
 const VERTRAGSARTEN = ['Vollzeit', 'Teilzeit', 'Minijob', 'Werkstudent', 'Auszubildender', 'Praktikant'];
@@ -39,17 +52,19 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th></th><th>Name</th><th>Rolle</th><th>Vertrag</th><th>Urlaub (Jahr)</th><th>Telefon</th><th>E-Mail</th></tr></thead>
+        <thead><tr><th></th><th>Name</th><th>Rolle</th><th>Vertrag</th><th>Status heute</th><th>Urlaub (Jahr)</th><th>Telefon</th><th>E-Mail</th></tr></thead>
         <tbody>
           ${mitarbeiter.map((m) => {
             const genommen = currentYearCount(termine, m.id, 'urlaub');
             const anspruch = Number(m.urlaubsanspruchTage) || 0;
+            const status = currentStatusFor(termine, m.id);
             return `
             <tr data-id="${m.id}">
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${m.farbe || '#f0a020'}"></span></td>
               <td>${escapeHtml(m.name)}</td>
               <td>${escapeHtml(m.rolle || '')}</td>
               <td>${escapeHtml(m.vertragsart || '')}</td>
+              <td>${status ? `<span class="badge" style="background:${escapeHtml(status.farbe)}22;color:${escapeHtml(status.farbe)}">${escapeHtml(status.titel)}</span>` : '<span class="badge badge-success">Verfügbar</span>'}</td>
               <td>${anspruch ? `${genommen} / ${anspruch} Tage` : (genommen ? `${genommen} Tage` : '')}</td>
               <td>${escapeHtml(m.telefon || '')}</td>
               <td>${escapeHtml(m.email || '')}</td>
@@ -80,6 +95,11 @@ export async function render(container) {
     const krankTage = isEdit ? currentYearCount(termine, data.id, 'krank') : 0;
     const schulungTage = isEdit ? currentYearCount(termine, data.id, 'schulung') : 0;
     const urlaubRest = (Number(data.urlaubsanspruchTage) || 0) - urlaubGenommen;
+    const aktuellerStatus = isEdit ? currentStatusFor(termine, data.id) : null;
+    const statusVerlauf = isEdit
+      ? termine.filter((t) => t.mitarbeiterIds?.includes(data.id) && STATUS_TYPEN.includes(t.typ))
+          .sort((a, b) => (b.start || '').localeCompare(a.start || '')).slice(0, 8)
+      : [];
 
     const { body, close } = openModal({
       title: isEdit ? 'Mitarbeiter bearbeiten' : 'Neuer Mitarbeiter',
@@ -132,6 +152,22 @@ export async function render(container) {
             ` : '<p class="text-mute col-span-2">Urlaub/Krank/Schulung werden nach dem Anlegen aus der Plantafel berechnet.</p>'}
           </div>
           <p class="hint">Trage Urlaub, Krankheit, Schulungen und Baustellen-Einsätze über Kalender oder Plantafel ein – sie werden hier automatisch gezählt.</p>
+          ${isEdit ? `
+            <div class="flex-row" style="margin:8px 0"><strong>Status heute:</strong>
+              ${aktuellerStatus ? `<span class="badge" style="background:${escapeHtml(aktuellerStatus.farbe)}22;color:${escapeHtml(aktuellerStatus.farbe)}">${escapeHtml(aktuellerStatus.titel)}</span>` : '<span class="badge badge-success">Verfügbar</span>'}
+            </div>
+            <h2 style="font-size:13px;margin:10px 0 6px">Letzte Einträge</h2>
+            ${statusVerlauf.length ? `<ul class="cal-event-list">${statusVerlauf.map((t) => {
+              const info = TERMIN_TYPEN.find((tt) => tt.id === t.typ);
+              return `<li>
+                <div>
+                  <strong>${escapeHtml(info?.titel || t.typ)}</strong>
+                  <div class="text-mute">${formatDate(t.start)}${t.ende && t.ende !== t.start ? ' – ' + formatDate(t.ende) : ''}${t.titel ? ' · ' + escapeHtml(t.titel) : ''}</div>
+                </div>
+                <span class="color-dot" style="background:${escapeHtml(info?.farbe || 'var(--border)')}"></span>
+              </li>`;
+            }).join('')}</ul>` : '<p class="text-mute">Noch keine Einträge (Urlaub/Krank/Schulung/Baustelle).</p>'}
+          ` : ''}
 
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Zugang zur Verwaltung</h2>

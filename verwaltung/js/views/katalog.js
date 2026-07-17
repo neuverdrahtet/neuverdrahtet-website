@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
 const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
+const EINHEITEN_PRESETS = ['Std.', 'Stk.', 'm', 'm²', 'm³', 'lfm', 'kg', 't', 'ltr', 'Psch.', 'Tag', 'Satz', 'Rolle', 'Paket'];
 
 function parseNumber(str) {
   const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
@@ -180,7 +181,10 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
                 <option value="paket" ${data.typ === 'paket' ? 'selected' : ''}>Paket (Leistung + Material + Gerät kombiniert)</option>
               </select>
             </div>
-            <div class="field"><label>Einheit</label><input name="einheit" placeholder="Std., Stk., pauschal ..." value="${escapeHtml(data.einheit || '')}"></div>
+            <div class="field"><label>Einheit</label>
+              <input name="einheit" list="einheiten-presets" placeholder="auswählen oder frei eingeben" value="${escapeHtml(data.einheit || '')}">
+              <datalist id="einheiten-presets">${EINHEITEN_PRESETS.map((e) => `<option value="${e}"></option>`).join('')}</datalist>
+            </div>
             <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
           </div>

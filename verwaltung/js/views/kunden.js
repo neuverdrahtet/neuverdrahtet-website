@@ -1,5 +1,5 @@
-import { getAll, put, remove, getSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
+import { getAll, put, remove, clearStore, getSettings, BEREICHE } from '../db.js';
+import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -21,6 +21,40 @@ function parseKundenCsv(text) {
     rows.push({
       id: uid(), firma, ansprechpartner: ansprechpartner || '', strasse: strasse || '',
       plz: plz || '', ort: ort || '', telefon: telefon || '', email: email || '', notizen: notizen || '',
+    });
+  }
+  return { rows, errors };
+}
+
+function isLexofficeCsv(text) {
+  const firstLine = (text.split(/\r?\n/)[0] || '');
+  return /^kundennummer;/i.test(firstLine.trim());
+}
+
+/** lexoffice-Kontakte-Export (Kundennummer;Lieferantennummer;Firmenname;Anrede;Kontakt;Vorname;Nachname;...). */
+function parseLexofficeCsv(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(';').map((c) => c.trim());
+    if (/^kundennummer$/i.test(cols[0] || '')) continue;
+    const [
+      kundennummer, , firmenname, , kontakt, vorname, nachname, , ustId,
+      , strasse1, plz1, ort1, , , , , , ,
+      telefon1, telefon2, email1, email2,
+      ansprechpartner1, , apVorname, apNachname, apEmail, apTelefon,
+    ] = cols;
+    const firma = firmenname || kontakt || [vorname, nachname].filter(Boolean).join(' ').trim();
+    if (!firma) { errors.push(line); continue; }
+    const ansprechpartner = ansprechpartner1 || [apVorname, apNachname].filter(Boolean).join(' ').trim();
+    rows.push({
+      id: uid(), firma, ansprechpartner,
+      strasse: strasse1 || '', plz: plz1 || '', ort: ort1 || '',
+      telefon: telefon1 || telefon2 || apTelefon || '',
+      email: email1 || email2 || apEmail || '',
+      notizen: ustId ? `USt-IdNr.: ${ustId}` : '',
+      kundennummer: kundennummer || '',
     });
   }
   return { rows, errors };
@@ -105,7 +139,7 @@ export async function render(container) {
       title: 'Kunden importieren',
       wide: true,
       bodyHtml: `
-        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Firma;Ansprechpartner;Straße;PLZ;Ort;Telefon;E-Mail;Notizen</code> – nur Firma/Name ist Pflicht. Eine optionale Kopfzeile wird erkannt.</p>
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Eigenes Format: <code>Firma;Ansprechpartner;Straße;PLZ;Ort;Telefon;E-Mail;Notizen</code> – nur Firma/Name ist Pflicht. Ein lexoffice-Kontakte-Export wird automatisch erkannt und passend zugeordnet. Eine optionale Kopfzeile wird erkannt.</p>
         <div class="field" style="margin-bottom:10px">
           <label>CSV- oder Excel-Datei</label>
           <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
@@ -114,6 +148,11 @@ export async function render(container) {
           <label>oder CSV-Text einfügen</label>
           <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Mustermann GmbH;Max Mustermann;Musterstr. 1;45357;Essen;0201123456;info@mustermann.de"></textarea>
         </div>
+        <div class="field field-checkbox" style="margin-top:8px">
+          <input type="checkbox" id="import-replace">
+          <label for="import-replace">Bestehende Kunden vor dem Import löschen (vollständig ersetzen)</label>
+        </div>
+        <p class="hint" id="import-replace-warning" hidden>⚠️ Löscht unwiderruflich alle bisherigen Kunden. Bereits verknüpfte Projekte/Rechnungen bleiben erhalten, verweisen aber danach ggf. ins Leere.</p>
         <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
         <div class="modal-actions">
           <span class="spacer"></span>
@@ -123,22 +162,29 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-replace').addEventListener('change', (e) => {
+      body.querySelector('#import-replace-warning').hidden = !e.target.checked;
+    });
     body.querySelector('#import-file').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       const isExcel = /\.xlsx?$/i.test(file.name);
       try {
-        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await readTextAutoEncoding(file);
       } catch (err) {
         toast(err.message, 'danger');
       }
     });
     body.querySelector('#btn-do-import').addEventListener('click', async () => {
       const text = body.querySelector('#import-text').value;
-      const { rows, errors } = parseKundenCsv(text);
+      const { rows, errors } = isLexofficeCsv(text) ? parseLexofficeCsv(text) : parseKundenCsv(text);
       if (rows.length === 0) {
         body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
         return;
+      }
+      if (body.querySelector('#import-replace').checked) {
+        if (!confirmDelete(`Wirklich ALLE ${kunden.length} bestehenden Kunden löschen und durch ${rows.length} neue ersetzen?`)) return;
+        await clearStore('kunden');
       }
       for (const row of rows) await put('kunden', row);
       toast(`${rows.length} Kunde(n) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
@@ -149,7 +195,7 @@ export async function render(container) {
 
   function openForm(kunde) {
     const isEdit = !!kunde;
-    const data = kunde || { id: uid(), firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '' };
+    const data = kunde || { id: uid(), firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '' };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const { body, close } = openModal({
@@ -159,6 +205,7 @@ export async function render(container) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required value="${escapeHtml(data.firma)}"></div>
             <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(data.ansprechpartner || '')}"></div>
+            <div class="field"><label>Kundennummer</label><input name="kundennummer" value="${escapeHtml(data.kundennummer || '')}"></div>
             <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
             <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>

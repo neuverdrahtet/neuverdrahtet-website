@@ -153,6 +153,20 @@ export async function excelFileToCsvText(file) {
   return rows.map((row) => row.map(csvCellToText).join(';')).join('\n');
 }
 
+/**
+ * Reads a text file, auto-detecting UTF-8 vs. Windows-1252/ISO-8859-1 (common
+ * for CSV exports from Windows business software like lexoffice/DATEV, which
+ * would otherwise show up as mojibake for German umlauts/ß).
+ */
+export async function readTextAutoEncoding(file) {
+  const buf = await file.arrayBuffer();
+  const utf8 = new TextDecoder('utf-8').decode(buf);
+  if (utf8.includes('�')) {
+    return new TextDecoder('windows-1252').decode(buf);
+  }
+  return utf8;
+}
+
 function csvEscapeField(v) {
   const s = String(v ?? '');
   return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;

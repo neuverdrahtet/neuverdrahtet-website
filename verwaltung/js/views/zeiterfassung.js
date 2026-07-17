@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings } from '../db.js';
+import { getAll, put, remove, getSettings, TAETIGKEITEN } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
@@ -197,6 +197,7 @@ export async function render(container) {
             id: uid(), projektId: runningNow.projektId, mitarbeiterId: currentMa,
             datum: runningNow.startedAt.slice(0, 10), dauerMinuten: minutes, beschreibung: '', abgerechnet: false,
             startzeit: runningNow.startedAt.slice(11, 16), endzeit: new Date().toISOString().slice(11, 16),
+            taetigkeit: 'baustelle',
           };
           await put('zeiterfassung', neu);
           eintraege.unshift(neu);
@@ -223,6 +224,9 @@ export async function render(container) {
           <div class="field"><label>Mitarbeiter</label>
             <select id="timer-mitarbeiter"><option value="">–</option>${mitarbeiter.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>
           </div>
+          <div class="field"><label>Tätigkeit</label>
+            <select id="timer-taetigkeit">${TAETIGKEITEN.map((t) => `<option value="${t.id}">${escapeHtml(t.titel)}</option>`).join('')}</select>
+          </div>
         </div>
         <button class="btn btn-primary" id="btn-start" style="margin-top:10px;font-size:16px;padding:14px 22px">▶️ Zeit starten</button>
       `;
@@ -230,7 +234,8 @@ export async function render(container) {
         const projektId = timerCard.querySelector('#timer-projekt').value;
         if (!projektId) { toast('Bitte ein Projekt wählen', 'danger'); return; }
         const mitarbeiterId = timerCard.querySelector('#timer-mitarbeiter').value;
-        saveRunningTimer({ projektId, mitarbeiterId, startedAt: new Date().toISOString() });
+        const taetigkeit = timerCard.querySelector('#timer-taetigkeit').value;
+        saveRunningTimer({ projektId, mitarbeiterId, taetigkeit, startedAt: new Date().toISOString() });
         renderTimer();
       });
     } else {
@@ -258,6 +263,7 @@ export async function render(container) {
           id: uid(), projektId: running.projektId, mitarbeiterId: running.mitarbeiterId,
           datum: running.startedAt.slice(0, 10), dauerMinuten: minutes, beschreibung: '', abgerechnet: false,
           startzeit: running.startedAt.slice(11, 16), endzeit: new Date().toISOString().slice(11, 16),
+          taetigkeit: running.taetigkeit || 'baustelle',
         }, { isNewFromTimer: true });
       });
     }
@@ -282,7 +288,7 @@ export async function render(container) {
     tableHost.innerHTML = `
       <p class="hint">Gesamt: ${formatDuration(totalMinutes)}</p>
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Projekt</th><th>Mitarbeiter</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Projekt</th><th>Mitarbeiter</th><th>Tätigkeit</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
         <tbody>
           ${filtered.map((e) => `
             <tr data-id="${e.id}">
@@ -290,6 +296,7 @@ export async function render(container) {
               <td>${e.startzeit && e.endzeit ? `${e.startzeit}–${e.endzeit}` : '–'}</td>
               <td>${escapeHtml(projekteById[e.projektId]?.titel || '')}</td>
               <td>${escapeHtml(mitarbeiterById[e.mitarbeiterId]?.name || '')}</td>
+              <td>${escapeHtml(TAETIGKEITEN.find((t) => t.id === e.taetigkeit)?.titel || '')}</td>
               <td>${formatDuration(e.dauerMinuten || 0)}</td>
               <td>${escapeHtml(e.beschreibung || '')}</td>
               <td><span class="badge ${e.abgerechnet ? 'badge-success' : 'badge'}">${e.abgerechnet ? 'abgerechnet' : 'offen'}</span></td>
@@ -310,7 +317,7 @@ export async function render(container) {
     const data = entry || {
       id: uid(), projektId: '', mitarbeiterId: '', datum: new Date().toISOString().slice(0, 10),
       dauerMinuten: 60, beschreibung: '', abgerechnet: false,
-      startzeit: nowHHMM(), endzeit: addMinutesHHMM(nowHHMM(), 60),
+      startzeit: nowHHMM(), endzeit: addMinutesHHMM(nowHHMM(), 60), taetigkeit: 'baustelle',
     };
     const { body, close } = openModal({
       title: isNewFromTimer ? 'Zeit speichern' : (isEdit ? 'Eintrag bearbeiten' : 'Neuer Eintrag'),
@@ -327,6 +334,9 @@ export async function render(container) {
             <div class="field"><label>Startzeit</label><input type="time" name="startzeit" id="ze-startzeit" value="${data.startzeit || ''}"></div>
             <div class="field"><label>Endzeit</label><input type="time" name="endzeit" id="ze-endzeit" value="${data.endzeit || ''}"></div>
             <div class="field"><label>Dauer (Minuten)</label><input type="number" min="1" name="dauerMinuten" id="ze-dauer" value="${data.dauerMinuten}"></div>
+            <div class="field"><label>Tätigkeit</label>
+              <select name="taetigkeit">${TAETIGKEITEN.map((t) => `<option value="${t.id}" ${t.id === (data.taetigkeit || 'baustelle') ? 'selected' : ''}>${escapeHtml(t.titel)}</option>`).join('')}</select>
+            </div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
             <div class="field field-checkbox col-span-2"><input type="checkbox" name="abgerechnet" id="ze-abgerechnet" ${data.abgerechnet ? 'checked' : ''}><label for="ze-abgerechnet">Bereits abgerechnet</label></div>
           </div>
@@ -368,6 +378,7 @@ export async function render(container) {
       updated.startzeit = (fd.get('startzeit') || '').toString();
       updated.endzeit = (fd.get('endzeit') || '').toString();
       updated.dauerMinuten = Number(fd.get('dauerMinuten')) || 0;
+      updated.taetigkeit = fd.get('taetigkeit') || 'baustelle';
       updated.beschreibung = (fd.get('beschreibung') || '').toString().trim();
       updated.abgerechnet = fd.get('abgerechnet') === 'on';
       if (!updated.projektId) { toast('Bitte ein Projekt wählen', 'danger'); return; }
