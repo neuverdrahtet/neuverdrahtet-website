@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, BEREICHE } from '../db.js';
+import { getAll, put, remove, getSettings, BEREICHE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
@@ -43,6 +43,10 @@ export async function render(container) {
             <option value="">Alle Bereiche</option>
             ${BEREICHE.map((b) => `<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('')}
           </select>
+          <select id="gewerk-filter">
+            <option value="">Alle Gewerke</option>
+            ${GEWERKE.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}
+          </select>
         </div>
         <div id="table-host"></div>
       </div>
@@ -80,10 +84,12 @@ export async function render(container) {
     renderFolders();
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const bereichFilter = container.querySelector('#bereich-filter').value;
+    const gewerkFilter = container.querySelector('#gewerk-filter').value;
     filtered = projekte.filter((p) => {
       if (folder === ALLE_OFFEN && spaltenById[p.status]?.geschlossen) return false;
       if (folder !== ALLE && folder !== ALLE_OFFEN && p.status !== folder) return false;
       if (bereichFilter && p.bereich !== bereichFilter) return false;
+      if (gewerkFilter && p.gewerk !== gewerkFilter) return false;
       if (!q) return true;
       const kunde = kundenById[p.kundeId];
       return [p.titel, kunde?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -98,13 +104,14 @@ export async function render(container) {
     }
     tableHost.innerHTML = `
       <table class="data-table">
-        <thead><tr><th></th><th>Titel</th><th>Kunde</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr><th></th><th>Titel</th><th>Kunde</th><th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
           ${filtered.map((p) => `
             <tr data-id="${p.id}">
               <td><span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span></td>
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
+              <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--border)')}22;color:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--text)')}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
               <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
               <td><span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span></td>
               <td>${formatDate(p.start)}</td>
@@ -121,6 +128,7 @@ export async function render(container) {
 
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#bereich-filter').addEventListener('change', applyFilter);
+  container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-status-manage').addEventListener('click', () => {
     openStatusManager({
@@ -136,7 +144,7 @@ export async function render(container) {
     const isEdit = !!p;
     const data = p || {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', farbe: '', createdAt: new Date().toISOString(),
+      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
@@ -160,6 +168,9 @@ export async function render(container) {
             </div>
             <div class="field"><label>Kategorie</label>
               <select name="kategorieId" id="f-kategorie">${kategorienForBereich(data.bereich).map((k) => `<option value="${k.id}" ${k.id === data.kategorieId ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Gewerk</label>
+              <select name="gewerk"><option value="">– kein Gewerk –</option>${GEWERKE.map((g) => `<option value="${g.id}" ${g.id === data.gewerk ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Start</label><input type="date" name="start" value="${data.start || ''}"></div>
             <div class="field"><label>Ende</label><input type="date" name="ende" value="${data.ende || ''}"></div>
@@ -227,7 +238,7 @@ export async function render(container) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
-      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'farbe']) {
+      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'gewerk', 'farbe']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.titel) return;

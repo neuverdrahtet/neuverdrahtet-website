@@ -1,5 +1,5 @@
 const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
 
 const STORES = {
   kunden: 'id',
@@ -24,6 +24,7 @@ const STORES = {
   flotten: 'id',
   terminStatus: 'id',
   textbausteine: 'id',
+  aufgabenStatus: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -194,6 +195,25 @@ export const BEREICHE = [
   { id: 'auftrag', titel: 'Aufträge' },
   { id: 'service', titel: 'Service' },
   { id: 'wartung', titel: 'Wartungen & Prüfungen' },
+];
+
+export const TAETIGKEITEN = [
+  { id: 'baustelle', titel: 'Baustelle' },
+  { id: 'fahrtzeit', titel: 'Fahrtzeit' },
+  { id: 'materialbeschaffung', titel: 'Materialbeschaffung' },
+  { id: 'planung', titel: 'Planung' },
+  { id: 'buero', titel: 'Büro' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+
+export const GEWERKE = [
+  { id: 'elektro', titel: 'Elektro', farbe: '#2b7fd6' },
+  { id: 'fliesen', titel: 'Fliesen', farbe: '#f0a020' },
+  { id: 'boden', titel: 'Bodenleger', farbe: '#8e6b3f' },
+  { id: 'maler', titel: 'Maler', farbe: '#16a085' },
+  { id: 'trockenbau', titel: 'Trockenbau', farbe: '#6b7280' },
+  { id: 'komplettbad', titel: 'Komplettbad', farbe: '#8e44ad' },
+  { id: 'sonstiges', titel: 'Sonstiges', farbe: '#c0392b' },
 ];
 
 export const DEFAULT_KATEGORIEN = [
@@ -454,6 +474,43 @@ Aufgemessen von:
 Ort, Datum: {{datum}}
 Unterschrift:`,
   },
+  {
+    id: 'vorlage-auftragsformular', typ: 'dokumentation', name: 'Auftragsformular',
+    textVorlage: `AUFTRAGSFORMULAR / AUFTRAGSBESTÄTIGUNG
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Ansprechpartner Kunde:
+Telefon:
+E-Mail:
+
+Auftragsgegenstand / Beschreibung der Leistung:
+
+
+
+Vereinbarter Ausführungszeitraum (von – bis):
+
+Vereinbarter Preis: ☐ Festpreis  ☐ nach Aufwand
+Betrag (falls Festpreis):
+
+Zahlungsbedingungen:
+- Anzahlung:
+- Abschlagszahlung(en):
+- Restzahlung nach Fertigstellung:
+
+Besondere Vereinbarungen / Hinweise:
+
+
+
+Der Auftraggeber beauftragt hiermit die oben beschriebene Leistung zu den genannten Bedingungen.
+
+Ort, Datum: {{datum}}
+
+Unterschrift Auftragnehmer:                     Unterschrift Auftraggeber/Kunde:`,
+  },
 ];
 
 export const TERMIN_TYPEN = [
@@ -470,6 +527,13 @@ export const DEFAULT_TERMIN_STATUS = [
   { id: 'abgerechnet', titel: 'Abgerechnet', farbe: '#f0a020', reihenfolge: 2 },
   { id: 'bezahlt', titel: 'Bezahlt', farbe: '#1f8a4c', reihenfolge: 3 },
   { id: 'storniert', titel: 'Storniert', farbe: '#c0392b', reihenfolge: 4 },
+];
+
+export const DEFAULT_AUFGABEN_STATUS = [
+  { id: 'offen', titel: 'Offen', farbe: '#2b7fd6', reihenfolge: 0 },
+  { id: 'in-arbeit', titel: 'In Arbeit', farbe: '#f0a020', reihenfolge: 1 },
+  { id: 'klaerung', titel: 'Klärung', farbe: '#8e44ad', reihenfolge: 2 },
+  { id: 'erledigt', titel: 'Erledigt', farbe: '#1f8a4c', reihenfolge: 3, geschlossen: true },
 ];
 
 export const ZUGRIFFSROLLEN = [
@@ -605,6 +669,12 @@ export async function ensureSeeded() {
   const missingTextbausteine = DEFAULT_TEXTBAUSTEINE.filter((t) => !textbausteinIds.has(t.id));
   for (const t of missingTextbausteine) {
     await put('textbausteine', t);
+  }
+  const aufgabenStatus = await getAll('aufgabenStatus');
+  if (aufgabenStatus.length === 0) {
+    for (const s of DEFAULT_AUFGABEN_STATUS) {
+      await put('aufgabenStatus', s);
+    }
   }
 }
 
