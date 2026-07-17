@@ -129,8 +129,8 @@ const DEFAULT_SETTINGS = {
   firmenname: 'neuverdrahtet UG',
   strasse: 'Donnerstr. 131',
   plzOrt: '45357 Essen',
-  telefon: '0201 89085050',
-  email: 'info@neuverdrahtet.com',
+  telefon: '01706398575',
+  email: 'neuverdrahtet@gmail.com',
   ustId: '',
   steuernummer: '',
   iban: '',
@@ -524,6 +524,15 @@ export async function ensureSeeded() {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       await put('einstellungen', { key, value });
     }
+  }
+  // Einmalige Korrektur: E-Mail/Telefon waren mit falschen Werten vorbelegt.
+  const emailRow = settingsRows.find((r) => r.key === 'email');
+  if (emailRow && emailRow.value === 'info@neuverdrahtet.com') {
+    await put('einstellungen', { key: 'email', value: DEFAULT_SETTINGS.email });
+  }
+  const telefonRow = settingsRows.find((r) => r.key === 'telefon');
+  if (telefonRow && telefonRow.value === '0201 89085050') {
+    await put('einstellungen', { key: 'telefon', value: DEFAULT_SETTINGS.telefon });
   }
   const spalten = await getAll('kanbanSpalten');
   const spaltenIds = new Set(spalten.map((s) => s.id));

@@ -109,7 +109,7 @@ export function buildDocHtml({
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
     <div class="print-footer">
       <div>
-        ${[settings.firmenname, settings.strasse, settings.plzOrt, settings.telefon, settings.email].filter(Boolean).map(escapeHtml).join('<br>')}
+        ${[settings.firmenname, [settings.strasse, settings.plzOrt].filter(Boolean).join(', '), settings.telefon, settings.email].filter(Boolean).map(escapeHtml).join('<br>')}
       </div>
       <div>
         ${settings.ustId ? `USt-IdNr.: ${escapeHtml(settings.ustId)}<br>` : ''}
