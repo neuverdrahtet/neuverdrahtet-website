@@ -122,6 +122,9 @@ export async function render(container) {
   }
   const umsatzSeries = months.map((m) => umsatzByMonth[m.key]);
   const ausgabenSeries = months.map((m) => ausgabenByMonth[m.key]);
+  const umsatzSumme = umsatzSeries.reduce((s, v) => s + v, 0);
+  const ausgabenSumme = ausgabenSeries.reduce((s, v) => s + v, 0);
+  const uebrigSumme = umsatzSumme - ausgabenSumme;
 
   // --- Today's Termine ---
   const heute = termine.filter((t) => {
@@ -174,6 +177,11 @@ export async function render(container) {
               <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_UMSATZ_COLOR}"></span>Umsatz</span>
               <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_AUSGABEN_COLOR}"></span>Ausgaben</span>
             </div>
+          </div>
+          <div class="dash-score-stats" style="margin-top:0;padding-top:0;border-top:none;margin-bottom:12px">
+            <div><span class="text-mute">Einnahmen (12 Mon.)</span><strong style="color:${CHART_UMSATZ_COLOR}">${formatCurrency(umsatzSumme)}</strong></div>
+            <div><span class="text-mute">Ausgaben (12 Mon.)</span><strong style="color:${CHART_AUSGABEN_COLOR}">${formatCurrency(ausgabenSumme)}</strong></div>
+            <div><span class="text-mute">Übrig</span><strong style="color:${uebrigSumme >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(uebrigSumme)}</strong></div>
           </div>
           ${buildLineChart(months, umsatzSeries, ausgabenSeries)}
         </div>
