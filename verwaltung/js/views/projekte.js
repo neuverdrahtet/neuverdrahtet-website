@@ -153,6 +153,43 @@ export async function render(container) {
     });
   });
 
+  function renderProjektAusgaben(host, projektId) {
+    const liste = ausgaben.filter((a) => a.projektId === projektId).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const summe = liste.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    host.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+        <h2 style="font-size:14px;margin:0">Ausgaben / Belege${liste.length ? ` · ${formatCurrency(summe)}` : ''}</h2>
+        <a class="text-mute" href="#/ausgaben" style="font-size:12.5px">+ Ausgabe erfassen →</a>
+      </div>
+      ${liste.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Projekt zugeordnet.</p>' : `
+        <table class="data-table">
+          <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th class="text-right">Betrag</th><th></th></tr></thead>
+          <tbody>
+            ${liste.map((a) => `
+              <tr>
+                <td>${formatDate(a.datum)}</td>
+                <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
+                <td>${escapeHtml(a.beschreibung || a.lieferant || '')}</td>
+                <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
+                <td>${a.beleg ? `<a href="#" class="btn btn-sm ausgabe-beleg-link" data-id="${a.id}">📎</a>` : ''}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+    host.querySelectorAll('.ausgabe-beleg-link').forEach((link) => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const a = liste.find((x) => x.id === link.dataset.id);
+        if (!a?.beleg) return;
+        const url = URL.createObjectURL(a.beleg);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      });
+    });
+  }
+
   function openForm(p) {
     const isEdit = !!p;
     const data = p || {
@@ -208,6 +245,8 @@ export async function render(container) {
             <div class="divider"></div>
             <div id="nk-host"></div>
             <div class="divider"></div>
+            <div id="ausgaben-host"></div>
+            <div class="divider"></div>
             <div id="tc-host"></div>
             <div class="divider"></div>
             <div id="foto-host"></div>
@@ -239,6 +278,7 @@ export async function render(container) {
       renderNachkalkulation(body.querySelector('#nk-host'), {
         projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
       });
+      renderProjektAusgaben(body.querySelector('#ausgaben-host'), data.id);
       renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {

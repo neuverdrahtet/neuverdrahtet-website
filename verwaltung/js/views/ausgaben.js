@@ -8,8 +8,9 @@ const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete',
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
 
 export async function render(container) {
-  let [ausgaben, settings, projekte] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte')]);
+  let [ausgaben, settings, projekte, kunden] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden')]);
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
   const bulk = createBulkSelect('ausgaben', { label: 'Ausgaben' });
@@ -25,6 +26,7 @@ export async function render(container) {
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Beschreibung/Lieferant ...">
       <select id="filter-kategorie"><option value="">Alle Kategorien</option>${KATEGORIEN.map((k) => `<option value="${k}">${k}</option>`).join('')}</select>
+      <select id="filter-kunde"><option value="">Alle Kunden</option>${kunden.map((k) => `<option value="${k.id}">${escapeHtml(k.firma)}</option>`).join('')}</select>
     </div>
     <div id="table-host"></div>
   `;
@@ -33,10 +35,12 @@ export async function render(container) {
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const kategorie = container.querySelector('#filter-kategorie').value;
+    const kundeId = container.querySelector('#filter-kunde').value;
     filtered = ausgaben.filter((a) => {
       if (kategorie && a.kategorie !== kategorie) return false;
+      if (kundeId && a.kundeId !== kundeId) return false;
       if (!q) return true;
-      return [a.beschreibung, a.lieferant].filter(Boolean).join(' ').toLowerCase().includes(q);
+      return [a.beschreibung, a.lieferant, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
     renderTable();
   }
@@ -51,7 +55,7 @@ export async function render(container) {
       <p class="hint">Summe: ${formatCurrency(summe)}</p>
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Kunde</th><th>Projekt</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
         <tbody>
           ${filtered.map((a) => `
             <tr data-id="${a.id}">
@@ -59,6 +63,7 @@ export async function render(container) {
               <td>${formatDate(a.datum)}</td>
               <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
               <td>${escapeHtml(a.beschreibung || '')}</td>
+              <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
               <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
               <td>${a.beleg ? '📎' : ''}</td>
@@ -82,6 +87,7 @@ export async function render(container) {
 
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#filter-kategorie').addEventListener('change', applyFilter);
+  container.querySelector('#filter-kunde').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-beleg-import').addEventListener('click', () => {
     openBelegImport({ onImported: () => render(container) });
@@ -96,7 +102,7 @@ export async function render(container) {
     const data = a || {
       id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
-      projektId: '', kalkKategorie: '',
+      projektId: '', kundeId: '', kalkKategorie: '',
     };
     const { body, close } = openModal({
       title: isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe',
@@ -125,8 +131,11 @@ export async function render(container) {
                 <option value="0" ${Number(data.steuersatz) === 0 ? 'selected' : ''}>0%</option>
               </select>
             </div>
-            <div class="field"><label>Projekt (für Nachkalkulation)</label>
-              <select name="projektId" id="ausgabe-projekt"><option value="">– keinem Projekt zugeordnet –</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
+            <div class="field"><label>Kunde</label>
+              <select name="kundeId" id="ausgabe-kunde"><option value="">– keinem Kunden zugeordnet –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Projekt / Auftrag (für Nachkalkulation)</label>
+              <select name="projektId" id="ausgabe-projekt"><option value="">– keinem Projekt zugeordnet –</option>${projekte.map((p) => `<option value="${p.id}" data-kunde="${p.kundeId || ''}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Kalkulations-Kategorie</label>
               <select name="kalkKategorie" id="ausgabe-kalkkategorie" ${data.projektId ? '' : 'disabled'}>
@@ -151,6 +160,9 @@ export async function render(container) {
 
     body.querySelector('#ausgabe-projekt').addEventListener('change', (e) => {
       body.querySelector('#ausgabe-kalkkategorie').disabled = !e.target.value;
+      const kundeSelect = body.querySelector('#ausgabe-kunde');
+      const projektKundeId = e.target.selectedOptions[0]?.dataset.kunde || '';
+      if (projektKundeId && !kundeSelect.value) kundeSelect.value = projektKundeId;
     });
 
     let belegBlob = data.beleg || null;
@@ -198,6 +210,7 @@ export async function render(container) {
       updated.betragBrutto = calcBrutto(updated.betragNetto, updated.steuersatz);
       updated.beleg = belegBlob;
       updated.projektId = fd.get('projektId') || '';
+      updated.kundeId = fd.get('kundeId') || '';
       updated.kalkKategorie = updated.projektId ? (fd.get('kalkKategorie') || '') : '';
       await put('ausgaben', updated);
       toast(isEdit ? 'Ausgabe aktualisiert' : 'Ausgabe erfasst', 'success');

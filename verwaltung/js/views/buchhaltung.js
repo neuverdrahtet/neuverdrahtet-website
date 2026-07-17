@@ -26,10 +26,14 @@ function downloadFile(content, filename, mime) {
 }
 
 export async function render(container) {
-  const [rechnungen, ausgaben, kunden, settings] = await Promise.all([
-    getAll('rechnungen'), getAll('ausgaben'), getAll('kunden'), getSettings(),
+  const [rechnungen, ausgaben, kunden, projekte, settings] = await Promise.all([
+    getAll('rechnungen'), getAll('ausgaben'), getAll('kunden'), getAll('projekte'), getSettings(),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  function ausgabeBezug(a) {
+    return [kundenById[a.kundeId]?.firma, projekteById[a.projektId]?.titel].filter(Boolean).join(' / ');
+  }
 
   const bezahlteRechnungen = rechnungen.filter((r) => r.status === 'bezahlt' && (r.bezahltAm || r.datum));
   const jahre = new Set([
@@ -122,7 +126,8 @@ export async function render(container) {
         rows.push([r.bezahltAm || r.datum, 'Einnahme', `Rechnung ${r.nummer} – ${kundenById[r.kundeId]?.firma || ''}`, deNum(r.netto), deNum(r.steuer), deNum(r.brutto)]);
       }
       for (const a of ausgabenJahr) {
-        rows.push([a.datum, 'Ausgabe', `${a.kategorie}: ${a.beschreibung || ''}`, deNum(a.betragNetto), deNum(a.betragBrutto - a.betragNetto), deNum(a.betragBrutto)]);
+        const bezug = ausgabeBezug(a);
+        rows.push([a.datum, 'Ausgabe', `${a.kategorie}: ${a.beschreibung || ''}${bezug ? ` (${bezug})` : ''}`, deNum(a.betragNetto), deNum(a.betragBrutto - a.betragNetto), deNum(a.betragBrutto)]);
       }
       const csv = rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
       downloadFile(csv, `buchhaltung-${jahr}.csv`, 'text/csv;charset=utf-8');
@@ -157,10 +162,12 @@ export async function render(container) {
       ].join(';'));
     }
     for (const a of ausgabenJahr) {
+      const bezug = ausgabeBezug(a);
+      const buchungstext = `${a.beschreibung || a.kategorie || ''}${bezug ? ` (${bezug})` : ''}`;
       rows.push([
         deNum(a.betragBrutto), 'S', 'EUR', '', '', '',
         settings.datevAufwandKonto, '', buSchluessel(a.steuersatz), ddmm(a.datum), `"${a.kategorie}"`, '', '',
-        `"${(a.beschreibung || a.kategorie || '').replace(/"/g, "'")}"`,
+        `"${buchungstext.replace(/"/g, "'")}"`,
       ].join(';'));
     }
 
