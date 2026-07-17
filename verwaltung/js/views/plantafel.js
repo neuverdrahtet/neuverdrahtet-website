@@ -56,6 +56,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const activeStatusFilter = new Set();
   let bereichFilter = '';
@@ -119,7 +120,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const weekTitle = container.querySelector('#week-title');
   const monatGrid = container.querySelector('#cal-grid');
   const monatTitle = container.querySelector('#cal-title');
-  const karte = mountKarte(container, { termine, kundenById, settings });
+  const karte = mountKarte(container, { termine, kundenById, mitarbeiterById, settings });
 
   function setMode(mode) {
     container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
