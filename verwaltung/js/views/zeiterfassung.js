@@ -31,6 +31,21 @@ function formatDuration(minutes) {
   const m = Math.round(minutes % 60);
   return `${h}:${String(m).padStart(2, '0')} Std.`;
 }
+function nowHHMM() {
+  return new Date().toTimeString().slice(0, 5);
+}
+function addMinutesHHMM(hhmm, minutes) {
+  const [h, m] = (hhmm || '00:00').split(':').map(Number);
+  const total = (h * 60 + m + minutes + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+function minutesBetweenHHMM(start, end) {
+  const [sh, sm] = (start || '00:00').split(':').map(Number);
+  const [eh, em] = (end || '00:00').split(':').map(Number);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff < 0) diff += 1440;
+  return diff;
+}
 
 export async function render(container) {
   let [eintraege, projekte, mitarbeiter, settings, termine, kunden] = await Promise.all([
@@ -181,6 +196,7 @@ export async function render(container) {
           const neu = {
             id: uid(), projektId: runningNow.projektId, mitarbeiterId: currentMa,
             datum: runningNow.startedAt.slice(0, 10), dauerMinuten: minutes, beschreibung: '', abgerechnet: false,
+            startzeit: runningNow.startedAt.slice(11, 16), endzeit: new Date().toISOString().slice(11, 16),
           };
           await put('zeiterfassung', neu);
           eintraege.unshift(neu);
@@ -241,6 +257,7 @@ export async function render(container) {
         openForm({
           id: uid(), projektId: running.projektId, mitarbeiterId: running.mitarbeiterId,
           datum: running.startedAt.slice(0, 10), dauerMinuten: minutes, beschreibung: '', abgerechnet: false,
+          startzeit: running.startedAt.slice(11, 16), endzeit: new Date().toISOString().slice(11, 16),
         }, { isNewFromTimer: true });
       });
     }
@@ -265,11 +282,12 @@ export async function render(container) {
     tableHost.innerHTML = `
       <p class="hint">Gesamt: ${formatDuration(totalMinutes)}</p>
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Projekt</th><th>Mitarbeiter</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Projekt</th><th>Mitarbeiter</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
         <tbody>
           ${filtered.map((e) => `
             <tr data-id="${e.id}">
               <td>${formatDate(e.datum)}</td>
+              <td>${e.startzeit && e.endzeit ? `${e.startzeit}–${e.endzeit}` : '–'}</td>
               <td>${escapeHtml(projekteById[e.projektId]?.titel || '')}</td>
               <td>${escapeHtml(mitarbeiterById[e.mitarbeiterId]?.name || '')}</td>
               <td>${formatDuration(e.dauerMinuten || 0)}</td>
@@ -292,6 +310,7 @@ export async function render(container) {
     const data = entry || {
       id: uid(), projektId: '', mitarbeiterId: '', datum: new Date().toISOString().slice(0, 10),
       dauerMinuten: 60, beschreibung: '', abgerechnet: false,
+      startzeit: nowHHMM(), endzeit: addMinutesHHMM(nowHHMM(), 60),
     };
     const { body, close } = openModal({
       title: isNewFromTimer ? 'Zeit speichern' : (isEdit ? 'Eintrag bearbeiten' : 'Neuer Eintrag'),
@@ -305,7 +324,9 @@ export async function render(container) {
               <select name="mitarbeiterId"><option value="">–</option>${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === data.mitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
-            <div class="field"><label>Dauer (Minuten)</label><input type="number" min="1" name="dauerMinuten" value="${data.dauerMinuten}"></div>
+            <div class="field"><label>Startzeit</label><input type="time" name="startzeit" id="ze-startzeit" value="${data.startzeit || ''}"></div>
+            <div class="field"><label>Endzeit</label><input type="time" name="endzeit" id="ze-endzeit" value="${data.endzeit || ''}"></div>
+            <div class="field"><label>Dauer (Minuten)</label><input type="number" min="1" name="dauerMinuten" id="ze-dauer" value="${data.dauerMinuten}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
             <div class="field field-checkbox col-span-2"><input type="checkbox" name="abgerechnet" id="ze-abgerechnet" ${data.abgerechnet ? 'checked' : ''}><label for="ze-abgerechnet">Bereits abgerechnet</label></div>
           </div>
@@ -318,6 +339,15 @@ export async function render(container) {
         </form>
       `,
     });
+    const startzeitInput = body.querySelector('#ze-startzeit');
+    const endzeitInput = body.querySelector('#ze-endzeit');
+    const dauerInput = body.querySelector('#ze-dauer');
+    function recalcDauer() {
+      if (!startzeitInput.value || !endzeitInput.value) return;
+      dauerInput.value = minutesBetweenHHMM(startzeitInput.value, endzeitInput.value) || 1;
+    }
+    startzeitInput.addEventListener('change', recalcDauer);
+    endzeitInput.addEventListener('change', recalcDauer);
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
@@ -335,6 +365,8 @@ export async function render(container) {
       updated.projektId = fd.get('projektId') || '';
       updated.mitarbeiterId = fd.get('mitarbeiterId') || '';
       updated.datum = fd.get('datum') || data.datum;
+      updated.startzeit = (fd.get('startzeit') || '').toString();
+      updated.endzeit = (fd.get('endzeit') || '').toString();
       updated.dauerMinuten = Number(fd.get('dauerMinuten')) || 0;
       updated.beschreibung = (fd.get('beschreibung') || '').toString().trim();
       updated.abgerechnet = fd.get('abgerechnet') === 'on';

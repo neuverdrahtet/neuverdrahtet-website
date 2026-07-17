@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate } from './utils.js';
+import { formatCurrency, formatDate, formatDateTime } from './utils.js';
 
 function logoFormat(dataUrl) {
   const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
@@ -175,7 +175,7 @@ export function buildDocPdfBlob(opts) {
   return doc.output('blob');
 }
 
-export function buildBerichtPdfBlob({ settings, titel, untertitel, text }) {
+export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum }) {
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }
@@ -203,7 +203,7 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text }) {
 
   doc.setFontSize(8);
   doc.setTextColor(110);
-  doc.text(formatDate(new Date().toISOString()), rightX, y, { align: 'right' });
+  doc.text(formatDateTime(datum || new Date().toISOString()), rightX, y, { align: 'right' });
 
   y += 24;
   doc.setDrawColor(180);

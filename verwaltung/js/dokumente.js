@@ -1,9 +1,13 @@
 import { getAll, put, remove } from './db.js';
-import { uid, escapeHtml, formatDate, formatDateTime, toast } from './utils.js';
+import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
+
+function nowHHMM() {
+  return new Date().toTimeString().slice(0, 5);
+}
 
 export const DOKUMENT_KATEGORIEN = [
   { id: 'bericht', titel: 'Bericht' },
@@ -56,11 +60,6 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const settings = berichtContext.settings || {};
     const kunde = berichtContext.kunde || null;
     const projekt = berichtContext.projekt || '';
-    const substitute = (text) => (text || '')
-      .replaceAll('{{firma}}', settings.firmenname || '')
-      .replaceAll('{{kunde}}', kunde?.firma || '')
-      .replaceAll('{{projekt}}', projekt)
-      .replaceAll('{{datum}}', formatDate(new Date().toISOString()));
 
     const { body, close } = openModal({
       title: 'Bericht aus Vorlage erstellen',
@@ -71,6 +70,8 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
             <select id="ber-vorlage">${vorlagen.map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('')}</select>
           </div>
           <div class="field col-span-2"><label>Titel</label><input id="ber-titel" type="text"></div>
+          <div class="field"><label>Datum</label><input id="ber-datum" type="date" value="${todayISO()}"></div>
+          <div class="field"><label>Uhrzeit</label><input id="ber-uhrzeit" type="time" value="${nowHHMM()}"></div>
         </div>
         <div class="divider"></div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
@@ -85,7 +86,18 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     });
     const vorlageSelect = body.querySelector('#ber-vorlage');
     const titelInput = body.querySelector('#ber-titel');
+    const datumInput = body.querySelector('#ber-datum');
+    const uhrzeitInput = body.querySelector('#ber-uhrzeit');
     const textArea = body.querySelector('#ber-text');
+
+    function substitute(text) {
+      return (text || '')
+        .replaceAll('{{firma}}', settings.firmenname || '')
+        .replaceAll('{{kunde}}', kunde?.firma || '')
+        .replaceAll('{{projekt}}', projekt)
+        .replaceAll('{{datum}}', formatDate(datumInput.value))
+        .replaceAll('{{uhrzeit}}', uhrzeitInput.value || '');
+    }
     function fillText() {
       const v = vorlagen.find((x) => x.id === vorlageSelect.value);
       titelInput.value = v?.name || 'Bericht';
@@ -95,16 +107,19 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     fillText();
     body.querySelector('#btn-cancel').addEventListener('click', close);
 
+    function currentDatumIso() {
+      return new Date(`${datumInput.value || todayISO()}T${uhrzeitInput.value || '00:00'}:00`).toISOString();
+    }
     function currentUntertitel() {
       return [kunde?.firma ? `Kunde: ${kunde.firma}` : '', projekt ? `Projekt: ${projekt}` : ''].filter(Boolean).join(' · ');
     }
     function currentFilename() {
-      return `${(titelInput.value || 'Bericht').replace(/[^a-z0-9äöüß _-]/gi, '')}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      return `${(titelInput.value || 'Bericht').replace(/[^a-z0-9äöüß _-]/gi, '')}-${datumInput.value || todayISO()}.pdf`;
     }
     function buildPdf() {
       return buildBerichtPdfBlob({
         settings, titel: titelInput.value || 'Bericht',
-        untertitel: currentUntertitel(), text: textArea.value,
+        untertitel: currentUntertitel(), text: textArea.value, datum: currentDatumIso(),
       });
     }
 
