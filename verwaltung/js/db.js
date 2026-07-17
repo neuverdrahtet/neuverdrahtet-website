@@ -313,6 +313,72 @@ Ort, Datum: {{datum}}
 Unterschrift Techniker:`,
   },
   {
+    id: 'vorlage-tagesbericht', typ: 'dokumentation', name: 'Tagesbericht',
+    textVorlage: `TAGESBERICHT
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Anwesende Mitarbeiter:
+
+
+Wetter (bei Außenarbeiten):
+
+Ausgeführte Arbeiten:
+-
+-
+-
+
+Verwendetes Material:
+
+
+Arbeitszeit (von – bis):
+
+
+Besondere Vorkommnisse / Behinderungen:
+
+
+Offene Punkte für den nächsten Tag:
+
+
+Ort, Datum: {{datum}}
+Unterschrift:`,
+  },
+  {
+    id: 'vorlage-servicebericht', typ: 'dokumentation', name: 'Servicebericht',
+    textVorlage: `SERVICEBERICHT
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum des Einsatzes: {{datum}}
+
+Ansprechpartner vor Ort:
+
+Gemeldetes Problem / Auftrag:
+
+
+Durchgeführte Arbeiten:
+-
+-
+-
+
+Verwendetes Material/Ersatzteile:
+
+
+Arbeitszeit (von – bis):
+
+Ergebnis: ☐ Problem behoben  ☐ Teilweise behoben  ☐ Nachtermin erforderlich
+
+Empfehlung für den Kunden:
+
+
+Ort, Datum: {{datum}}
+Unterschrift Techniker:                     Unterschrift Kunde:`,
+  },
+  {
     id: 'vorlage-abnahme', typ: 'dokumentation', name: 'Abnahmeprotokoll',
     textVorlage: `ABNAHMEPROTOKOLL
 
