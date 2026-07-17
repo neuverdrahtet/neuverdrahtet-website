@@ -42,6 +42,7 @@ export function buildDocHtml({
   closingText,
   steuerHinweis,
   showPositions = true,
+  abschlaege,
 }) {
   const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
 
@@ -79,10 +80,18 @@ export function buildDocHtml({
       .filter(([rate]) => Number(rate) > 0)
       .map(([rate, netto]) => `<div class="row"><span>zzgl. ${rate}% USt.</span><span>${formatCurrency(netto * (Number(rate) / 100))}</span></div>`)
       .join('');
+    const abschlagRows = (abschlaege || [])
+      .map((a) => `<div class="row"><span>Abzgl. Abschlagsrechnung ${escapeHtml(a.nummer)}</span><span>-${formatCurrency(a.betrag)}</span></div>`)
+      .join('');
+    const restbetragRow = abschlaege && abschlaege.length
+      ? `<div class="row grand"><span>Noch zu zahlen</span><span>${formatCurrency(totals.brutto - abschlaege.reduce((s, a) => s + (a.betrag || 0), 0))}</span></div>`
+      : '';
     totalsHtml = `<div class="print-totals">
       <div class="row"><span>Netto</span><span>${formatCurrency(totals.netto)}</span></div>
       ${steuerRows}
       <div class="row grand"><span>Gesamt</span><span>${formatCurrency(totals.brutto)}</span></div>
+      ${abschlagRows}
+      ${restbetragRow}
     </div>`;
   }
 
