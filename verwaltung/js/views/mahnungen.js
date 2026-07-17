@@ -71,6 +71,7 @@ export async function render(container) {
                 <td>${formatDate(m.datum)}</td>
                 <td class="text-right">${formatCurrency(m.gebuehr)}</td>
                 <td>
+                  <button class="btn btn-sm btn-edit-mahnung" data-id="${m.id}">Bearbeiten</button>
                   <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
                   ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
                   ${kundenById[rech?.kundeId]?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
@@ -89,6 +90,9 @@ export async function render(container) {
       const rechnung = rechnungenById[btn.dataset.rid];
       openForm(rechnung, Number(btn.dataset.stufe));
     });
+  });
+  container.querySelectorAll('.btn-edit-mahnung').forEach((btn) => {
+    btn.addEventListener('click', () => openEditForm(mahnungen.find((m) => m.id === btn.dataset.id)));
   });
   container.querySelectorAll('.btn-print-mahnung').forEach((btn) => {
     btn.addEventListener('click', () => printMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
@@ -198,6 +202,52 @@ export async function render(container) {
       close();
       mahnungen.push(updated);
       printMahnung(updated);
+      render(container);
+    });
+  }
+
+  function openEditForm(m) {
+    const rech = rechnungenById[m.rechnungId];
+    const { body, close } = openModal({
+      title: `Mahnung Stufe ${m.stufe} bearbeiten – ${rech?.nummer || ''}`,
+      wide: true,
+      bodyHtml: `
+        <form id="mahn-edit-form">
+          <p class="text-mute">Rechnung ${escapeHtml(rech?.nummer || '')} · ${escapeHtml(kundenById[rech?.kundeId]?.firma || '')} · Betrag ${formatCurrency(rech?.brutto)}</p>
+          <div class="form-grid">
+            <div class="field"><label>Datum</label><input type="date" name="datum" value="${m.datum}"></div>
+            <div class="field"><label>Neue Zahlungsfrist</label><input type="date" name="neueFrist" value="${m.neueFrist}"></div>
+            <div class="field"><label>Mahngebühr (€)</label><input type="number" step="0.01" min="0" name="gebuehr" value="${m.gebuehr}"></div>
+            <div class="field col-span-2"><label>Text</label><textarea name="text" rows="6">${escapeHtml(m.text || '')}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-danger" id="btn-delete-mahn">Löschen</button>
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-delete-mahn').addEventListener('click', async () => {
+      if (!confirmDelete('Mahnung wirklich löschen?')) return;
+      await remove('mahnungen', m.id);
+      toast('Mahnung gelöscht');
+      close();
+      render(container);
+    });
+    body.querySelector('#mahn-edit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = { ...m };
+      updated.datum = fd.get('datum') || m.datum;
+      updated.neueFrist = fd.get('neueFrist') || m.neueFrist;
+      updated.gebuehr = Number(fd.get('gebuehr')) || 0;
+      updated.text = (fd.get('text') || '').toString();
+      await put('mahnungen', updated);
+      toast('Mahnung aktualisiert', 'success');
+      close();
       render(container);
     });
   }

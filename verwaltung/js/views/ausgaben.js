@@ -1,6 +1,7 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { openBelegImport } from '../belegimport.js';
 
 const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -14,7 +15,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Ausgaben</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-beleg-import">⇪ Belege importieren (ZIP)</button>
+        <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Beschreibung/Lieferant ...">
@@ -67,6 +71,9 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#filter-kategorie').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-beleg-import').addEventListener('click', () => {
+    openBelegImport({ onImported: () => render(container) });
+  });
 
   function calcBrutto(netto, steuersatz) {
     return Math.round(Number(netto) * (1 + Number(steuersatz) / 100) * 100) / 100;
@@ -115,9 +122,9 @@ export async function render(container) {
                 ${KALK_KATEGORIEN_AUSGABEN.map((k) => `<option value="${k.id}" ${k.id === data.kalkKategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}
               </select>
             </div>
-            <div class="field col-span-2"><label>Beleg-Foto</label>
-              <input type="file" accept="image/*" id="beleg-input">
-              <div id="beleg-preview">${data.beleg ? '<span class="badge badge-success">Beleg vorhanden</span>' : ''}</div>
+            <div class="field col-span-2"><label>Beleg (Foto oder PDF)</label>
+              <input type="file" accept="image/*,application/pdf" id="beleg-input">
+              <div id="beleg-preview">${data.beleg ? '<a href="#" class="btn btn-sm" id="beleg-view-link">📎 Beleg ansehen</a>' : ''}</div>
             </div>
           </div>
           <div class="modal-actions">
@@ -135,12 +142,21 @@ export async function render(container) {
     });
 
     let belegBlob = data.beleg || null;
+    const belegViewLink = body.querySelector('#beleg-view-link');
+    if (belegViewLink) {
+      belegViewLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        const url = URL.createObjectURL(data.beleg);
+        window.open(url, '_blank', 'noopener');
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+      });
+    }
     body.querySelector('#beleg-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        belegBlob = await compressImage(file, { maxWidth: 1400 });
-        body.querySelector('#beleg-preview').innerHTML = '<span class="badge badge-success">Beleg hinzugefügt</span>';
+        belegBlob = file.type === 'application/pdf' ? file : await compressImage(file, { maxWidth: 1400 });
+        body.querySelector('#beleg-preview').innerHTML = '<span class="badge badge-success">Beleg hinzugefügt (wird beim Speichern übernommen)</span>';
       } catch (err) {
         toast(err.message, 'danger');
       }
