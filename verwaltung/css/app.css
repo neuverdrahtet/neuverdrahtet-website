@@ -321,6 +321,27 @@ table.data-table tbody tr:hover { background: var(--card-2); }
 table.data-table tbody tr { cursor: pointer; }
 .table-empty { padding: 30px; text-align: center; color: var(--text-mute); }
 
+table.data-table th.col-select, table.data-table td.col-select {
+  width: 34px;
+  padding-left: 12px;
+  padding-right: 4px;
+}
+.col-select input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.bulk-bar span { font-weight: 600; }
+.bulk-bar .spacer, .bulk-bar > *:last-child { margin-left: auto; }
+.bulk-bar #bulk-clear { margin-left: auto; }
+
 .search-bar {
   display: flex;
   gap: 8px;

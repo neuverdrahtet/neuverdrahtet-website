@@ -8,6 +8,7 @@ import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -23,6 +24,7 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = angebote;
+  const bulk = createBulkSelect('angebote', { label: 'Angebote' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -57,11 +59,13 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Gültig bis</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Nummer</th><th>Kunde</th><th>Datum</th><th>Gültig bis</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
         <tbody>
           ${filtered.map((a) => `
             <tr data-id="${a.id}">
+              ${bulk.rowCell(a.id)}
               <td>${escapeHtml(a.nummer)}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${formatDate(a.datum)}</td>
@@ -75,6 +79,14 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(angebote.find((a) => a.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        angebote = angebote.filter((a) => !ids.includes(a.id));
+        filtered = filtered.filter((a) => !ids.includes(a.id));
+        renderTable();
+      },
     });
   }
 

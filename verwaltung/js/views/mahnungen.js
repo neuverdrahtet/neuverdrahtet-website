@@ -5,6 +5,7 @@ import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const STUFE_TEXT = {
   1: (settings, frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
@@ -29,6 +30,7 @@ export async function render(container) {
     .sort((a, b) => b.tageUeberfaellig - a.tageUeberfaellig);
 
   mahnungen.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+  const bulk = createBulkSelect('mahnungen', { label: 'Mahnungen' });
 
   container.innerHTML = `
     <div class="view-header"><h1>Mahnungen</h1></div>
@@ -57,31 +59,7 @@ export async function render(container) {
 
     <div class="card">
       <h2>Erstellte Mahnungen</h2>
-      ${mahnungen.length === 0 ? '<p class="text-mute">Noch keine Mahnungen erstellt.</p>' : `
-        <table class="data-table">
-          <thead><tr><th>Rechnung</th><th>Kunde</th><th>Stufe</th><th>Datum</th><th class="text-right">Mahngebühr</th><th></th></tr></thead>
-          <tbody>
-            ${mahnungen.map((m) => {
-              const rech = rechnungenById[m.rechnungId];
-              return `
-              <tr data-id="${m.id}">
-                <td>${escapeHtml(rech?.nummer || '–')}</td>
-                <td>${escapeHtml(kundenById[rech?.kundeId]?.firma || '')}</td>
-                <td><span class="badge badge-warn">Stufe ${m.stufe}</span></td>
-                <td>${formatDate(m.datum)}</td>
-                <td class="text-right">${formatCurrency(m.gebuehr)}</td>
-                <td>
-                  <button class="btn btn-sm btn-edit-mahnung" data-id="${m.id}">Bearbeiten</button>
-                  <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
-                  ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
-                  ${kundenById[rech?.kundeId]?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
-                  <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button>
-                </td>
-              </tr>
-            `; }).join('')}
-          </tbody>
-        </table>
-      `}
+      <div id="mahnungen-table-host"></div>
     </div>
   `;
 
@@ -91,26 +69,72 @@ export async function render(container) {
       openForm(rechnung, Number(btn.dataset.stufe));
     });
   });
-  container.querySelectorAll('.btn-edit-mahnung').forEach((btn) => {
-    btn.addEventListener('click', () => openEditForm(mahnungen.find((m) => m.id === btn.dataset.id)));
-  });
-  container.querySelectorAll('.btn-print-mahnung').forEach((btn) => {
-    btn.addEventListener('click', () => printMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
-  });
-  container.querySelectorAll('.btn-email-mahnung').forEach((btn) => {
-    btn.addEventListener('click', () => emailMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
-  });
-  container.querySelectorAll('.btn-whatsapp-mahnung').forEach((btn) => {
-    btn.addEventListener('click', () => whatsappMahnung(mahnungen.find((m) => m.id === btn.dataset.id)));
-  });
-  container.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
-    btn.addEventListener('click', async () => {
-      if (!confirmDelete('Mahnung wirklich löschen?')) return;
-      await remove('mahnungen', btn.dataset.id);
-      toast('Mahnung gelöscht');
-      render(container);
+
+  const mahnungenTableHost = container.querySelector('#mahnungen-table-host');
+
+  function renderMahnungenTable() {
+    if (mahnungen.length === 0) {
+      mahnungenTableHost.innerHTML = '<p class="text-mute">Noch keine Mahnungen erstellt.</p>';
+      return;
+    }
+    mahnungenTableHost.innerHTML = `
+      ${bulk.barHtml()}
+      <table class="data-table">
+        <thead><tr>${bulk.headerCell()}<th>Rechnung</th><th>Kunde</th><th>Stufe</th><th>Datum</th><th class="text-right">Mahngebühr</th><th></th></tr></thead>
+        <tbody>
+          ${mahnungen.map((m) => {
+            const rech = rechnungenById[m.rechnungId];
+            return `
+            <tr data-id="${m.id}">
+              ${bulk.rowCell(m.id)}
+              <td>${escapeHtml(rech?.nummer || '–')}</td>
+              <td>${escapeHtml(kundenById[rech?.kundeId]?.firma || '')}</td>
+              <td><span class="badge badge-warn">Stufe ${m.stufe}</span></td>
+              <td>${formatDate(m.datum)}</td>
+              <td class="text-right">${formatCurrency(m.gebuehr)}</td>
+              <td>
+                <button class="btn btn-sm btn-edit-mahnung" data-id="${m.id}">Bearbeiten</button>
+                <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
+                ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
+                ${kundenById[rech?.kundeId]?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
+                <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button>
+              </td>
+            </tr>
+          `; }).join('')}
+        </tbody>
+      </table>
+    `;
+    mahnungenTableHost.querySelectorAll('.btn-edit-mahnung').forEach((btn) => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); openEditForm(mahnungen.find((m) => m.id === btn.dataset.id)); });
     });
-  });
+    mahnungenTableHost.querySelectorAll('.btn-print-mahnung').forEach((btn) => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); printMahnung(mahnungen.find((m) => m.id === btn.dataset.id)); });
+    });
+    mahnungenTableHost.querySelectorAll('.btn-email-mahnung').forEach((btn) => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); emailMahnung(mahnungen.find((m) => m.id === btn.dataset.id)); });
+    });
+    mahnungenTableHost.querySelectorAll('.btn-whatsapp-mahnung').forEach((btn) => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); whatsappMahnung(mahnungen.find((m) => m.id === btn.dataset.id)); });
+    });
+    mahnungenTableHost.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirmDelete('Mahnung wirklich löschen?')) return;
+        await remove('mahnungen', btn.dataset.id);
+        toast('Mahnung gelöscht');
+        mahnungen = mahnungen.filter((m) => m.id !== btn.dataset.id);
+        renderMahnungenTable();
+      });
+    });
+    bulk.wire(mahnungenTableHost, {
+      onChange: renderMahnungenTable,
+      onDeleted: (ids) => {
+        mahnungen = mahnungen.filter((m) => !ids.includes(m.id));
+        renderMahnungenTable();
+      },
+    });
+  }
+  renderMahnungenTable();
 
   function mahnungDocOpts(m) {
     const rech = rechnungenById[m.rechnungId];

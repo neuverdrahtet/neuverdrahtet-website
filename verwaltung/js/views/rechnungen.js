@@ -8,6 +8,7 @@ import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -21,6 +22,7 @@ export async function render(container) {
   rechnungen.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = rechnungen;
   const today = todayISO();
+  const bulk = createBulkSelect('rechnungen', { label: 'Rechnungen' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -55,14 +57,16 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Nummer</th><th>Kunde</th><th>Typ</th><th>Datum</th><th>Fällig am</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Nummer</th><th>Kunde</th><th>Typ</th><th>Datum</th><th>Fällig am</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
         <tbody>
           ${filtered.map((r) => {
             const overdue = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < today;
             const abschlagsSumme = (r.verrechneteAbschlaege || []).reduce((s, a) => s + (a.betrag || 0), 0);
             return `
             <tr data-id="${r.id}">
+              ${bulk.rowCell(r.id, !!r.versendet)}
               <td>${escapeHtml(r.nummer)}</td>
               <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
               <td><span class="badge ${r.rechnungstyp === 'abschlag' ? 'badge-warn' : ''}">${escapeHtml(RECHNUNGSTYP_LABEL[r.rechnungstyp] || 'Rechnung')}</span>${r.verrechnetIn ? `<div class="text-mute" style="font-size:11px">verrechnet in ${escapeHtml(r.verrechnetIn)}</div>` : ''}</td>
@@ -80,6 +84,14 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(rechnungen.find((r) => r.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        rechnungen = rechnungen.filter((r) => !ids.includes(r.id));
+        filtered = filtered.filter((r) => !ids.includes(r.id));
+        renderTable();
+      },
     });
   }
 

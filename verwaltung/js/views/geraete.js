@@ -1,6 +1,7 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const FARBEN = ['#14b8a6', '#4d8bf0', '#a463f2', '#f0a020', '#ef4444', '#16a085', '#d35400', '#2c3e50'];
 
@@ -20,6 +21,8 @@ export async function render(container) {
   geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   let tab = 'geraete';
+  const bulkGeraete = createBulkSelect('geraete', { label: 'Geräte' });
+  const bulkFlotten = createBulkSelect('flotten', { label: 'Fahrzeuge' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -48,15 +51,18 @@ export async function render(container) {
       tableHost.innerHTML = `<div class="empty-state">Noch ${tab === 'geraete' ? 'keine Geräte' : 'keine Fahrzeuge'} angelegt.</div>`;
       return;
     }
+    const bulk = tab === 'geraete' ? bulkGeraete : bulkFlotten;
     if (tab === 'geraete') {
       tableHost.innerHTML = `
+        ${bulk.barHtml()}
         <table class="data-table">
-          <thead><tr><th></th><th>Name</th><th>Kategorie</th><th>Status</th><th>Nächste Prüfung</th></tr></thead>
+          <thead><tr>${bulk.headerCell()}<th></th><th>Name</th><th>Kategorie</th><th>Status</th><th>Nächste Prüfung</th></tr></thead>
           <tbody>
             ${geraete.map((g) => {
               const s = statusInfo(g.status);
               return `
               <tr data-id="${g.id}">
+                ${bulk.rowCell(g.id)}
                 <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${g.farbe || FARBEN[0]}"></span></td>
                 <td>${escapeHtml(g.name)}</td>
                 <td>${escapeHtml(g.kategorie || '')}</td>
@@ -69,13 +75,15 @@ export async function render(container) {
       `;
     } else {
       tableHost.innerHTML = `
+        ${bulk.barHtml()}
         <table class="data-table">
-          <thead><tr><th></th><th>Bezeichnung</th><th>Kennzeichen</th><th>Status</th><th>TÜV/HU</th></tr></thead>
+          <thead><tr>${bulk.headerCell()}<th></th><th>Bezeichnung</th><th>Kennzeichen</th><th>Status</th><th>TÜV/HU</th></tr></thead>
           <tbody>
             ${flotten.map((f) => {
               const s = statusInfo(f.status);
               return `
               <tr data-id="${f.id}">
+                ${bulk.rowCell(f.id)}
                 <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${f.farbe || FARBEN[1]}"></span></td>
                 <td>${escapeHtml(f.bezeichnung)}</td>
                 <td>${escapeHtml(f.kennzeichen || '')}</td>
@@ -92,6 +100,14 @@ export async function render(container) {
         const list2 = tab === 'geraete' ? geraete : flotten;
         openForm(list2.find((x) => x.id === row.dataset.id));
       });
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        if (tab === 'geraete') geraete = geraete.filter((g) => !ids.includes(g.id));
+        else flotten = flotten.filter((f) => !ids.includes(f.id));
+        renderTable();
+      },
     });
   }
 

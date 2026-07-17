@@ -2,6 +2,7 @@ import { getAll, put, remove, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
 
@@ -35,6 +36,7 @@ function currentYearCount(termine, mitarbeiterId, typ) {
 export async function render(container) {
   let [mitarbeiter, termine] = await Promise.all([getAll('mitarbeiter'), getAll('termine')]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const bulk = createBulkSelect('mitarbeiter', { label: 'Mitarbeiter' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -51,8 +53,9 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th></th><th>Name</th><th>Rolle</th><th>Vertrag</th><th>Status heute</th><th>Urlaub (Jahr)</th><th>Telefon</th><th>E-Mail</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th></th><th>Name</th><th>Rolle</th><th>Vertrag</th><th>Status heute</th><th>Urlaub (Jahr)</th><th>Telefon</th><th>E-Mail</th></tr></thead>
         <tbody>
           ${mitarbeiter.map((m) => {
             const genommen = currentYearCount(termine, m.id, 'urlaub');
@@ -60,6 +63,7 @@ export async function render(container) {
             const status = currentStatusFor(termine, m.id);
             return `
             <tr data-id="${m.id}">
+              ${bulk.rowCell(m.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${m.farbe || '#f0a020'}"></span></td>
               <td>${escapeHtml(m.name)}</td>
               <td>${escapeHtml(m.rolle || '')}</td>
@@ -75,6 +79,13 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(mitarbeiter.find((m) => m.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        mitarbeiter = mitarbeiter.filter((m) => !ids.includes(m.id));
+        renderTable();
+      },
     });
   }
 

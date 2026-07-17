@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
 import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -69,6 +70,7 @@ export async function render(container) {
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   let filtered = kunden;
+  const bulk = createBulkSelect('kunden', { label: 'Kunden' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -93,13 +95,15 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
         <thead><tr>
-          <th>Firma / Name</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
+          ${bulk.headerCell()}<th>Firma / Name</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
         </tr></thead>
         <tbody>
           ${filtered.map((k) => `
             <tr data-id="${k.id}">
+              ${bulk.rowCell(k.id)}
               <td>${escapeHtml(k.firma)}</td>
               <td>${escapeHtml(k.ansprechpartner || '')}</td>
               <td>${escapeHtml(k.ort || '')}</td>
@@ -115,6 +119,14 @@ export async function render(container) {
         const kunde = kunden.find((k) => k.id === row.dataset.id);
         openForm(kunde);
       });
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        kunden = kunden.filter((k) => !ids.includes(k.id));
+        filtered = filtered.filter((k) => !ids.includes(k.id));
+        renderTable();
+      },
     });
   }
 
