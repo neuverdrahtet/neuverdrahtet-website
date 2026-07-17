@@ -1,11 +1,14 @@
-import { getAll, put, remove, getSettings, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import * as google from '../google.js';
+import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
 import { mountKarte, KARTE_TAB_HTML } from '../karte.js';
 import { openStatusManager } from '../statusManager.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const LANE_HEIGHT = 24;
 
 const RES_TYPES = [
@@ -40,7 +43,11 @@ function daysBetweenStr(a, b) {
   return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 }
 
-export async function render(container) {
+export async function render(container, _route, { autoSync = true } = {}) {
+  if (autoSync && google.isConnected() && (await google.isConfigured())) {
+    try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
+  }
+
   let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus] = await Promise.all([
     getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'),
   ]);
@@ -49,23 +56,38 @@ export async function render(container) {
   flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const activeStatusFilter = new Set();
+  let bereichFilter = '';
 
   const resourceLists = { mitarbeiter, geraet: geraete, flotte: flotten };
 
-  let weekStart = startOfWeek(new Date());
+  const now = new Date();
+  let weekStart = startOfWeek(now);
+  let viewYear = now.getFullYear();
+  let viewMonth = now.getMonth();
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Plantafel</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neuer Termin</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-sync">🔄 Mit Google synchronisieren</button>
+        <button class="btn btn-primary" id="btn-new">+ Neuer Termin</button>
+      </div>
     </div>
     <div class="cal-legend">
       ${TERMIN_TYPEN.map((t) => `<span class="cal-legend-item"><span class="cal-legend-dot" style="background:${t.farbe}"></span>${escapeHtml(t.titel)}</span>`).join('')}
     </div>
+    <div class="flex-row flex-wrap" style="margin-bottom:10px">
+      <select id="bereich-filter">
+        <option value="">Alle Bereiche</option>
+        ${BEREICHE.map((b) => `<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('')}
+      </select>
+    </div>
     <div class="status-pill-bar" id="status-pill-bar"></div>
     <div class="tabs" id="pt-mode-tabs">
       <button type="button" class="tab-item active" data-mode="woche">🗓️ Woche</button>
+      <button type="button" class="tab-item" data-mode="monat">📅 Monat</button>
       <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
     </div>
     <div id="woche-view">
@@ -80,20 +102,93 @@ export async function render(container) {
         <div id="plantafel-host"></div>
       </div>
     </div>
+    <div id="monat-view" hidden>
+      <div class="card">
+        <div class="cal-header">
+          <button class="btn btn-sm" id="btn-monat-prev">← </button>
+          <div class="cal-title" id="cal-title"></div>
+          <button class="btn btn-sm" id="btn-monat-next">→</button>
+        </div>
+        <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
     ${KARTE_TAB_HTML}
   `;
 
   const host = container.querySelector('#plantafel-host');
   const weekTitle = container.querySelector('#week-title');
+  const monatGrid = container.querySelector('#cal-grid');
+  const monatTitle = container.querySelector('#cal-title');
   const karte = mountKarte(container, { termine, kundenById, settings });
 
   function setMode(mode) {
     container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     container.querySelector('#woche-view').hidden = mode !== 'woche';
+    container.querySelector('#monat-view').hidden = mode !== 'monat';
     container.querySelector('#karte-view').hidden = mode !== 'karte';
     if (mode === 'karte') karte.refresh();
   }
   container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  container.querySelector('#btn-sync').addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-sync');
+    btn.disabled = true;
+    btn.textContent = 'Synchronisiere ...';
+    try {
+      const result = await syncCalendar();
+      toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.`, 'success');
+      render(container, _route, { autoSync: false });
+    } catch (err) {
+      toast(err.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = '🔄 Mit Google synchronisieren';
+    }
+  });
+
+  function passesFilters(t) {
+    if (activeStatusFilter.size && !activeStatusFilter.has(t.status || 'geplant')) return false;
+    if (bereichFilter) {
+      const projekt = projekteById[t.projektId];
+      if (!projekt || projekt.bereich !== bereichFilter) return false;
+    }
+    return true;
+  }
+
+  container.querySelector('#bereich-filter').addEventListener('change', (e) => {
+    bereichFilter = e.target.value;
+    renderGrid();
+    renderMonatGrid();
+  });
+
+  function renderStatusPills() {
+    const bar = container.querySelector('#status-pill-bar');
+    bar.innerHTML = terminStatus.map((s) => `
+      <label class="status-pill ${activeStatusFilter.has(s.id) ? 'active' : ''}" style="--pill-color:${s.farbe}" data-id="${s.id}">
+        <input type="checkbox" value="${s.id}" ${activeStatusFilter.has(s.id) ? 'checked' : ''}>
+        <span class="dot" style="background:${s.farbe}"></span>${escapeHtml(s.titel)}
+      </label>
+    `).join('') + `<button type="button" class="status-pill manage-btn" id="btn-status-manage">⚙️ Status verwalten</button>`;
+    bar.querySelectorAll('.status-pill[data-id]').forEach((label) => {
+      label.querySelector('input').addEventListener('change', (e) => {
+        if (e.target.checked) activeStatusFilter.add(label.dataset.id);
+        else activeStatusFilter.delete(label.dataset.id);
+        label.classList.toggle('active', e.target.checked);
+        renderGrid();
+        renderMonatGrid();
+      });
+    });
+    bar.querySelector('#btn-status-manage').addEventListener('click', () => {
+      openStatusManager({
+        title: 'Termin-Status verwalten',
+        store: 'terminStatus',
+        items: terminStatus,
+        canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
+        onChange: () => render(container, _route, { autoSync: false }),
+      });
+    });
+  }
+
+  // ---------- Woche (Gantt) ----------
 
   function fmtDay(d) {
     return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit' }).format(d);
@@ -122,7 +217,7 @@ export async function render(container) {
   function buildRow(resource, resType, field, nameKey, colorFallback, weekStartStr, weekEndStr, todayStr) {
     const items = termine
       .filter((t) => t[field]?.includes(resource.id))
-      .filter((t) => !activeStatusFilter.size || activeStatusFilter.has(t.status || 'geplant'))
+      .filter(passesFilters)
       .map((t) => {
         const start = toDateOnly(t.start);
         const ende = toDateOnly(t.ende) || start;
@@ -162,33 +257,6 @@ export async function render(container) {
         </div>
       </div>
     `;
-  }
-
-  function renderStatusPills() {
-    const bar = container.querySelector('#status-pill-bar');
-    bar.innerHTML = terminStatus.map((s) => `
-      <label class="status-pill ${activeStatusFilter.has(s.id) ? 'active' : ''}" style="--pill-color:${s.farbe}" data-id="${s.id}">
-        <input type="checkbox" value="${s.id}" ${activeStatusFilter.has(s.id) ? 'checked' : ''}>
-        <span class="dot" style="background:${s.farbe}"></span>${escapeHtml(s.titel)}
-      </label>
-    `).join('') + `<button type="button" class="status-pill manage-btn" id="btn-status-manage">⚙️ Status verwalten</button>`;
-    bar.querySelectorAll('.status-pill[data-id]').forEach((label) => {
-      label.querySelector('input').addEventListener('change', (e) => {
-        if (e.target.checked) activeStatusFilter.add(label.dataset.id);
-        else activeStatusFilter.delete(label.dataset.id);
-        label.classList.toggle('active', e.target.checked);
-        renderGrid();
-      });
-    });
-    bar.querySelector('#btn-status-manage').addEventListener('click', () => {
-      openStatusManager({
-        title: 'Termin-Status verwalten',
-        store: 'terminStatus',
-        items: terminStatus,
-        canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
-        onChange: () => render(container),
-      });
-    });
   }
 
   function renderGrid() {
@@ -362,6 +430,72 @@ export async function render(container) {
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
+  // ---------- Monat ----------
+
+  function todayStrFn() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function terminsOnDay(dateStr) {
+    return termine.filter((t) => {
+      if (!passesFilters(t)) return false;
+      const start = (t.start || '').slice(0, 10);
+      const ende = (t.ende || '').slice(0, 10) || start;
+      return dateStr >= start && dateStr <= ende;
+    }).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+  }
+
+  function renderMonatGrid() {
+    monatTitle.textContent = `${MONTHS[viewMonth]} ${viewYear}`;
+    const first = new Date(viewYear, viewMonth, 1);
+    const startOffset = (first.getDay() + 6) % 7; // Monday = 0
+    const gridStart = new Date(viewYear, viewMonth, 1 - startOffset);
+
+    let html = DOW.map((d) => `<div class="cal-dow">${d}</div>`).join('');
+    const today = todayStrFn();
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(gridStart);
+      d.setDate(gridStart.getDate() + i);
+      const dateStr = d.toISOString().slice(0, 10);
+      const isOtherMonth = d.getMonth() !== viewMonth;
+      const events = terminsOnDay(dateStr);
+      html += `
+        <div class="cal-day ${isOtherMonth ? 'other-month' : ''} ${dateStr === today ? 'today' : ''}" data-date="${dateStr}">
+          <div class="day-num">${d.getDate()}</div>
+          ${events.slice(0, 3).map((e) => {
+            const farbe = e.farbe || typInfo(e.typ).farbe;
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(typInfo(e.typ).titel)}">${escapeHtml(e.titel)}</div>`;
+          }).join('')}
+          ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
+        </div>
+      `;
+    }
+    monatGrid.innerHTML = html;
+
+    monatGrid.querySelectorAll('.cal-event').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openForm(termine.find((t) => t.id === el.dataset.id));
+      });
+    });
+    monatGrid.querySelectorAll('.cal-day').forEach((el) => {
+      el.addEventListener('click', () => openForm(null, { date: el.dataset.date }));
+    });
+  }
+
+  container.querySelector('#btn-monat-prev').addEventListener('click', () => {
+    viewMonth--;
+    if (viewMonth < 0) { viewMonth = 11; viewYear--; }
+    renderMonatGrid();
+  });
+  container.querySelector('#btn-monat-next').addEventListener('click', () => {
+    viewMonth++;
+    if (viewMonth > 11) { viewMonth = 0; viewYear++; }
+    renderMonatGrid();
+  });
+
+  // ---------- Gemeinsames Termin-Formular ----------
+
   function openForm(t, prefill) {
     const isEdit = !!t;
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -397,8 +531,8 @@ export async function render(container) {
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
-            <div class="field col-span-2"><label>Projekt</label>
-              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
+            <div class="field col-span-2"><label>Projekt <span class="text-mute" id="f-projekt-bereich"></span></label>
+              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" data-bereich="${p.bereich || ''}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
             </div>
             <div class="field col-span-2"><label>Mitarbeiter</label>
               <div class="tag-list">
@@ -443,6 +577,15 @@ export async function render(container) {
         </form>
       `,
     });
+    function updateProjektBereichHint() {
+      const select = body.querySelector('select[name="projektId"]');
+      const bereichId = select.selectedOptions[0]?.dataset.bereich;
+      const bereich = BEREICHE.find((b) => b.id === bereichId);
+      body.querySelector('#f-projekt-bereich').textContent = bereich ? `(${bereich.titel})` : '';
+    }
+    updateProjektBereichHint();
+    body.querySelector('select[name="projektId"]').addEventListener('change', updateProjektBereichHint);
+
     let farbeCustom = !!data.farbe;
     body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });
     body.querySelector('select[name="typ"]').addEventListener('change', (e) => {
@@ -463,10 +606,11 @@ export async function render(container) {
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Termin "${data.titel}" wirklich löschen?`)) return;
+        try { await deleteSyncedEvent(data); } catch (err) { /* ignore Google errors on delete */ }
         await remove('termine', data.id);
         toast('Termin gelöscht');
         close();
-        render(container);
+        render(container, null, { autoSync: false });
       });
     }
     body.querySelector('#pt-form').addEventListener('submit', async (e) => {
@@ -492,10 +636,11 @@ export async function render(container) {
       await put('termine', updated);
       toast(isEdit ? 'Termin aktualisiert' : 'Termin angelegt', 'success');
       close();
-      render(container);
+      render(container, null, { autoSync: false });
     });
   }
 
   renderStatusPills();
   renderGrid();
+  renderMonatGrid();
 }

@@ -1,6 +1,9 @@
 import { getAll, put, remove } from './db.js';
 import { uid, escapeHtml, formatDate, formatDateTime, toast } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
+import { buildBerichtPdfBlob } from './docpdf.js';
+import { openEmailComposer } from './emailsend.js';
+import { sendDocumentViaWhatsApp } from './whatsapp.js';
 
 export const DOKUMENT_KATEGORIEN = [
   { id: 'bericht', titel: 'Bericht' },
@@ -50,10 +53,13 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       toast('Noch keine Dokumentations-Vorlage angelegt (siehe Menü Vorlagen).', 'danger');
       return;
     }
-    const substitute = (text, vorlageName) => text
-      .replaceAll('{{firma}}', berichtContext.firma || '')
-      .replaceAll('{{kunde}}', berichtContext.kunde || '')
-      .replaceAll('{{projekt}}', berichtContext.projekt || '')
+    const settings = berichtContext.settings || {};
+    const kunde = berichtContext.kunde || null;
+    const projekt = berichtContext.projekt || '';
+    const substitute = (text) => (text || '')
+      .replaceAll('{{firma}}', settings.firmenname || '')
+      .replaceAll('{{kunde}}', kunde?.firma || '')
+      .replaceAll('{{projekt}}', projekt)
       .replaceAll('{{datum}}', formatDate(new Date().toISOString()));
 
     const { body, close } = openModal({
@@ -64,51 +70,89 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <div class="field col-span-2"><label>Vorlage</label>
             <select id="ber-vorlage">${vorlagen.map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('')}</select>
           </div>
+          <div class="field col-span-2"><label>Titel</label><input id="ber-titel" type="text"></div>
         </div>
         <div class="divider"></div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          ${kunde?.telefon ? '<button type="button" class="btn" id="btn-send-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+          <button type="button" class="btn" id="btn-send-email">✉️ Per E-Mail senden</button>
           <button type="button" class="btn btn-primary" id="btn-save-pdf">Als PDF speichern</button>
         </div>
       `,
     });
     const vorlageSelect = body.querySelector('#ber-vorlage');
+    const titelInput = body.querySelector('#ber-titel');
     const textArea = body.querySelector('#ber-text');
     function fillText() {
       const v = vorlagen.find((x) => x.id === vorlageSelect.value);
-      textArea.value = v ? substitute(v.textVorlage || '', v.name) : '';
+      titelInput.value = v?.name || 'Bericht';
+      textArea.value = v ? substitute(v.textVorlage || '') : '';
     }
     vorlageSelect.addEventListener('change', fillText);
     fillText();
     body.querySelector('#btn-cancel').addEventListener('click', close);
+
+    function currentUntertitel() {
+      return [kunde?.firma ? `Kunde: ${kunde.firma}` : '', projekt ? `Projekt: ${projekt}` : ''].filter(Boolean).join(' · ');
+    }
+    function currentFilename() {
+      return `${(titelInput.value || 'Bericht').replace(/[^a-z0-9äöüß _-]/gi, '')}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    }
+    function buildPdf() {
+      return buildBerichtPdfBlob({
+        settings, titel: titelInput.value || 'Bericht',
+        untertitel: currentUntertitel(), text: textArea.value,
+      });
+    }
+
     body.querySelector('#btn-save-pdf').addEventListener('click', async () => {
-      if (!window.jspdf) {
-        toast('PDF-Bibliothek konnte nicht geladen werden.', 'danger');
+      let blob;
+      try {
+        blob = buildPdf();
+      } catch (err) {
+        toast(err.message, 'danger');
         return;
       }
-      const v = vorlagen.find((x) => x.id === vorlageSelect.value);
-      const { jsPDF } = window.jspdf;
-      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-      const marginX = 18;
-      doc.setFontSize(14);
-      doc.setFont(undefined, 'bold');
-      doc.text(v?.name || 'Bericht', marginX, 20);
-      doc.setFont(undefined, 'normal');
-      doc.setFontSize(10);
-      const lines = doc.splitTextToSize(textArea.value, 174);
-      doc.text(lines, marginX, 30);
-      const blob = doc.output('blob');
       await saveDokument({
         bezugTyp, bezugId, kategorie: 'bericht',
-        name: `${(v?.name || 'Bericht').replace(/[^a-z0-9äöüß _-]/gi, '')}-${new Date().toISOString().slice(0, 10)}.pdf`,
-        mime: 'application/pdf', blob,
+        name: currentFilename(), mime: 'application/pdf', blob,
       });
       toast('Bericht gespeichert', 'success');
       close();
       load();
     });
+
+    body.querySelector('#btn-send-email').addEventListener('click', () => {
+      openEmailComposer({
+        to: kunde?.email || '',
+        subject: `${titelInput.value || 'Bericht'}${kunde?.firma ? ' – ' + kunde.firma : ''}`,
+        bodyText: `Guten Tag${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie ${titelInput.value || 'den Bericht'}.\n\nMit freundlichen Grüßen\n${settings.firmenname || ''}`,
+        filename: currentFilename(),
+        buildPdfBlob: buildPdf,
+      });
+    });
+
+    const whatsappBtn = body.querySelector('#btn-send-whatsapp');
+    if (whatsappBtn) {
+      whatsappBtn.addEventListener('click', () => {
+        let blob;
+        try {
+          blob = buildPdf();
+        } catch (err) {
+          toast(err.message, 'danger');
+          return;
+        }
+        sendDocumentViaWhatsApp({
+          phone: kunde.telefon,
+          text: `${titelInput.value || 'Bericht'}${kunde?.firma ? ' – ' + kunde.firma : ''}`,
+          pdfBlob: blob,
+          filename: currentFilename(),
+        });
+      });
+    }
   }
 
   async function load() {

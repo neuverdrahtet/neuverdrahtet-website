@@ -1,8 +1,9 @@
-import { getAll, put, remove } from '../db.js';
+import { getAll, put, remove, getSettings, BEREICHE } from '../db.js';
 import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
+import { renderDokumenteSection } from '../dokumente.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -26,10 +27,13 @@ function parseKundenCsv(text) {
 }
 
 export async function render(container) {
-  let [kunden, projekte, spalten] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten')]);
+  let [kunden, projekte, spalten, kategorien, dokumente, settings] = await Promise.all([
+    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(),
+  ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
+  const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   let filtered = kunden;
 
   container.innerHTML = `
@@ -166,8 +170,9 @@ export async function render(container) {
             <div class="divider"></div>
             <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
               <h2 style="font-size:14px;margin:0">Aufträge &amp; Projekte (${linkedProjekte.length}, davon ${offenCount} offen)</h2>
+              <button type="button" class="btn btn-sm" id="btn-akte">📁 Kundenakte öffnen</button>
             </div>
-            ${linkedProjekte.length ? `<ul class="cal-event-list">${linkedProjekte.map((p) => `
+            ${linkedProjekte.length ? `<ul class="cal-event-list">${linkedProjekte.slice(0, 5).map((p) => `
               <li>
                 <div>
                   <strong>${escapeHtml(p.titel)}</strong>
@@ -175,8 +180,8 @@ export async function render(container) {
                 </div>
                 <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
               </li>
-            `).join('')}</ul>` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
-            <p class="hint">Berichte, Stundenzettel und Bilder werden je Auftrag im Projekt selbst dokumentiert (Menü Projekte → Auftrag öffnen).</p>
+            `).join('')}</ul>${linkedProjekte.length > 5 ? `<p class="text-mute">... und ${linkedProjekte.length - 5} weitere – in der Kundenakte einsehbar.</p>` : ''}` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
+            <p class="hint">Alle Aufträge, Wartungen, Projekte und Dokumente dieses Kunden findest du gesammelt in der Kundenakte.</p>
           ` : ''}
           ${isEdit && data.email ? `
             <div class="divider"></div>
@@ -199,6 +204,7 @@ export async function render(container) {
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
+      body.querySelector('#btn-akte').addEventListener('click', () => openKundenakte(data));
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Kunde "${data.firma}" wirklich löschen?`)) return;
         await remove('kunden', data.id);
@@ -252,6 +258,69 @@ export async function render(container) {
       toast(isEdit ? 'Kunde aktualisiert' : 'Kunde angelegt', 'success');
       close();
       render(container);
+    });
+  }
+
+  function openKundenakte(kunde) {
+    const kProjekte = projekte
+      .filter((p) => p.kundeId === kunde.id)
+      .sort((a, b) => (b.start || b.createdAt || '').localeCompare(a.start || a.createdAt || ''));
+    const projektIds = new Set(kProjekte.map((p) => p.id));
+    const dokAnzahl = dokumente.filter((d) => d.bezugTyp === 'projekt' && projektIds.has(d.bezugId)).length;
+    const offen = kProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
+
+    const gruppen = [
+      ...BEREICHE.map((b) => ({ id: b.id, titel: b.titel, items: kProjekte.filter((p) => p.bereich === b.id) })),
+      { id: '__sonstige__', titel: 'Ohne Bereich', items: kProjekte.filter((p) => !BEREICHE.some((b) => b.id === p.bereich)) },
+    ].filter((g) => g.items.length > 0);
+
+    function projektMeta(p) {
+      const dokCount = dokumente.filter((d) => d.bezugTyp === 'projekt' && d.bezugId === p.id).length;
+      return `
+        <summary>
+          <span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span>
+          <strong>${escapeHtml(p.titel)}</strong>
+          <span class="text-mute">${escapeHtml(kategorienById[p.kategorieId]?.titel || '')}</span>
+          <span class="text-mute">${formatDate(p.start)}${p.ende ? ' – ' + formatDate(p.ende) : ''}</span>
+          <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+          <span class="text-mute">📎 ${dokCount}</span>
+        </summary>
+        <div class="akte-projekt-body">
+          ${p.notizen ? `<p class="text-mute">${escapeHtml(p.notizen)}</p>` : ''}
+          <div class="akte-dok-host" data-projekt-id="${p.id}"></div>
+        </div>
+      `;
+    }
+
+    const { body } = openModal({
+      title: `Kundenakte – ${kunde.firma}`,
+      wide: true,
+      bodyHtml: `
+        <p class="text-mute" style="margin-top:-6px">${kProjekte.length} Aufträge/Projekte insgesamt, davon ${offen} offen · ${dokAnzahl} Dokumente</p>
+        ${gruppen.length === 0 ? '<p class="text-mute">Noch keine Aufträge, Wartungen oder Projekte für diesen Kunden.</p>' : gruppen.map((g) => `
+          <div class="akte-bereich">
+            <h2 style="font-size:14px;margin:14px 0 8px">${escapeHtml(g.titel)} (${g.items.length})</h2>
+            <div class="akte-projekte-list">
+              ${g.items.map((p) => `<details class="akte-projekt" data-id="${p.id}">${projektMeta(p)}</details>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+        <div class="modal-actions"><span class="spacer"></span></div>
+      `,
+    });
+
+    body.querySelectorAll('details.akte-projekt').forEach((det) => {
+      let loaded = false;
+      det.addEventListener('toggle', () => {
+        if (!det.open || loaded) return;
+        loaded = true;
+        const p = kProjekte.find((x) => x.id === det.dataset.id);
+        const host = det.querySelector('.akte-dok-host');
+        renderDokumenteSection(host, 'projekt', p.id, {
+          title: 'Dokumente',
+          berichtContext: { settings, kunde, projekt: p.titel },
+        });
+      });
     });
   }
 
