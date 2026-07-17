@@ -3,7 +3,7 @@ import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, readTextAut
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
-import { renderDokumenteSection } from '../dokumente.js';
+import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -229,6 +229,8 @@ export async function render(container) {
               </li>
             `).join('')}</ul>${linkedProjekte.length > 5 ? `<p class="text-mute">... und ${linkedProjekte.length - 5} weitere – in der Kundenakte einsehbar.</p>` : ''}` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
             <p class="hint">Alle Aufträge, Wartungen, Projekte und Dokumente dieses Kunden findest du gesammelt in der Kundenakte.</p>
+            <div class="divider"></div>
+            <div id="dok-host"></div>
           ` : ''}
           ${isEdit && data.email ? `
             <div class="divider"></div>
@@ -252,6 +254,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-akte').addEventListener('click', () => openKundenakte(data));
+      renderDokumenteSection(body.querySelector('#dok-host'), 'kunde', data.id, {
+        kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente (Rechnungen, Angebote, Verträge, ...)',
+      });
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Kunde "${data.firma}" wirklich löschen?`)) return;
         await remove('kunden', data.id);

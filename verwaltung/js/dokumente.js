@@ -131,8 +131,12 @@ export const DOKUMENT_KATEGORIEN = [
   { id: 'stundenzettel', titel: 'Stundenzettel' },
   { id: 'bild', titel: 'Bild' },
   { id: 'vertrag', titel: 'Vertrag' },
+  { id: 'rechnung', titel: 'Rechnung' },
+  { id: 'angebot', titel: 'Angebot' },
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
+
+export const KUNDE_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['rechnung', 'angebot', 'vertrag', 'sonstiges'].includes(k.id));
 
 function katLabel(id) {
   return DOKUMENT_KATEGORIEN.find((k) => k.id === id)?.titel || 'Sonstiges';
