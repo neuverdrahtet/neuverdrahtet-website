@@ -1,6 +1,7 @@
 import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
 const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
@@ -42,6 +43,7 @@ export async function render(container) {
   items.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   let filtered = items;
   let typeFilter = '';
+  const bulk = createBulkSelect('katalog', { label: 'Einträge' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -81,11 +83,13 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th></tr></thead>
         <tbody>
           ${filtered.map((i) => `
             <tr data-id="${i.id}">
+              ${bulk.rowCell(i.id)}
               <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
               <td>${escapeHtml(i.bezeichnung)}</td>
               <td>${escapeHtml(i.einheit || '')}</td>
@@ -100,6 +104,14 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(items.find((i) => i.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        items = items.filter((i) => !ids.includes(i.id));
+        filtered = filtered.filter((i) => !ids.includes(i.id));
+        renderTable();
+      },
     });
   }
 

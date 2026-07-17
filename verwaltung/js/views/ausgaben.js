@@ -2,6 +2,7 @@ import { getAll, put, remove, getSettings, KALK_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -11,6 +12,7 @@ export async function render(container) {
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
+  const bulk = createBulkSelect('ausgaben', { label: 'Ausgaben' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -47,11 +49,13 @@ export async function render(container) {
     const summe = filtered.reduce((s, a) => s + (a.betragBrutto || 0), 0);
     tableHost.innerHTML = `
       <p class="hint">Summe: ${formatCurrency(summe)}</p>
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag (brutto)</th><th></th></tr></thead>
         <tbody>
           ${filtered.map((a) => `
             <tr data-id="${a.id}">
+              ${bulk.rowCell(a.id)}
               <td>${formatDate(a.datum)}</td>
               <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
               <td>${escapeHtml(a.beschreibung || '')}</td>
@@ -65,6 +69,14 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(ausgaben.find((a) => a.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        ausgaben = ausgaben.filter((a) => !ids.includes(a.id));
+        filtered = filtered.filter((a) => !ids.includes(a.id));
+        renderTable();
+      },
     });
   }
 

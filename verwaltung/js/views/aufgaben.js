@@ -2,6 +2,7 @@ import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const PRIORITAETEN = [
   { id: 'niedrig', titel: 'Niedrig' },
@@ -32,6 +33,7 @@ export async function render(container) {
   if (!currentMa && mitarbeiter.length) currentMa = mitarbeiter[0].id;
   let tab = 'meine';
   let filtered = aufgaben;
+  const bulk = createBulkSelect('aufgaben', { label: 'Aufgaben' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -86,13 +88,15 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th></th><th>Titel</th><th>Zugewiesen an</th><th>Fällig am</th><th>Priorität</th><th>Status</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Zugewiesen an</th><th>Fällig am</th><th>Priorität</th><th>Status</th></tr></thead>
         <tbody>
           ${filtered.map((a) => {
             const st = statusById[a.status];
             return `
             <tr data-id="${a.id}">
+              ${bulk.rowCell(a.id)}
               <td><input type="checkbox" class="chk-erledigt" data-id="${a.id}" ${st?.geschlossen ? 'checked' : ''}></td>
               <td>${escapeHtml(a.titel)}</td>
               <td>${escapeHtml(mitarbeiterById[a.zugewiesenAn]?.name || '')}</td>
@@ -120,6 +124,14 @@ export async function render(container) {
         toast(chk.checked ? 'Aufgabe erledigt' : 'Aufgabe wieder geöffnet', 'success');
         applyFilter();
       });
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        aufgaben = aufgaben.filter((a) => !ids.includes(a.id));
+        filtered = filtered.filter((a) => !ids.includes(a.id));
+        renderTable();
+      },
     });
   }
 

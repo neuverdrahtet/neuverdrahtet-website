@@ -1,6 +1,7 @@
 import { getAll, put, remove, getSettings, TAETIGKEITEN } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const TIMER_KEY = 'nv-running-timer';
@@ -56,6 +57,7 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   eintraege.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = eintraege;
+  const bulk = createBulkSelect('zeiterfassung', { label: 'Einträge' });
   let tickInterval = null;
   let mode = 'einsaetze';
 
@@ -287,11 +289,13 @@ export async function render(container) {
     const totalMinutes = filtered.reduce((s, e) => s + (e.dauerMinuten || 0), 0);
     tableHost.innerHTML = `
       <p class="hint">Gesamt: ${formatDuration(totalMinutes)}</p>
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Projekt</th><th>Mitarbeiter</th><th>Tätigkeit</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Datum</th><th>Uhrzeit</th><th>Projekt</th><th>Mitarbeiter</th><th>Tätigkeit</th><th>Dauer</th><th>Beschreibung</th><th>Status</th></tr></thead>
         <tbody>
           ${filtered.map((e) => `
             <tr data-id="${e.id}">
+              ${bulk.rowCell(e.id)}
               <td>${formatDate(e.datum)}</td>
               <td>${e.startzeit && e.endzeit ? `${e.startzeit}–${e.endzeit}` : '–'}</td>
               <td>${escapeHtml(projekteById[e.projektId]?.titel || '')}</td>
@@ -307,6 +311,14 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(eintraege.find((e) => e.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        eintraege = eintraege.filter((e) => !ids.includes(e.id));
+        filtered = filtered.filter((e) => !ids.includes(e.id));
+        renderTable();
+      },
     });
   }
 

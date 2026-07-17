@@ -2,10 +2,12 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 export async function render(container) {
   let [vorlagen, katalog, settings] = await Promise.all([getAll('vorlagen'), getAll('katalog'), getSettings()]);
   vorlagen.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const bulk = createBulkSelect('vorlagen', { label: 'Vorlagen' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -23,14 +25,16 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th>Typ</th><th>Name</th><th>Positionen</th><th class="text-right">Summe (netto)</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Name</th><th>Positionen</th><th class="text-right">Summe (netto)</th></tr></thead>
         <tbody>
           ${vorlagen.map((v) => {
             const isDok = v.typ === 'dokumentation';
             const summe = (v.positionen || []).reduce((s, p) => s + (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0), 0);
             return `
             <tr data-id="${v.id}">
+              ${bulk.rowCell(v.id)}
               <td><span class="badge ${isDok ? 'badge-success' : 'badge-accent'}">${isDok ? 'Dokumentation' : 'Positionen'}</span></td>
               <td>${escapeHtml(v.name)}</td>
               <td>${isDok ? '–' : (v.positionen || []).length}</td>
@@ -42,6 +46,13 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(vorlagen.find((v) => v.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        vorlagen = vorlagen.filter((v) => !ids.includes(v.id));
+        renderTable();
+      },
     });
   }
 

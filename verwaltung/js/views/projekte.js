@@ -6,6 +6,7 @@ import { renderFotoSection } from '../fotos.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { renderNachkalkulation } from '../nachkalkulation.js';
 import { renderTeamchat } from '../teamchat.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
@@ -25,6 +26,7 @@ export async function render(container) {
 
   let folder = ALLE_OFFEN;
   let filtered = projekte;
+  const bulk = createBulkSelect('projekte', { label: 'Projekte' });
 
   container.innerHTML = `
     <div class="view-header">
@@ -103,11 +105,13 @@ export async function render(container) {
       return;
     }
     tableHost.innerHTML = `
+      ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr><th></th><th>Titel</th><th>Kunde</th><th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th><th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
           ${filtered.map((p) => `
             <tr data-id="${p.id}">
+              ${bulk.rowCell(p.id)}
               <td><span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span></td>
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
@@ -123,6 +127,15 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(projekte.find((p) => p.id === row.dataset.id)));
+    });
+    bulk.wire(tableHost, {
+      onChange: renderTable,
+      onDeleted: (ids) => {
+        projekte = projekte.filter((p) => !ids.includes(p.id));
+        filtered = filtered.filter((p) => !ids.includes(p.id));
+        renderFolders();
+        renderTable();
+      },
     });
   }
 
