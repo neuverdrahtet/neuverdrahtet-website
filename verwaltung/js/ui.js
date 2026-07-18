@@ -1,4 +1,4 @@
-import { el } from './utils.js';
+import { el, escapeHtml } from './utils.js';
 
 export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   const backdrop = el(`<div class="modal-backdrop"></div>`);
@@ -35,11 +35,12 @@ export function confirmDelete(msg = 'Wirklich löschen?') {
 }
 
 export function optionList(items, { value = 'id', label = 'name', selected = '', placeholder = '' } = {}) {
+  const labelFn = typeof label === 'function' ? label : (item) => escapeHtml(item[label] ?? '');
   let html = placeholder !== null ? `<option value="">${placeholder}</option>` : '';
   for (const item of items) {
     const v = item[value];
     const sel = String(v) === String(selected) ? 'selected' : '';
-    html += `<option value="${v}" ${sel}>${label(item)}</option>`;
+    html += `<option value="${v}" ${sel}>${labelFn(item)}</option>`;
   }
   return html;
 }
