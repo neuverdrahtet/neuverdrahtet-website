@@ -1,4 +1,4 @@
-import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, TEXTBAUSTEIN_KATEGORIEN, ZUGRIFFSROLLEN } from '../db.js';
+import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, clearStore, TEXTBAUSTEIN_KATEGORIEN, ZUGRIFFSROLLEN } from '../db.js';
 import { uid, escapeHtml, toast, compressImage } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
@@ -260,6 +260,15 @@ export async function render(container) {
             <button class="btn" id="btn-import">Daten importieren ...</button>
             <input type="file" id="import-file" accept="application/json" hidden>
           </div>
+
+          <h2 style="margin-top:28px">Testdaten zurücksetzen</h2>
+          <p class="hint">Löscht alle Datensätze im gewählten Bereich unwiderruflich – auch bereits versendete/gesperrte Rechnungen. Gedacht, um Testeinträge komplett zu entfernen und wieder bei 0 anzufangen.</p>
+          <form id="reset-form" style="max-width:360px">
+            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="rechnungen" id="reset-rechnungen"><label for="reset-rechnungen">Rechnungen</label></div>
+            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="angebote" id="reset-angebote"><label for="reset-angebote">Angebote</label></div>
+            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="mahnungen" id="reset-mahnungen"><label for="reset-mahnungen">Mahnungen</label></div>
+            <button type="submit" class="btn btn-danger" style="margin-top:12px">Ausgewählte Bereiche löschen</button>
+          </form>
         </div>
 
       </div>
@@ -521,5 +530,24 @@ export async function render(container) {
       toast('Import fehlgeschlagen: ' + err.message, 'danger');
     }
     fileInput.value = '';
+  });
+
+  const resetLabels = { rechnungen: 'Rechnungen', angebote: 'Angebote', mahnungen: 'Mahnungen' };
+  container.querySelector('#reset-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const bereiche = Array.from(e.target.querySelectorAll('input[name="bereich"]:checked')).map((c) => c.value);
+    if (!bereiche.length) {
+      toast('Bitte mindestens einen Bereich auswählen', 'info');
+      return;
+    }
+    const namen = bereiche.map((b) => resetLabels[b]).join(', ');
+    if (!confirmDelete(`${namen} wirklich unwiderruflich löschen? Das betrifft auch bereits versendete/gesperrte Einträge und kann nicht rückgängig gemacht werden.`)) return;
+    for (const bereich of bereiche) {
+      await clearStore(bereich);
+    }
+    if (bereiche.includes('rechnungen')) await setSettings({ rechnungNummerDatum: '', rechnungNummerZaehler: 0 });
+    if (bereiche.includes('angebote')) await setSettings({ angebotNummerDatum: '', angebotNummerZaehler: 0 });
+    toast(`${namen} gelöscht`, 'success');
+    e.target.querySelectorAll('input[name="bereich"]').forEach((c) => { c.checked = false; });
   });
 }
