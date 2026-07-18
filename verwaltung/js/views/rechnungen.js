@@ -338,7 +338,7 @@ let editor = createPositionsEditor({
         openForm({ ...data });
       }
       body.querySelector('#btn-print').addEventListener('click', async () => {
-        printHtml(buildDocHtml(docOpts()));
+        printHtml(buildDocHtml(docOpts()), settings);
         if (!locked) await markVersendetUndSperren();
       });
       const emailBtn = body.querySelector('#btn-email');

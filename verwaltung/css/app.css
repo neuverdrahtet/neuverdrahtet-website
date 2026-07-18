@@ -1088,16 +1088,33 @@ table.data-table th.col-select, table.data-table td.col-select {
 /* Print — Aufbau folgt bewusst dem gleichen Layout wie das echte PDF (docpdf.js):
    Logo/Firmenname links, Titel+Meta-Box rechts, Absender-Zeile, Empfänger,
    Positionstabelle, Summenblock, 3-spaltige Fußzeile. */
+.dok-layout-preview {
+  max-width: 420px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fff;
+  color: #111;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: var(--dok-fontsize, 13px);
+}
+.dok-layout-preview .dlp-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-weight: 700; }
+.dok-layout-preview .dlp-titel { font-size: 1.2em; }
+.dok-layout-preview .dlp-table { width: 100%; border-collapse: collapse; margin-bottom: 18px; }
+.dok-layout-preview .dlp-table th, .dok-layout-preview .dlp-table td { border-bottom: 1px solid #ccc; padding: 4px 5px; font-size: 0.85em; text-align: left; }
+.dok-layout-preview .dlp-table th { background: var(--dok-akzent, #0f1b2d); color: #fff; font-weight: 400; }
+.dok-layout-preview .dlp-footer { border-top: 1px solid #ccc; padding-top: 6px; font-size: 0.7em; color: #666; }
+
 .print-root { display: none; }
 @media print {
   html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; background: #fff !important; }
-  .print-doc { padding: 10mm; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 13px; background: #fff; }
+  .print-doc { padding: 10mm 10mm 30mm 10mm; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; }
   .print-doc * { color: #111; }
   .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
-  .print-doc th { background: #0f1b2d; color: #fff; }
+  .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; }
 
   .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
   .print-doc .print-logo { max-width: 46mm; max-height: 22mm; object-fit: contain; }
@@ -1114,7 +1131,10 @@ table.data-table th.col-select, table.data-table td.col-select {
   .print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
 
   .print-doc .print-footer {
-    margin-top: 40px;
+    position: fixed;
+    left: 10mm;
+    right: 10mm;
+    bottom: 8mm;
     padding-top: 6px;
     border-top: 1px solid #ccc;
     display: grid;
@@ -1123,6 +1143,7 @@ table.data-table th.col-select, table.data-table td.col-select {
     font-size: 9.5px;
     color: #444;
     line-height: 1.5;
+    background: #fff;
   }
 }
 

@@ -155,7 +155,7 @@ export async function render(container) {
 
   function printMahnung(m) {
     if (!m) return;
-    printHtml(buildDocHtml(mahnungDocOpts(m)));
+    printHtml(buildDocHtml(mahnungDocOpts(m)), settings);
   }
 
   function emailMahnung(m) {

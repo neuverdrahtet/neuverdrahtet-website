@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate, formatDateTime } from './utils.js';
+import { formatCurrency, formatDate, formatDateTime, hexToRgb } from './utils.js';
 
 function logoFormat(dataUrl) {
   const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
@@ -49,6 +49,8 @@ export function buildDocPdfBlob(opts) {
   const marginX = 18;
   const rightX = 192;
   let y = 20;
+  const accentRgb = hexToRgb(opts.settings.dokAkzentfarbe);
+  const baseFont = Number(opts.settings.dokSchriftgroesse) || 10;
 
   // --- Header: logo (top-left) + title & meta box (top-right) ---
   const fmt = logoFormat(opts.settings.logoDataUrl);
@@ -108,20 +110,20 @@ export function buildDocPdfBlob(opts) {
   y += 8 + kundeLines.length * 5 + 12;
 
   if (opts.betreff) {
-    doc.setFontSize(10);
+    doc.setFontSize(baseFont);
     doc.setTextColor(20);
     doc.text(`Gerne bieten wir Ihnen an: ${opts.betreff}`, marginX, y);
     y += 5.5;
   }
   if (opts.projekt) {
-    doc.setFontSize(10);
+    doc.setFontSize(baseFont);
     doc.text(`Für das Projekt: ${opts.projekt}`, marginX, y);
     y += 5.5;
   }
   y += 4;
 
   if (opts.introText) {
-    doc.setFontSize(10);
+    doc.setFontSize(baseFont);
     const lines = doc.splitTextToSize(opts.introText, 174);
     doc.text(lines, marginX, y);
     y += lines.length * 5 + 4;
@@ -140,8 +142,8 @@ export function buildDocPdfBlob(opts) {
         formatCurrency(p.einzelpreis),
         formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
       ]),
-      styles: { fontSize: 9, cellPadding: 2.2 },
-      headStyles: { fillColor: [15, 27, 45] },
+      styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+      headStyles: { fillColor: accentRgb },
       columnStyles: { 0: { cellWidth: 14 } },
     });
     y = doc.lastAutoTable.finalY + 8;
@@ -187,7 +189,7 @@ export function buildDocPdfBlob(opts) {
   }
 
   if (opts.closingText) {
-    doc.setFontSize(10);
+    doc.setFontSize(baseFont);
     const lines = doc.splitTextToSize(opts.closingText, 174);
     doc.text(lines, marginX, y);
   }
@@ -206,6 +208,8 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
   const marginX = 18;
   const rightX = 192;
   let y = 20;
+  const accentRgb = hexToRgb(settings.dokAkzentfarbe);
+  const baseFont = Number(settings.dokSchriftgroesse) || 10;
 
   const fmt = logoFormat(settings.logoDataUrl);
   if (fmt) {
@@ -248,7 +252,7 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
     y += 3;
   }
 
-  doc.setFontSize(10);
+  doc.setFontSize(baseFont);
   doc.setTextColor(20);
   const bodyLines = doc.splitTextToSize(text || '', rightX - marginX);
   const lineHeight = 5;
@@ -271,8 +275,8 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
       margin: { left: marginX, right: marginX, bottom: 24 },
       head: [['Raum / Bereich', 'Beschreibung / Zustand']],
       body: raeumeGefuellt.map((r) => [r.raum || '', r.beschreibung || '']),
-      styles: { fontSize: 9, cellPadding: 2.2 },
-      headStyles: { fillColor: [15, 27, 45] },
+      styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+      headStyles: { fillColor: accentRgb },
       columnStyles: { 0: { cellWidth: 50 } },
     });
     y = doc.lastAutoTable.finalY + 8;
