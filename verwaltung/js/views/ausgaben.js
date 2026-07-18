@@ -3,9 +3,19 @@ import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, t
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { analyzeBeleg } from '../ai.js';
 
 const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 export async function render(container) {
   let [ausgaben, settings, projekte, kunden] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden')]);
@@ -20,6 +30,8 @@ export async function render(container) {
       <h1>Ausgaben</h1>
       <div class="actions">
         <button class="btn" id="btn-beleg-import">⇪ Belege importieren (ZIP)</button>
+        <button class="btn" id="btn-beleg-scan">📷 Beleg scannen</button>
+        <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
       </div>
     </div>
@@ -93,16 +105,58 @@ export async function render(container) {
     openBelegImport({ onImported: () => render(container) });
   });
 
+  const belegScanInput = container.querySelector('#beleg-scan-input');
+  container.querySelector('#btn-beleg-scan').addEventListener('click', () => belegScanInput.click());
+  belegScanInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    belegScanInput.value = '';
+    if (!file) return;
+    const scanBtn = container.querySelector('#btn-beleg-scan');
+    scanBtn.disabled = true;
+    scanBtn.textContent = 'Beleg wird analysiert ...';
+    try {
+      const belegBlob = await compressImage(file, { maxWidth: 1400 });
+      const imageDataUrl = await blobToDataUrl(await compressImage(file, { maxWidth: 1000, quality: 0.7 }));
+      let prefill = { beleg: belegBlob };
+      try {
+        const result = await analyzeBeleg({ imageDataUrl, kategorien: KATEGORIEN });
+        const kategorie = KATEGORIEN.includes(result.kategorie) ? result.kategorie : 'Sonstiges';
+        const unsicher = !result.lesbar || !result.kategorieSicher;
+        const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : todayISO();
+        const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : 19;
+        prefill = {
+          ...prefill,
+          datum,
+          kategorie,
+          beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || ''}`.trim(),
+          lieferant: result.haendler || '',
+          betragNetto: Number(result.betragNetto) || 0,
+          steuersatz,
+          betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
+        };
+        toast(unsicher ? 'Beleg gescannt – bitte Angaben prüfen' : 'Beleg erkannt', unsicher ? 'info' : 'success');
+      } catch (err) {
+        toast(`KI-Erkennung fehlgeschlagen (${err.message}) – bitte manuell ausfüllen`, 'danger');
+      }
+      openForm(null, { prefill });
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+    scanBtn.disabled = false;
+    scanBtn.textContent = '📷 Beleg scannen';
+  });
+
   function calcBrutto(netto, steuersatz) {
     return Math.round(Number(netto) * (1 + Number(steuersatz) / 100) * 100) / 100;
   }
 
-  function openForm(a) {
+  function openForm(a, { prefill } = {}) {
     const isEdit = !!a;
     const data = a || {
       id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
       projektId: '', kundeId: '', kalkKategorie: '',
+      ...prefill,
     };
     const { body, close } = openModal({
       title: isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe',

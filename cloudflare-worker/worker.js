@@ -1,9 +1,11 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
- * Angebotspositionen erzeugen. Der Anthropic-API-Key bleibt ausschließlich
- * hier im Worker (als Secret) – er wird NIE an den Browser geschickt.
+ * Angebotspositionen erzeugen, oder analysiert ein fotografiertes Beleg-Bild
+ * und liefert Händler/Datum/Betrag/Kategorie zurück. Der Anthropic-API-Key
+ * bleibt ausschließlich hier im Worker (als Secret) – er wird NIE an den
+ * Browser geschickt.
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -127,6 +129,88 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
   return JSON.parse(textBlock.text);
 }
 
+const BELEG_SCHEMA = {
+  type: 'object',
+  properties: {
+    haendler: { type: 'string' },
+    datum: { type: 'string' },
+    betragNetto: { type: 'number' },
+    betragBrutto: { type: 'number' },
+    steuersatz: { type: 'number' },
+    kategorie: { type: 'string' },
+    kategorieSicher: { type: 'boolean' },
+    beschreibung: { type: 'string' },
+    lesbar: { type: 'boolean' },
+  },
+  required: ['haendler', 'datum', 'betragNetto', 'betragBrutto', 'steuersatz', 'kategorie', 'kategorieSicher', 'beschreibung', 'lesbar'],
+  additionalProperties: false,
+};
+
+function buildBelegSystemPrompt(kategorien) {
+  const liste = (kategorien && kategorien.length ? kategorien : ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges']).join(', ');
+  return `Du liest einen fotografierten Kassenbon oder eine Rechnung für einen deutschen Handwerksbetrieb aus und extrahierst die Daten für die Ausgaben-Erfassung.
+
+Regeln:
+- Antworte ausschließlich auf Deutsch.
+- "haendler": Name des Geschäfts/Lieferanten, so wie auf dem Beleg erkennbar (z.B. "Hornbach", "Esso").
+- "datum": Belegdatum im Format JJJJ-MM-TT. Wenn nicht lesbar, leer lassen.
+- "betragBrutto": Gesamtbetrag (inkl. USt.) als Zahl, ohne Währungssymbol.
+- "steuersatz": erkannter USt.-Satz in Prozent als Zahl (meist 19 oder 7). Wenn nicht erkennbar, 19 annehmen.
+- "betragNetto": betragBrutto / (1 + steuersatz/100), gerundet auf 2 Nachkommastellen.
+- "kategorie": wähle GENAU einen Eintrag aus dieser Liste, der am besten passt: ${liste}.
+- "kategorieSicher": true nur wenn du dir bei Händler UND Kategorie wirklich sicher bist. Bei Unsicherheit, schlechter Bildqualität oder einem für die Kategorie untypischen Beleg: false.
+- "beschreibung": sehr kurze Zusammenfassung, was gekauft/bezahlt wurde (max. ca. 60 Zeichen).
+- "lesbar": false, wenn das Bild kein auswertbarer Beleg ist oder die wichtigsten Felder (Betrag, Händler) nicht erkennbar sind. In diesem Fall die übrigen Felder so gut wie möglich schätzen bzw. leer/0 lassen.
+- Erfinde keine Beträge - wenn ein Betrag nicht lesbar ist, setze ihn auf 0 und "lesbar" auf false.`;
+}
+
+async function callClaudeBelegScan({ apiKey, model, imageDataUrl, kategorien }) {
+  const match = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(imageDataUrl || '');
+  if (!match) {
+    throw new Error('Ungültiges Bildformat.');
+  }
+  const [, mediaType, base64Data] = match;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system: buildBelegSystemPrompt(kategorien),
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+          { type: 'text', text: 'Lies diesen Beleg aus und liefere die strukturierten Daten.' },
+        ],
+      }],
+      output_config: {
+        format: { type: 'json_schema', schema: BELEG_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -161,6 +245,29 @@ export default {
       return new Response(JSON.stringify({ error: 'Ungültiger Request-Body.' }), {
         status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
       });
+    }
+
+    if (body.action === 'beleg-scan') {
+      if (!body.imageDataUrl || typeof body.imageDataUrl !== 'string') {
+        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeBelegScan({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          imageDataUrl: body.imageDataUrl,
+          kategorien: body.kategorien,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     if (!body.stichpunkte || typeof body.stichpunkte !== 'string') {
