@@ -142,6 +142,7 @@ if (contactForm) {
       if (res.ok) {
         formStatus.textContent = 'Danke — Ihre Anfrage ist angekommen. Rückmeldung folgt in Kürze.';
         formStatus.classList.add('ok');
+        trackEvent('generate_lead', { method: 'contact_form' });
         contactForm.reset();
       } else {
         throw new Error('send-failed');
@@ -305,3 +306,22 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
     });
   }
 })();
+
+/* =========================================================
+   GA4 Conversion-Tracking (Anruf, WhatsApp, Formular)
+   ========================================================= */
+function trackEvent(name, params) {
+  if (typeof gtag === 'function') gtag('event', name, params || {});
+}
+
+document.addEventListener('click', (e) => {
+  const link = e.target.closest('a[href]');
+  if (!link) return;
+  const href = link.getAttribute('href');
+  if (href.startsWith('tel:')) {
+    trackEvent('contact_click', { method: 'phone', link_url: href });
+  } else if (href.includes('wa.me')) {
+    trackEvent('contact_click', { method: 'whatsapp', link_url: href });
+  }
+});
+
