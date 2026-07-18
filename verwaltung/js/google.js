@@ -214,3 +214,126 @@ export async function searchEmailsForAddress(email, maxResults = 8) {
     };
   });
 }
+
+// --- Postfach (Posteingang lesen/schreiben) ---
+
+function decodeBase64UrlToText(data) {
+  if (!data) return '';
+  const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function decodeBase64UrlToBytes(data) {
+  const b64 = data.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+function walkMessageParts(part, acc) {
+  if (!part) return;
+  if (part.parts && part.parts.length) {
+    part.parts.forEach((p) => walkMessageParts(p, acc));
+    return;
+  }
+  const mimeType = part.mimeType || '';
+  if (part.filename && part.body && (part.body.attachmentId || part.body.data)) {
+    acc.attachments.push({
+      filename: part.filename,
+      mimeType,
+      attachmentId: part.body.attachmentId || null,
+      size: part.body.size || 0,
+    });
+  } else if (mimeType === 'text/plain' && part.body?.data) {
+    acc.text += decodeBase64UrlToText(part.body.data);
+  } else if (mimeType === 'text/html' && part.body?.data) {
+    acc.html += decodeBase64UrlToText(part.body.data);
+  }
+}
+
+/** Listet Nachrichten (Standard: Posteingang) mit Metadaten (ohne vollen Body) für die Übersichtsliste. */
+export async function listInboxMessages({ query = 'in:inbox', maxResults = 25, pageToken } = {}) {
+  const params = new URLSearchParams({ maxResults: String(maxResults), q: query });
+  if (pageToken) params.set('pageToken', pageToken);
+  const list = await apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+  const messages = list.messages || [];
+  const details = await Promise.all(messages.map((m) =>
+    apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`)
+  ));
+  return {
+    nextPageToken: list.nextPageToken || null,
+    messages: details.map((d) => {
+      const headers = Object.fromEntries((d.payload?.headers || []).map((h) => [h.name, h.value]));
+      return {
+        id: d.id,
+        threadId: d.threadId,
+        subject: headers.Subject || '(kein Betreff)',
+        from: headers.From || '',
+        to: headers.To || '',
+        date: headers.Date || '',
+        snippet: d.snippet || '',
+        unread: (d.labelIds || []).includes('UNREAD'),
+      };
+    }),
+  };
+}
+
+/** Lädt eine Nachricht vollständig (Text/HTML-Body + Anhangsliste) zum Lesen/Beantworten. */
+export async function getMessageFull(id) {
+  const d = await apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}?format=full`);
+  const headers = Object.fromEntries((d.payload?.headers || []).map((h) => [h.name, h.value]));
+  const acc = { text: '', html: '', attachments: [] };
+  walkMessageParts(d.payload, acc);
+  return {
+    id: d.id,
+    threadId: d.threadId,
+    subject: headers.Subject || '(kein Betreff)',
+    from: headers.From || '',
+    to: headers.To || '',
+    date: headers.Date || '',
+    messageIdHeader: headers['Message-ID'] || headers['Message-Id'] || '',
+    referencesHeader: headers.References || '',
+    text: acc.text,
+    html: acc.html,
+    attachments: acc.attachments,
+    unread: (d.labelIds || []).includes('UNREAD'),
+  };
+}
+
+/** Lädt die Rohdaten eines Anhangs (als Bytes, der Aufrufer verpackt sie mit passendem mimeType als Blob). */
+export async function getAttachmentData(messageId, attachmentId) {
+  const d = await apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}/attachments/${encodeURIComponent(attachmentId)}`);
+  return decodeBase64UrlToBytes(d.data);
+}
+
+/** Markiert eine Nachricht als gelesen (entfernt das UNREAD-Label). */
+export async function markAsRead(id) {
+  return apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/modify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
+  });
+}
+
+/** Verfasst/beantwortet eine einfache Text-E-Mail (ohne Anhang). */
+export async function sendEmail({ to, subject, bodyText, inReplyTo, referencesHeader, threadId }) {
+  let headerPart = `To: ${to}\r\n` +
+    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\n`;
+  if (inReplyTo) {
+    headerPart += `In-Reply-To: ${inReplyTo}\r\n`;
+    headerPart += `References: ${(referencesHeader ? referencesHeader + ' ' : '') + inReplyTo}\r\n`;
+  }
+  headerPart += `MIME-Version: 1.0\r\nContent-Type: text/plain; charset="UTF-8"\r\n\r\n${bodyText}`;
+  const raw = base64UrlEncode(headerPart);
+  const body = { raw };
+  if (threadId) body.threadId = threadId;
+  return apiFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
