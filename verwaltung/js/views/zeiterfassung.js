@@ -1,7 +1,118 @@
 import { getAll, put, remove, getSettings, TAETIGKEITEN } from '../db.js';
-import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { mountSignaturePad } from '../signature.js';
+
+const ARBEITSORTE = [
+  { id: 'buero', titel: 'Büro' },
+  { id: 'homeoffice', titel: 'HomeOffice' },
+  { id: 'aussendienst', titel: 'Außendienst/Kunde vor Ort' },
+];
+const BESONDERHEITEN = [
+  { id: 'keine', titel: 'Keine' },
+  { id: 'krankheit', titel: 'Krankheit/Urlaub/Feiertag' },
+  { id: 'verspaetung', titel: 'Verspätung/früher Feierabend' },
+  { id: 'dienstreise', titel: 'Dienstreise' },
+  { id: 'technik', titel: 'Tech. Probleme' },
+];
+const MEDIEN_LIMITS = {
+  image: { max: 10, maxSize: 10 * 1024 * 1024, label: 'Bilder' },
+  video: { max: 1, maxSize: 100 * 1024 * 1024, label: 'Video' },
+  pdf: { max: 3, maxSize: 25 * 1024 * 1024, label: 'PDF' },
+};
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function addDaysISO(iso, days) {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Drag&Drop-Upload für Fotos/Videos/PDFs mit Mengen-/Größenlimits je Typ. */
+function mountMedienDropzone(host, existing = []) {
+  let items = existing.slice();
+
+  function kindOf(file) {
+    if (file.type.startsWith('image/')) return 'image';
+    if (file.type.startsWith('video/')) return 'video';
+    if (file.type === 'application/pdf') return 'pdf';
+    return null;
+  }
+
+  async function handleFiles(files) {
+    for (const file of files) {
+      const kind = kindOf(file);
+      if (!kind) { toast(`Dateityp nicht unterstützt: ${file.name}`, 'danger'); continue; }
+      const limit = MEDIEN_LIMITS[kind];
+      const count = items.filter((it) => it.type === kind).length;
+      if (count >= limit.max) { toast(`Maximal ${limit.max}× ${limit.label} erlaubt.`, 'danger'); continue; }
+      if (file.size > limit.maxSize) { toast(`${file.name} ist zu groß (max. ${Math.round(limit.maxSize / 1024 / 1024)} MB).`, 'danger'); continue; }
+      try {
+        const dataUrl = kind === 'image'
+          ? await blobToDataUrl(await compressImage(file, { maxWidth: 1200, quality: 0.78 }))
+          : await blobToDataUrl(file);
+        items.push({ type: kind, dataUrl, name: file.name });
+      } catch (err) {
+        toast(err.message || 'Datei konnte nicht geladen werden.', 'danger');
+      }
+    }
+    render();
+  }
+
+  function render() {
+    host.innerHTML = `
+      <div class="file-dropzone" tabindex="0">
+        <div class="dz-icon">⬆️</div>
+        <div>Drag &amp; Drop oder Datei hochladen</div>
+        <div class="dz-hint">Bilder: 10×10 MB · Video: 1×100 MB · PDF: 3×25 MB</div>
+        <div style="margin-top:10px">
+          <button type="button" class="btn btn-sm dz-camera">📷 Foto aufnehmen</button>
+        </div>
+        <input type="file" class="dz-input" accept="image/*,video/*,application/pdf" multiple>
+        <input type="file" class="dz-camera-input" accept="image/*" capture="environment" hidden>
+      </div>
+      <div class="dz-preview-grid">
+        ${items.map((it, i) => `
+          <div class="dz-preview-item" data-i="${i}">
+            ${it.type === 'image' ? `<img src="${it.dataUrl}" alt="${escapeHtml(it.name || '')}">`
+              : it.type === 'video' ? `<video src="${it.dataUrl}" muted></video>`
+              : `<div class="dz-file-icon">📄</div>`}
+            <button type="button" class="dz-remove" title="Entfernen">✕</button>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    const zone = host.querySelector('.file-dropzone');
+    const input = host.querySelector('.dz-input');
+    const camInput = host.querySelector('.dz-camera-input');
+    zone.addEventListener('click', (e) => { if (e.target.closest('.dz-camera')) return; input.click(); });
+    host.querySelector('.dz-camera').addEventListener('click', (e) => { e.stopPropagation(); camInput.click(); });
+    ['dragover', 'dragenter'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('dragover'); }));
+    ['dragleave', 'drop'].forEach((ev) => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('dragover'); }));
+    zone.addEventListener('drop', (e) => handleFiles(Array.from(e.dataTransfer?.files || [])));
+    input.addEventListener('change', (e) => { handleFiles(Array.from(e.target.files || [])); e.target.value = ''; });
+    camInput.addEventListener('change', (e) => { handleFiles(Array.from(e.target.files || [])); e.target.value = ''; });
+    host.querySelectorAll('.dz-remove').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const i = Number(btn.closest('.dz-preview-item').dataset.i);
+        items.splice(i, 1);
+        render();
+      });
+    });
+  }
+  render();
+  return { getMedien: () => items };
+}
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const TIMER_KEY = 'nv-running-timer';
@@ -64,7 +175,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Zeiterfassung</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Eintrag erfassen</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-new-tagesbericht">+ Tagesbericht</button>
+        <button class="btn btn-primary" id="btn-new">+ Eintrag erfassen</button>
+      </div>
     </div>
     <div class="tabs" id="mode-tabs">
       <button type="button" class="tab-item" data-mode="einsaetze">📱 Einsätze</button>
@@ -300,7 +414,7 @@ export async function render(container) {
               <td>${e.startzeit && e.endzeit ? `${e.startzeit}–${e.endzeit}` : '–'}</td>
               <td>${escapeHtml(projekteById[e.projektId]?.titel || '')}</td>
               <td>${escapeHtml(mitarbeiterById[e.mitarbeiterId]?.name || '')}</td>
-              <td>${escapeHtml(TAETIGKEITEN.find((t) => t.id === e.taetigkeit)?.titel || '')}</td>
+              <td>${e.istTagesbericht ? '<span class="badge badge-accent">📝 Tagesbericht</span>' : escapeHtml(TAETIGKEITEN.find((t) => t.id === e.taetigkeit)?.titel || '')}</td>
               <td>${formatDuration(e.dauerMinuten || 0)}</td>
               <td>${escapeHtml(e.beschreibung || '')}</td>
               <td><span class="badge ${e.abgerechnet ? 'badge-success' : 'badge'}">${e.abgerechnet ? 'abgerechnet' : 'offen'}</span></td>
@@ -310,7 +424,11 @@ export async function render(container) {
       </table>
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
-      row.addEventListener('click', () => openForm(eintraege.find((e) => e.id === row.dataset.id)));
+      row.addEventListener('click', () => {
+        const entry = eintraege.find((e) => e.id === row.dataset.id);
+        if (entry?.istTagesbericht) openTagesberichtForm(entry);
+        else openForm(entry);
+      });
     });
     bulk.wire(tableHost, {
       onChange: renderTable,
@@ -323,6 +441,189 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-new-tagesbericht').addEventListener('click', () => openTagesberichtForm());
+
+  function openTagesberichtForm(entry) {
+    const isEdit = !!entry;
+    const currentMa = getCurrentMitarbeiterId();
+    const data = entry || {
+      id: uid(), projektId: '', mitarbeiterId: currentMa || '',
+      verfassungsdatum: toDateOnly(new Date().toISOString()),
+      notizen: '', arbeitsbeginn: '08:00', arbeitsende: '17:00', pause: 1,
+      taetigkeitsbeschreibung: '', arbeitsort: 'aussendienst', besonderheit: 'keine',
+      medien: [], unterschriftMitarbeiter: null,
+    };
+
+    function calcArbeitszeit(beginn, ende, pause) {
+      const minuten = minutesBetweenHHMM(beginn, ende) - (Number(pause) || 0) * 60;
+      return Math.max(0, Math.round((minuten / 60) * 100) / 100);
+    }
+
+    const { body, close } = openModal({
+      title: isEdit ? 'Tagesbericht bearbeiten' : 'Neuer Tagesbericht',
+      wide: true,
+      bodyHtml: `
+        <form id="tb-form">
+          <div class="form-grid">
+            <div class="field"><label>Mitarbeiter</label>
+              <select name="mitarbeiterId">
+                <option value="">–</option>
+                ${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === data.mitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field"><label>Projekt (optional)</label>
+              <select name="projektId">
+                <option value="">–</option>
+                ${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="field"><label>Notizen (Mehrzeiligen Text eingeben, ggf. in Bulletpoints)</label><textarea name="notizen" style="min-height:90px">${escapeHtml(data.notizen || '')}</textarea></div>
+          <div class="form-grid">
+            <div class="field"><label>Arbeitsbeginn (Uhrzeit)</label><input type="time" name="arbeitsbeginn" id="tb-beginn" value="${data.arbeitsbeginn}"></div>
+            <div class="field"><label>Arbeitsende (Uhrzeit)</label><input type="time" name="arbeitsende" id="tb-ende" value="${data.arbeitsende}"></div>
+            <div class="field"><label>Pause (in h)</label><input type="number" step="0.25" min="0" name="pause" id="tb-pause" value="${data.pause}"></div>
+            <div class="field"><label>Arbeitszeit ges. (in h)</label><input type="number" step="0.01" min="0" name="arbeitszeitGesamt" id="tb-gesamt" value="${data.arbeitszeitGesamt ?? calcArbeitszeit(data.arbeitsbeginn, data.arbeitsende, data.pause)}"></div>
+          </div>
+          <div class="field"><label>Tätigkeitsbeschreibung (Projekte/Aufgaben)</label><textarea name="taetigkeitsbeschreibung" style="min-height:90px">${escapeHtml(data.taetigkeitsbeschreibung || '')}</textarea></div>
+          <div class="field"><label>Arbeitsort</label>
+            <div class="toggle-group" id="tb-arbeitsort">
+              ${ARBEITSORTE.map((o) => `<button type="button" data-val="${o.id}" class="${o.id === data.arbeitsort ? 'active' : ''}">${escapeHtml(o.titel)}</button>`).join('')}
+            </div>
+            <input type="hidden" name="arbeitsort" id="tb-arbeitsort-val" value="${data.arbeitsort}">
+          </div>
+          <div class="field"><label>Besonderheiten</label>
+            <div class="pill-radio-group">
+              ${BESONDERHEITEN.map((b) => `
+                <label>
+                  <input type="radio" name="besonderheit" value="${b.id}" ${b.id === (data.besonderheit || 'keine') ? 'checked' : ''}>
+                  <span>${escapeHtml(b.titel)}</span>
+                </label>
+              `).join('')}
+            </div>
+          </div>
+          <div class="field"><label>Verfassungsdatum</label><input type="date" name="verfassungsdatum" value="${data.verfassungsdatum}"></div>
+          <div class="field"><label>Medienupload (Foto/Video)</label><div id="tb-medien-host"></div></div>
+          <div id="tb-sig-host"></div>
+          <div class="modal-actions">
+            ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            <span class="spacer"></span>
+            ${isEdit ? '<button type="button" class="btn" id="btn-duplizieren">Duplizieren</button>' : ''}
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit">Speichern</button>
+            <button type="submit" class="btn btn-primary" id="btn-submit-next">+ Arbeitstag</button>
+          </div>
+        </form>
+      `,
+    });
+
+    const beginnInput = body.querySelector('#tb-beginn');
+    const endeInput = body.querySelector('#tb-ende');
+    const pauseInput = body.querySelector('#tb-pause');
+    const gesamtInput = body.querySelector('#tb-gesamt');
+    function recalcGesamt() {
+      gesamtInput.value = calcArbeitszeit(beginnInput.value, endeInput.value, pauseInput.value);
+    }
+    [beginnInput, endeInput, pauseInput].forEach((el) => el.addEventListener('change', recalcGesamt));
+
+    const arbeitsortGroup = body.querySelector('#tb-arbeitsort');
+    const arbeitsortVal = body.querySelector('#tb-arbeitsort-val');
+    arbeitsortGroup.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        arbeitsortGroup.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        arbeitsortVal.value = btn.dataset.val;
+      });
+    });
+
+    const medienEditor = mountMedienDropzone(body.querySelector('#tb-medien-host'), data.medien || []);
+    const sig = mountSignaturePad(body.querySelector('#tb-sig-host'), { label: 'Unterschrift Mitarbeiter' });
+    if (data.unterschriftMitarbeiter) {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = body.querySelector('#tb-sig-host canvas');
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      img.src = data.unterschriftMitarbeiter;
+    }
+
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (isEdit) {
+      body.querySelector('#btn-delete').addEventListener('click', async () => {
+        if (!confirmDelete('Tagesbericht wirklich löschen?')) return;
+        await remove('zeiterfassung', data.id);
+        toast('Tagesbericht gelöscht');
+        close();
+        render(container);
+      });
+      body.querySelector('#btn-duplizieren').addEventListener('click', async () => {
+        const kopie = { ...collect(), id: uid() };
+        await put('zeiterfassung', kopie);
+        eintraege.unshift(kopie);
+        toast('Tagesbericht dupliziert', 'success');
+        close();
+        openTagesberichtForm(kopie);
+      });
+    }
+
+    function collect() {
+      const fd = new FormData(body.querySelector('#tb-form'));
+      const beginn = (fd.get('arbeitsbeginn') || '').toString();
+      const ende = (fd.get('arbeitsende') || '').toString();
+      return {
+        ...data,
+        mitarbeiterId: fd.get('mitarbeiterId') || '',
+        projektId: fd.get('projektId') || '',
+        notizen: (fd.get('notizen') || '').toString().trim(),
+        arbeitsbeginn: beginn,
+        arbeitsende: ende,
+        pause: Number(fd.get('pause')) || 0,
+        arbeitszeitGesamt: Number(fd.get('arbeitszeitGesamt')) || 0,
+        taetigkeitsbeschreibung: (fd.get('taetigkeitsbeschreibung') || '').toString().trim(),
+        arbeitsort: fd.get('arbeitsort') || 'aussendienst',
+        besonderheit: fd.get('besonderheit') || 'keine',
+        verfassungsdatum: fd.get('verfassungsdatum') || data.verfassungsdatum,
+        medien: medienEditor.getMedien(),
+        unterschriftMitarbeiter: sig.getDataUrl() || data.unterschriftMitarbeiter || null,
+        // Kompatibilität mit der bestehenden Listenansicht:
+        datum: fd.get('verfassungsdatum') || data.verfassungsdatum,
+        startzeit: beginn,
+        endzeit: ende,
+        dauerMinuten: Math.round((Number(fd.get('arbeitszeitGesamt')) || 0) * 60),
+        beschreibung: (fd.get('taetigkeitsbeschreibung') || '').toString().trim(),
+        taetigkeit: data.taetigkeit || 'baustelle',
+        abgerechnet: data.abgerechnet || false,
+        istTagesbericht: true,
+      };
+    }
+
+    body.querySelector('#tb-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const submitter = e.submitter;
+      const updated = collect();
+      if (!updated.mitarbeiterId) { toast('Bitte einen Mitarbeiter wählen', 'danger'); return; }
+      await put('zeiterfassung', updated);
+      if (!isEdit) eintraege.unshift(updated);
+      else {
+        const idx = eintraege.findIndex((x) => x.id === updated.id);
+        if (idx >= 0) eintraege[idx] = updated;
+      }
+      toast('Tagesbericht gespeichert', 'success');
+      close();
+      if (submitter?.id === 'btn-submit-next') {
+        openTagesberichtForm({
+          ...updated,
+          id: uid(),
+          verfassungsdatum: addDaysISO(updated.verfassungsdatum, 1),
+          datum: addDaysISO(updated.verfassungsdatum, 1),
+          medien: [],
+          unterschriftMitarbeiter: null,
+        });
+      } else {
+        renderTable();
+      }
+    });
+  }
 
   function openForm(entry, { isNewFromTimer = false } = {}) {
     const isEdit = !!entry && !isNewFromTimer;
