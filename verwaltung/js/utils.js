@@ -103,9 +103,21 @@ export function calcTotals(positionen) {
   return { netto, steuer, brutto: netto + steuer, steuerGruppen };
 }
 
-export function nextNummer(prefix, nummer) {
-  const year = new Date().getFullYear();
-  return `${prefix}${year}-${String(nummer).padStart(4, '0')}`;
+/**
+ * Nummernschema Jahr+Tag+Monat+laufende Tagesnummer, z.B. 2026180701 für den
+ * 18.07.2026, 1. Dokument dieses Tages. Der Tageszähler setzt sich pro Typ
+ * fort (state = { datum, zaehler} aus den Einstellungen) und beginnt bei
+ * Tageswechsel automatisch wieder bei 01.
+ */
+export function nextDailyNummer(prefix, state = {}) {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const heute = `${yyyy}-${mm}-${dd}`;
+  const zaehler = state.datum === heute ? (Number(state.zaehler) || 0) + 1 : 1;
+  const nummer = `${prefix || ''}${yyyy}${dd}${mm}${String(zaehler).padStart(2, '0')}`;
+  return { nummer, datum: heute, zaehler };
 }
 
 export function compressImage(file, { maxWidth = 1600, quality = 0.8 } = {}) {

@@ -1,5 +1,5 @@
-import { getAll, put, remove, clearStore, getSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile } from '../utils.js';
+import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -213,6 +213,9 @@ export async function render(container) {
     const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));
     const linkedAusgaben = isEdit ? ausgaben.filter((a) => a.kundeId === data.id || linkedProjektIds.has(a.projektId)) : [];
     const ausgabenSumme = linkedAusgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    const suggestedKundennummer = !isEdit
+      ? nextDailyNummer('', { datum: settings.kundeNummerDatum, zaehler: settings.kundeNummerZaehler }).nummer
+      : '';
     const { body, close } = openModal({
       title: isEdit ? 'Kunde bearbeiten' : 'Neuer Kunde',
       bodyHtml: `
@@ -220,7 +223,7 @@ export async function render(container) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required value="${escapeHtml(data.firma)}"></div>
             <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(data.ansprechpartner || '')}"></div>
-            <div class="field"><label>Kundennummer</label><input name="kundennummer" value="${escapeHtml(data.kundennummer || '')}"></div>
+            <div class="field"><label>Kundennummer</label><input name="kundennummer" value="${escapeHtml(data.kundennummer || suggestedKundennummer)}"></div>
             <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
             <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
@@ -322,6 +325,14 @@ export async function render(container) {
       const updated = { ...data };
       for (const [k, v] of fd.entries()) updated[k] = v.trim ? v.trim() : v;
       if (!updated.firma) return;
+      if (!isEdit) {
+        const currentSettings = await getSettings();
+        const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+          '', { datum: currentSettings.kundeNummerDatum, zaehler: currentSettings.kundeNummerZaehler }
+        );
+        if (!updated.kundennummer) updated.kundennummer = autoNummer;
+        await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
+      }
       await put('kunden', updated);
       toast(isEdit ? 'Kunde aktualisiert' : 'Kunde angelegt', 'success');
       close();

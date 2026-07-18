@@ -1160,7 +1160,8 @@ table.data-table th.col-select, table.data-table td.col-select {
   .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; }
 
   .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-  .print-doc .print-logo { max-width: 46mm; max-height: 22mm; object-fit: contain; }
+  .print-doc .print-logo-col { flex: 0 0 74mm; display: flex; justify-content: center; }
+  .print-doc .print-logo { max-width: 62mm; max-height: 30mm; object-fit: contain; }
   .print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
   .print-doc .print-meta { text-align: right; min-width: 55mm; }
   .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }

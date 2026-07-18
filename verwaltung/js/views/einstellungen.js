@@ -134,12 +134,17 @@ export async function render(container) {
 
         <div class="card settings-panel" data-panel="nummern" hidden>
           <h2>Nummernkreise &amp; Fristen</h2>
+          <p class="hint">
+            Angebots-/Rechnungsnummer und Kundennummer werden automatisch nach dem Schema
+            <strong>Jahr + Tag + Monat + laufende Tagesnummer</strong> vergeben, z.B. <code>2026180701</code>
+            für den 18.07., 1. Dokument dieses Tages – bei Jahreswechsel geht es automatisch wieder bei
+            <code>...010101</code> los. Die Nummer bleibt bei jedem Angebot/jeder Rechnung/jedem Kunden
+            im Formular weiterhin frei editierbar, hier legst du nur das Präfix fest.
+          </p>
           <form id="nr-form">
             <div class="form-grid">
               <div class="field"><label>Angebots-Präfix</label><input name="angebotPrefix" value="${escapeHtml(settings.angebotPrefix)}"></div>
-              <div class="field"><label>Nächste Angebotsnummer</label><input type="number" min="1" name="naechsteAngebotNr" value="${settings.naechsteAngebotNr}"></div>
               <div class="field"><label>Rechnungs-Präfix</label><input name="rechnungPrefix" value="${escapeHtml(settings.rechnungPrefix)}"></div>
-              <div class="field"><label>Nächste Rechnungsnummer</label><input type="number" min="1" name="naechsteRechnungNr" value="${settings.naechsteRechnungNr}"></div>
               <div class="field"><label>Standard USt.-Satz (%)</label><input type="number" name="standardSteuersatz" value="${settings.standardSteuersatz}"></div>
               <div class="field"><label>Angebot gültig (Tage)</label><input type="number" name="angebotGueltigTage" value="${settings.angebotGueltigTage}"></div>
               <div class="field"><label>Zahlungsziel Rechnung (Tage)</label><input type="number" name="zahlungszielTage" value="${settings.zahlungszielTage}"></div>
@@ -468,9 +473,7 @@ export async function render(container) {
     const fd = new FormData(e.target);
     await setSettings({
       angebotPrefix: fd.get('angebotPrefix') || 'AN-',
-      naechsteAngebotNr: Number(fd.get('naechsteAngebotNr')) || 1,
       rechnungPrefix: fd.get('rechnungPrefix') || 'RE-',
-      naechsteRechnungNr: Number(fd.get('naechsteRechnungNr')) || 1,
       standardSteuersatz: Number(fd.get('standardSteuersatz')) || 19,
       angebotGueltigTage: Number(fd.get('angebotGueltigTage')) || 30,
       zahlungszielTage: Number(fd.get('zahlungszielTage')) || 14,

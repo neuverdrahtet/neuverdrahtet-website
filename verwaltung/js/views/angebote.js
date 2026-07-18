@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNummer, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -103,12 +103,17 @@ export async function render(container) {
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
     };
 
+    const suggestedNummer = !isEdit
+      ? nextDailyNummer(settings.angebotPrefix, { datum: settings.angebotNummerDatum, zaehler: settings.angebotNummerZaehler }).nummer
+      : '';
+
     const { body, close } = openModal({
       title: isEdit ? `Angebot ${data.nummer}` : 'Neues Angebot',
       wide: true,
       bodyHtml: `
         <form id="ang-form">
           <div class="form-grid">
+            <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}"></div>
             <div class="field"><label>Kunde *</label>
               <select name="kundeId" required><option value="">– wählen –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
@@ -257,7 +262,9 @@ let editor = createPositionsEditor({
         toRechnungBtn.addEventListener('click', async () => {
           const totals = editor.getTotals();
           const rSettings = await getSettings();
-          const nummer = nextNummer(rSettings.rechnungPrefix, rSettings.naechsteRechnungNr);
+          const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+            rSettings.rechnungPrefix, { datum: rSettings.rechnungNummerDatum, zaehler: rSettings.rechnungNummerZaehler }
+          );
           const rechnung = {
             id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
             datum: todayISO(), faelligAm: addDays(todayISO(), rSettings.zahlungszielTage || 14),
@@ -266,7 +273,7 @@ let editor = createPositionsEditor({
             createdAt: new Date().toISOString(),
           };
           await put('rechnungen', rechnung);
-          await setSettings({ naechsteRechnungNr: rSettings.naechsteRechnungNr + 1 });
+          await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
           toast('Rechnung aus Angebot erstellt', 'success');
           close();
           window.location.hash = '#/rechnungen';
@@ -278,6 +285,7 @@ let editor = createPositionsEditor({
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
+      updated.nummer = (fd.get('nummer') || '').toString().trim();
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
       updated.datum = fd.get('datum') || todayISO();
@@ -299,8 +307,11 @@ let editor = createPositionsEditor({
 
       if (!isEdit) {
         const currentSettings = await getSettings();
-        updated.nummer = nextNummer(currentSettings.angebotPrefix, currentSettings.naechsteAngebotNr);
-        await setSettings({ naechsteAngebotNr: currentSettings.naechsteAngebotNr + 1 });
+        const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+          currentSettings.angebotPrefix, { datum: currentSettings.angebotNummerDatum, zaehler: currentSettings.angebotNummerZaehler }
+        );
+        if (!updated.nummer) updated.nummer = autoNummer;
+        await setSettings({ angebotNummerDatum: nDatum, angebotNummerZaehler: nZaehler });
       }
 
       await put('angebote', updated);
