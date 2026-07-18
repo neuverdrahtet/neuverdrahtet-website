@@ -164,6 +164,8 @@ const DEFAULT_SETTINGS = {
   wetterLng: 7.0116,
   logoDataUrl: '',
   theme: 'dark',
+  dokAkzentfarbe: '#0f1b2d',
+  dokSchriftgroesse: 10,
 };
 
 // Gut unterscheidbare Farbfolge für automatisch vergebene Status-/Stufenfarben

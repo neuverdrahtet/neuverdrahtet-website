@@ -1,8 +1,10 @@
 import { formatCurrency, formatDate, escapeHtml } from './utils.js';
 
-export function printHtml(bodyHtml) {
+export function printHtml(bodyHtml, settings) {
   const root = document.getElementById('print-root');
-  root.innerHTML = `<div class="print-doc">${bodyHtml}</div>`;
+  const accent = settings?.dokAkzentfarbe || '#0f1b2d';
+  const fontSize = Number(settings?.dokSchriftgroesse) || 10;
+  root.innerHTML = `<div class="print-doc" style="--dok-akzent:${escapeHtml(accent)};--dok-fontsize:${fontSize}px">${bodyHtml}</div>`;
   setTimeout(() => window.print(), 60);
 }
 

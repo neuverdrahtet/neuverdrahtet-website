@@ -27,6 +27,7 @@ const NAV = [
   ] },
   { group: 'Vorlagen & Texte', items: [
     { id: 'textbausteine', icon: '📝', label: 'Textbausteine (Schlusstexte)' },
+    { id: 'layout', icon: '🎨', label: 'Layout (Dokument-Design)' },
   ] },
   { group: 'Integrationen', items: [
     { id: 'google', icon: '📅', label: 'Google-Verbindung' },
@@ -183,6 +184,31 @@ export async function render(container) {
           <p class="hint">Wiederverwendbare Schlusstexte für Angebote/Rechnungen – dort per Mehrfachauswahl in die Notizen einfügbar.</p>
           <div id="tb-list"></div>
           <button class="btn btn-sm" id="btn-tb-new" style="margin-top:8px">+ Neuer Textbaustein</button>
+        </div>
+
+        <div class="card settings-panel" data-panel="layout" hidden>
+          <h2>Layout (Dokument-Design)</h2>
+          <p class="hint">Gilt für Angebote, Rechnungen und Mahnungen (PDF und Druckvorschau). Die Fußzeile mit Firmendaten, Bankverbindung und Seitenzahl ist immer am unteren Rand jeder Seite fixiert und verschiebt sich nicht, egal wie viel Text im Hauptteil steht.</p>
+          <form id="layout-form">
+            <div class="form-grid">
+              <div class="field"><label>Akzentfarbe (Tabellenköpfe)</label><input type="color" name="dokAkzentfarbe" id="layout-akzent" value="${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')}"></div>
+              <div class="field"><label>Schriftgröße Fließtext (pt)</label><input type="number" min="8" max="14" step="0.5" name="dokSchriftgroesse" id="layout-schriftgroesse" value="${settings.dokSchriftgroesse || 10}"></div>
+            </div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
+          <div class="divider"></div>
+          <h3 style="font-size:13px;margin:0 0 8px">Vorschau</h3>
+          <div class="dok-layout-preview" id="layout-preview" style="--dok-akzent:${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')};--dok-fontsize:${settings.dokSchriftgroesse || 10}px">
+            <div class="dlp-header">
+              <div>${escapeHtml(settings.firmenname || 'Musterfirma GmbH')}</div>
+              <div class="dlp-titel">Rechnung</div>
+            </div>
+            <table class="dlp-table">
+              <thead><tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Preis</th></tr></thead>
+              <tbody><tr><td>1</td><td>Beispiel-Leistung</td><td>1</td><td>100,00 €</td></tr></tbody>
+            </table>
+            <div class="dlp-footer">${escapeHtml(settings.firmenname || 'Musterfirma GmbH')} · Fußzeile bleibt immer am unteren Rand</div>
+          </div>
         </div>
 
         <div class="card settings-panel" data-panel="google" hidden>
@@ -360,6 +386,25 @@ export async function render(container) {
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
     await setSettings(update);
     toast('Firmendaten gespeichert', 'success');
+  });
+
+  const layoutPreview = container.querySelector('#layout-preview');
+  const layoutAkzentInput = container.querySelector('#layout-akzent');
+  const layoutSchriftInput = container.querySelector('#layout-schriftgroesse');
+  layoutAkzentInput.addEventListener('input', () => {
+    layoutPreview.style.setProperty('--dok-akzent', layoutAkzentInput.value);
+  });
+  layoutSchriftInput.addEventListener('input', () => {
+    layoutPreview.style.setProperty('--dok-fontsize', `${Number(layoutSchriftInput.value) || 10}px`);
+  });
+  container.querySelector('#layout-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      dokAkzentfarbe: (fd.get('dokAkzentfarbe') || '#0f1b2d').toString(),
+      dokSchriftgroesse: Number(fd.get('dokSchriftgroesse')) || 10,
+    });
+    toast('Layout gespeichert', 'success');
   });
 
   container.querySelector('#kalk-form').addEventListener('submit', async (e) => {

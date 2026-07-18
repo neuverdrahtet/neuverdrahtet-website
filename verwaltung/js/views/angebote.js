@@ -225,7 +225,7 @@ let editor = createPositionsEditor({
         };
       }
       body.querySelector('#btn-print').addEventListener('click', () => {
-        printHtml(buildDocHtml(docOpts()));
+        printHtml(buildDocHtml(docOpts()), settings);
       });
       const emailBtn = body.querySelector('#btn-email');
       if (emailBtn) {

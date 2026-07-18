@@ -43,6 +43,13 @@ export function escapeHtml(str) {
   }[c]));
 }
 
+export function hexToRgb(hex, fallback = [15, 27, 45]) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+  if (!m) return fallback;
+  const n = parseInt(m[1], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
 export function el(html) {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
