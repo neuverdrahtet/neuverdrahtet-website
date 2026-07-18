@@ -5,7 +5,7 @@ import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
 
-const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
+export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
 
 function blobToDataUrl(blob) {

@@ -565,6 +565,7 @@ export const ROUTE_ROLLEN = {
   rechnungen: ['admin', 'buero'],
   mahnungen: ['admin', 'buero'],
   ausgaben: ['admin', 'buero'],
+  postfach: ['admin', 'buero'],
   buchhaltung: ['admin'],
   einstellungen: ['admin'],
 };
