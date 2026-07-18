@@ -11,7 +11,10 @@ import { createBulkSelect } from '../bulkselect.js';
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
 
-export async function render(container) {
+export async function render(container, opts = {}) {
+  const bereichScope = opts.bereichScope || null;
+  const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
+
   let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
@@ -23,6 +26,7 @@ export async function render(container) {
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   projekte.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  if (bereichScope) projekte = projekte.filter((p) => bereichScope.includes(p.bereich));
 
   let folder = ALLE_OFFEN;
   let filtered = projekte;
@@ -30,7 +34,7 @@ export async function render(container) {
 
   container.innerHTML = `
     <div class="view-header">
-      <h1>Projekte</h1>
+      <h1>${escapeHtml(opts.titel || 'Projekte')}</h1>
       <div class="actions">
         <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
         <button class="btn btn-primary" id="btn-new">+ Neues Projekt</button>
@@ -43,7 +47,7 @@ export async function render(container) {
           <input type="search" id="search" placeholder="Suche nach Titel oder Kunde ...">
           <select id="bereich-filter">
             <option value="">Alle Bereiche</option>
-            ${BEREICHE.map((b) => `<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('')}
+            ${scopedBereiche.map((b) => `<option value="${b.id}">${escapeHtml(b.titel)}</option>`).join('')}
           </select>
           <select id="gewerk-filter">
             <option value="">Alle Gewerke</option>
@@ -149,7 +153,7 @@ export async function render(container) {
       store: 'kanbanSpalten',
       items: spalten,
       canDelete: (it) => !projekte.some((p) => p.status === it.id),
-      onChange: () => render(container),
+      onChange: () => render(container, opts),
     });
   });
 
@@ -194,7 +198,7 @@ export async function render(container) {
     const isEdit = !!p;
     const data = p || {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
+      start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
@@ -214,7 +218,7 @@ export async function render(container) {
               <select name="status">${spalten.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Bereich</label>
-              <select name="bereich" id="f-bereich">${BEREICHE.map((b) => `<option value="${b.id}" ${b.id === data.bereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
+              <select name="bereich" id="f-bereich">${scopedBereiche.map((b) => `<option value="${b.id}" ${b.id === data.bereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Kategorie</label>
               <select name="kategorieId" id="f-kategorie">${kategorienForBereich(data.bereich).map((k) => `<option value="${k.id}" ${k.id === data.kategorieId ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
@@ -273,7 +277,7 @@ export async function render(container) {
         await remove('projekte', data.id);
         toast('Projekt gelöscht');
         close();
-        render(container);
+        render(container, opts);
       });
       renderNachkalkulation(body.querySelector('#nk-host'), {
         projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
@@ -298,7 +302,7 @@ export async function render(container) {
       await put('projekte', updated);
       toast(isEdit ? 'Projekt aktualisiert' : 'Projekt angelegt', 'success');
       close();
-      render(container);
+      render(container, opts);
     });
   }
 
