@@ -52,14 +52,17 @@ export function buildDocPdfBlob(opts) {
   const accentRgb = hexToRgb(opts.settings.dokAkzentfarbe);
   const baseFont = Number(opts.settings.dokSchriftgroesse) || 10;
 
-  // --- Header: logo (top-left) + title & meta box (top-right) ---
+  // --- Header: logo (centered in left column) + title & meta box (top-right) ---
   const fmt = logoFormat(opts.settings.logoDataUrl);
   if (fmt) {
     try {
       const props = doc.getImageProperties(opts.settings.logoDataUrl);
-      const maxW = 46, maxH = 22;
-      const scale = Math.min(maxW / props.width, maxH / props.height);
-      doc.addImage(opts.settings.logoDataUrl, fmt, marginX, y - 4, props.width * scale, props.height * scale);
+      const logoColW = 74, maxW = 62, maxH = 30;
+      const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+      const drawW = props.width * scale;
+      const drawH = props.height * scale;
+      const logoX = marginX + Math.max(0, (logoColW - drawW) / 2);
+      doc.addImage(opts.settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
     } catch (err) { /* ignore broken logo data */ }
   } else {
     doc.setFontSize(13);
@@ -215,9 +218,12 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
   if (fmt) {
     try {
       const props = doc.getImageProperties(settings.logoDataUrl);
-      const maxW = 46, maxH = 22;
-      const scale = Math.min(maxW / props.width, maxH / props.height);
-      doc.addImage(settings.logoDataUrl, fmt, marginX, y - 4, props.width * scale, props.height * scale);
+      const logoColW = 74, maxW = 62, maxH = 30;
+      const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+      const drawW = props.width * scale;
+      const drawH = props.height * scale;
+      const logoX = marginX + Math.max(0, (logoColW - drawW) / 2);
+      doc.addImage(settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
     } catch (err) { /* ignore broken logo data */ }
   } else {
     doc.setFontSize(13);

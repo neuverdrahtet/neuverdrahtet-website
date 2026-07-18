@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextNummer, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -111,6 +111,9 @@ export async function render(container) {
     };
     const locked = isEdit && !!data.versendet;
     const abschlaegeChecked = new Set((data.verrechneteAbschlaege || []).map((a) => a.rechnungId));
+    const suggestedNummer = !isEdit
+      ? nextDailyNummer(settings.rechnungPrefix, { datum: settings.rechnungNummerDatum, zaehler: settings.rechnungNummerZaehler }).nummer
+      : '';
 
     const { body, close } = openModal({
       title: isEdit ? `Rechnung ${data.nummer}` : 'Neue Rechnung',
@@ -119,6 +122,7 @@ export async function render(container) {
         <form id="re-form">
           ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}
           <div class="form-grid">
+            <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Kunde *</label>
               <select name="kundeId" required ${locked ? 'disabled' : ''}><option value="">– wählen –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
             </div>
@@ -295,8 +299,10 @@ let editor = createPositionsEditor({
         stornoBtn.addEventListener('click', async () => {
           if (!confirmDelete(`Stornorechnung zu ${data.nummer} erstellen? Die Positionen werden mit negativem Betrag als neue, eigenständige Rechnung angelegt.`)) return;
           const currentSettings = await getSettings();
-          const stornoNummer = nextNummer(currentSettings.rechnungPrefix, currentSettings.naechsteRechnungNr);
-          await setSettings({ naechsteRechnungNr: currentSettings.naechsteRechnungNr + 1 });
+          const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+            currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
+          );
+          await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
           const stornoPositionen = data.positionen.map((p) => ({ ...p, id: uid(), menge: -(Number(p.menge) || 0) }));
           const stornoTotals = calcTotals(stornoPositionen);
           const storno = {
@@ -375,6 +381,7 @@ let editor = createPositionsEditor({
       const fd = new FormData(e.target);
       const updated = { ...data };
       if (!locked) {
+        updated.nummer = (fd.get('nummer') || '').toString().trim();
         updated.kundeId = fd.get('kundeId') || '';
         updated.projektId = fd.get('projektId') || '';
         updated.datum = fd.get('datum') || todayISO();
@@ -401,8 +408,11 @@ let editor = createPositionsEditor({
 
       if (!isEdit) {
         const currentSettings = await getSettings();
-        updated.nummer = nextNummer(currentSettings.rechnungPrefix, currentSettings.naechsteRechnungNr);
-        await setSettings({ naechsteRechnungNr: currentSettings.naechsteRechnungNr + 1 });
+        const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+          currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
+        );
+        if (!updated.nummer) updated.nummer = autoNummer;
+        await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
       }
 
       if (!locked) {

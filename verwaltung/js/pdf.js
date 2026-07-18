@@ -103,7 +103,7 @@ export function buildDocHtml({
 
   return `
     <div class="print-header">
-      ${logoOrName}
+      <div class="print-logo-col">${logoOrName}</div>
       <div class="print-meta">
         <div class="print-meta-title">${escapeHtml(art)}</div>
         ${metaRows.map((row) => `<div class="row"><span>${escapeHtml(row[0])}</span><span>${escapeHtml(String(row[1] ?? ''))}</span></div>`).join('')}
