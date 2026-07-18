@@ -26,6 +26,24 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<!-- Google Consent Mode (Standard: abgelehnt, bis Nutzer zustimmt) -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'analytics_storage': 'denied',
+    'ad_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'wait_for_update': 500
+  });
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TC5LT5DXCZ"></script>
+<script>
+  gtag('js', new Date());
+  gtag('config', 'G-TC5LT5DXCZ', { 'anonymize_ip': true });
+</script>
 
 <script type="application/ld+json">
 {
@@ -91,9 +109,11 @@
         "@type": "Person",
         "name": "Danny Berger"
       },
+      "hasMap": "https://maps.app.goo.gl/jFSMik9pEeff53my5",
       "sameAs": [
         "https://www.facebook.com/neuverdrahtetug/",
-        "https://www.instagram.com/neuverdrahtet/"
+        "https://www.instagram.com/neuverdrahtet/",
+        "https://maps.app.goo.gl/jFSMik9pEeff53my5"
       ]
     },
     {
@@ -190,20 +210,13 @@
     <nav class="main-nav" aria-label="Hauptnavigation">
       <div class="nav-item-dropdown">
         <a>Gewerke <svg width="11" height="7" viewBox="0 0 11 7" fill="none"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
-        <div class="nav-dropdown" style="width:640px;">
+        <div class="nav-dropdown" style="width:420px;">
           <a href="elektro.html"><span class="code">01</span>Elektro</a>
           <a href="bodenleger.html"><span class="code">02</span>Bodenleger</a>
           <a href="fliesen.html"><span class="code">03</span>Fliesen</a>
           <a href="maler.html"><span class="code">04</span>Maler</a>
           <a href="trockenbau.html"><span class="code">05</span>Trockenbau</a>
           <a href="komplettbad.html"><span class="code">06</span>Komplettbad</a>
-          <a href="hausmeisterservice.html"><span class="code">07</span>Hausmeisterservice</a>
-          <a href="abbruch.html"><span class="code">08</span>Abbruch</a>
-          <a href="entruempelung.html"><span class="code">09</span>Entrümpelung</a>
-          <a href="gebaeudereinigung.html"><span class="code">10</span>Gebäudereinigung</a>
-          <a href="gartenpflege.html"><span class="code">11</span>Gartenpflege</a>
-          <a href="umzuege.html"><span class="code">12</span>Umzüge</a>
-          <a href="wohnungsrenovierung.html"><span class="code">13</span>Wohnungsrenovierung</a>
           <div class="col-foot"><a href="leistungen.html">Alle Gewerke im Überblick →</a></div>
         </div>
       </div>
@@ -218,6 +231,7 @@
         <a href="tel:+491706398575" aria-label="Anrufen" title="Anrufen: 01706398575"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
         <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" aria-label="Instagram" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
         <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" aria-label="Facebook" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+        <a href="https://maps.app.goo.gl/jFSMik9pEeff53my5" target="_blank" rel="noopener" aria-label="Google Maps" title="Auf Google Maps ansehen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.5" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg></a>
       </div>
       <a class="btn btn-primary btn-sm" href="index.html#kontakt">Angebot anfragen</a>
       <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
@@ -236,13 +250,6 @@
   <a class="mobile-sub" href="maler.html">Maler</a>
   <a class="mobile-sub" href="trockenbau.html">Trockenbau</a>
   <a class="mobile-sub" href="komplettbad.html">Komplettbad</a>
-  <a class="mobile-sub" href="hausmeisterservice.html">Hausmeisterservice</a>
-  <a class="mobile-sub" href="abbruch.html">Abbruch</a>
-  <a class="mobile-sub" href="entruempelung.html">Entrümpelung</a>
-  <a class="mobile-sub" href="gebaeudereinigung.html">Gebäudereinigung</a>
-  <a class="mobile-sub" href="gartenpflege.html">Gartenpflege</a>
-  <a class="mobile-sub" href="umzuege.html">Umzüge</a>
-  <a class="mobile-sub" href="wohnungsrenovierung.html">Wohnungsrenovierung</a>
   <a href="index.html#ueber-uns">Über uns</a>
   <a href="index.html#einsatzgebiet">Einsatzgebiet</a>
   <a href="index.html#kontakt">Kontakt</a>
@@ -362,8 +369,8 @@
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-              <button type="button" data-value="basis" data-low="8" data-high="12" class="">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Wände & Decken</span></button>
-            <button type="button" data-value="hochwertig" data-low="12" data-high="18" class="is-active">Hochwertig <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">mit Spachtelung Q2/Q3</span></button>
+              <button type="button" data-value="basis" data-low="8" data-high="12" class="is-active">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Wände & Decken</span></button>
+            <button type="button" data-value="hochwertig" data-low="12" data-high="18" class="">Hochwertig <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">mit Spachtelung Q2/Q3</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert inkl. Farbe und Material, bezogen auf Wand-/Deckenfläche (Marktdaten 2026).</p>
@@ -421,8 +428,8 @@
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-              <button type="button" data-value="standard" data-low="10" data-high="15" class="">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Raufaser & Co.</span></button>
-            <button type="button" data-value="design" data-low="15" data-high="22" class="is-active">Design <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">hochwertige Tapeten</span></button>
+              <button type="button" data-value="standard" data-low="12" data-high="20" class="is-active">Standard <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Raufaser & Co.</span></button>
+            <button type="button" data-value="design" data-low="25" data-high="45" class="">Design <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">hochwertige Tapeten</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert inkl. Tapete und Kleister, bezogen auf Wandfläche (Marktdaten 2026).</p>
@@ -445,8 +452,8 @@
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-              <button type="button" data-value="anstrich" data-low="18" data-high="26" class="">Anstrich <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">ohne Vorschäden</span></button>
-            <button type="button" data-value="sanierung" data-low="26" data-high="35" class="is-active">Sanierung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">inkl. Ausbesserung</span></button>
+              <button type="button" data-value="anstrich" data-low="25" data-high="38" class="is-active">Anstrich <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">ohne Vorschäden</span></button>
+            <button type="button" data-value="sanierung" data-low="38" data-high="55" class="">Sanierung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">inkl. Ausbesserung</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert inkl. Material für Fassadenarbeiten (Marktdaten 2026).</p>
@@ -518,10 +525,10 @@
         <h2>Passt oft dazu</h2>
       </div>
       <div class="related-grid">
-        <a class="service-card" href="elektro.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
-        <h3>Elektro</h3>
-        <p>Elektroinstallation, Smart Home, Wallbox, E-Check und mehr.</p>
+        <a class="service-card" href="trockenbau.html">
+        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="4" y="3" width="16" height="18" stroke="currentColor" stroke-width="1.6"/><path d="M4 9h16M4 15h16M10 3v18M14 3v18" stroke="currentColor" stroke-width="1.6"/></svg></div>
+        <h3>Trockenbau</h3>
+        <p>Wände, Decken und Dämmung im Trockenbau.</p>
         <span class="more">Mehr erfahren →</span>
       </a>
       <a class="service-card" href="bodenleger.html">
@@ -530,10 +537,10 @@
         <p>Laminat, Vinyl und Parkett fachgerecht verlegt.</p>
         <span class="more">Mehr erfahren →</span>
       </a>
-      <a class="service-card" href="fliesen.html">
-        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="8" height="8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="3" width="8" height="8" stroke="currentColor" stroke-width="1.6"/><rect x="3" y="13" width="8" height="8" stroke="currentColor" stroke-width="1.6"/><rect x="13" y="13" width="8" height="8" stroke="currentColor" stroke-width="1.6"/></svg></div>
-        <h3>Fliesen</h3>
-        <p>Fliesenverlegung für Bad, Küche und Boden.</p>
+      <a class="service-card" href="elektro.html">
+        <div class="icon-badge"><svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></div>
+        <h3>Elektro</h3>
+        <p>Elektroinstallation, Smart Home, Wallbox, E-Check und mehr.</p>
         <span class="more">Mehr erfahren →</span>
       </a>
       </div>
@@ -556,12 +563,13 @@
     <div class="footer-top">
       <div class="footer-brand">
         <img class="footer-logo" src="assets/logo/hauptlogo_dunkel.jpg" alt="neuverdrahtet Logo">
-        <p>Handwerksbetrieb in Essen. Handwerk mit System — 13 Gewerke, ein Ansprechpartner, von Elektro bis Wohnungsrenovierung.</p>
+        <p>Handwerksbetrieb in Essen. Handwerk mit System — 6 Gewerke, ein Ansprechpartner, von Elektro bis Komplettbad.</p>
         <div class="footer-social">
           <a href="https://wa.me/491706398575" target="_blank" rel="noopener" aria-label="WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.36a9.9 9.9 0 0 0 4.62 1.15h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.72 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1.02.24-3.43-.72-2.9-1.16-4.76-4.14-4.9-4.33-.14-.19-1.17-1.56-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.61 2 1.11.99 2.04 1.3 2.33 1.45.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.38-.24.63-.14.26.1 1.64.77 1.92.91.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg></a>
           <a href="tel:+491706398575" aria-label="Anrufen"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
           <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
           <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" aria-label="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+          <a href="https://maps.app.goo.gl/jFSMik9pEeff53my5" target="_blank" rel="noopener" aria-label="Google Maps"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.5" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg></a>
         </div>
       </div>
       <div class="footer-cols">
@@ -573,7 +581,6 @@
       <a href="maler.html">Maler</a>
       <a href="trockenbau.html">Trockenbau</a>
       <a href="komplettbad.html">Komplettbad</a>
-      <a href="hausmeisterservice.html">Hausmeisterservice</a>
           <a href="leistungen.html">Alle Gewerke →</a>
         </div>
         <div class="footer-col">
@@ -600,6 +607,7 @@
   <a href="tel:+491706398575" class="fab fab-phone" aria-label="Anrufen" title="Anrufen"><svg width="21" height="21" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
   <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" class="fab fab-instagram" aria-label="Instagram" title="Instagram"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
   <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" class="fab fab-facebook" aria-label="Facebook" title="Facebook"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+  <a href="https://maps.app.goo.gl/jFSMik9pEeff53my5" target="_blank" rel="noopener" class="fab fab-google" aria-label="Google Maps" title="Auf Google Maps ansehen"><svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.5" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg></a>
 </div>
 <script src="assets/script.js"></script>
 </body>

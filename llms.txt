@@ -2,7 +2,7 @@
 
 > Handwerksbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
 > Slogan: "Handwerk mit System".
-> 13 Gewerke unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
+> 6 Gewerke unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
 - Adresse: Donnerstr. 131, 45357 Essen
@@ -17,13 +17,6 @@
 - [Maler](https://neuverdrahtet.com/maler.html): Streichen, Tapezieren und Fassadenanstrich. (inkl. Kosten-Konfigurator)
 - [Trockenbau](https://neuverdrahtet.com/trockenbau.html): Wände, Decken und Dämmung im Trockenbau. (inkl. Kosten-Konfigurator)
 - [Komplettbad](https://neuverdrahtet.com/komplettbad.html): Badsanierung aus einer Hand, von Planung bis Abnahme. (inkl. Kosten-Konfigurator)
-- [Hausmeisterservice](https://neuverdrahtet.com/hausmeisterservice.html): Regelmäßige Betreuung für Haus und Grundstück. (inkl. Kosten-Konfigurator)
-- [Abbruch](https://neuverdrahtet.com/abbruch.html): Entkernung und Teil- bis Komplettabbruch. (inkl. Kosten-Konfigurator)
-- [Entrümpelung](https://neuverdrahtet.com/entruempelung.html): Haushalts- und Objektauflösung, besenrein übergeben. (inkl. Kosten-Konfigurator)
-- [Gebäudereinigung](https://neuverdrahtet.com/gebaeudereinigung.html): Unterhalts-, Grund- und Baureinigung. (inkl. Kosten-Konfigurator)
-- [Gartenpflege](https://neuverdrahtet.com/gartenpflege.html): Rasenpflege, Heckenschnitt und Neuanlage. (inkl. Kosten-Konfigurator)
-- [Umzüge](https://neuverdrahtet.com/umzuege.html): Privat- und Gewerbeumzüge, mit oder ohne Verpackung. (inkl. Kosten-Konfigurator)
-- [Wohnungsrenovierung](https://neuverdrahtet.com/wohnungsrenovierung.html): Renovierung, Modernisierung und Sanierung aus einer Hand. (inkl. Kosten-Konfigurator)
 
 ## Weitere Seiten
 - [Alle Gewerke im Überblick](https://neuverdrahtet.com/leistungen.html)

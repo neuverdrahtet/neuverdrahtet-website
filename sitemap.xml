@@ -2,76 +2,49 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://neuverdrahtet.com/</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>1.0</priority>
     <changefreq>weekly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/elektro.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/bodenleger.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/fliesen.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/maler.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/trockenbau.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/komplettbad.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/hausmeisterservice.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/abbruch.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/entruempelung.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/gebaeudereinigung.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/gartenpflege.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/umzuege.html</loc>
-    <priority>0.8</priority>
-    <changefreq>monthly</changefreq>
-  </url>
-  <url>
-    <loc>https://neuverdrahtet.com/wohnungsrenovierung.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.8</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/leistungen.html</loc>
+    <lastmod>2026-07-17</lastmod>
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
