@@ -19,13 +19,27 @@
 <body>
 
 <div id="lock-screen" class="lock-screen" hidden>
-  <form id="lock-form" class="lock-box">
-    <h1>neuverdrahtet Verwaltung</h1>
-    <p>Bitte Zugangscode eingeben.</p>
-    <input type="password" id="lock-input" autocomplete="off" placeholder="Zugangscode" required>
-    <button type="submit">Entsperren</button>
-    <p id="lock-error" class="lock-error" hidden>Falscher Code.</p>
-  </form>
+  <div id="lock-pin-box" class="lock-box" hidden>
+    <form id="lock-form">
+      <h1>neuverdrahtet Verwaltung</h1>
+      <p>Bitte Zugangscode eingeben.</p>
+      <input type="password" id="lock-input" autocomplete="off" placeholder="Zugangscode" required>
+      <button type="submit">Entsperren</button>
+      <p id="lock-error" class="lock-error" hidden>Falscher Code.</p>
+    </form>
+  </div>
+  <div id="lock-auth-box" class="lock-box" hidden>
+    <form id="auth-form">
+      <h1>neuverdrahtet Verwaltung</h1>
+      <h2 id="auth-title">Anmelden</h2>
+      <input type="email" id="auth-email" autocomplete="username" placeholder="E-Mail-Adresse" required>
+      <input type="password" id="auth-password" autocomplete="current-password" placeholder="Passwort" required minlength="6">
+      <button type="submit" id="auth-submit">Anmelden</button>
+      <p id="auth-error" class="lock-error" hidden></p>
+      <p id="auth-hint" class="lock-hint">Bitte mit deiner E-Mail und deinem Passwort anmelden.</p>
+      <a href="#" id="auth-mode-toggle" class="lock-toggle">Als eingeladener Mitarbeiter registrieren</a>
+    </form>
+  </div>
 </div>
 
 <div id="app" class="app" hidden>
