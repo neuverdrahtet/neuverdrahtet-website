@@ -642,6 +642,16 @@ section{ padding:88px 0; }
 .contact-detail a, .contact-detail span{ font-size:14.5px; color:var(--ink-soft); text-decoration:none; }
 .contact-detail a:hover{ color:var(--orange); }
 
+.contact-map{ margin-top:20px; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
+.contact-map iframe{ display:block; filter:grayscale(0.15) contrast(1.02); }
+
+.contact-review{ display:flex; align-items:center; gap:14px; margin-top:16px; padding:16px; border:1px solid var(--line); border-radius:var(--radius); background:var(--surface); }
+.contact-review img{ flex:none; border-radius:8px; background:#fff; padding:4px; }
+.contact-review strong{ display:block; font-size:14px; color:var(--ink); margin-bottom:3px; }
+.contact-review p{ font-size:14px; color:var(--ink-soft); margin:0; }
+.contact-review a{ color:var(--orange); text-decoration:none; }
+.contact-review a:hover{ text-decoration:underline; }
+
 .form-panel{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:36px; }
 .form-row{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 @media (max-width:520px){ .form-row{ grid-template-columns:1fr; } }

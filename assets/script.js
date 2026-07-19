@@ -322,6 +322,8 @@ document.addEventListener('click', (e) => {
     trackEvent('contact_click', { method: 'phone', link_url: href });
   } else if (href.includes('wa.me')) {
     trackEvent('contact_click', { method: 'whatsapp', link_url: href });
+  } else if (href.includes('maps.app.goo.gl') || href.includes('google.com/maps')) {
+    trackEvent('contact_click', { method: 'google_maps', link_url: href });
   }
 });
 
