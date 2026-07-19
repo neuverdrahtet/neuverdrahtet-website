@@ -7,12 +7,12 @@
 // 2. Projekteinstellungen (Zahnrad oben links) -> "Meine Apps" -> Web-App (</>) hinzufügen.
 // 3. Den angezeigten "firebaseConfig"-Block hier unten eintragen.
 export const firebaseConfig = {
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyDY9NDdfqbnaxIoNi1SxrCbsppbidd0Sto',
+  authDomain: 'neuverdrahtet-verwaltung.firebaseapp.com',
+  projectId: 'neuverdrahtet-verwaltung',
+  storageBucket: 'neuverdrahtet-verwaltung.firebasestorage.app',
+  messagingSenderId: '1007747718563',
+  appId: '1:1007747718563:web:fbf274c25ae8cf9ccf0e16',
 };
 
 // Auf "true" setzen, um lokal gegen die Firebase Local Emulator Suite zu testen
