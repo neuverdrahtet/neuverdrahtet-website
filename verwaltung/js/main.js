@@ -104,9 +104,21 @@ export async function applyTheme() {
 async function boot() {
   const deviceType = applyDeviceClass();
   await openDB();
-  await ensureSeeded();
-  await applyTheme();
+  // initLock() muss vor ensureSeeded()/applyTheme() laufen: im Firebase-Modus
+  // verlangen die Security Rules einen eingeloggten Nutzer mit Rolle, bevor
+  // überhaupt Einstellungen (Theme, Logo, ...) gelesen werden dürfen. Der
+  // Login-Screen selbst braucht dafür keine Einstellungen.
   session = await initLock();
+  try {
+    // ensureSeeded() legt u.a. fehlende Vorlagen/Textbausteine/Kanban-Spalten
+    // an – das dürfen laut Security Rules nur admin/buero. Meldet sich zuerst
+    // ein Mitarbeiter an einem frischen Projekt an, schlägt das serverseitig
+    // ab; das darf den restlichen Boot-Vorgang (Nav/Rollen) nicht blockieren.
+    await ensureSeeded();
+  } catch (err) {
+    console.warn('ensureSeeded() übersprungen:', err);
+  }
+  await applyTheme();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
   // Auf dem Handy landen Außendienstler meist direkt in der Zeiterfassung

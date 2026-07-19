@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { FIREBASE_ENABLED, inviteEmployee, revokeInvite, revokeUserAccess, getEmployeeAuthStatus } from '../employeeAuth.js';
 
 const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
 
@@ -183,12 +184,14 @@ export async function render(container) {
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Zugang zur Verwaltung</h2>
           <div class="form-grid">
-            <div class="field"><label>Eigener Zugangscode (optional)</label><input name="zugangscode" placeholder="leer = kein eigener Login" value="${escapeHtml(data.zugangscode || '')}"></div>
+            ${FIREBASE_ENABLED ? '' : `<div class="field"><label>Eigener Zugangscode (optional)</label><input name="zugangscode" placeholder="leer = kein eigener Login" value="${escapeHtml(data.zugangscode || '')}"></div>`}
             <div class="field"><label>Zugriffsrolle</label>
               <select name="zugriffsrolle">${ZUGRIFFSROLLEN.map((r) => `<option value="${r.id}" ${r.id === (data.zugriffsrolle || 'mitarbeiter') ? 'selected' : ''}>${escapeHtml(r.titel)}</option>`).join('')}</select>
             </div>
-            <p class="hint col-span-2">${escapeHtml(ZUGRIFFSROLLEN.find((r) => r.id === (data.zugriffsrolle || 'mitarbeiter'))?.beschreibung || '')} Wichtig: Diese App läuft rein lokal im Browser – der Code ist eine einfache Bedienungssperre, kein vollwertiger Server-Login.</p>
+            <p class="hint col-span-2">${escapeHtml(ZUGRIFFSROLLEN.find((r) => r.id === (data.zugriffsrolle || 'mitarbeiter'))?.beschreibung || '')}${FIREBASE_ENABLED ? '' : ' Wichtig: Diese App läuft rein lokal im Browser – der Code ist eine einfache Bedienungssperre, kein vollwertiger Server-Login.'}</p>
           </div>
+          ${FIREBASE_ENABLED && isEdit ? '<div id="auth-status-host">Lädt Login-Status …</div>' : ''}
+          ${FIREBASE_ENABLED && !isEdit ? '<p class="hint">Zugang per E-Mail-Login kannst du einrichten, sobald der Mitarbeiter gespeichert ist.</p>' : ''}
 
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Notfallkontakt</h2>
@@ -225,6 +228,7 @@ export async function render(container) {
       renderDokumenteSection(body.querySelector('#dok-host'), 'mitarbeiter', data.id, {
         kategorien: MA_DOKUMENT_KATEGORIEN, title: 'Dokumente (Vertrag, Ausweis, ...)',
       });
+      if (FIREBASE_ENABLED) renderAuthStatus(body, data);
     }
     body.querySelector('#ma-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -237,6 +241,56 @@ export async function render(container) {
       close();
       render(container);
     });
+  }
+
+  async function renderAuthStatus(body, data) {
+    const host = body.querySelector('#auth-status-host');
+    if (!host) return;
+    const status = await getEmployeeAuthStatus(data.id);
+
+    function draw() {
+      if (status.status === 'registered') {
+        host.innerHTML = `
+          <p class="hint">✅ Registriert mit <strong>${escapeHtml(status.email)}</strong> – kann sich anmelden.</p>
+          <button type="button" class="btn btn-sm btn-danger" id="btn-revoke-access">Zugriff entziehen</button>
+        `;
+        host.querySelector('#btn-revoke-access').addEventListener('click', async () => {
+          if (!confirmDelete('Zugriff wirklich entziehen? Der Mitarbeiter kann sich danach nicht mehr anmelden (das Firebase-Konto selbst bleibt bestehen, kann aber nichts mehr sehen).')) return;
+          await revokeUserAccess(status.uid);
+          toast('Zugriff entzogen', 'success');
+          status.status = 'none';
+          draw();
+        });
+      } else if (status.status === 'invited') {
+        host.innerHTML = `
+          <p class="hint">📧 Eingeladen mit <strong>${escapeHtml(status.email)}</strong> – wartet auf Registrierung durch den Mitarbeiter.</p>
+          <button type="button" class="btn btn-sm" id="btn-revoke-invite">Einladung zurückziehen</button>
+        `;
+        host.querySelector('#btn-revoke-invite').addEventListener('click', async () => {
+          await revokeInvite(status.email);
+          toast('Einladung zurückgezogen', 'success');
+          status.status = 'none';
+          draw();
+        });
+      } else {
+        host.innerHTML = `
+          <div class="field"><label>E-Mail für Login-Einladung</label><input type="email" id="invite-email" placeholder="mitarbeiter@beispiel.de" value="${escapeHtml(data.email || '')}"></div>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-invite">Zum Login einladen</button>
+          <p class="hint">Der Mitarbeiter bekommt keine automatische E-Mail – bitte die Adresse selbst mitteilen. Registrierung erfolgt im Login-Bildschirm über "Als eingeladener Mitarbeiter registrieren".</p>
+        `;
+        host.querySelector('#btn-invite').addEventListener('click', async () => {
+          const email = host.querySelector('#invite-email').value.trim();
+          if (!email) return;
+          const roleSelect = body.querySelector('select[name="zugriffsrolle"]');
+          await inviteEmployee({ email, role: roleSelect.value, mitarbeiterId: data.id, name: data.name });
+          toast('Einladung erstellt', 'success');
+          status.status = 'invited';
+          status.email = email;
+          draw();
+        });
+      }
+    }
+    draw();
   }
 
   renderTable();

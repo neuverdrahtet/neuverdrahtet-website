@@ -101,6 +101,10 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   font-weight: 600;
 }
 .lock-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
+.lock-box h2 { font-size: 15px; margin: 0 0 16px; color: var(--text-mute); font-weight: 600; }
+.lock-hint { color: var(--text-mute); font-size: 12px; margin: 10px 0 0; }
+.lock-toggle { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--accent); text-decoration: none; }
+.lock-toggle:hover { text-decoration: underline; }
 
 /* App shell */
 .app[hidden] { display: none; }

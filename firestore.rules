@@ -1,0 +1,82 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+
+    function myRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+    function hasRole(roles) { return myRole() in roles; }
+    function isAdmin() { return myRole() == 'admin'; }
+    function isAdminOrBuero() { return hasRole(['admin', 'buero']); }
+    function isAnyRole() { return hasRole(['admin', 'buero', 'mitarbeiter']); }
+
+    // Sensible Geschäfts-/Finanz-/Personaldaten: nur Admin + Büro
+    // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/angebote/rechnungen/
+    // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
+    function isSensitiveCollection(collectionId) {
+      return collectionId in [
+        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'rechnungen',
+        'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten'
+      ];
+    }
+    // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
+    // projekte/plantafel/zeiterfassung/aufgaben/geraete, für alle nutzbar).
+    function isSharedCollection(collectionId) {
+      return collectionId in [
+        'projekte', 'termine', 'zeiterfassung', 'fotos', 'aufgaben', 'dokumente',
+        'kategorien', 'nachrichten', 'geraete', 'flotten', 'terminStatus', 'aufgabenStatus'
+      ];
+    }
+
+    // --- Login-Bootstrapping (E-Mail+Passwort statt Zugangscode) ---
+
+    // Ein Admin legt hier eine Einladung an (Rolle + Mitarbeiter-Verknüpfung
+    // vorbelegt). "get" auf den exakten Dokumentnamen (E-Mail) ist bewusst auch
+    // ohne Login erlaubt, damit der Registrierungs-Bildschirm vor dem Anlegen
+    // des Kontos prüfen kann, ob überhaupt eine Einladung existiert – "list"
+    // bleibt aber gesperrt, damit niemand alle eingeladenen E-Mail-Adressen
+    // auflisten kann.
+    match /invites/{email} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.token.email == email);
+    }
+
+    // Rolle je Mitarbeiter-Konto. Erstellt sich der Mitarbeiter bei der
+    // Registrierung selbst an – aber nur, wenn eine passende Einladung
+    // existiert und Rolle/Mitarbeiter-ID exakt aus dieser Einladung übernommen
+    // werden (verhindert, dass sich jemand selbst zum Admin macht).
+    match /users/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && exists(/databases/$(database)/documents/invites/$(request.resource.data.email))
+        && request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.role
+        && request.resource.data.mitarbeiterId == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.mitarbeiterId;
+      allow update, delete: if isAdmin();
+    }
+
+    // --- Anwendungsdaten ---
+
+    // einstellungen/global: alle eingeloggten Rollen dürfen lesen (Theme,
+    // Logo, Firmendaten werden auf praktisch jeder Seite gebraucht), aber nur
+    // Admin darf etwas ändern.
+    match /einstellungen/{docId} {
+      allow read: if isAnyRole();
+      allow write: if isAdmin();
+    }
+
+    match /{collectionId}/{docId} {
+      allow read, write: if isSignedIn() && (
+        (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||
+        (isSharedCollection(collectionId) && isAnyRole())
+      );
+    }
+  }
+}
