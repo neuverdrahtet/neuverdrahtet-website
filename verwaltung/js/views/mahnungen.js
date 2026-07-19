@@ -24,10 +24,15 @@ export async function render(container) {
   const overdue = rechnungen
     .filter((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < today)
     .map((r) => {
-      const stufeCount = mahnungen.filter((m) => m.rechnungId === r.id).length;
-      return { r, stufeCount, nextStufe: Math.min(stufeCount + 1, 3), tageUeberfaellig: daysBetween(r.faelligAm, today) };
+      const mahnungenFuerR = mahnungen.filter((m) => m.rechnungId === r.id).sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+      const stufeCount = mahnungenFuerR.length;
+      const letzte = mahnungenFuerR[mahnungenFuerR.length - 1];
+      const wartetBis = letzte ? letzte.neueFrist : r.faelligAm;
+      const bereit = !wartetBis || wartetBis < today;
+      return { r, stufeCount, nextStufe: Math.min(stufeCount + 1, 3), tageUeberfaellig: daysBetween(r.faelligAm, today), bereit, wartetBis };
     })
     .sort((a, b) => b.tageUeberfaellig - a.tageUeberfaellig);
+  const bereitCount = overdue.filter((o) => o.bereit).length;
 
   mahnungen.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   const bulk = createBulkSelect('mahnungen', { label: 'Mahnungen' });
@@ -36,12 +41,15 @@ export async function render(container) {
     <div class="view-header"><h1>Mahnungen</h1></div>
 
     <div class="card">
-      <h2>Überfällige Rechnungen</h2>
+      <div class="view-header" style="margin-bottom:10px">
+        <h2 style="margin:0">Überfällige Rechnungen</h2>
+        ${bereitCount > 0 ? `<button class="btn btn-primary" id="btn-bulk-mahnung">Alle fälligen Mahnungen jetzt erstellen (${bereitCount})</button>` : ''}
+      </div>
       ${overdue.length === 0 ? '<p class="text-mute">Aktuell keine überfälligen Rechnungen.</p>' : `
         <table class="data-table">
           <thead><tr><th>Rechnung</th><th>Kunde</th><th>Fällig am</th><th>Tage überfällig</th><th>Bisherige Mahnungen</th><th class="text-right">Betrag</th><th></th></tr></thead>
           <tbody>
-            ${overdue.map(({ r, stufeCount, nextStufe, tageUeberfaellig }) => `
+            ${overdue.map(({ r, stufeCount, nextStufe, tageUeberfaellig, bereit, wartetBis }) => `
               <tr>
                 <td>${escapeHtml(r.nummer)}</td>
                 <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
@@ -49,7 +57,9 @@ export async function render(container) {
                 <td><span class="badge badge-danger">${tageUeberfaellig} Tage</span></td>
                 <td>${stufeCount}</td>
                 <td class="text-right">${formatCurrency(r.brutto)}</td>
-                <td><button class="btn btn-sm btn-primary btn-create-mahnung" data-rid="${r.id}" data-stufe="${nextStufe}">Mahnung Stufe ${nextStufe}</button></td>
+                <td>${bereit
+                  ? `<button class="btn btn-sm btn-primary btn-create-mahnung" data-rid="${r.id}" data-stufe="${nextStufe}">Mahnung Stufe ${nextStufe}</button>`
+                  : `<span class="badge" title="Zahlungsfrist der letzten Mahnung läuft noch">Wartet bis ${formatDate(wartetBis)}</span>`}</td>
               </tr>
             `).join('')}
           </tbody>
@@ -62,6 +72,32 @@ export async function render(container) {
       <div id="mahnungen-table-host"></div>
     </div>
   `;
+
+  function buildMahnungData(rechnung, stufe) {
+    const frist = settings.mahnfristTage || 10;
+    const gebuehr = settings.mahnGebuehr?.[stufe] ?? 0;
+    return {
+      id: uid(), rechnungId: rechnung.id, stufe, datum: today,
+      neueFrist: addDays(today, frist), gebuehr,
+      text: STUFE_TEXT[stufe] ? STUFE_TEXT[stufe](settings, frist) : '',
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  const btnBulkMahnung = container.querySelector('#btn-bulk-mahnung');
+  if (btnBulkMahnung) {
+    btnBulkMahnung.addEventListener('click', async () => {
+      const bereitEintraege = overdue.filter((o) => o.bereit);
+      if (!confirmDelete(`${bereitEintraege.length} Mahnung(en) jetzt anlegen? Drucken/Versenden erfolgt danach einzeln über die Liste unten.`)) return;
+      for (const { r, nextStufe } of bereitEintraege) {
+        const neueMahnung = buildMahnungData(r, nextStufe);
+        await put('mahnungen', neueMahnung);
+        mahnungen.push(neueMahnung);
+      }
+      toast(`${bereitEintraege.length} Mahnung(en) erstellt`, 'success');
+      render(container);
+    });
+  }
 
   container.querySelectorAll('.btn-create-mahnung').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -184,14 +220,7 @@ export async function render(container) {
   }
 
   function openForm(rechnung, stufe) {
-    const frist = settings.mahnfristTage || 10;
-    const gebuehr = settings.mahnGebuehr?.[stufe] ?? 0;
-    const data = {
-      id: uid(), rechnungId: rechnung.id, stufe, datum: today,
-      neueFrist: addDays(today, frist), gebuehr,
-      text: STUFE_TEXT[stufe] ? STUFE_TEXT[stufe](settings, frist) : '',
-      createdAt: new Date().toISOString(),
-    };
+    const data = buildMahnungData(rechnung, stufe);
     const { body, close } = openModal({
       title: `Mahnung Stufe ${stufe} – ${rechnung.nummer}`,
       wide: true,

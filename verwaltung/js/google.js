@@ -1,9 +1,10 @@
-import { getSettings } from './db.js';
+import { getSettings, setSettings, exportAll } from './db.js';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/drive.file',
 ].join(' ');
 
 let tokenClient = null;
@@ -60,6 +61,7 @@ export async function connect() {
         sessionStorage.setItem('nv-google-token', accessToken);
         sessionStorage.setItem('nv-google-token-exp', String(tokenExpiresAt));
         resolve(accessToken);
+        maybeAutoBackup().catch(() => { /* Auto-Backup ist ein Komfort-Feature, darf die Verbindung nicht stören */ });
       },
       error_callback: (err) => reject(new Error(err?.message || 'Google-Anmeldung abgebrochen.')),
     });
@@ -336,4 +338,81 @@ export async function sendEmail({ to, subject, bodyText, inReplyTo, referencesHe
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+// --- Drive (automatisches Cloud-Backup) ---
+
+const BACKUP_NAME_PREFIX = 'neuverdrahtet-backup-';
+const BACKUP_KEEP_COUNT = 30;
+const BACKUP_MIN_INTERVAL_MS = 20 * 60 * 60 * 1000; // ~20h, damit ein Backup pro Tag reicht
+
+/** Lädt ein Backup (JSON-Text) als neue Datei in Google Drive hoch (nur App-eigene Dateien, drive.file-Scope). */
+export async function uploadBackupToDrive({ filename, jsonText }) {
+  const boundary = 'nvDriveBoundary' + Date.now();
+  const metadata = { name: filename, mimeType: 'application/json' };
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    `${JSON.stringify(metadata)}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Type: application/json\r\n\r\n` +
+    `${jsonText}\r\n` +
+    `--${boundary}--`;
+  return apiFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  });
+}
+
+/** Listet die von dieser App in Drive abgelegten Backups (neueste zuerst). */
+export async function listDriveBackups() {
+  const params = new URLSearchParams({
+    q: `name contains '${BACKUP_NAME_PREFIX}' and trashed = false`,
+    orderBy: 'createdTime desc',
+    fields: 'files(id,name,createdTime,size)',
+    pageSize: '100',
+  });
+  const data = await apiFetch(`https://www.googleapis.com/drive/v3/files?${params}`);
+  return data.files || [];
+}
+
+export async function deleteDriveFile(fileId) {
+  return apiFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`, { method: 'DELETE' });
+}
+
+/** Lädt den Inhalt eines Backups zum Wiederherstellen herunter (Rohinhalt, keine JSON-API-Hülle). */
+export async function downloadDriveFileContent(fileId) {
+  const token = await ensureToken();
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`Google-API-Fehler (${res.status})`);
+  return res.text();
+}
+
+async function pruneOldDriveBackups() {
+  const files = await listDriveBackups();
+  const toDelete = files.slice(BACKUP_KEEP_COUNT);
+  for (const f of toDelete) {
+    await deleteDriveFile(f.id).catch(() => { /* einzelnes fehlgeschlagenes Aufräumen soll den Rest nicht blockieren */ });
+  }
+}
+
+/** Erzwingt sofort ein Backup nach Drive, unabhängig vom Zeitintervall (für den manuellen "Jetzt sichern"-Button). */
+export async function runBackupNow() {
+  const data = await exportAll();
+  const filename = `${BACKUP_NAME_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  await uploadBackupToDrive({ filename, jsonText: JSON.stringify(data) });
+  await setSettings({ driveBackupLastAt: new Date().toISOString() });
+  await pruneOldDriveBackups();
+}
+
+/** Läuft automatisch nach jeder erfolgreichen Google-Verbindung; sichert höchstens ca. 1x/Tag. */
+async function maybeAutoBackup() {
+  const settings = await getSettings();
+  if (!settings.driveBackupEnabled) return;
+  const last = settings.driveBackupLastAt ? new Date(settings.driveBackupLastAt).getTime() : 0;
+  if (Date.now() - last < BACKUP_MIN_INTERVAL_MS) return;
+  await runBackupNow();
 }
