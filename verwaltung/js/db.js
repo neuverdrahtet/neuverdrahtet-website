@@ -156,6 +156,8 @@ const DEFAULT_SETTINGS = {
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',
+  driveBackupEnabled: false,
+  driveBackupLastAt: '',
   stundensatz: 60,
   datevBeraterNr: '',
   datevMandantNr: '',

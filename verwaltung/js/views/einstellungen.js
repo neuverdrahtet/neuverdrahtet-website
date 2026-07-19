@@ -1,5 +1,5 @@
 import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, clearStore, TEXTBAUSTEIN_KATEGORIEN, ZUGRIFFSROLLEN } from '../db.js';
-import { uid, escapeHtml, toast, compressImage } from '../utils.js';
+import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 
@@ -260,6 +260,22 @@ export async function render(container) {
             <button class="btn" id="btn-import">Daten importieren ...</button>
             <input type="file" id="import-file" accept="application/json" hidden>
           </div>
+
+          <h2 style="margin-top:28px">Automatisches Cloud-Backup (Google Drive)</h2>
+          <p class="hint">
+            Sichert die Daten zusätzlich in deinem Google Drive (eigener Ordner, nur für diese App sichtbar).
+            Läuft automatisch mit, sobald die Google-Verbindung aktiv ist (max. 1x pro Tag) – dafür muss die
+            Google-Verbindung (siehe Einstellungen → Google-Verbindung) eingerichtet sein. Ohne aktiv geöffnete
+            Verwaltung/Verbindung kann kein Backup laufen, daher zusätzlich den "Jetzt sichern"-Button nutzen,
+            wenn du sichergehen willst.
+          </p>
+          <div class="field field-checkbox"><input type="checkbox" id="drive-backup-enabled" ${settings.driveBackupEnabled ? 'checked' : ''}><label for="drive-backup-enabled">Automatisches Backup aktivieren</label></div>
+          <p class="hint" id="drive-backup-last">Letztes Backup: ${settings.driveBackupLastAt ? escapeHtml(formatDateTime(settings.driveBackupLastAt)) : 'noch nie'}</p>
+          <div class="flex-row flex-wrap">
+            <button class="btn" id="btn-backup-now">☁️ Jetzt sichern</button>
+            <button class="btn" id="btn-backup-list">Verfügbare Backups anzeigen</button>
+          </div>
+          <div id="drive-backup-list-host"></div>
 
           <h2 style="margin-top:28px">Testdaten zurücksetzen</h2>
           <p class="hint">Löscht alle Datensätze im gewählten Bereich unwiderruflich – auch bereits versendete/gesperrte Rechnungen. Gedacht, um Testeinträge komplett zu entfernen und wieder bei 0 anzufangen.</p>
@@ -530,6 +546,68 @@ export async function render(container) {
       toast('Import fehlgeschlagen: ' + err.message, 'danger');
     }
     fileInput.value = '';
+  });
+
+  container.querySelector('#drive-backup-enabled').addEventListener('change', async (e) => {
+    await setSettings({ driveBackupEnabled: e.target.checked });
+    toast(e.target.checked ? 'Automatisches Backup aktiviert' : 'Automatisches Backup deaktiviert', 'success');
+  });
+
+  container.querySelector('#btn-backup-now').addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-backup-now');
+    btn.disabled = true;
+    btn.textContent = 'Sichere ...';
+    try {
+      await google.runBackupNow();
+      const updated = await getSettings();
+      container.querySelector('#drive-backup-last').textContent = `Letztes Backup: ${formatDateTime(updated.driveBackupLastAt)}`;
+      toast('Backup zu Google Drive hochgeladen', 'success');
+    } catch (err) {
+      toast(`Backup fehlgeschlagen: ${err.message}`, 'danger');
+    }
+    btn.disabled = false;
+    btn.textContent = '☁️ Jetzt sichern';
+  });
+
+  container.querySelector('#btn-backup-list').addEventListener('click', async () => {
+    const listHost = container.querySelector('#drive-backup-list-host');
+    listHost.innerHTML = '<p class="text-mute">Lädt ...</p>';
+    try {
+      const files = await google.listDriveBackups();
+      if (files.length === 0) {
+        listHost.innerHTML = '<p class="text-mute">Noch keine Backups in Drive vorhanden.</p>';
+        return;
+      }
+      listHost.innerHTML = `<ul class="cal-event-list">${files.map((f) => `
+        <li>
+          <div>
+            <strong>${escapeHtml(f.name)}</strong>
+            <div class="text-mute">${escapeHtml(formatDateTime(f.createdTime))}</div>
+          </div>
+          <button class="btn btn-sm" data-fileid="${f.id}">Wiederherstellen</button>
+        </li>
+      `).join('')}</ul>`;
+      listHost.querySelectorAll('button[data-fileid]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (!confirmDelete('Dieses Backup wiederherstellen? Vorhandene Einträge mit gleicher ID werden überschrieben.')) return;
+          btn.disabled = true;
+          btn.textContent = 'Lädt ...';
+          try {
+            const text = await google.downloadDriveFileContent(btn.dataset.fileid);
+            const data = JSON.parse(text);
+            await importAll(data, { replace: false });
+            toast('Wiederherstellung erfolgreich. Seite wird neu geladen.', 'success');
+            setTimeout(() => window.location.reload(), 1200);
+          } catch (err) {
+            toast(`Wiederherstellung fehlgeschlagen: ${err.message}`, 'danger');
+            btn.disabled = false;
+            btn.textContent = 'Wiederherstellen';
+          }
+        });
+      });
+    } catch (err) {
+      listHost.innerHTML = `<p class="text-mute">Fehler beim Laden: ${escapeHtml(err.message)}</p>`;
+    }
   });
 
   const resetLabels = { rechnungen: 'Rechnungen', angebote: 'Angebote', mahnungen: 'Mahnungen' };

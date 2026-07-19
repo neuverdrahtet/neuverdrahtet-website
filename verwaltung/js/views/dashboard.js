@@ -94,7 +94,13 @@ export async function render(container) {
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
 
   const offen = rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
-  const ueberfaellig = offen.filter((r) => r.faelligAm && r.faelligAm < today);
+  const ueberfaellig = offen.filter((r) => r.faelligAm && r.faelligAm < today).map((r) => {
+    const mahnungenFuerR = mahnungen.filter((m) => m.rechnungId === r.id).sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+    const letzte = mahnungenFuerR[mahnungenFuerR.length - 1];
+    const wartetBis = letzte ? letzte.neueFrist : r.faelligAm;
+    return { ...r, mahnstufeCount: mahnungenFuerR.length, mahnBereit: !wartetBis || wartetBis < today, mahnWartetBis: wartetBis, mahnNextStufe: Math.min(mahnungenFuerR.length + 1, 3) };
+  });
+  const mahnBereitCount = ueberfaellig.filter((r) => r.mahnBereit).length;
   const offenSumme = offen.reduce((s, r) => s + (r.brutto || 0), 0);
   const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + (r.brutto || 0), 0);
   const aktiveProjekte = projekte.filter((p) => !spaltenById[p.status]?.geschlossen);
@@ -264,9 +270,9 @@ export async function render(container) {
 
     ${ueberfaellig.length ? `
       <div class="card">
-        <h2>Überfällige Rechnungen</h2>
+        <h2>Überfällige Rechnungen${mahnBereitCount > 0 ? ` <span class="badge badge-danger">${mahnBereitCount} bereit für nächste Mahnstufe</span>` : ''}</h2>
         <table class="data-table">
-          <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Betrag</th></tr></thead>
+          <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Betrag</th><th>Mahnstatus</th></tr></thead>
           <tbody>
             ${ueberfaellig.map((r) => `
               <tr>
@@ -274,6 +280,9 @@ export async function render(container) {
                 <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
                 <td>${formatDate(r.faelligAm)}</td>
                 <td>${formatCurrency(r.brutto)}</td>
+                <td>${r.mahnBereit
+                  ? `<span class="badge badge-danger">Bereit: Stufe ${r.mahnNextStufe}</span>`
+                  : `<span class="badge">Wartet bis ${formatDate(r.mahnWartetBis)}</span>`}</td>
               </tr>
             `).join('')}
           </tbody>
