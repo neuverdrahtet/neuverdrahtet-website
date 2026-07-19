@@ -1,5 +1,29 @@
+import {
+  collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, onSnapshot,
+} from './vendor/firebase/firebase-firestore.js';
+import { firebaseConfig } from './firebase-config.js';
+
+// Solange kein echtes Firebase-Projekt in firebase-config.js hinterlegt ist,
+// läuft die App unverändert mit der bisherigen lokalen IndexedDB weiter (wie
+// vor der Mehrbenutzer-Umstellung). Erst wenn firebaseConfig.projectId gesetzt
+// ist, wird auf die gemeinsame Firestore-Datenbank umgeschaltet. So bricht die
+// produktiv genutzte App nicht, bevor das Firebase-Projekt wirklich eingerichtet
+// und die Zugangsdaten eingetragen sind.
+const FIREBASE_ENABLED = !!firebaseConfig.projectId;
+let firestore = null;
+if (FIREBASE_ENABLED) {
+  ({ firestore } = await import('./firebase.js'));
+}
+
 const DB_NAME = 'neuverdrahtet-verwaltung';
 const DB_VERSION = 9;
+
+// 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
+// (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
+// weiter unten in getAll/get/put/remove/clearStore. Grund: getSettings() wird
+// bei praktisch jedem View-Rendering aufgerufen; ein Dokument statt ~40
+// Einzeldokumenten spart massiv Firestore-Lesevorgänge.
+const EINSTELLUNGEN_DOC = () => doc(firestore, 'einstellungen', 'global');
 
 const STORES = {
   kunden: 'id',
@@ -37,33 +61,35 @@ export const KALK_KATEGORIEN = [
 
 export const STORE_NAMES = Object.keys(STORES);
 
-let dbPromise = null;
+// --- IndexedDB-Implementierung (Fallback, solange kein Firebase-Projekt konfiguriert ist) ---
 
-export function openDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+let idbPromise = null;
+
+function openIndexedDB() {
+  if (idbPromise) return idbPromise;
+  idbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
-      const db = req.result;
+      const idb = req.result;
       for (const [name, keyPath] of Object.entries(STORES)) {
-        if (!db.objectStoreNames.contains(name)) {
-          db.createObjectStore(name, { keyPath });
+        if (!idb.objectStoreNames.contains(name)) {
+          idb.createObjectStore(name, { keyPath });
         }
       }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-  return dbPromise;
+  return idbPromise;
 }
 
-async function storeTx(storeName, mode) {
-  const db = await openDB();
-  return db.transaction(storeName, mode).objectStore(storeName);
+async function idbStoreTx(storeName, mode) {
+  const idb = await openIndexedDB();
+  return idb.transaction(storeName, mode).objectStore(storeName);
 }
 
-export async function getAll(storeName) {
-  const store = await storeTx(storeName, 'readonly');
+async function getAllIdb(storeName) {
+  const store = await idbStoreTx(storeName, 'readonly');
   return new Promise((resolve, reject) => {
     const req = store.getAll();
     req.onsuccess = () => resolve(req.result);
@@ -71,8 +97,8 @@ export async function getAll(storeName) {
   });
 }
 
-export async function get(storeName, key) {
-  const store = await storeTx(storeName, 'readonly');
+async function getIdb(storeName, key) {
+  const store = await idbStoreTx(storeName, 'readonly');
   return new Promise((resolve, reject) => {
     const req = store.get(key);
     req.onsuccess = () => resolve(req.result);
@@ -80,8 +106,8 @@ export async function get(storeName, key) {
   });
 }
 
-export async function put(storeName, value) {
-  const store = await storeTx(storeName, 'readwrite');
+async function putIdb(storeName, value) {
+  const store = await idbStoreTx(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.put(value);
     req.onsuccess = () => resolve(req.result);
@@ -89,8 +115,8 @@ export async function put(storeName, value) {
   });
 }
 
-export async function remove(storeName, key) {
-  const store = await storeTx(storeName, 'readwrite');
+async function removeIdb(storeName, key) {
+  const store = await idbStoreTx(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.delete(key);
     req.onsuccess = () => resolve();
@@ -98,13 +124,120 @@ export async function remove(storeName, key) {
   });
 }
 
-export async function clearStore(storeName) {
-  const store = await storeTx(storeName, 'readwrite');
+async function clearStoreIdb(storeName) {
+  const store = await idbStoreTx(storeName, 'readwrite');
   return new Promise((resolve, reject) => {
     const req = store.clear();
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
   });
+}
+
+// --- Firestore-Implementierung (aktiv sobald firebase-config.js ein echtes Projekt trägt) ---
+
+// Firestore rechnet jeden getDocs()-Aufruf als N Lesevorgänge ab, egal ob sich
+// etwas geändert hat. Da getAll() sehr häufig aufgerufen wird (praktisch jedes
+// View-Rendering), hält db.js pro Collection einen einzigen langlebigen
+// onSnapshot()-Listener, der einen In-Memory-Cache aktuell hält – das ist
+// gleichzeitig die Grundlage für Firestores Offline-Unterstützung (erster
+// Snapshot kommt bei fehlendem Netz aus dem lokalen persistentLocalCache()).
+const cache = new Map(); // storeName -> Map(id -> row)
+const listeners = new Map(); // storeName -> unsubscribe
+const ready = new Map(); // storeName -> Promise, resolved nach dem ersten Snapshot
+
+function ensureListening(storeName) {
+  if (listeners.has(storeName)) return ready.get(storeName);
+  const storeCache = new Map();
+  cache.set(storeName, storeCache);
+  let resolveReady;
+  ready.set(storeName, new Promise((resolve) => { resolveReady = resolve; }));
+  const unsubscribe = onSnapshot(collection(firestore, storeName), (snap) => {
+    snap.docChanges().forEach((change) => {
+      if (change.type === 'removed') storeCache.delete(change.doc.id);
+      else storeCache.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+    });
+    resolveReady();
+  }, (err) => {
+    console.error(`Firestore-Listener-Fehler (${storeName}):`, err);
+    resolveReady();
+  });
+  listeners.set(storeName, unsubscribe);
+  return ready.get(storeName);
+}
+
+async function getEinstellungenRows() {
+  const snap = await getDoc(EINSTELLUNGEN_DOC());
+  const data = snap.exists() ? snap.data() : {};
+  return Object.entries(data).map(([key, value]) => ({ key, value }));
+}
+
+async function getAllFs(storeName) {
+  if (storeName === 'einstellungen') return getEinstellungenRows();
+  await ensureListening(storeName);
+  return [...cache.get(storeName).values()];
+}
+
+async function getFs(storeName, key) {
+  if (storeName === 'einstellungen') {
+    const rows = await getEinstellungenRows();
+    return rows.find((r) => r.key === key);
+  }
+  await ensureListening(storeName);
+  return cache.get(storeName).get(key);
+}
+
+async function putFs(storeName, value) {
+  if (storeName === 'einstellungen') {
+    await setDoc(EINSTELLUNGEN_DOC(), { [value.key]: value.value }, { merge: true });
+    return value.key;
+  }
+  await setDoc(doc(firestore, storeName, value.id), value);
+  return value.id;
+}
+
+async function removeFs(storeName, key) {
+  if (storeName === 'einstellungen') {
+    await setDoc(EINSTELLUNGEN_DOC(), { [key]: deleteField() }, { merge: true });
+    return;
+  }
+  await deleteDoc(doc(firestore, storeName, key));
+}
+
+async function clearStoreFs(storeName) {
+  if (storeName === 'einstellungen') {
+    await deleteDoc(EINSTELLUNGEN_DOC());
+    return;
+  }
+  const snap = await getDocs(collection(firestore, storeName));
+  await Promise.all(snap.docs.map((d) => deleteDoc(d.ref)));
+  cache.get(storeName)?.clear();
+}
+
+// --- Öffentliche API: wählt je nach FIREBASE_ENABLED die passende Implementierung ---
+
+export async function openDB() {
+  if (!FIREBASE_ENABLED) return openIndexedDB();
+  return Promise.resolve(); // Firestore braucht kein explizites "Öffnen" wie IndexedDB
+}
+
+export async function getAll(storeName) {
+  return FIREBASE_ENABLED ? getAllFs(storeName) : getAllIdb(storeName);
+}
+
+export async function get(storeName, key) {
+  return FIREBASE_ENABLED ? getFs(storeName, key) : getIdb(storeName, key);
+}
+
+export async function put(storeName, value) {
+  return FIREBASE_ENABLED ? putFs(storeName, value) : putIdb(storeName, value);
+}
+
+export async function remove(storeName, key) {
+  return FIREBASE_ENABLED ? removeFs(storeName, key) : removeIdb(storeName, key);
+}
+
+export async function clearStore(storeName) {
+  return FIREBASE_ENABLED ? clearStoreFs(storeName) : clearStoreIdb(storeName);
 }
 
 export async function exportAll() {
