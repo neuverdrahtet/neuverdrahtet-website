@@ -1,6 +1,6 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
 import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
 import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
@@ -272,6 +272,12 @@ export async function render(container) {
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    attachAddressSearch(body.querySelector('input[name="strasse"]'), (r) => {
+      const form = body.querySelector('#kunde-form');
+      form.strasse.value = r.strasse || form.strasse.value;
+      if (r.plz) form.plz.value = r.plz;
+      if (r.ort) form.ort.value = r.ort;
+    });
     body.querySelector('#btn-kunde-navi').addEventListener('click', () => {
       const form = body.querySelector('#kunde-form');
       const adresse = [form.strasse.value, form.plz.value, form.ort.value].filter((s) => s.trim()).join(', ');
