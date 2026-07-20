@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
-import { uid, escapeHtml, toast } from '../utils.js';
+import { uid, escapeHtml, toast, navigationUrl } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
@@ -527,7 +527,12 @@ export async function render(container, _route, { autoSync = true } = {}) {
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
             <div class="field"><label>Von</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${toDateOnly(data.ende) || ''}"></div>
-            <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            <div class="field"><label>Ort</label>
+              <div class="flex-row" style="gap:6px">
+                <input name="ort" value="${escapeHtml(data.ort || '')}" style="flex:1">
+                <button type="button" class="btn btn-sm" id="btn-ort-navi" title="In Karten-App navigieren">🧭</button>
+              </div>
+            </div>
             <div class="field"><label>Farbe (optional, überschreibt Art-Farbe)</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || typInfo(data.typ || 'termin').farbe)}"></div>
             <div class="field"><label>Kunde</label>
               <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
@@ -604,6 +609,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
       toast(`Vorschlag: ${vorschlag.datum} um ${vorschlag.uhrzeit} Uhr`, 'success');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-ort-navi').addEventListener('click', () => {
+      const ort = body.querySelector('input[name="ort"]').value.trim();
+      if (!ort) { toast('Bitte zuerst einen Ort eintragen', 'danger'); return; }
+      window.open(navigationUrl(ort), '_blank', 'noopener');
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Termin "${data.titel}" wirklich löschen?`)) return;

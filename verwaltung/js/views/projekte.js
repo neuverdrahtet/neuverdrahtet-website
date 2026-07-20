@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -212,7 +212,10 @@ export async function render(container, opts = {}) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Kunde</label>
-              <select name="kundeId"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+              <div class="flex-row" style="gap:6px">
+                <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+                <button type="button" class="btn btn-sm" id="btn-proj-navi" title="Zur Kundenadresse navigieren">🧭</button>
+              </div>
             </div>
             <div class="field"><label>Status</label>
               <select name="status">${spalten.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
@@ -271,6 +274,12 @@ export async function render(container, opts = {}) {
       sel.innerHTML = kategorienForBereich(e.target.value).map((k) => `<option value="${k.id}">${escapeHtml(k.titel)}</option>`).join('');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-proj-navi').addEventListener('click', () => {
+      const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
+      const adresse = kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '';
+      if (!adresse) { toast('Kein Kunde mit Adresse ausgewählt', 'danger'); return; }
+      window.open(navigationUrl(adresse), '_blank', 'noopener');
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Projekt "${data.titel}" wirklich löschen?`)) return;
