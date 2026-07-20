@@ -270,6 +270,7 @@ export async function render(container) {
                 ${t.ort ? `<a class="btn btn-sm" href="${mapsUrl(t.ort)}" target="_blank" rel="noopener">📍 Standort</a>` : ''}
                 ${kunde?.telefon ? `<a class="btn btn-sm" href="tel:${escapeHtml(kunde.telefon)}">📞 Anruf</a>` : ''}
                 ${t.projektId ? `<button type="button" class="btn btn-sm ${isRunningHere ? 'btn-danger' : 'btn-primary'} es-timer-btn" data-id="${t.id}" data-projekt="${t.projektId}">${isRunningHere ? '⏹️ Stopp' : '▶️ Start'}</button>` : ''}
+                ${t.projektId ? `<button type="button" class="btn btn-sm es-manual-btn" data-id="${t.id}" data-projekt="${t.projektId}">✏️ Manuell</button>` : ''}
               </div>
             </div>
           `;
@@ -322,6 +323,15 @@ export async function render(container) {
           saveRunningTimer({ projektId: btn.dataset.projekt, mitarbeiterId: currentMa, startedAt: new Date().toISOString(), terminId: btn.dataset.id });
         }
         renderEinsaetze();
+      });
+    });
+    einsaetzeHost.querySelectorAll('.es-manual-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openForm({
+          id: uid(), projektId: btn.dataset.projekt, mitarbeiterId: currentMa, datum: selectedDay,
+          dauerMinuten: 60, beschreibung: '', abgerechnet: false,
+          startzeit: nowHHMM(), endzeit: addMinutesHHMM(nowHHMM(), 60), taetigkeit: 'baustelle',
+        }, { isNewFromTimer: true });
       });
     });
   }
