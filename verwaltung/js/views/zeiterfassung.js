@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbe
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from '../blobstore.js';
 
 const ARBEITSORTE = [
   { id: 'buero', titel: 'Büro' },
@@ -29,6 +30,30 @@ function blobToDataUrl(blob) {
     reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
     reader.readAsDataURL(blob);
   });
+}
+
+/** Lädt Medien/Unterschrift eines Tagesberichts nach Firebase Storage hoch (nur im Firebase-Modus). */
+async function persistTagesberichtBlobs(entry) {
+  if (!FIREBASE_ENABLED) return entry;
+  const medien = [];
+  for (const it of entry.medien || []) {
+    if (it.dataUrl && it.dataUrl.startsWith('data:')) {
+      const blob = await (await fetch(it.dataUrl)).blob();
+      const meta = await uploadBlobToStorage(`zeiterfassung/${entry.id}/medien/${uid()}`, blob);
+      medien.push({ ...it, dataUrl: meta.url, path: meta.path });
+    } else {
+      medien.push(it);
+    }
+  }
+  let unterschriftMitarbeiter = entry.unterschriftMitarbeiter || null;
+  let unterschriftPath = entry.unterschriftPath || null;
+  if (unterschriftMitarbeiter && unterschriftMitarbeiter.startsWith('data:')) {
+    const blob = await (await fetch(unterschriftMitarbeiter)).blob();
+    const meta = await uploadBlobToStorage(`zeiterfassung/${entry.id}/unterschrift`, blob);
+    unterschriftMitarbeiter = meta.url;
+    unterschriftPath = meta.path;
+  }
+  return { ...entry, medien, unterschriftMitarbeiter, unterschriftPath };
 }
 
 function addDaysISO(iso, days) {
@@ -562,12 +587,14 @@ export async function render(container) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete('Tagesbericht wirklich löschen?')) return;
         await remove('zeiterfassung', data.id);
+        for (const it of data.medien || []) { if (it.path) await deleteBlobFromStorage(it.path); }
+        if (data.unterschriftPath) await deleteBlobFromStorage(data.unterschriftPath);
         toast('Tagesbericht gelöscht');
         close();
         render(container);
       });
       body.querySelector('#btn-duplizieren').addEventListener('click', async () => {
-        const kopie = { ...collect(), id: uid() };
+        const kopie = await persistTagesberichtBlobs({ ...collect(), id: uid() });
         await put('zeiterfassung', kopie);
         eintraege.unshift(kopie);
         toast('Tagesbericht dupliziert', 'success');
@@ -610,8 +637,9 @@ export async function render(container) {
     body.querySelector('#tb-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const submitter = e.submitter;
-      const updated = collect();
+      let updated = collect();
       if (!updated.mitarbeiterId) { toast('Bitte einen Mitarbeiter wählen', 'danger'); return; }
+      updated = await persistTagesberichtBlobs(updated);
       await put('zeiterfassung', updated);
       if (!isEdit) eintraege.unshift(updated);
       else {

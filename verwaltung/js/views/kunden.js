@@ -431,6 +431,7 @@ export async function render(container) {
         e.preventDefault();
         const a = kAusgaben.find((x) => x.id === link.dataset.id);
         if (!a?.beleg) return;
+        if (a.beleg.url) { window.open(a.beleg.url, '_blank', 'noopener'); return; }
         const url = URL.createObjectURL(a.beleg);
         window.open(url, '_blank', 'noopener');
         setTimeout(() => URL.revokeObjectURL(url), 10000);

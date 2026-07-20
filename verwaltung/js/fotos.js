@@ -1,6 +1,7 @@
 import { getAll, put, remove } from './db.js';
-import { uid, compressImage, toast } from './utils.js';
+import { uid, escapeHtml, compressImage, toast } from './utils.js';
 import { confirmDelete } from './ui.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
 
 export function renderFotoSection(host, projektId) {
   async function load() {
@@ -19,7 +20,7 @@ export function renderFotoSection(host, projektId) {
       <div class="foto-grid" id="foto-grid">
         ${fotos.length === 0 ? '<p class="text-mute">Noch keine Fotos.</p>' : fotos.map((f) => `
           <div class="foto-thumb" data-id="${f.id}">
-            <img src="${URL.createObjectURL(f.blob)}" alt="">
+            <img src="${f.url ? escapeHtml(f.url) : (f.blob ? URL.createObjectURL(f.blob) : '')}" alt="">
             <button type="button" class="foto-del" data-id="${f.id}" title="Löschen">✕</button>
           </div>
         `).join('')}
@@ -33,7 +34,15 @@ export function renderFotoSection(host, projektId) {
       for (const file of files) {
         try {
           const blob = await compressImage(file);
-          await put('fotos', { id: uid(), projektId, blob, erstelltAm: new Date().toISOString(), dateiname: file.name });
+          const id = uid();
+          const row = { id, projektId, erstelltAm: new Date().toISOString(), dateiname: file.name };
+          if (FIREBASE_ENABLED) {
+            const meta = await uploadBlobToStorage(`fotos/${projektId}/${id}`, blob);
+            Object.assign(row, meta);
+          } else {
+            row.blob = blob;
+          }
+          await put('fotos', row);
         } catch (err) {
           toast(err.message, 'danger');
         }
@@ -45,7 +54,9 @@ export function renderFotoSection(host, projektId) {
       btn.addEventListener('click', async (ev) => {
         ev.preventDefault();
         if (!confirmDelete('Foto wirklich löschen?')) return;
+        const foto = fotos.find((f) => f.id === btn.dataset.id);
         await remove('fotos', btn.dataset.id);
+        if (foto?.path) await deleteBlobFromStorage(foto.path);
         load();
       });
     });

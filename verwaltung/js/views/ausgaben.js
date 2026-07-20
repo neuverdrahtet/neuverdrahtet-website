@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from '../blobstore.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -219,21 +220,30 @@ export async function render(container) {
       if (projektKundeId && !kundeSelect.value) kundeSelect.value = projektKundeId;
     });
 
-    let belegBlob = data.beleg || null;
+    // newBelegBlob ist nur gesetzt, wenn der Nutzer gerade eine neue Datei
+    // ausgewählt hat (entweder über den Datei-Input oder - noch nicht
+    // gespeichert - über den "Beleg scannen"-Vorschlag). Ein bereits
+    // gespeicherter Beleg im Firebase-Modus liegt als {url,path,...} vor,
+    // kein Blob - der wird beim Speichern unverändert übernommen.
+    let newBelegBlob = data.beleg instanceof Blob ? data.beleg : null;
     const belegViewLink = body.querySelector('#beleg-view-link');
     if (belegViewLink) {
       belegViewLink.addEventListener('click', (e) => {
         e.preventDefault();
-        const url = URL.createObjectURL(data.beleg);
-        window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        if (data.beleg?.url) {
+          window.open(data.beleg.url, '_blank', 'noopener');
+        } else if (data.beleg instanceof Blob) {
+          const url = URL.createObjectURL(data.beleg);
+          window.open(url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
       });
     }
     body.querySelector('#beleg-input').addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
       try {
-        belegBlob = file.type === 'application/pdf' ? file : await compressImage(file, { maxWidth: 1400 });
+        newBelegBlob = file.type === 'application/pdf' ? file : await compressImage(file, { maxWidth: 1400 });
         body.querySelector('#beleg-preview').innerHTML = '<span class="badge badge-success">Beleg hinzugefügt (wird beim Speichern übernommen)</span>';
       } catch (err) {
         toast(err.message, 'danger');
@@ -245,6 +255,7 @@ export async function render(container) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete('Ausgabe wirklich löschen?')) return;
         await remove('ausgaben', data.id);
+        if (data.beleg?.path) await deleteBlobFromStorage(data.beleg.path);
         toast('Ausgabe gelöscht');
         close();
         render(container);
@@ -262,7 +273,11 @@ export async function render(container) {
       updated.betragNetto = Number(fd.get('betragNetto')) || 0;
       updated.steuersatz = Number(fd.get('steuersatz')) || 0;
       updated.betragBrutto = calcBrutto(updated.betragNetto, updated.steuersatz);
-      updated.beleg = belegBlob;
+      if (newBelegBlob) {
+        updated.beleg = FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${data.id}`, newBelegBlob) : newBelegBlob;
+      } else {
+        updated.beleg = data.beleg || null;
+      }
       updated.projektId = fd.get('projektId') || '';
       updated.kundeId = fd.get('kundeId') || '';
       updated.kalkKategorie = updated.projektId ? (fd.get('kalkKategorie') || '') : '';
