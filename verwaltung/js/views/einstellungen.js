@@ -2,6 +2,8 @@ import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, cl
 import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+import { FIREBASE_ENABLED } from '../employeeAuth.js';
+import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -260,6 +262,21 @@ export async function render(container) {
             <button class="btn" id="btn-import">Daten importieren ...</button>
             <input type="file" id="import-file" accept="application/json" hidden>
           </div>
+
+          ${FIREBASE_ENABLED ? `
+            <h2 style="margin-top:28px">Alte lokale Daten von diesem Gerät übertragen</h2>
+            <p class="hint">
+              Falls auf <strong>diesem Gerät</strong> noch Daten aus der Zeit vor der gemeinsamen Datenbank liegen
+              (z.B. Mitarbeiter, Kunden, Katalog, Firmendaten/Logo, die hier nicht mehr auftauchen), können sie
+              hierüber einmalig in die neue gemeinsame Datenbank übertragen werden. Nichts wird dabei gelöscht.
+              Fotos/Belege/Unterschriften, die zu groß für die aktuelle Datenbank sind, werden übersprungen und
+              am Ende gemeldet – dafür kommt später eine eigene Lösung.
+            </p>
+            <div class="flex-row flex-wrap">
+              <button class="btn" id="btn-migrate-check">Lokale Altdaten auf diesem Gerät prüfen</button>
+            </div>
+            <div id="migrate-host"></div>
+          ` : ''}
 
           <h2 style="margin-top:28px">Automatisches Cloud-Backup (Google Drive)</h2>
           <p class="hint">
@@ -547,6 +564,41 @@ export async function render(container) {
     }
     fileInput.value = '';
   });
+
+  if (FIREBASE_ENABLED) {
+    const migrateHost = container.querySelector('#migrate-host');
+    container.querySelector('#btn-migrate-check').addEventListener('click', async () => {
+      migrateHost.innerHTML = '<p class="hint">Suche lokale Daten auf diesem Gerät ...</p>';
+      let preview;
+      try {
+        preview = await previewLegacyData();
+      } catch (err) {
+        migrateHost.innerHTML = `<p class="hint">Fehler beim Prüfen: ${escapeHtml(err.message)}</p>`;
+        return;
+      }
+      if (preview.total === 0) {
+        migrateHost.innerHTML = '<p class="hint">Keine lokalen Altdaten auf diesem Gerät gefunden.</p>';
+        return;
+      }
+      const rows = Object.entries(preview.counts).map(([store, count]) => `<li>${escapeHtml(store)}: ${count} Datensätze</li>`).join('');
+      migrateHost.innerHTML = `
+        <p class="hint">Gefunden (insgesamt ${preview.total} Datensätze):</p>
+        <ul class="cal-event-list">${rows}</ul>
+        <button class="btn btn-primary" id="btn-migrate-run">Jetzt in die gemeinsame Datenbank übertragen</button>
+      `;
+      migrateHost.querySelector('#btn-migrate-run').addEventListener('click', async () => {
+        if (!confirmDelete(`${preview.total} Datensätze jetzt übertragen? Bestehende Einträge mit gleicher ID in der gemeinsamen Datenbank werden dabei überschrieben.`)) return;
+        migrateHost.innerHTML = '<p class="hint">Übertrage Daten ...</p>';
+        const result = await migrateLegacyData();
+        const summary = Object.entries(result).map(([store, r]) => {
+          const failedNote = r.failed > 0 ? ` <span style="color:var(--danger)">(${r.failed} fehlgeschlagen, meist zu große Fotos/Belege)</span>` : '';
+          return `<li>${escapeHtml(store)}: ${r.migrated} / ${r.total} übertragen${failedNote}</li>`;
+        }).join('');
+        migrateHost.innerHTML = `<p class="hint">Fertig:</p><ul class="cal-event-list">${summary}</ul><p class="hint">Bitte die Seite neu laden, damit die neuen Daten überall angezeigt werden.</p>`;
+        toast('Altdaten übertragen', 'success');
+      });
+    });
+  }
 
   container.querySelector('#drive-backup-enabled').addEventListener('change', async (e) => {
     await setSettings({ driveBackupEnabled: e.target.checked });

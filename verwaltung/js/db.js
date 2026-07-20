@@ -15,7 +15,7 @@ if (FIREBASE_ENABLED) {
   ({ firestore } = await import('./firebase.js'));
 }
 
-const DB_NAME = 'neuverdrahtet-verwaltung';
+export const DB_NAME = 'neuverdrahtet-verwaltung';
 const DB_VERSION = 9;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
