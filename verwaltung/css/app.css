@@ -450,6 +450,20 @@ table.data-table th.col-select, table.data-table td.col-select {
 }
 .field textarea { resize: vertical; min-height: 70px; }
 .field-checkbox { flex-direction: row; align-items: center; gap: 8px; }
+.address-search-dropdown {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  z-index: 20;
+  margin-top: 2px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.address-search-item { padding: 8px 10px; font-size: 13px; cursor: pointer; }
+.address-search-item:hover { background: var(--accent); color: #fff; }
 .field-checkbox input { width: auto; }
 
 /* Toggle-Gruppe (z.B. Arbeitsort): einzeln wählbare Buttons in einer Reihe */

@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -609,6 +609,15 @@ export async function render(container, _route, { autoSync = true } = {}) {
       toast(`Vorschlag: ${vorschlag.datum} um ${vorschlag.uhrzeit} Uhr`, 'success');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    const ortInput = body.querySelector('input[name="ort"]');
+    attachAddressSearch(ortInput, (r) => {
+      ortInput.value = r.label;
+      data.lat = r.lat;
+      data.lng = r.lng;
+    });
+    // Falls der Ort nach einer Auswahl von Hand weiter geändert wird, passen
+    // die zwischengespeicherten Koordinaten nicht mehr sicher dazu.
+    ortInput.addEventListener('input', () => { delete data.lat; delete data.lng; });
     body.querySelector('#btn-ort-navi').addEventListener('click', () => {
       const ort = body.querySelector('input[name="ort"]').value.trim();
       if (!ort) { toast('Bitte zuerst einen Ort eintragen', 'danger'); return; }
