@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, TAETIGKEITEN } from '../db.js';
+import { getAll, put, remove, getSettings, TAETIGKEITEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -196,6 +196,9 @@ export async function render(container) {
   const bulk = createBulkSelect('zeiterfassung', { label: 'Einträge' });
   let tickInterval = null;
   let mode = 'einsaetze';
+  let ueJahr = null;
+  let ueMitarbeiterId = '';
+  let ueBereich = '';
 
   container.innerHTML = `
     <div class="view-header">
@@ -208,6 +211,7 @@ export async function render(container) {
     <div class="tabs" id="mode-tabs">
       <button type="button" class="tab-item" data-mode="einsaetze">📱 Einsätze</button>
       <button type="button" class="tab-item" data-mode="liste">📋 Liste</button>
+      <button type="button" class="tab-item" data-mode="uebersicht">📊 Übersicht</button>
     </div>
     <div id="einsaetze-view"></div>
     <div id="liste-view" hidden>
@@ -218,6 +222,7 @@ export async function render(container) {
       </div>
       <div id="table-host"></div>
     </div>
+    <div id="uebersicht-view" hidden></div>
   `;
 
   function setMode(m) {
@@ -225,8 +230,10 @@ export async function render(container) {
     container.querySelectorAll('#mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === m));
     container.querySelector('#einsaetze-view').hidden = m !== 'einsaetze';
     container.querySelector('#liste-view').hidden = m !== 'liste';
+    container.querySelector('#uebersicht-view').hidden = m !== 'uebersicht';
     if (m === 'einsaetze') renderEinsaetze();
     if (m === 'liste') renderTable();
+    if (m === 'uebersicht') renderUebersicht();
   }
   container.querySelectorAll('#mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 
@@ -473,6 +480,90 @@ export async function render(container) {
         renderTable();
       },
     });
+  }
+
+  const MONATE_UE = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+  function formatStd(minuten) {
+    if (!minuten) return '–';
+    return (minuten / 60).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  }
+
+  function renderUebersicht() {
+    const host = container.querySelector('#uebersicht-view');
+    const jahre = Array.from(new Set(eintraege.map((e) => (e.datum || '').slice(0, 4)).filter(Boolean)));
+    const currentYear = String(new Date().getFullYear());
+    if (!jahre.includes(currentYear)) jahre.push(currentYear);
+    jahre.sort((a, b) => b.localeCompare(a));
+    if (!ueJahr || !jahre.includes(ueJahr)) ueJahr = jahre.includes(currentYear) ? currentYear : jahre[0];
+
+    const relevant = eintraege.filter((e) => {
+      if ((e.datum || '').slice(0, 4) !== ueJahr) return false;
+      if (ueMitarbeiterId && e.mitarbeiterId !== ueMitarbeiterId) return false;
+      if (ueBereich && projekteById[e.projektId]?.bereich !== ueBereich) return false;
+      return true;
+    });
+
+    const rows = new Map(); // projektId (oder '__ohne__') -> Array(12) Minuten
+    for (const e of relevant) {
+      const key = e.projektId || '__ohne__';
+      if (!rows.has(key)) rows.set(key, Array(12).fill(0));
+      const monatIdx = Number((e.datum || '').slice(5, 7)) - 1;
+      if (monatIdx >= 0 && monatIdx < 12) rows.get(key)[monatIdx] += (e.dauerMinuten || 0);
+    }
+    const sorted = Array.from(rows.entries())
+      .map(([projektId, monate]) => ({ projektId, monate, gesamt: monate.reduce((s, m) => s + m, 0) }))
+      .sort((a, b) => b.gesamt - a.gesamt);
+    const monatsSummen = Array(12).fill(0);
+    let gesamtSumme = 0;
+    sorted.forEach((r) => { r.monate.forEach((m, i) => { monatsSummen[i] += m; }); gesamtSumme += r.gesamt; });
+
+    host.innerHTML = `
+      <div class="card">
+        <div class="search-bar" style="margin-bottom:14px">
+          <select id="ue-jahr">${jahre.map((j) => `<option value="${j}" ${j === ueJahr ? 'selected' : ''}>${j}</option>`).join('')}</select>
+          <select id="ue-mitarbeiter"><option value="">Alle Mitarbeiter</option>${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === ueMitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}</select>
+          <select id="ue-bereich"><option value="">Alle Bereiche</option>${BEREICHE.map((b) => `<option value="${b.id}" ${b.id === ueBereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
+        </div>
+        ${sorted.length === 0 ? '<p class="text-mute">Keine Zeiten für diesen Zeitraum erfasst.</p>' : `
+          <div style="overflow-x:auto">
+            <table class="data-table" style="min-width:900px">
+              <thead>
+                <tr>
+                  <th>Projekt</th>
+                  ${MONATE_UE.map((m) => `<th class="text-right">${m}</th>`).join('')}
+                  <th class="text-right">${ueJahr}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sorted.map((r) => {
+                  const p = projekteById[r.projektId];
+                  const bereichTitel = BEREICHE.find((b) => b.id === p?.bereich)?.titel;
+                  return `
+                    <tr>
+                      <td>${p ? escapeHtml(p.titel) : '<span class="text-mute">Ohne Projekt</span>'}${bereichTitel ? ` <span class="badge">${escapeHtml(bereichTitel)}</span>` : ''}</td>
+                      ${r.monate.map((m) => `<td class="text-right">${formatStd(m)}</td>`).join('')}
+                      <td class="text-right"><strong>${formatStd(r.gesamt)}</strong></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td><strong>Gesamt</strong></td>
+                  ${monatsSummen.map((m) => `<td class="text-right"><strong>${formatStd(m)}</strong></td>`).join('')}
+                  <td class="text-right"><strong>${formatStd(gesamtSumme)}</strong></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p class="hint" style="margin-top:10px">Stunden pro Monat (Jan–Dez ${ueJahr}), berechnet aus der erfassten Dauer (Zeiterfassung + Tagesberichte). "Ohne Projekt" fasst Einträge ohne zugeordnetes Projekt zusammen.</p>
+        `}
+      </div>
+    `;
+
+    host.querySelector('#ue-jahr').addEventListener('change', (e) => { ueJahr = e.target.value; renderUebersicht(); });
+    host.querySelector('#ue-mitarbeiter').addEventListener('change', (e) => { ueMitarbeiterId = e.target.value; renderUebersicht(); });
+    host.querySelector('#ue-bereich').addEventListener('change', (e) => { ueBereich = e.target.value; renderUebersicht(); });
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
