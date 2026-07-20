@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -229,6 +229,7 @@ export async function render(container) {
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
             <div class="field"><label>PLZ</label><input name="plz" value="${escapeHtml(data.plz || '')}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            <div class="field col-span-2"><button type="button" class="btn btn-sm" id="btn-kunde-navi">🧭 Navigation zur Adresse</button></div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           ${isEdit ? `
@@ -271,6 +272,12 @@ export async function render(container) {
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-kunde-navi').addEventListener('click', () => {
+      const form = body.querySelector('#kunde-form');
+      const adresse = [form.strasse.value, form.plz.value, form.ort.value].filter((s) => s.trim()).join(', ');
+      if (!adresse) { toast('Bitte zuerst eine Adresse eintragen', 'danger'); return; }
+      window.open(navigationUrl(adresse), '_blank', 'noopener');
+    });
     if (isEdit) {
       body.querySelector('#btn-akte').addEventListener('click', () => openKundenakte(data));
       renderDokumenteSection(body.querySelector('#dok-host'), 'kunde', data.id, {

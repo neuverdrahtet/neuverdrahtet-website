@@ -1,5 +1,5 @@
 import { put } from './db.js';
-import { escapeHtml } from './utils.js';
+import { escapeHtml, navigationUrl } from './utils.js';
 import { geocode } from './geocode.js';
 import { TERMIN_TYPEN } from './db.js';
 
@@ -44,6 +44,7 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
       <div class="karte-detail-row"><span class="text-mute">Kunde</span><span>${kunde ? escapeHtml(kunde.firma) : '–'}</span></div>
       <div class="karte-detail-row"><span class="text-mute">Mitarbeiter</span><span>${mitarbeiterNamen.length ? mitarbeiterNamen.map(escapeHtml).join(', ') : '–'}</span></div>
       <div class="karte-detail-row"><span class="text-mute">Ort</span><span>${escapeHtml(t.ort || '–')}</span></div>
+      ${t.ort ? `<a class="btn btn-sm" style="margin-top:8px" href="${escapeHtml(navigationUrl(t.ort))}" target="_blank" rel="noopener">🧭 Navigation</a>` : ''}
     `;
   }
 

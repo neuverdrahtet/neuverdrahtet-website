@@ -43,6 +43,13 @@ export function escapeHtml(str) {
   }[c]));
 }
 
+// Öffnet die Navigations-App des Geräts (Google Maps/Apple Maps je nach
+// Betriebssystem) mit der Zieladresse - funktioniert ohne eigenen API-Key,
+// da nur das öffentliche "Get Directions"-URL-Schema genutzt wird.
+export function navigationUrl(address) {
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
+}
+
 export function hexToRgb(hex, fallback = [15, 27, 45]) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return fallback;
