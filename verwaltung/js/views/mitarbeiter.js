@@ -1,4 +1,4 @@
-import { getAll, put, remove, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, syncMitarbeiterOeffentlich, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
@@ -37,6 +37,7 @@ function currentYearCount(termine, mitarbeiterId, typ) {
 export async function render(container) {
   let [mitarbeiter, termine] = await Promise.all([getAll('mitarbeiter'), getAll('termine')]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  syncMitarbeiterOeffentlich().catch((err) => console.error('mitarbeiterOeffentlich-Sync fehlgeschlagen:', err));
   const bulk = createBulkSelect('mitarbeiter', { label: 'Mitarbeiter' });
 
   container.innerHTML = `
