@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatDate, toast } from './utils.js';
 import { openModal } from './ui.js';
 import { saveDokument } from './dokumente.js';
 import { readZipEntries } from './zipreader.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage } from './blobstore.js';
 
 const LIEFERANT_KATEGORIE_MAP = [
   { match: /hornbach|baumarkt|obi\b|bauhaus/i, kategorie: 'Material' },
@@ -108,11 +109,13 @@ export function openBelegImport({ onImported } = {}) {
 
         if (parsed.typ === 'ausgabe') {
           const kategorie = guessAusgabenKategorie(parsed.name);
+          const ausgabeId = uid();
           const ausgabe = {
-            id: uid(), datum: parsed.datum, kategorie,
+            id: ausgabeId, datum: parsed.datum, kategorie,
             beschreibung: `Beleg ${parsed.belegnummer} – Betrag bitte prüfen (aus Import, nicht automatisch erkannt)`,
             lieferant: parsed.name, betragNetto: 0, steuersatz: settings.standardSteuersatz ?? 19, betragBrutto: 0,
-            bezahltMit: 'überweisung', beleg: blob, projektId: '', kalkKategorie: '',
+            bezahltMit: 'überweisung', beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${ausgabeId}`, blob) : blob,
+            projektId: '', kalkKategorie: '',
           };
           await put('ausgaben', ausgabe);
           ausgabenCount++;

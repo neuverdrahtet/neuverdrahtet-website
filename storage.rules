@@ -1,0 +1,19 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Zugriff auf Storage-Objekte (Fotos/Dokumente/Belege/Zeiterfassungs-Medien)
+    // ist an einen gültigen Login gebunden. Eine feinere, rollenbasierte
+    // Aufteilung wie in firestore.rules (Admin+Büro vs. alle drei Rollen) ist
+    // über Storage Rules technisch zwar mit firestore.get()/firestore.exists()
+    // möglich, lässt sich aber mit der Firebase Local Emulator Suite nicht
+    // zuverlässig testen (Cross-Service-Regeln zwischen Storage und Firestore
+    // werden dort nicht ausgewertet) - deshalb bewusst hier nicht verwendet.
+    // Der eigentliche Schutz sensibler Daten (z.B. Ausgaben/Belege) passiert
+    // bereits in firestore.rules: nur wer das zugehörige Firestore-Dokument
+    // lesen darf (Admin/Büro), erfährt überhaupt den genauen Storage-Pfad.
+    match /{allPaths=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

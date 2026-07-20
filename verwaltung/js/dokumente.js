@@ -5,6 +5,7 @@ import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
 import { mountSignaturePad } from './signature.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
 
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
@@ -159,8 +160,14 @@ export async function saveDokument({ bezugTyp, bezugId, kategorie, name, mime, b
   const doc = {
     id: uid(), bezugTyp, bezugId, kategorie: kategorie || 'sonstiges',
     name, mime: mime || blob.type || 'application/octet-stream',
-    blob, groesse: blob.size || 0, erstelltAm: new Date().toISOString(),
+    groesse: blob.size || 0, erstelltAm: new Date().toISOString(),
   };
+  if (FIREBASE_ENABLED) {
+    const meta = await uploadBlobToStorage(`dokumente/${bezugTyp}/${bezugId}/${doc.id}`, blob);
+    Object.assign(doc, meta);
+  } else {
+    doc.blob = blob;
+  }
   await put('dokumente', doc);
   return doc;
 }
@@ -380,8 +387,14 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
 
     host.querySelectorAll('.dok-download').forEach((a) => {
       const doc = dokumente.find((d) => d.id === a.dataset.id);
-      if (doc) a.href = URL.createObjectURL(doc.blob);
-      a.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(a.href), 4000));
+      if (doc?.url) {
+        a.href = doc.url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+      } else if (doc?.blob) {
+        a.href = URL.createObjectURL(doc.blob);
+        a.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(a.href), 4000));
+      }
     });
 
     host.querySelector('#dok-input').addEventListener('change', async (e) => {
@@ -404,7 +417,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     host.querySelectorAll('.dok-del').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirmDelete('Dokument wirklich löschen?')) return;
+        const doc = dokumente.find((d) => d.id === btn.dataset.id);
         await remove('dokumente', btn.dataset.id);
+        if (doc?.path) await deleteBlobFromStorage(doc.path);
         load();
       });
     });
