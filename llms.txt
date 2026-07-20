@@ -1,8 +1,8 @@
 # neuverdrahtet
 
-> Handwerksbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
-> Slogan: "Handwerk mit System".
-> 6 Gewerke unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
+> Elektro Fachbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
+> Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
+> 9 Elektro-Leistungen unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
 - Adresse: Donnerstr. 131, 45357 Essen
@@ -10,15 +10,18 @@
 - E-Mail: neuverdrahtet@gmail.com
 - Einsatzgebiet: Essen und Ruhrgebiet (u. a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen)
 
-## Gewerke
-- [Elektro](https://neuverdrahtet.com/elektro.html): Elektroinstallation, Smart Home, Wallbox, E-Check und mehr. (inkl. Kosten-Konfigurator)
-- [Bodenleger](https://neuverdrahtet.com/bodenleger.html): Laminat, Vinyl und Parkett fachgerecht verlegt. (inkl. Kosten-Konfigurator)
-- [Fliesen](https://neuverdrahtet.com/fliesen.html): Fliesenverlegung für Bad, Küche und Boden. (inkl. Kosten-Konfigurator)
-- [Maler](https://neuverdrahtet.com/maler.html): Streichen, Tapezieren und Fassadenanstrich. (inkl. Kosten-Konfigurator)
-- [Trockenbau](https://neuverdrahtet.com/trockenbau.html): Wände, Decken und Dämmung im Trockenbau. (inkl. Kosten-Konfigurator)
-- [Komplettbad](https://neuverdrahtet.com/komplettbad.html): Badsanierung aus einer Hand, von Planung bis Abnahme. (inkl. Kosten-Konfigurator)
+## Leistungen
+- [Elektroinstallation](https://neuverdrahtet.com/elektroinstallation.html): Elektroinstallation für Neubau, Altbau und Sanierung. (inkl. Kosten-Konfigurator)
+- [Beleuchtungstechnik](https://neuverdrahtet.com/beleuchtungstechnik.html): Lichtplanung, LED-Umrüstung und Einbaustrahler. (inkl. Kosten-Konfigurator)
+- [Smart Home](https://neuverdrahtet.com/smart-home.html): Licht-, Heizungs- und Sicherheitssteuerung vernetzt. (inkl. Kosten-Konfigurator)
+- [Photovoltaik](https://neuverdrahtet.com/photovoltaik.html): Elektro-seitiger Anschluss für Ihre PV-Anlage. (inkl. Kosten-Konfigurator)
+- [Wallbox](https://neuverdrahtet.com/wallbox.html): Wallbox-Installation privat und gewerblich. (inkl. Kosten-Konfigurator)
+- [Wärmepumpe](https://neuverdrahtet.com/waermepumpe.html): Elektroanschluss für Ihre Wärmepumpe. (inkl. Kosten-Konfigurator)
+- [E-Check](https://neuverdrahtet.com/e-check.html): Prüfung ortsveränderlicher Geräte nach VDE 0701-0702. (inkl. Kosten-Konfigurator)
+- [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
+- [Wartung](https://neuverdrahtet.com/wartung.html): Wartungsverträge, Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
 
 ## Weitere Seiten
-- [Alle Gewerke im Überblick](https://neuverdrahtet.com/leistungen.html)
+- [Alle Leistungen im Überblick](https://neuverdrahtet.com/leistungen.html)
 - [Impressum](https://neuverdrahtet.com/impressum.html)
 - [Datenschutz](https://neuverdrahtet.com/datenschutz.html)
