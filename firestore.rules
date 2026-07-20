@@ -72,6 +72,18 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // mitarbeiter/* enthält die volle, sensible Personalakte (Adresse,
+    // Geburtsdatum, Stundenlohn/Gehalt, Notfallkontakt, ...) - deshalb wie
+    // katalog/kunden/etc. nur für Admin+Büro lesbar. Für Namens-/Farb-Anzeige
+    // (z.B. "Ich bin: ..."-Auswahl in Zeiterfassung/Aufgaben/Teamchat, die
+    // auch normale Mitarbeiter sehen müssen) pflegt db.js parallel eine
+    // öffentliche Teilmenge (nur Name/Farbe/Gewerk) in mitarbeiterOeffentlich,
+    // die für alle drei Rollen lesbar ist.
+    match /mitarbeiterOeffentlich/{docId} {
+      allow read: if isAnyRole();
+      allow write: if isAdminOrBuero();
+    }
+
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (
         (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||

@@ -145,23 +145,41 @@ const cache = new Map(); // storeName -> Map(id -> row)
 const listeners = new Map(); // storeName -> unsubscribe
 const ready = new Map(); // storeName -> Promise, resolved nach dem ersten Snapshot
 
+// 'mitarbeiter' enthält sensible Personalakte-Felder (Adresse, Stundenlohn, ...)
+// und ist deshalb in firestore.rules für die Rolle "mitarbeiter" komplett
+// gesperrt. Trotzdem brauchen ganz normale Mitarbeiter an vielen Stellen die
+// simple Namensliste (z.B. "Ich bin: ..."-Auswahl in Zeiterfassung/Aufgaben/
+// Teamchat). Deshalb pflegt db.js parallel eine öffentliche, nicht-sensible
+// Teilmenge (Name/Farbe/Gewerk) in einer eigenen Collection - siehe
+// syncMitarbeiterOeffentlich() und den Firestore-Permission-Fallback unten.
+const MITARBEITER_OEFFENTLICH = 'mitarbeiterOeffentlich';
+
 function ensureListening(storeName) {
   if (listeners.has(storeName)) return ready.get(storeName);
   const storeCache = new Map();
   cache.set(storeName, storeCache);
   let resolveReady;
   ready.set(storeName, new Promise((resolve) => { resolveReady = resolve; }));
-  const unsubscribe = onSnapshot(collection(firestore, storeName), (snap) => {
-    snap.docChanges().forEach((change) => {
-      if (change.type === 'removed') storeCache.delete(change.doc.id);
-      else storeCache.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+  let usingFallback = false;
+  function subscribe(collectionName, isFallback) {
+    return onSnapshot(collection(firestore, collectionName), (snap) => {
+      if (isFallback && !usingFallback) { storeCache.clear(); usingFallback = true; }
+      snap.docChanges().forEach((change) => {
+        if (change.type === 'removed') storeCache.delete(change.doc.id);
+        else storeCache.set(change.doc.id, { id: change.doc.id, ...change.doc.data() });
+      });
+      resolveReady();
+    }, (err) => {
+      if (storeName === 'mitarbeiter' && !usingFallback) {
+        console.warn(`Firestore: kein Zugriff auf "mitarbeiter" (${err.code}) - falle auf öffentliche Mitarbeiterliste zurück.`);
+        listeners.set(storeName, subscribe(MITARBEITER_OEFFENTLICH, true));
+        return;
+      }
+      console.error(`Firestore-Listener-Fehler (${storeName}):`, err);
+      resolveReady();
     });
-    resolveReady();
-  }, (err) => {
-    console.error(`Firestore-Listener-Fehler (${storeName}):`, err);
-    resolveReady();
-  });
-  listeners.set(storeName, unsubscribe);
+  }
+  listeners.set(storeName, subscribe(storeName, false));
   return ready.get(storeName);
 }
 
@@ -186,12 +204,19 @@ async function getFs(storeName, key) {
   return cache.get(storeName).get(key);
 }
 
+function mitarbeiterOeffentlichData(value) {
+  return { name: value.name || '', farbe: value.farbe || '', rolle: value.rolle || '' };
+}
+
 async function putFs(storeName, value) {
   if (storeName === 'einstellungen') {
     await setDoc(EINSTELLUNGEN_DOC(), { [value.key]: value.value }, { merge: true });
     return value.key;
   }
   await setDoc(doc(firestore, storeName, value.id), value);
+  if (storeName === 'mitarbeiter') {
+    await setDoc(doc(firestore, MITARBEITER_OEFFENTLICH, value.id), mitarbeiterOeffentlichData(value));
+  }
   return value.id;
 }
 
@@ -201,6 +226,9 @@ async function removeFs(storeName, key) {
     return;
   }
   await deleteDoc(doc(firestore, storeName, key));
+  if (storeName === 'mitarbeiter') {
+    await deleteDoc(doc(firestore, MITARBEITER_OEFFENTLICH, key));
+  }
 }
 
 async function clearStoreFs(storeName) {
@@ -234,6 +262,16 @@ export async function put(storeName, value) {
 
 export async function remove(storeName, key) {
   return FIREBASE_ENABLED ? removeFs(storeName, key) : removeIdb(storeName, key);
+}
+
+// Backfill für bereits vor diesem Fix angelegte Mitarbeiter-Datensätze, die
+// noch kein gespiegeltes mitarbeiterOeffentlich-Dokument haben. Nur admin/
+// buero können 'mitarbeiter' überhaupt vollständig lesen (siehe firestore.rules),
+// daher wird das einfach beim Öffnen der Mitarbeiter-Seite mit ausgeführt.
+export async function syncMitarbeiterOeffentlich() {
+  if (!FIREBASE_ENABLED) return;
+  const alle = await getAllFs('mitarbeiter');
+  await Promise.all(alle.map((m) => setDoc(doc(firestore, MITARBEITER_OEFFENTLICH, m.id), mitarbeiterOeffentlichData(m))));
 }
 
 export async function clearStore(storeName) {
