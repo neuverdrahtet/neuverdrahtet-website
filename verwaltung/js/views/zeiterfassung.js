@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, TAETIGKEITEN, BEREICHE } from '../db.js';
-import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage } from '../utils.js';
+import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
@@ -184,7 +184,7 @@ function minutesBetweenHHMM(start, end) {
   return diff;
 }
 
-export async function render(container) {
+export async function render(container, route) {
   let [eintraege, projekte, mitarbeiter, settings, termine, kunden] = await Promise.all([
     getAll('zeiterfassung'), getAll('projekte'), getAll('mitarbeiter'), getSettings(), getAll('termine'), getAll('kunden'),
   ]);
@@ -199,6 +199,12 @@ export async function render(container) {
   let ueJahr = null;
   let ueMitarbeiterId = '';
   let ueBereich = '';
+  // Deep-Link aus der Mitarbeiter-Akte (#/zeiterfassung/<mitarbeiterId>): direkt
+  // in die Übersicht springen, gefiltert auf diesen Mitarbeiter.
+  if (route && mitarbeiterById[route]) {
+    ueMitarbeiterId = route;
+    mode = 'uebersicht';
+  }
 
   container.innerHTML = `
     <div class="view-header">
@@ -522,7 +528,8 @@ export async function render(container) {
         <div class="search-bar" style="margin-bottom:14px">
           <select id="ue-jahr">${jahre.map((j) => `<option value="${j}" ${j === ueJahr ? 'selected' : ''}>${j}</option>`).join('')}</select>
           <select id="ue-mitarbeiter"><option value="">Alle Mitarbeiter</option>${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === ueMitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}</select>
-          <select id="ue-bereich"><option value="">Alle Bereiche</option>${BEREICHE.map((b) => `<option value="${b.id}" ${b.id === ueBereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
+          <select id="ue-bereich"><option value="">Alle Bereiche (Projekt)</option>${BEREICHE.map((b) => `<option value="${b.id}" ${b.id === ueBereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
+          <button type="button" class="btn" id="ue-export">⇩ Exportieren (CSV)</button>
         </div>
         ${sorted.length === 0 ? '<p class="text-mute">Keine Zeiten für diesen Zeitraum erfasst.</p>' : `
           <div style="overflow-x:auto">
@@ -564,6 +571,22 @@ export async function render(container) {
     host.querySelector('#ue-jahr').addEventListener('change', (e) => { ueJahr = e.target.value; renderUebersicht(); });
     host.querySelector('#ue-mitarbeiter').addEventListener('change', (e) => { ueMitarbeiterId = e.target.value; renderUebersicht(); });
     host.querySelector('#ue-bereich').addEventListener('change', (e) => { ueBereich = e.target.value; renderUebersicht(); });
+    host.querySelector('#ue-export').addEventListener('click', () => {
+      const csvNum = (minuten) => (minuten / 60).toFixed(2).replace('.', ',');
+      const rows = [
+        ['Projekt', 'Bereich', ...MONATE_UE, ueJahr],
+        ...sorted.map((r) => {
+          const p = projekteById[r.projektId];
+          const bereichTitel = BEREICHE.find((b) => b.id === p?.bereich)?.titel || '';
+          return [p ? p.titel : 'Ohne Projekt', bereichTitel, ...r.monate.map(csvNum), csvNum(r.gesamt)];
+        }),
+        ['Gesamt', '', ...monatsSummen.map(csvNum), csvNum(gesamtSumme)],
+      ];
+      const maSuffix = ueMitarbeiterId ? `-${(mitarbeiterById[ueMitarbeiterId]?.name || '').replace(/\s+/g, '_')}` : '';
+      const bereichSuffix = ueBereich ? `-${ueBereich}` : '';
+      downloadTextFile(`zeiterfassung-uebersicht-${ueJahr}${maSuffix}${bereichSuffix}.csv`, toCsv(rows));
+      toast('Export erstellt', 'success');
+    });
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
@@ -833,7 +856,7 @@ export async function render(container) {
 
   renderTimer();
   renderTable();
-  setMode('einsaetze');
+  setMode(mode);
 
   return () => { if (tickInterval) clearInterval(tickInterval); };
 }
