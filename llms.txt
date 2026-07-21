@@ -19,7 +19,7 @@
 - [Wärmepumpe](https://neuverdrahtet.com/waermepumpe.html): Elektroanschluss für Ihre Wärmepumpe. (inkl. Kosten-Konfigurator)
 - [E-Check](https://neuverdrahtet.com/e-check.html): Prüfung ortsveränderlicher Geräte nach VDE 0701-0702. (inkl. Kosten-Konfigurator)
 - [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
-- [Wartung](https://neuverdrahtet.com/wartung.html): Wartungsverträge, Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
+- [Wartung](https://neuverdrahtet.com/wartung.html): Wartung für Elektroinstallation, Wallbox, Photovoltaik-Anschluss, Wärmepumpe, Smart Home und Beleuchtung — Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
 
 ## Weitere Seiten
 - [Alle Leistungen im Überblick](https://neuverdrahtet.com/leistungen.html)
