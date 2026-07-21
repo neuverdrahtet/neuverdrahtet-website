@@ -1,11 +1,43 @@
-import { getAll, put, remove, syncMitarbeiterOeffentlich, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
-import { uid, escapeHtml, formatDate, toast } from '../utils.js';
+import { getAll, put, remove, clearStore, syncMitarbeiterOeffentlich, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
+import { uid, escapeHtml, formatDate, toast, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteEmployee, revokeInvite, revokeUserAccess, getEmployeeAuthStatus } from '../employeeAuth.js';
 
 const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
+const ABWESENHEIT_TYPEN = ['urlaub', 'krank', 'schulung'];
+
+const MA_FELDER = [
+  'name', 'personalnummer', 'rolle', 'telefon', 'email', 'strasse', 'plz', 'ort',
+  'geburtsdatum', 'eintrittsdatum', 'austrittsdatum', 'vertragsart', 'wochenstunden',
+  'stundenlohn', 'gehaltMonatlich', 'urlaubsanspruchTage', 'iban', 'steuerId',
+  'sozialversicherungsnummer', 'krankenkasse', 'notfallkontaktName', 'notfallkontaktTelefon', 'notizen',
+];
+const MA_HEADER = [
+  'Name', 'Personalnummer', 'Rolle', 'Telefon', 'E-Mail', 'Straße', 'PLZ', 'Ort',
+  'Geburtsdatum', 'Eintrittsdatum', 'Austrittsdatum', 'Vertragsart', 'Wochenstunden',
+  'Stundenlohn', 'Gehalt monatlich', 'Urlaubsanspruch (Tage)', 'IBAN', 'Steuer-ID',
+  'Sozialversicherungsnr.', 'Krankenkasse', 'Notfallkontakt Name', 'Notfallkontakt Telefon', 'Notizen',
+];
+
+function parseMitarbeiterCsv(text) {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const delimiter = line.includes(';') ? ';' : ',';
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^name$/i.test(cols[0] || '')) continue;
+    const [name, ...rest] = cols;
+    if (!name) { errors.push(line); continue; }
+    const row = { id: uid(), name, vertragsart: 'Vollzeit', zugriffsrolle: 'mitarbeiter' };
+    MA_FELDER.slice(1).forEach((feld, i) => { row[feld] = rest[i] || ''; });
+    if (row.vertragsart === '') row.vertragsart = 'Vollzeit';
+    rows.push(row);
+  }
+  return { rows, errors };
+}
 
 function currentStatusFor(termine, mitarbeiterId) {
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -43,7 +75,11 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Mitarbeiter</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neuer Mitarbeiter</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
+        <button class="btn" id="btn-import">⇪ Importieren</button>
+        <button class="btn btn-primary" id="btn-new">+ Neuer Mitarbeiter</button>
+      </div>
     </div>
     <div id="table-host"></div>
   `;
@@ -92,6 +128,122 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const rows = [MA_HEADER, ...mitarbeiter.map((m) => MA_FELDER.map((f) => m[f] ?? ''))];
+    downloadTextFile(`neuverdrahtet-mitarbeiter-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
+  container.querySelector('#btn-import').addEventListener('click', () => openImport());
+
+  function openImport() {
+    const { body, close } = openModal({
+      title: 'Mitarbeiter importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>${MA_HEADER.join(';')}</code> – nur Name ist Pflicht. Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace"></textarea>
+        </div>
+        <div class="field field-checkbox" style="margin-top:8px">
+          <input type="checkbox" id="import-replace">
+          <label for="import-replace">Bestehende Mitarbeiter vor dem Import löschen (vollständig ersetzen)</label>
+        </div>
+        <p class="hint" id="import-replace-warning" hidden>⚠️ Löscht unwiderruflich alle bisherigen Mitarbeiter. Bereits verknüpfte Projekte/Zeiterfassung bleiben erhalten, verweisen aber danach ggf. ins Leere.</p>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-replace').addEventListener('change', (e) => {
+      body.querySelector('#import-replace-warning').hidden = !e.target.checked;
+    });
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await readTextAutoEncoding(file);
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = parseMitarbeiterCsv(text);
+      if (rows.length === 0) {
+        body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      if (body.querySelector('#import-replace').checked) {
+        if (!confirmDelete(`Wirklich ALLE ${mitarbeiter.length} bestehenden Mitarbeiter löschen und durch ${rows.length} neue ersetzen?`)) return;
+        await clearStore('mitarbeiter');
+      }
+      for (const row of rows) await put('mitarbeiter', row);
+      toast(`${rows.length} Mitarbeiter importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      render(container);
+    });
+  }
+
+  function openAbwesenheitForm(mitarbeiterId, closeParent) {
+    if (closeParent) closeParent();
+    const heute = new Date().toISOString().slice(0, 10);
+    const { body, close } = openModal({
+      title: 'Abwesenheit eintragen',
+      bodyHtml: `
+        <form id="abw-form">
+          <div class="form-grid">
+            <div class="field"><label>Art *</label>
+              <select name="typ" required>
+                ${ABWESENHEIT_TYPEN.map((t) => {
+                  const info = TERMIN_TYPEN.find((tt) => tt.id === t);
+                  return `<option value="${t}">${escapeHtml(info?.titel || t)}</option>`;
+                }).join('')}
+              </select>
+            </div>
+            <div class="field"><label>Von *</label><input type="date" name="von" required value="${heute}"></div>
+            <div class="field"><label>Bis</label><input type="date" name="bis" value="${heute}"></div>
+            <div class="field col-span-2"><label>Notiz (optional)</label><input name="notiz" placeholder="z.B. Grund, Vertretung, ..."></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Eintragen</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#abw-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const typ = (fd.get('typ') || 'urlaub').toString();
+      const von = (fd.get('von') || heute).toString();
+      const bis = (fd.get('bis') || von).toString();
+      const notiz = (fd.get('notiz') || '').toString().trim();
+      const info = TERMIN_TYPEN.find((tt) => tt.id === typ);
+      const neu = {
+        id: uid(), titel: notiz || info?.titel || typ, typ,
+        start: `${von}T00:00`, ende: bis < von ? von : bis,
+        mitarbeiterIds: [mitarbeiterId], geraeteIds: [], flottenIds: [],
+        kundeId: '', projektId: '', ort: '', notizen: '', farbe: '',
+      };
+      await put('termine', neu);
+      termine.push(neu);
+      toast(`${info?.titel || 'Eintrag'} gespeichert`, 'success');
+      close();
+      openForm(mitarbeiter.find((mm) => mm.id === mitarbeiterId));
+    });
+  }
 
   function openForm(m) {
     const isEdit = !!m;
@@ -164,10 +316,14 @@ export async function render(container) {
               <div class="field"><label>Schulungstage (${new Date().getFullYear()})</label><input disabled value="${schulungTage} Tage"></div>
             ` : '<p class="text-mute col-span-2">Urlaub/Krank/Schulung werden nach dem Anlegen aus der Plantafel berechnet.</p>'}
           </div>
-          <p class="hint">Trage Urlaub, Krankheit, Schulungen und Baustellen-Einsätze über Kalender oder Plantafel ein – sie werden hier automatisch gezählt.</p>
+          <p class="hint">Baustellen-Einsätze trägst du weiterhin über Kalender/Plantafel ein – sie werden hier automatisch gezählt.</p>
           ${isEdit ? `
-            <div class="flex-row" style="margin:8px 0"><strong>Status heute:</strong>
+            <div class="flex-row" style="margin:8px 0;align-items:center">
+              <strong>Status heute:</strong>
               ${aktuellerStatus ? `<span class="badge" style="background:${escapeHtml(aktuellerStatus.farbe)}22;color:${escapeHtml(aktuellerStatus.farbe)}">${escapeHtml(aktuellerStatus.titel)}</span>` : '<span class="badge badge-success">Verfügbar</span>'}
+              <span class="spacer"></span>
+              <button type="button" class="btn btn-sm" id="btn-abwesenheit">+ Krank/Urlaub eintragen</button>
+              <a class="btn btn-sm" id="link-zeituebersicht" href="#/zeiterfassung/${data.id}">📊 Zeitübersicht</a>
             </div>
             <h2 style="font-size:13px;margin:10px 0 6px">Letzte Einträge</h2>
             ${statusVerlauf.length ? `<ul class="cal-event-list">${statusVerlauf.map((t) => {
@@ -229,6 +385,8 @@ export async function render(container) {
       renderDokumenteSection(body.querySelector('#dok-host'), 'mitarbeiter', data.id, {
         kategorien: MA_DOKUMENT_KATEGORIEN, title: 'Dokumente (Vertrag, Ausweis, ...)',
       });
+      body.querySelector('#btn-abwesenheit').addEventListener('click', () => openAbwesenheitForm(data.id, close));
+      body.querySelector('#link-zeituebersicht').addEventListener('click', () => close());
       if (FIREBASE_ENABLED) renderAuthStatus(body, data);
     }
     body.querySelector('#ma-form').addEventListener('submit', async (e) => {
