@@ -2,6 +2,7 @@ import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, cl
 import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+import * as lexoffice from '../lexoffice.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 
@@ -34,6 +35,7 @@ const NAV = [
   { group: 'Integrationen', items: [
     { id: 'google', icon: '📅', label: 'Google-Verbindung' },
     { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
+    { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
   ] },
   { group: 'Daten & Sicherheit', items: [
     { id: 'daten', icon: '💾', label: 'Datensicherung / Geräte-Sync' },
@@ -251,6 +253,25 @@ export async function render(container) {
               <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="aiAppSecret" value="${escapeHtml(settings.aiAppSecret || '')}"></div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
+        </div>
+
+        <div class="card settings-panel" data-panel="lexoffice" hidden>
+          <h2>lexoffice-Verbindung</h2>
+          <p class="hint">
+            Überträgt Zeiterfassung und verwendete Leistungen/Material je Auftrag als Rechnungsentwurf nach lexoffice – die eigentlichen Preise kommen dabei aus deinem lexoffice-Artikelstamm, nicht aus dieser App.
+            Den API-Key erzeugst du einmalig in deinem lexoffice-Konto unter Einstellungen → Öffentliche API.
+          </p>
+          <form id="lexoffice-form">
+            <div class="form-grid">
+              <div class="field col-span-2"><label>API-Key</label><input type="password" name="lexofficeApiKey" value="${escapeHtml(settings.lexofficeApiKey || '')}"></div>
+            </div>
+            <div class="modal-actions" style="border:none;padding-top:10px">
+              <span id="lexoffice-status" class="badge ${settings.lexofficeApiKey ? 'badge-success' : 'badge'}">${settings.lexofficeApiKey ? 'Key hinterlegt' : 'Kein Key hinterlegt'}</span>
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="btn-lexoffice-test">Verbindung testen</button>
+              <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
           </form>
         </div>
 
@@ -508,6 +529,28 @@ export async function render(container) {
     google.disconnect();
     toast('Google-Verbindung getrennt');
     render(container);
+  });
+
+  container.querySelector('#lexoffice-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({ lexofficeApiKey: (fd.get('lexofficeApiKey') || '').toString().trim() });
+    toast('lexoffice-Einstellungen gespeichert', 'success');
+    render(container);
+  });
+
+  container.querySelector('#btn-lexoffice-test').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = 'Teste ...';
+    try {
+      const profile = await lexoffice.testConnection();
+      toast(`Verbindung erfolgreich${profile?.companyName ? ` (${profile.companyName})` : ''}`, 'success');
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Verbindung testen';
   });
 
   container.querySelector('#nr-form').addEventListener('submit', async (e) => {

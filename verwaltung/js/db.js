@@ -337,6 +337,7 @@ const DEFAULT_SETTINGS = {
   datevAufwandKonto: '4900',
   aiWorkerUrl: '',
   aiAppSecret: '',
+  lexofficeApiKey: '',
   wetterOrt: 'Essen',
   wetterLat: 51.4556,
   wetterLng: 7.0116,
