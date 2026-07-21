@@ -16,7 +16,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -49,6 +49,7 @@ const STORES = {
   terminStatus: 'id',
   textbausteine: 'id',
   aufgabenStatus: 'id',
+  lagerbewegungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [

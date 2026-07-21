@@ -83,10 +83,13 @@ async function loadWeather(lat, lng) {
 }
 
 export async function render(container) {
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings] = await Promise.all([
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'),
   ]);
+  const niedrigBestand = katalog
+    .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
+    .sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   const today = todayISO();
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -288,6 +291,25 @@ export async function render(container) {
           </tbody>
         </table>
         <p class="hint"><a href="#/mahnungen">→ Zu den Mahnungen</a></p>
+      </div>
+    ` : ''}
+
+    ${niedrigBestand.length ? `
+      <div class="card">
+        <h2>Niedriger Lagerbestand <span class="badge badge-danger">${niedrigBestand.length}</span></h2>
+        <table class="data-table">
+          <thead><tr><th>Artikel</th><th class="text-right">Bestand</th><th class="text-right">Mindestbestand</th></tr></thead>
+          <tbody>
+            ${niedrigBestand.map((k) => `
+              <tr>
+                <td>${escapeHtml(k.bezeichnung)}</td>
+                <td class="text-right">${Number(k.bestand ?? 0)} ${escapeHtml(k.einheit || '')}</td>
+                <td class="text-right">${Number(k.mindestbestand ?? 0)} ${escapeHtml(k.einheit || '')}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <p class="hint"><a href="#/katalog">→ Zu Artikel &amp; Leistungen</a></p>
       </div>
     ` : ''}
   `;

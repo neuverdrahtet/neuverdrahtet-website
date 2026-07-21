@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings } from '../db.js';
-import { uid, escapeHtml, formatCurrency, toast, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 
@@ -39,6 +39,7 @@ function parseKatalogCsv(text, standardSteuersatz) {
 
 export async function render(container) {
   let items = await getAll('katalog');
+  let lagerbewegungen = await getAll('lagerbewegungen');
   const settings = await getSettings();
   items.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   let filtered = items;
@@ -85,9 +86,12 @@ export async function render(container) {
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th><th>Bestand</th></tr></thead>
         <tbody>
-          ${filtered.map((i) => `
+          ${filtered.map((i) => {
+            const tracked = i.typ === 'artikel' && i.bestandTracking;
+            const niedrig = tracked && Number(i.bestand ?? 0) <= Number(i.mindestbestand ?? 0);
+            return `
             <tr data-id="${i.id}">
               ${bulk.rowCell(i.id)}
               <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
@@ -97,13 +101,29 @@ export async function render(container) {
               <td class="text-right">${i.einkaufspreis ? `${i.aufschlagProzent || 0}%` : '–'}</td>
               <td class="text-right">${formatCurrency(i.preis)}</td>
               <td>${i.steuersatz}%</td>
+              <td>
+                ${tracked ? `
+                  <span class="flex-row" style="align-items:center;gap:6px" onclick="event.stopPropagation()">
+                    <span class="badge ${niedrig ? 'badge-danger' : 'badge'}" title="Mindestbestand: ${Number(i.mindestbestand ?? 0)} ${escapeHtml(i.einheit || '')}">${Number(i.bestand ?? 0)} ${escapeHtml(i.einheit || '')}</span>
+                    <button type="button" class="btn btn-sm btn-ghost lager-btn" data-id="${i.id}" data-richtung="aus" title="Verbrauch/Entnahme erfassen">−</button>
+                    <button type="button" class="btn btn-sm btn-ghost lager-btn" data-id="${i.id}" data-richtung="ein" title="Wareneingang erfassen">+</button>
+                  </span>
+                ` : '<span class="text-mute">–</span>'}
+              </td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => openForm(items.find((i) => i.id === row.dataset.id)));
+    });
+    tableHost.querySelectorAll('.lager-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openLagerbewegungForm(items.find((i) => i.id === btn.dataset.id), btn.dataset.richtung);
+      });
     });
     bulk.wire(tableHost, {
       onChange: renderTable,
@@ -112,6 +132,43 @@ export async function render(container) {
         filtered = filtered.filter((i) => !ids.includes(i.id));
         renderTable();
       },
+    });
+  }
+
+  function openLagerbewegungForm(item, richtung) {
+    if (!item) return;
+    const isEin = richtung === 'ein';
+    const { body, close } = openModal({
+      title: `${isEin ? 'Wareneingang' : 'Verbrauch/Entnahme'}: ${item.bezeichnung}`,
+      bodyHtml: `
+        <form id="lager-form">
+          <p class="hint">Aktueller Bestand: <strong>${Number(item.bestand ?? 0)} ${escapeHtml(item.einheit || '')}</strong></p>
+          <div class="field"><label>Menge (${escapeHtml(item.einheit || 'Stk.')}) *</label><input type="number" step="0.01" min="0.01" name="menge" required autofocus></div>
+          <div class="field"><label>Grund / Notiz (optional)</label><input name="grund" placeholder="${isEin ? 'z.B. Bestellung Sonepar' : 'z.B. Baustelle Müller'}"></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">${isEin ? 'Eingang buchen' : 'Entnahme buchen'}</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#lager-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const menge = Number(fd.get('menge')) || 0;
+      if (menge <= 0) return;
+      const delta = isEin ? menge : -menge;
+      item.bestand = Math.max(0, Number(item.bestand ?? 0) + delta);
+      await put('katalog', item);
+      await put('lagerbewegungen', {
+        id: uid(), katalogId: item.id, delta, grund: (fd.get('grund') || '').toString().trim(),
+        datum: new Date().toISOString(),
+      });
+      toast(`${isEin ? 'Wareneingang' : 'Entnahme'} gebucht`, 'success');
+      close();
+      render(container);
     });
   }
 
@@ -176,7 +233,11 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     const data = item || {
       id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.',
       einkaufspreis: 0, aufschlagProzent: settings.standardAufschlagProzent ?? 20, preis: 0, steuersatz: settings.standardSteuersatz, komponenten: [],
+      bestandTracking: false, bestand: 0, mindestbestand: 0,
     };
+    const bewegungen = isEdit
+      ? lagerbewegungen.filter((b) => b.katalogId === data.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || '')).slice(0, 8)
+      : [];
     const komponentenAuswahl = items.filter((i) => i.typ !== 'paket' && i.id !== data.id);
     let kompState = (data.komponenten || []).map((k) => ({ ...k }));
     const { body, close } = openModal({
@@ -213,6 +274,29 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
               </select>
               <button type="button" class="btn btn-sm" id="btn-komp-add">+ hinzufügen</button>
             </div>
+          </div>
+
+          <div id="bestand-section" ${data.typ === 'artikel' ? '' : 'hidden'}>
+            <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">Lagerbestand</h2>
+            <div class="field-checkbox">
+              <label><input type="checkbox" name="bestandTracking" id="f-bestand-tracking" ${data.bestandTracking ? 'checked' : ''}> Lagerbestand für diesen Artikel verfolgen</label>
+            </div>
+            <div id="bestand-felder" class="form-grid" ${data.bestandTracking ? '' : 'hidden'} style="margin-top:8px">
+              <div class="field"><label>Aktueller Bestand</label><input type="number" step="0.01" min="0" name="bestand" value="${data.bestand ?? 0}"></div>
+              <div class="field"><label>Mindestbestand (Warnschwelle)</label><input type="number" step="0.01" min="0" name="mindestbestand" value="${data.mindestbestand ?? 0}"></div>
+            </div>
+            ${isEdit && data.bestandTracking ? `
+              <p class="hint" style="margin-top:6px">Bestand direkt hier ändern zählt nicht als protokollierte Bewegung – für eine nachvollziehbare Historie lieber über die +/− Buttons in der Tabelle buchen.</p>
+              ${bewegungen.length ? `
+                <div style="margin-top:8px">
+                  <p class="text-mute" style="font-size:12.5px;margin:0 0 4px">Letzte Bewegungen:</p>
+                  <ul class="cal-event-list">
+                    ${bewegungen.map((b) => `<li>${formatDate(b.datum)}: ${b.delta > 0 ? '+' : ''}${b.delta} ${escapeHtml(data.einheit || '')}${b.grund ? ` – ${escapeHtml(b.grund)}` : ''}</li>`).join('')}
+                  </ul>
+                </div>
+              ` : ''}
+            ` : ''}
           </div>
 
           <div class="divider"></div>
@@ -287,7 +371,11 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     body.querySelector('#f-typ').addEventListener('change', (e) => {
       const isPaket = e.target.value === 'paket';
       body.querySelector('#komp-section').hidden = !isPaket;
+      body.querySelector('#bestand-section').hidden = e.target.value !== 'artikel';
       if (isPaket) updateEkFromKomp();
+    });
+    body.querySelector('#f-bestand-tracking').addEventListener('change', (e) => {
+      body.querySelector('#bestand-felder').hidden = !e.target.checked;
     });
     body.querySelector('#btn-komp-add').addEventListener('click', () => {
       const select = body.querySelector('#komp-add-select');
@@ -318,6 +406,9 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
       updated.einkaufspreis = Number(updated.einkaufspreis) || 0;
       updated.aufschlagProzent = Number(updated.aufschlagProzent) || 0;
       updated.steuersatz = Number(updated.steuersatz) || 0;
+      updated.bestandTracking = updated.typ === 'artikel' && body.querySelector('#f-bestand-tracking').checked;
+      updated.bestand = updated.bestandTracking ? (Number(updated.bestand) || 0) : (data.bestand || 0);
+      updated.mindestbestand = updated.bestandTracking ? (Number(updated.mindestbestand) || 0) : (data.mindestbestand || 0);
       if (updated.typ === 'paket') {
         updated.komponenten = kompState;
         updated.einkaufspreis = kompState.reduce((s, k) => {

@@ -20,7 +20,8 @@ service cloud.firestore {
     function isSensitiveCollection(collectionId) {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'rechnungen',
-        'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten'
+        'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
+        'lagerbewegungen'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
