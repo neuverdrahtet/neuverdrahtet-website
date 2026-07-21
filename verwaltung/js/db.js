@@ -32,14 +32,10 @@ const STORES = {
   kanbanSpalten: 'id',
   termine: 'id',
   katalog: 'id',
-  angebote: 'id',
-  rechnungen: 'id',
-  mahnungen: 'id',
   einstellungen: 'key',
   zeiterfassung: 'id',
   fotos: 'id',
   vorlagen: 'id',
-  ausgaben: 'id',
   aufgaben: 'id',
   dokumente: 'id',
   kategorien: 'id',
@@ -47,7 +43,6 @@ const STORES = {
   geraete: 'id',
   flotten: 'id',
   terminStatus: 'id',
-  textbausteine: 'id',
   aufgabenStatus: 'id',
   lagerbewegungen: 'id',
   verwendungen: 'id',
@@ -311,33 +306,13 @@ const DEFAULT_SETTINGS = {
   bic: '',
   bank: '',
   inhaber: '',
-  kleinunternehmer: false,
-  standardSteuersatz: 19,
-  standardAufschlagProzent: 20,
-  angebotPrefix: 'AN-',
-  rechnungPrefix: 'RE-',
-  angebotNummerDatum: '',
-  angebotNummerZaehler: 0,
-  rechnungNummerDatum: '',
-  rechnungNummerZaehler: 0,
   kundeNummerDatum: '',
   kundeNummerZaehler: 0,
-  zahlungszielTage: 14,
-  angebotGueltigTage: 30,
-  mahnGebuehr: [0, 5, 10, 15],
-  mahnfristTage: 10,
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',
   driveBackupEnabled: false,
   driveBackupLastAt: '',
-  stundensatz: 60,
-  datevBeraterNr: '',
-  datevMandantNr: '',
-  datevErloesKonto: '8400',
-  datevAufwandKonto: '4900',
-  aiWorkerUrl: '',
-  aiAppSecret: '',
   lexofficeApiKey: '',
   lexofficeArbeitsstundeArtikelId: '',
   lexofficeArbeitsstundeArtikelName: '',
@@ -721,8 +696,8 @@ export const DEFAULT_AUFGABEN_STATUS = [
 ];
 
 export const ZUGRIFFSROLLEN = [
-  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen und Buchhaltung.' },
-  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen und Buchhaltungs-Export.' },
+  { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen.' },
+  { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Katalog – ohne Einstellungen.' },
   { id: 'mitarbeiter', titel: 'Mitarbeiter', beschreibung: 'Nur Zeiterfassung, eigene Aufgaben, Kalender/Plantafel und Geräte – keine Finanz- oder Personaldaten.' },
 ];
 
@@ -739,63 +714,9 @@ export const ROUTE_ROLLEN = {
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],
-  angebote: ['admin', 'buero'],
-  rechnungen: ['admin', 'buero'],
-  mahnungen: ['admin', 'buero'],
-  ausgaben: ['admin', 'buero'],
   postfach: ['admin', 'buero'],
-  buchhaltung: ['admin'],
   einstellungen: ['admin'],
 };
-
-export const STEUERARTEN = [
-  { id: 'regel', titel: 'Regelbesteuerung (USt. je Position)', hinweis: '' },
-  { id: 'kleinunternehmer', titel: 'Kleinunternehmer § 19 UStG (keine USt.)', hinweis: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' },
-  { id: 'reverse-charge', titel: 'Bauleistungen – Steuerschuldnerschaft des Leistungsempfängers § 13b UStG', hinweis: 'Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG. Der Rechnungsbetrag ist ohne Umsatzsteuer zu zahlen; die Umsatzsteuer schuldet der Leistungsempfänger.' },
-  { id: 'ig-lieferung', titel: 'Innergemeinschaftliche Lieferung § 4 Nr. 1b UStG (steuerfrei)', hinweis: 'Steuerfreie innergemeinschaftliche Lieferung gemäß § 4 Nr. 1b i.V.m. § 6a UStG.' },
-  { id: 'export', titel: 'Ausfuhrlieferung / Drittland § 4 Nr. 1a UStG (steuerfrei)', hinweis: 'Steuerfreie Ausfuhrlieferung gemäß § 4 Nr. 1a UStG.' },
-];
-
-export const TEXTBAUSTEIN_KATEGORIEN = [
-  { id: 'beide', titel: 'Angebote & Rechnungen' },
-  { id: 'angebot', titel: 'Nur Angebote' },
-  { id: 'rechnung', titel: 'Nur Rechnungen' },
-];
-
-export const DEFAULT_TEXTBAUSTEINE = [
-  {
-    id: 'tb-angebotseinleitung', titel: 'Begrüßung / Angebotseinleitung', kategorie: 'angebot',
-    text: 'Vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
-  },
-  {
-    id: 'tb-gueltigkeit', titel: 'Gültigkeit & Ansprechbereitschaft', kategorie: 'angebot',
-    text: 'Dieses Angebot ist freibleibend und 30 Tage ab Ausstellungsdatum gültig. Die angegebenen Preise verstehen sich zzgl. der gesetzlichen Mehrwertsteuer.\n\nWir würden uns freuen, den Auftrag für Sie ausführen zu dürfen, und stehen für Rückfragen gerne zur Verfügung.',
-  },
-  {
-    id: 'tb-zugaenglichkeit', titel: 'Zugänglichkeit der Arbeitsstelle', kategorie: 'beide',
-    text: 'Alle zu bearbeitenden Flächen müssen frei zugänglich sein, ohne Installationen, Leitungen, Heizkörper oder Mobiliar. Die Arbeitsstelle ist besenrein zu übergeben.',
-  },
-  {
-    id: 'tb-strom-wasser', titel: 'Strom & Wasser bauseits', kategorie: 'beide',
-    text: 'Die Bereitstellung von Strom und Wasser erfolgt bauseits durch den Auftraggeber.',
-  },
-  {
-    id: 'tb-staub-laerm', titel: 'Staub- und Lärmbelastung', kategorie: 'beide',
-    text: 'Baubedingte Staub- und Lärmbelastungen sind unvermeidbar. Wir empfehlen, empfindliche Gegenstände und Möbel abzudecken oder zu entfernen.',
-  },
-  {
-    id: 'tb-endreinigung', titel: 'Endreinigung', kategorie: 'beide',
-    text: 'Eine eventuell notwendige Endreinigung ist nicht im Leistungsumfang enthalten und wird bauseits durchgeführt.',
-  },
-  {
-    id: 'tb-altbausubstanz', titel: 'Altbausubstanz / Mehrarbeiten', kategorie: 'beide',
-    text: 'Bei Arbeiten an Altbausubstanz können unvorhergesehene Mehrarbeiten erforderlich werden, die wir vor Ausführung mit Ihnen abstimmen.',
-  },
-  {
-    id: 'tb-abrechnung-aufwand', titel: 'Abrechnung nach Aufwand', kategorie: 'beide',
-    text: 'Die Abrechnung erfolgt nach tatsächlichem Arbeitsaufwand. Fahrtzeit ist Arbeitszeit. Materialbeschaffung und Rüstzeit sind ebenfalls Arbeitszeit. Abweichungen zur Angebotsmenge sind daher möglich.',
-  },
-];
 
 export function hasRouteAccess(role, route) {
   const allowed = ROUTE_ROLLEN[route];
@@ -849,12 +770,6 @@ export async function ensureSeeded() {
   const missingDokuVorlagen = DEFAULT_DOKU_VORLAGEN.filter((v) => !dokuVorlagenIds.has(v.id));
   for (const v of missingDokuVorlagen) {
     await put('vorlagen', v);
-  }
-  const textbausteine = await getAll('textbausteine');
-  const textbausteinIds = new Set(textbausteine.map((t) => t.id));
-  const missingTextbausteine = DEFAULT_TEXTBAUSTEINE.filter((t) => !textbausteinIds.has(t.id));
-  for (const t of missingTextbausteine) {
-    await put('textbausteine', t);
   }
   const aufgabenStatus = await getAll('aufgabenStatus');
   if (aufgabenStatus.length === 0) {

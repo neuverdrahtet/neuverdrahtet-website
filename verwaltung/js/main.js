@@ -9,22 +9,17 @@ import * as auftraege from './views/auftraege.js';
 import * as plantafel from './views/plantafel.js';
 import * as mitarbeiter from './views/mitarbeiter.js';
 import * as katalog from './views/katalog.js';
-import * as angebote from './views/angebote.js';
-import * as rechnungen from './views/rechnungen.js';
-import * as mahnungen from './views/mahnungen.js';
 import * as einstellungen from './views/einstellungen.js';
 import * as zeiterfassung from './views/zeiterfassung.js';
 import * as vorlagen from './views/vorlagen.js';
-import * as ausgaben from './views/ausgaben.js';
 import * as postfach from './views/postfach.js';
-import * as buchhaltung from './views/buchhaltung.js';
 import * as aufgaben from './views/aufgaben.js';
 import * as geraete from './views/geraete.js';
 
 const routes = {
   dashboard, kunden, kanban, projekte, auftraege, plantafel, mitarbeiter,
-  katalog, angebote, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, postfach, buchhaltung, aufgaben, geraete,
+  katalog, einstellungen, zeiterfassung, vorlagen,
+  postfach, aufgaben, geraete,
 };
 
 const viewEl = document.getElementById('view');
@@ -110,7 +105,7 @@ async function boot() {
   // Login-Screen selbst braucht dafür keine Einstellungen.
   session = await initLock();
   try {
-    // ensureSeeded() legt u.a. fehlende Vorlagen/Textbausteine/Kanban-Spalten
+    // ensureSeeded() legt u.a. fehlende Vorlagen/Kanban-Spalten
     // an – das dürfen laut Security Rules nur admin/buero. Meldet sich zuerst
     // ein Mitarbeiter an einem frischen Projekt an, schlägt das serverseitig
     // ab; das darf den restlichen Boot-Vorgang (Nav/Rollen) nicht blockieren.

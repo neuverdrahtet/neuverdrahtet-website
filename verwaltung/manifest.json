@@ -1,7 +1,7 @@
 {
   "name": "neuverdrahtet Verwaltung",
   "short_name": "Verwaltung",
-  "description": "Interne Verwaltung für Kunden, Projekte, Angebote, Rechnungen und mehr.",
+  "description": "Interne Verwaltung für Kunden, Projekte, Zeiterfassung und Dokumentation.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

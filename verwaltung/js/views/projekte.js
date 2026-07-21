@@ -4,7 +4,6 @@ import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderDokumenteSection } from '../dokumente.js';
-import { renderNachkalkulation } from '../nachkalkulation.js';
 import { renderTeamchat } from '../teamchat.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
@@ -16,10 +15,10 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, kategorien, settings, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
-    getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
-    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'),
+    getAll('kategorien'), getSettings(),
+    getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -157,44 +156,6 @@ export async function render(container, opts = {}) {
       onChange: () => render(container, opts),
     });
   });
-
-  function renderProjektAusgaben(host, projektId) {
-    const liste = ausgaben.filter((a) => a.projektId === projektId).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
-    const summe = liste.reduce((s, a) => s + (a.betragBrutto || 0), 0);
-    host.innerHTML = `
-      <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
-        <h2 style="font-size:14px;margin:0">Ausgaben / Belege${liste.length ? ` · ${formatCurrency(summe)}` : ''}</h2>
-        <a class="text-mute" href="#/ausgaben" style="font-size:12.5px">+ Ausgabe erfassen →</a>
-      </div>
-      ${liste.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Projekt zugeordnet.</p>' : `
-        <table class="data-table">
-          <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th class="text-right">Betrag</th><th></th></tr></thead>
-          <tbody>
-            ${liste.map((a) => `
-              <tr>
-                <td>${formatDate(a.datum)}</td>
-                <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
-                <td>${escapeHtml(a.beschreibung || a.lieferant || '')}</td>
-                <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
-                <td>${a.beleg ? `<a href="#" class="btn btn-sm ausgabe-beleg-link" data-id="${a.id}">📎</a>` : ''}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `}
-    `;
-    host.querySelectorAll('.ausgabe-beleg-link').forEach((link) => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const a = liste.find((x) => x.id === link.dataset.id);
-        if (!a?.beleg) return;
-        if (a.beleg.url) { window.open(a.beleg.url, '_blank', 'noopener'); return; }
-        const url = URL.createObjectURL(a.beleg);
-        window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      });
-    });
-  }
 
   function renderVerwendungen(host, projektId) {
     const liste = verwendungen.filter((v) => v.projektId === projektId).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -368,8 +329,6 @@ export async function render(container, opts = {}) {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
       start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
     };
-    const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
-    const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
     const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
     const { body, close } = openModal({
@@ -413,15 +372,6 @@ export async function render(container, opts = {}) {
           </div>
           ${isEdit ? `
             <div class="divider"></div>
-            <h2 style="font-size:14px;margin:0 0 8px">Verknüpfte Angebote</h2>
-            ${linkedAngebote.length ? `<ul class="cal-event-list">${linkedAngebote.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Angebote verknüpft.</p>'}
-            <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
-            ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
-            <div class="divider"></div>
-            <div id="nk-host"></div>
-            <div class="divider"></div>
-            <div id="ausgaben-host"></div>
-            <div class="divider"></div>
             <div id="verwendung-host"></div>
             <div class="divider"></div>
             <div id="tc-host"></div>
@@ -459,10 +409,6 @@ export async function render(container, opts = {}) {
         close();
         render(container, opts);
       });
-      renderNachkalkulation(body.querySelector('#nk-host'), {
-        projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
-      });
-      renderProjektAusgaben(body.querySelector('#ausgaben-host'), data.id);
       renderVerwendungen(body.querySelector('#verwendung-host'), data.id);
       renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
       renderFotoSection(body.querySelector('#foto-host'), data.id);

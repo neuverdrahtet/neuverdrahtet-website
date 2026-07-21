@@ -2,8 +2,6 @@ import { put, getAll, getSettings } from '../db.js';
 import { uid, escapeHtml, toast, todayISO } from '../utils.js';
 import { openModal } from '../ui.js';
 import * as google from '../google.js';
-import { analyzeBeleg } from '../ai.js';
-import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 
 function extractEmailAddress(fromHeader) {
   const match = /<([^>]+)>/.exec(fromHeader || '');
@@ -12,19 +10,6 @@ function extractEmailAddress(fromHeader) {
 
 function bytesToBlob(bytes, mimeType) {
   return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
-}
-
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function calcBrutto(netto, steuersatz) {
-  return Math.round(netto * (1 + (Number(steuersatz) || 0) / 100) * 100) / 100;
 }
 
 function formatSize(bytes) {
@@ -160,7 +145,6 @@ export async function render(container) {
               <span>📎 ${escapeHtml(a.filename)} <span class="text-mute">(${formatSize(a.size)})</span></span>
               <div class="actions">
                 <button class="btn btn-sm" data-attidx="${i}" data-action="download">Herunterladen</button>
-                <button class="btn btn-sm" data-attidx="${i}" data-action="beleg">Als Beleg übernehmen</button>
               </div>
             </div>
           `).join('')}
@@ -191,49 +175,6 @@ export async function render(container) {
         btn.textContent = 'Herunterladen';
       });
     });
-    detailHost.querySelectorAll('[data-action="beleg"]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const att = full.attachments[Number(btn.dataset.attidx)];
-        btn.disabled = true;
-        btn.textContent = 'Übernehme ...';
-        try {
-          await uebernehmeAlsBeleg(full, att);
-        } catch (err) {
-          toast(`Übernahme fehlgeschlagen: ${err.message}`, 'danger');
-        }
-        btn.disabled = false;
-        btn.textContent = 'Als Beleg übernehmen';
-      });
-    });
-  }
-
-  async function uebernehmeAlsBeleg(message, attachment) {
-    const bytes = await google.getAttachmentData(message.id, attachment.attachmentId);
-    const blob = bytesToBlob(bytes, attachment.mimeType);
-    let prefill = {
-      id: uid(), datum: todayISO(), kategorie: AUSGABEN_KATEGORIEN[AUSGABEN_KATEGORIEN.length - 1], beschreibung: `Anhang aus E-Mail: ${message.subject}`,
-      lieferant: extractEmailAddress(message.from), betragNetto: 0, steuersatz: settings.standardSteuersatz || 19, betragBrutto: 0,
-      bezahltMit: 'überweisung', beleg: blob, projektId: '', kundeId: '', kalkKategorie: '',
-    };
-    if (attachment.mimeType.startsWith('image/')) {
-      try {
-        const imageDataUrl = await blobToDataUrl(blob);
-        const result = await analyzeBeleg({ imageDataUrl, kategorien: AUSGABEN_KATEGORIEN });
-        const kategorie = AUSGABEN_KATEGORIEN.includes(result.kategorie) ? result.kategorie : prefill.kategorie;
-        const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : prefill.steuersatz;
-        const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : prefill.datum;
-        prefill = {
-          ...prefill,
-          datum, kategorie, steuersatz,
-          beschreibung: `${!result.lesbar || !result.kategorieSicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || prefill.beschreibung}`.trim(),
-          lieferant: result.haendler || prefill.lieferant,
-          betragNetto: Number(result.betragNetto) || 0,
-          betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
-        };
-      } catch { /* KI-Erkennung ist optional – Anhang wird trotzdem als Beleg gespeichert */ }
-    }
-    await put('ausgaben', prefill);
-    toast('Anhang als Ausgabe/Beleg gespeichert – bitte in Ausgaben prüfen', 'success');
   }
 
   async function openTaskFromMessage(message) {
