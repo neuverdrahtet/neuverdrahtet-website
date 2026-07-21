@@ -1,5 +1,19 @@
-import { getAll, put, getSettings } from '../db.js';
+import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, formatDate, todayISO, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
+
+const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+
+function startOfWeek(d) {
+  const date = new Date(d);
+  const offset = (date.getDay() + 6) % 7; // Montag = 0
+  date.setDate(date.getDate() - offset);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function typFarbe(typId) {
+  return (TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0])?.farbe || 'var(--border)';
+}
 
 const WEATHER_ICON = {
   0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️',
@@ -41,6 +55,22 @@ export async function render(container) {
   let currentMa = getCurrentMitarbeiterId();
   const meineAufgaben = aufgaben.filter((a) => a.status !== 'erledigt' && (!currentMa || a.zugewiesenAn === currentMa)).slice(0, 6);
 
+  // --- Plantafel-Vorschau (aktuelle Woche) ---
+  const weekStartDate = startOfWeek(new Date());
+  const wocheTage = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStartDate);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().slice(0, 10);
+    const termineTag = termine
+      .filter((t) => {
+        const s = (t.start || '').slice(0, 10);
+        const e = (t.ende || '').slice(0, 10) || s;
+        return dateStr >= s && dateStr <= e;
+      })
+      .sort((a, b) => (a.start || '').localeCompare(b.start || ''));
+    return { dateStr, label: `${DOW[i]} ${d.getDate()}.${d.getMonth() + 1}.`, isHeute: dateStr === today, termine: termineTag };
+  });
+
   container.innerHTML = `
     <div class="view-header"><h1>Dashboard</h1></div>
     <div class="kpi-grid">
@@ -62,6 +92,31 @@ export async function render(container) {
               const count = projekte.filter((p) => p.status === s.id).length;
               return `<a class="dash-pipeline-col" href="#/projekte"><span class="count">${count}</span><span class="label">${escapeHtml(s.titel)}</span></a>`;
             }).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
+            <h2 style="margin:0">Plantafel – diese Woche</h2>
+            <a class="text-mute" href="#/plantafel" style="font-size:12.5px">Zur Plantafel →</a>
+          </div>
+          <div class="dash-woche">
+            ${wocheTage.map((tag) => `
+              <a class="dash-woche-tag ${tag.isHeute ? 'is-heute' : ''}" href="#/plantafel">
+                <div class="dash-woche-label">${escapeHtml(tag.label)}</div>
+                ${tag.termine.length === 0 ? '<div class="dash-woche-leer">–</div>' : `
+                  <div class="dash-woche-liste">
+                    ${tag.termine.slice(0, 4).map((t) => `
+                      <div class="dash-woche-termin">
+                        <span class="dash-woche-dot" style="background:${escapeHtml(typFarbe(t.typ))}"></span>
+                        <span>${escapeHtml(t.titel)}</span>
+                      </div>
+                    `).join('')}
+                    ${tag.termine.length > 4 ? `<div class="text-mute" style="font-size:11px">+${tag.termine.length - 4} weitere</div>` : ''}
+                  </div>
+                `}
+              </a>
+            `).join('')}
           </div>
         </div>
       </div>
