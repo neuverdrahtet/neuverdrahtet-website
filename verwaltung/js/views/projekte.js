@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -15,10 +15,10 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
-    getAll('ausgaben'), getAll('zeiterfassung'),
+    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -195,6 +195,64 @@ export async function render(container, opts = {}) {
     });
   }
 
+  function renderVerwendungen(host, projektId) {
+    const liste = verwendungen.filter((v) => v.projektId === projektId).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const katalogById = Object.fromEntries(katalog.map((k) => [k.id, k]));
+    host.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+        <h2 style="font-size:14px;margin:0">Verwendetes Material / Leistungen</h2>
+      </div>
+      <div class="flex-row" style="gap:6px;margin-bottom:10px">
+        <select id="verwendung-katalog" style="flex:2">
+          <option value="">– Artikel wählen –</option>
+          ${katalog.map((k) => `<option value="${k.id}">${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}</option>`).join('')}
+        </select>
+        <input type="number" id="verwendung-menge" placeholder="Menge" min="0" step="0.01" style="flex:1">
+        <button type="button" class="btn btn-sm" id="btn-verwendung-add">+ hinzufügen</button>
+      </div>
+      ${liste.length === 0 ? '<p class="text-mute">Noch kein Material/Leistungen erfasst.</p>' : `
+        <table class="data-table">
+          <thead><tr><th>Datum</th><th>Bezeichnung</th><th class="text-right">Menge</th><th></th></tr></thead>
+          <tbody>
+            ${liste.map((v) => {
+              const k = katalogById[v.katalogId];
+              return `
+                <tr data-id="${v.id}">
+                  <td>${formatDate(v.datum)}</td>
+                  <td>${escapeHtml(k?.bezeichnung || '– gelöschter Artikel –')}</td>
+                  <td class="text-right">${v.menge}${k?.einheit ? ` ${escapeHtml(k.einheit)}` : ''}</td>
+                  <td><a href="#" class="btn btn-sm verwendung-del" data-id="${v.id}">🗑️</a></td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+    host.querySelector('#btn-verwendung-add').addEventListener('click', async () => {
+      const katalogId = host.querySelector('#verwendung-katalog').value;
+      const menge = parseFloat(host.querySelector('#verwendung-menge').value);
+      if (!katalogId || !menge || menge <= 0) { toast('Bitte Artikel und Menge angeben', 'danger'); return; }
+      const entry = {
+        id: uid(), projektId, katalogId, menge, datum: new Date().toISOString().slice(0, 10),
+        mitarbeiterId: getCurrentMitarbeiterId() || '',
+      };
+      await put('verwendungen', entry);
+      verwendungen.push(entry);
+      toast('Verwendung erfasst', 'success');
+      renderVerwendungen(host, projektId);
+    });
+    host.querySelectorAll('.verwendung-del').forEach((link) => {
+      link.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const id = link.dataset.id;
+        await remove('verwendungen', id);
+        verwendungen = verwendungen.filter((v) => v.id !== id);
+        renderVerwendungen(host, projektId);
+      });
+    });
+  }
+
   function openForm(p) {
     const isEdit = !!p;
     const data = p || {
@@ -255,6 +313,8 @@ export async function render(container, opts = {}) {
             <div class="divider"></div>
             <div id="ausgaben-host"></div>
             <div class="divider"></div>
+            <div id="verwendung-host"></div>
+            <div class="divider"></div>
             <div id="tc-host"></div>
             <div class="divider"></div>
             <div id="foto-host"></div>
@@ -293,6 +353,7 @@ export async function render(container, opts = {}) {
         projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
       });
       renderProjektAusgaben(body.querySelector('#ausgaben-host'), data.id);
+      renderVerwendungen(body.querySelector('#verwendung-host'), data.id);
       renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {

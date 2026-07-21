@@ -29,7 +29,8 @@ service cloud.firestore {
     function isSharedCollection(collectionId) {
       return collectionId in [
         'projekte', 'termine', 'zeiterfassung', 'fotos', 'aufgaben', 'dokumente',
-        'kategorien', 'nachrichten', 'geraete', 'flotten', 'terminStatus', 'aufgabenStatus'
+        'kategorien', 'nachrichten', 'geraete', 'flotten', 'terminStatus', 'aufgabenStatus',
+        'verwendungen'
       ];
     }
 
