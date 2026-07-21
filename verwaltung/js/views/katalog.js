@@ -2,6 +2,7 @@ import { getAll, put, remove, getSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
+import * as lexoffice from '../lexoffice.js';
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
 const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
@@ -51,6 +52,7 @@ export async function render(container) {
       <h1>Artikel &amp; Leistungen</h1>
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
+        <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
       </div>
     </div>
@@ -95,7 +97,7 @@ export async function render(container) {
             <tr data-id="${i.id}">
               ${bulk.rowCell(i.id)}
               <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
-              <td>${escapeHtml(i.bezeichnung)}</td>
+              <td>${escapeHtml(i.bezeichnung)}${i.lexofficeArtikelId ? ' <span title="Verknüpft mit lexoffice">🔗</span>' : ''}</td>
               <td>${escapeHtml(i.einheit || '')}</td>
               <td class="text-right">${i.einkaufspreis ? formatCurrency(i.einkaufspreis) : '–'}</td>
               <td class="text-right">${i.einkaufspreis ? `${i.aufschlagProzent || 0}%` : '–'}</td>
@@ -179,6 +181,68 @@ export async function render(container) {
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
+  container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
+
+  function openLexofficeSync() {
+    const { body, close } = openModal({
+      title: 'Aus lexoffice abgleichen',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">Lädt deinen Artikelstamm aus lexoffice. Der Preis wird nur zur Auswahl angezeigt und NICHT lokal gespeichert – die Preisführung bleibt komplett in lexoffice.</p>
+        <div id="lo-sync-host"><p class="text-mute">Lade Artikel ...</p></div>
+        <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn" id="btn-cancel">Schließen</button></div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    const host = body.querySelector('#lo-sync-host');
+
+    lexoffice.fetchArtikel().then((artikel) => {
+      const bekannteIds = new Set(items.map((i) => i.lexofficeArtikelId).filter(Boolean));
+      if (artikel.length === 0) {
+        host.innerHTML = '<p class="text-mute">Keine Artikel in lexoffice gefunden.</p>';
+        return;
+      }
+      host.innerHTML = `
+        <table class="data-table">
+          <thead><tr><th>Bezeichnung</th><th>Einheit</th><th class="text-right">Preis (nur Anzeige)</th><th></th></tr></thead>
+          <tbody>
+            ${artikel.map((a) => {
+              const bereitsVerknuepft = bekannteIds.has(a.id);
+              const preis = a.price?.netPrice ?? a.price?.grossPrice;
+              return `
+                <tr>
+                  <td>${escapeHtml(a.title || a.name || '(ohne Namen)')}</td>
+                  <td>${escapeHtml(a.unitName || '')}</td>
+                  <td class="text-right">${preis != null ? formatCurrency(preis) : '–'}</td>
+                  <td>${bereitsVerknuepft ? '<span class="badge badge-success">Verknüpft</span>' : `<button type="button" class="btn btn-sm lo-import" data-id="${escapeHtml(a.id)}">Importieren</button>`}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+      host.querySelectorAll('.lo-import').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const a = artikel.find((x) => x.id === btn.dataset.id);
+          if (!a) return;
+          const typ = /service|leistung/i.test(a.type || '') ? 'leistung' : 'artikel';
+          const neu = {
+            id: uid(), typ, bezeichnung: a.title || a.name || '(ohne Namen)', beschreibung: '',
+            einheit: a.unitName || (typ === 'artikel' ? 'Stk.' : 'Std.'),
+            einkaufspreis: 0, aufschlagProzent: 0, preis: 0, steuersatz: settings.standardSteuersatz,
+            komponenten: [], lexofficeArtikelId: a.id,
+          };
+          await put('katalog', neu);
+          items.push(neu);
+          toast(`"${neu.bezeichnung}" importiert`, 'success');
+          btn.closest('tr').querySelector('td:last-child').innerHTML = '<span class="badge badge-success">Verknüpft</span>';
+          applyFilter();
+        });
+      });
+    }).catch((err) => {
+      host.innerHTML = `<p class="text-mute">Fehler: ${escapeHtml(err.message)}</p>`;
+    });
+  }
 
   function openImport() {
     const { body, close } = openModal({
