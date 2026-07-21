@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -62,8 +62,8 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben] = await Promise.all([
-    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'),
+  let [kunden, projekte, spalten, kategorien, dokumente, settings] = await Promise.all([
+    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -164,7 +164,7 @@ export async function render(container) {
           <input type="checkbox" id="import-replace">
           <label for="import-replace">Bestehende Kunden vor dem Import löschen (vollständig ersetzen)</label>
         </div>
-        <p class="hint" id="import-replace-warning" hidden>⚠️ Löscht unwiderruflich alle bisherigen Kunden. Bereits verknüpfte Projekte/Rechnungen bleiben erhalten, verweisen aber danach ggf. ins Leere.</p>
+        <p class="hint" id="import-replace-warning" hidden>⚠️ Löscht unwiderruflich alle bisherigen Kunden. Bereits verknüpfte Projekte bleiben erhalten, verweisen aber danach ggf. ins Leere.</p>
         <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
         <div class="modal-actions">
           <span class="spacer"></span>
@@ -210,9 +210,6 @@ export async function render(container) {
     const data = kunde || { id: uid(), firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '' };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
-    const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));
-    const linkedAusgaben = isEdit ? ausgaben.filter((a) => a.kundeId === data.id || linkedProjektIds.has(a.projektId)) : [];
-    const ausgabenSumme = linkedAusgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
     const suggestedKundennummer = !isEdit
       ? nextDailyNummer('', { datum: settings.kundeNummerDatum, zaehler: settings.kundeNummerZaehler }).nummer
       : '';
@@ -247,8 +244,7 @@ export async function render(container) {
                 <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
               </li>
             `).join('')}</ul>${linkedProjekte.length > 5 ? `<p class="text-mute">... und ${linkedProjekte.length - 5} weitere – in der Kundenakte einsehbar.</p>` : ''}` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
-            ${linkedAusgaben.length ? `<p class="hint">💶 ${linkedAusgaben.length} Ausgabe(n) diesem Kunden zugeordnet · ${formatCurrency(ausgabenSumme)} – Details in der Kundenakte.</p>` : ''}
-            <p class="hint">Alle Aufträge, Wartungen, Projekte, Ausgaben und Dokumente dieses Kunden findest du gesammelt in der Kundenakte.</p>
+            <p class="hint">Alle Aufträge, Wartungen, Projekte und Dokumente dieses Kunden findest du gesammelt in der Kundenakte.</p>
             <div class="divider"></div>
             <div id="dok-host"></div>
           ` : ''}
@@ -358,13 +354,8 @@ export async function render(container) {
       .filter((p) => p.kundeId === kunde.id)
       .sort((a, b) => (b.start || b.createdAt || '').localeCompare(a.start || a.createdAt || ''));
     const projektIds = new Set(kProjekte.map((p) => p.id));
-    const projekteById2 = Object.fromEntries(kProjekte.map((p) => [p.id, p]));
     const dokAnzahl = dokumente.filter((d) => d.bezugTyp === 'projekt' && projektIds.has(d.bezugId)).length;
     const offen = kProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
-    const kAusgaben = ausgaben
-      .filter((a) => a.kundeId === kunde.id || projektIds.has(a.projektId))
-      .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
-    const kAusgabenSumme = kAusgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
 
     const gruppen = [
       ...BEREICHE.map((b) => ({ id: b.id, titel: b.titel, items: kProjekte.filter((p) => p.bereich === b.id) })),
@@ -393,27 +384,7 @@ export async function render(container) {
       title: `Kundenakte – ${kunde.firma}`,
       wide: true,
       bodyHtml: `
-        <p class="text-mute" style="margin-top:-6px">${kProjekte.length} Aufträge/Projekte insgesamt, davon ${offen} offen · ${dokAnzahl} Dokumente · ${kAusgaben.length} Ausgaben</p>
-        <div class="akte-bereich">
-          <h2 style="font-size:14px;margin:14px 0 8px">Ausgaben / Belege${kAusgaben.length ? ` (${kAusgaben.length}, ${formatCurrency(kAusgabenSumme)})` : ''}</h2>
-          ${kAusgaben.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Kunden oder seinen Projekten zugeordnet.</p>' : `
-            <table class="data-table">
-              <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag</th><th></th></tr></thead>
-              <tbody>
-                ${kAusgaben.map((a) => `
-                  <tr>
-                    <td>${formatDate(a.datum)}</td>
-                    <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
-                    <td>${escapeHtml(a.beschreibung || a.lieferant || '')}</td>
-                    <td>${escapeHtml(projekteById2[a.projektId]?.titel || '')}</td>
-                    <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
-                    <td>${a.beleg ? `<a href="#" class="btn btn-sm akte-ausgabe-beleg" data-id="${a.id}">📎</a>` : ''}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          `}
-        </div>
+        <p class="text-mute" style="margin-top:-6px">${kProjekte.length} Aufträge/Projekte insgesamt, davon ${offen} offen · ${dokAnzahl} Dokumente</p>
         ${gruppen.length === 0 ? '<p class="text-mute">Noch keine Aufträge, Wartungen oder Projekte für diesen Kunden.</p>' : gruppen.map((g) => `
           <div class="akte-bereich">
             <h2 style="font-size:14px;margin:14px 0 8px">${escapeHtml(g.titel)} (${g.items.length})</h2>
@@ -426,17 +397,6 @@ export async function render(container) {
       `,
     });
 
-    body.querySelectorAll('.akte-ausgabe-beleg').forEach((link) => {
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const a = kAusgaben.find((x) => x.id === link.dataset.id);
-        if (!a?.beleg) return;
-        if (a.beleg.url) { window.open(a.beleg.url, '_blank', 'noopener'); return; }
-        const url = URL.createObjectURL(a.beleg);
-        window.open(url, '_blank', 'noopener');
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      });
-    });
     body.querySelectorAll('details.akte-projekt').forEach((det) => {
       let loaded = false;
       det.addEventListener('toggle', () => {

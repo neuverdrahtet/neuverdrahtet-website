@@ -1,5 +1,5 @@
-import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, clearStore, TEXTBAUSTEIN_KATEGORIEN, ZUGRIFFSROLLEN } from '../db.js';
-import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
+import { getSettings, setSettings, exportAll, importAll, ZUGRIFFSROLLEN } from '../db.js';
+import { escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import * as lexoffice from '../lexoffice.js';
@@ -21,20 +21,11 @@ const NAV = [
     { id: 'rollen', icon: '🛡️', label: 'Rollen & Berechtigungen' },
     { id: 'zugang', icon: '🔒', label: 'Zugangscode' },
   ] },
-  { group: 'Finanzen & Kalkulation', items: [
-    { id: 'nummern', icon: '#️⃣', label: 'Nummernkreise & Fristen' },
-    { id: 'kalkulation', icon: '📈', label: 'Zuschläge & Kalkulation' },
-  ] },
-  { group: 'Personal & Zeit', items: [
-    { id: 'zeit', icon: '⏱️', label: 'Zeiterfassung & Buchhaltung' },
-  ] },
   { group: 'Vorlagen & Texte', items: [
-    { id: 'textbausteine', icon: '📝', label: 'Textbausteine (Schlusstexte)' },
     { id: 'layout', icon: '🎨', label: 'Layout (Dokument-Design)' },
   ] },
   { group: 'Integrationen', items: [
     { id: 'google', icon: '📅', label: 'Google-Verbindung' },
-    { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
     { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
   ] },
   { group: 'Daten & Sicherheit', items: [
@@ -44,8 +35,6 @@ const NAV = [
 
 export async function render(container) {
   const settings = await getSettings();
-  const textbausteine = await getAll('textbausteine');
-  textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
   const isLight = settings.theme === 'light';
 
   container.innerHTML = `
@@ -102,7 +91,6 @@ export async function render(container) {
               <div class="field"><label>BIC</label><input name="bic" value="${escapeHtml(settings.bic)}"></div>
               <div class="field"><label>Bank</label><input name="bank" value="${escapeHtml(settings.bank)}"></div>
               <div class="field"><label>Inhaber</label><input name="inhaber" value="${escapeHtml(settings.inhaber || '')}"></div>
-              <div class="field field-checkbox col-span-2"><input type="checkbox" name="kleinunternehmer" id="ku" ${settings.kleinunternehmer ? 'checked' : ''}><label for="ku">Kleinunternehmer nach §19 UStG (keine USt. ausweisen)</label></div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
@@ -136,68 +124,9 @@ export async function render(container) {
           </form>
         </div>
 
-        <div class="card settings-panel" data-panel="nummern" hidden>
-          <h2>Nummernkreise &amp; Fristen</h2>
-          <p class="hint">
-            Angebots-/Rechnungsnummer und Kundennummer werden automatisch nach dem Schema
-            <strong>Jahr + Tag + Monat + laufende Tagesnummer</strong> vergeben, z.B. <code>2026180701</code>
-            für den 18.07., 1. Dokument dieses Tages – bei Jahreswechsel geht es automatisch wieder bei
-            <code>...010101</code> los. Die Nummer bleibt bei jedem Angebot/jeder Rechnung/jedem Kunden
-            im Formular weiterhin frei editierbar, hier legst du nur das Präfix fest.
-          </p>
-          <form id="nr-form">
-            <div class="form-grid">
-              <div class="field"><label>Angebots-Präfix</label><input name="angebotPrefix" value="${escapeHtml(settings.angebotPrefix)}"></div>
-              <div class="field"><label>Rechnungs-Präfix</label><input name="rechnungPrefix" value="${escapeHtml(settings.rechnungPrefix)}"></div>
-              <div class="field"><label>Standard USt.-Satz (%)</label><input type="number" name="standardSteuersatz" value="${settings.standardSteuersatz}"></div>
-              <div class="field"><label>Angebot gültig (Tage)</label><input type="number" name="angebotGueltigTage" value="${settings.angebotGueltigTage}"></div>
-              <div class="field"><label>Zahlungsziel Rechnung (Tage)</label><input type="number" name="zahlungszielTage" value="${settings.zahlungszielTage}"></div>
-              <div class="field"><label>Mahnfrist (Tage)</label><input type="number" name="mahnfristTage" value="${settings.mahnfristTage}"></div>
-              <div class="field"><label>Mahngebühr Stufe 1 (€)</label><input type="number" step="0.01" name="mahn1" value="${settings.mahnGebuehr?.[1] ?? 0}"></div>
-              <div class="field"><label>Mahngebühr Stufe 2 (€)</label><input type="number" step="0.01" name="mahn2" value="${settings.mahnGebuehr?.[2] ?? 0}"></div>
-              <div class="field"><label>Mahngebühr Stufe 3 (€)</label><input type="number" step="0.01" name="mahn3" value="${settings.mahnGebuehr?.[3] ?? 0}"></div>
-            </div>
-            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
-          </form>
-        </div>
-
-        <div class="card settings-panel" data-panel="kalkulation" hidden>
-          <h2>Zuschläge &amp; Kalkulation</h2>
-          <p class="hint">Wird als Vorschlag für den Zuschlag (%) beim Anlegen neuer Artikel/Leistungen/Pakete im Katalog verwendet (EK × (1 + Zuschlag/100) = VK). Lässt sich pro Eintrag weiterhin frei anpassen.</p>
-          <form id="kalk-form">
-            <div class="form-grid">
-              <div class="field"><label>Standard-Zuschlag (%)</label><input type="number" step="1" min="0" name="standardAufschlagProzent" value="${settings.standardAufschlagProzent ?? 20}"></div>
-            </div>
-            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
-          </form>
-        </div>
-
-        <div class="card settings-panel" data-panel="zeit" hidden>
-          <h2>Zeiterfassung &amp; Buchhaltung</h2>
-          <form id="buch-form">
-            <div class="form-grid">
-              <div class="field"><label>Stundensatz für Zeiterfassung (€)</label><input type="number" step="0.01" min="0" name="stundensatz" value="${settings.stundensatz}"></div>
-              <div class="field"></div>
-              <div class="field"><label>DATEV Berater-Nr.</label><input name="datevBeraterNr" value="${escapeHtml(settings.datevBeraterNr || '')}"></div>
-              <div class="field"><label>DATEV Mandanten-Nr.</label><input name="datevMandantNr" value="${escapeHtml(settings.datevMandantNr || '')}"></div>
-              <div class="field"><label>Erlöskonto (SKR)</label><input name="datevErloesKonto" value="${escapeHtml(settings.datevErloesKonto)}"></div>
-              <div class="field"><label>Aufwandskonto (SKR)</label><input name="datevAufwandKonto" value="${escapeHtml(settings.datevAufwandKonto)}"></div>
-            </div>
-            <p class="hint">Die DATEV-Felder werden nur für den Buchhaltungsexport benötigt – bitte mit deinem Steuerberater abstimmen.</p>
-            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
-          </form>
-        </div>
-
-        <div class="card settings-panel" data-panel="textbausteine" hidden>
-          <h2>Textbausteine (Schlusstexte)</h2>
-          <p class="hint">Wiederverwendbare Schlusstexte für Angebote/Rechnungen – dort per Mehrfachauswahl in die Notizen einfügbar.</p>
-          <div id="tb-list"></div>
-          <button class="btn btn-sm" id="btn-tb-new" style="margin-top:8px">+ Neuer Textbaustein</button>
-        </div>
-
         <div class="card settings-panel" data-panel="layout" hidden>
           <h2>Layout (Dokument-Design)</h2>
-          <p class="hint">Gilt für Angebote, Rechnungen und Mahnungen (PDF und Druckvorschau). Die Fußzeile mit Firmendaten, Bankverbindung und Seitenzahl ist immer am unteren Rand jeder Seite fixiert und verschiebt sich nicht, egal wie viel Text im Hauptteil steht.</p>
+          <p class="hint">Gilt für Berichte/Protokolle (PDF). Die Fußzeile mit Firmendaten, Bankverbindung und Seitenzahl ist immer am unteren Rand jeder Seite fixiert und verschiebt sich nicht, egal wie viel Text im Hauptteil steht.</p>
           <form id="layout-form">
             <div class="form-grid">
               <div class="field"><label>Akzentfarbe (Tabellenköpfe)</label><input type="color" name="dokAkzentfarbe" id="layout-akzent" value="${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')}"></div>
@@ -210,11 +139,11 @@ export async function render(container) {
           <div class="dok-layout-preview" id="layout-preview" style="--dok-akzent:${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')};--dok-fontsize:${settings.dokSchriftgroesse || 10}px">
             <div class="dlp-header">
               <div>${escapeHtml(settings.firmenname || 'Musterfirma GmbH')}</div>
-              <div class="dlp-titel">Rechnung</div>
+              <div class="dlp-titel">Bericht</div>
             </div>
             <table class="dlp-table">
-              <thead><tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Preis</th></tr></thead>
-              <tbody><tr><td>1</td><td>Beispiel-Leistung</td><td>1</td><td>100,00 €</td></tr></tbody>
+              <thead><tr><th>Raum / Bereich</th><th>Beschreibung / Zustand</th></tr></thead>
+              <tbody><tr><td>Beispiel-Raum</td><td>Beispiel-Text</td></tr></tbody>
             </table>
             <div class="dlp-footer">${escapeHtml(settings.firmenname || 'Musterfirma GmbH')} · Fußzeile bleibt immer am unteren Rand</div>
           </div>
@@ -223,7 +152,7 @@ export async function render(container) {
         <div class="card settings-panel" data-panel="google" hidden>
           <h2>Google-Verbindung (Kalender &amp; Gmail)</h2>
           <p class="hint">
-            Verbindet die Verwaltung mit deinem Google-Konto, damit Termine mit Google Kalender abgeglichen werden und du Angebote/Rechnungen/Mahnungen direkt per Gmail verschicken kannst.
+            Verbindet die Verwaltung mit deinem Google-Konto, damit Termine mit Google Kalender abgeglichen werden und du Dokumente/Berichte direkt per Gmail verschicken kannst.
             Dafür brauchst du einmalig eine kostenlose <strong>Google Client-ID</strong> aus der Google Cloud Console – frag mich im Chat, wenn du dabei Hilfe brauchst.
             Die Verbindung gilt jeweils nur für die aktuelle Browser-Sitzung; nach dem Schließen des Browsers musst du dich beim nächsten Mal neu verbinden.
           </p>
@@ -239,20 +168,6 @@ export async function render(container) {
               <button type="button" class="btn" id="btn-google-connect">Mit Google verbinden</button>
               <button type="submit" class="btn btn-primary">Speichern</button>
             </div>
-          </form>
-        </div>
-
-        <div class="card settings-panel" data-panel="ki" hidden>
-          <h2>KI-Angebotserstellung</h2>
-          <p class="hint">
-            Erstellt Angebotspositionen automatisch aus Stichpunkten (z.B. auf der Baustelle diktiert). Dafür wird ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt, der deinen Anthropic-API-Schlüssel sicher verwahrt – der Schlüssel selbst liegt niemals im Browser. Details/Einrichtung: Ordner <code>cloudflare-worker/</code> im Projekt bzw. frag im Chat nach.
-          </p>
-          <form id="ai-form">
-            <div class="form-grid">
-              <div class="field col-span-2"><label>Worker-URL</label><input name="aiWorkerUrl" placeholder="https://neuverdrahtet-ki-angebote.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.aiWorkerUrl || '')}"></div>
-              <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="aiAppSecret" value="${escapeHtml(settings.aiAppSecret || '')}"></div>
-            </div>
-            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
         </div>
 
@@ -322,15 +237,6 @@ export async function render(container) {
             <button class="btn" id="btn-backup-list">Verfügbare Backups anzeigen</button>
           </div>
           <div id="drive-backup-list-host"></div>
-
-          <h2 style="margin-top:28px">Testdaten zurücksetzen</h2>
-          <p class="hint">Löscht alle Datensätze im gewählten Bereich unwiderruflich – auch bereits versendete/gesperrte Rechnungen. Gedacht, um Testeinträge komplett zu entfernen und wieder bei 0 anzufangen.</p>
-          <form id="reset-form" style="max-width:360px">
-            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="rechnungen" id="reset-rechnungen"><label for="reset-rechnungen">Rechnungen</label></div>
-            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="angebote" id="reset-angebote"><label for="reset-angebote">Angebote</label></div>
-            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="mahnungen" id="reset-mahnungen"><label for="reset-mahnungen">Mahnungen</label></div>
-            <button type="submit" class="btn btn-danger" style="margin-top:12px">Ausgewählte Bereiche löschen</button>
-          </form>
         </div>
 
       </div>
@@ -357,78 +263,6 @@ export async function render(container) {
     document.documentElement.dataset.theme = theme;
     toast('Darstellung gespeichert', 'success');
   });
-
-  const tbListHost = container.querySelector('#tb-list');
-  function renderTbList() {
-    tbListHost.innerHTML = textbausteine.length === 0
-      ? '<p class="text-mute">Noch keine Textbausteine angelegt.</p>'
-      : `<ul class="cal-event-list">${textbausteine.map((t) => `
-          <li data-id="${t.id}">
-            <div>
-              <strong>${escapeHtml(t.titel)}</strong>
-              <div class="text-mute">${escapeHtml(TEXTBAUSTEIN_KATEGORIEN.find((k) => k.id === t.kategorie)?.titel || '')} · ${escapeHtml((t.text || '').slice(0, 60))}${(t.text || '').length > 60 ? '…' : ''}</div>
-            </div>
-            <div class="flex-row">
-              <button type="button" class="btn btn-sm btn-ghost btn-tb-edit">Bearbeiten</button>
-              <button type="button" class="btn btn-sm btn-ghost btn-tb-del">Löschen</button>
-            </div>
-          </li>
-        `).join('')}</ul>`;
-    tbListHost.querySelectorAll('.btn-tb-edit').forEach((btn) => {
-      btn.addEventListener('click', () => openTbForm(textbausteine.find((t) => t.id === btn.closest('li').dataset.id)));
-    });
-    tbListHost.querySelectorAll('.btn-tb-del').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.closest('li').dataset.id;
-        const t = textbausteine.find((x) => x.id === id);
-        if (!confirmDelete(`Textbaustein "${t.titel}" wirklich löschen?`)) return;
-        await remove('textbausteine', id);
-        const i = textbausteine.findIndex((x) => x.id === id);
-        textbausteine.splice(i, 1);
-        renderTbList();
-        toast('Textbaustein gelöscht');
-      });
-    });
-  }
-  function openTbForm(t) {
-    const isEdit = !!t;
-    const data = t || { id: uid(), titel: '', text: '', kategorie: 'beide' };
-    const { body, close } = openModal({
-      title: isEdit ? 'Textbaustein bearbeiten' : 'Neuer Textbaustein',
-      bodyHtml: `
-        <form id="tb-form">
-          <div class="form-grid">
-            <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
-            <div class="field col-span-2"><label>Verwendung</label>
-              <select name="kategorie">${TEXTBAUSTEIN_KATEGORIEN.map((k) => `<option value="${k.id}" ${k.id === data.kategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
-            </div>
-            <div class="field col-span-2"><label>Text *</label><textarea name="text" required style="min-height:100px">${escapeHtml(data.text)}</textarea></div>
-          </div>
-          <div class="modal-actions">
-            <span class="spacer"></span>
-            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
-            <button type="submit" class="btn btn-primary">Speichern</button>
-          </div>
-        </form>
-      `,
-    });
-    body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#tb-form').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const updated = { ...data, titel: (fd.get('titel') || '').toString().trim(), text: (fd.get('text') || '').toString().trim(), kategorie: fd.get('kategorie') || 'beide' };
-      if (!updated.titel || !updated.text) return;
-      await put('textbausteine', updated);
-      if (!isEdit) textbausteine.push(updated);
-      else Object.assign(t, updated);
-      textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
-      toast(isEdit ? 'Textbaustein aktualisiert' : 'Textbaustein angelegt', 'success');
-      close();
-      renderTbList();
-    });
-  }
-  renderTbList();
-  container.querySelector('#btn-tb-new').addEventListener('click', () => openTbForm());
 
   container.querySelector('#logo-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
@@ -459,7 +293,6 @@ export async function render(container) {
     for (const key of ['firmenname', 'strasse', 'plzOrt', 'telefon', 'email', 'ustId', 'steuernummer', 'iban', 'bic', 'bank', 'inhaber']) {
       update[key] = (fd.get(key) || '').toString().trim();
     }
-    update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
     await setSettings(update);
     toast('Firmendaten gespeichert', 'success');
   });
@@ -481,36 +314,6 @@ export async function render(container) {
       dokSchriftgroesse: Number(fd.get('dokSchriftgroesse')) || 10,
     });
     toast('Layout gespeichert', 'success');
-  });
-
-  container.querySelector('#kalk-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await setSettings({ standardAufschlagProzent: Number(fd.get('standardAufschlagProzent')) || 0 });
-    toast('Kalkulationseinstellungen gespeichert', 'success');
-  });
-
-  container.querySelector('#buch-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await setSettings({
-      stundensatz: Number(fd.get('stundensatz')) || 0,
-      datevBeraterNr: (fd.get('datevBeraterNr') || '').toString().trim(),
-      datevMandantNr: (fd.get('datevMandantNr') || '').toString().trim(),
-      datevErloesKonto: (fd.get('datevErloesKonto') || '8400').toString().trim(),
-      datevAufwandKonto: (fd.get('datevAufwandKonto') || '4900').toString().trim(),
-    });
-    toast('Gespeichert', 'success');
-  });
-
-  container.querySelector('#ai-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await setSettings({
-      aiWorkerUrl: (fd.get('aiWorkerUrl') || '').toString().trim(),
-      aiAppSecret: (fd.get('aiAppSecret') || '').toString().trim(),
-    });
-    toast('KI-Einstellungen gespeichert', 'success');
   });
 
   container.querySelector('#google-form').addEventListener('submit', async (e) => {
@@ -605,21 +408,6 @@ export async function render(container) {
       });
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
-  });
-
-  container.querySelector('#nr-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    await setSettings({
-      angebotPrefix: fd.get('angebotPrefix') || 'AN-',
-      rechnungPrefix: fd.get('rechnungPrefix') || 'RE-',
-      standardSteuersatz: Number(fd.get('standardSteuersatz')) || 19,
-      angebotGueltigTage: Number(fd.get('angebotGueltigTage')) || 30,
-      zahlungszielTage: Number(fd.get('zahlungszielTage')) || 14,
-      mahnfristTage: Number(fd.get('mahnfristTage')) || 10,
-      mahnGebuehr: [0, Number(fd.get('mahn1')) || 0, Number(fd.get('mahn2')) || 0, Number(fd.get('mahn3')) || 0],
-    });
-    toast('Einstellungen gespeichert', 'success');
   });
 
   container.querySelector('#pw-form').addEventListener('submit', async (e) => {
@@ -757,24 +545,5 @@ export async function render(container) {
     } catch (err) {
       listHost.innerHTML = `<p class="text-mute">Fehler beim Laden: ${escapeHtml(err.message)}</p>`;
     }
-  });
-
-  const resetLabels = { rechnungen: 'Rechnungen', angebote: 'Angebote', mahnungen: 'Mahnungen' };
-  container.querySelector('#reset-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const bereiche = Array.from(e.target.querySelectorAll('input[name="bereich"]:checked')).map((c) => c.value);
-    if (!bereiche.length) {
-      toast('Bitte mindestens einen Bereich auswählen', 'info');
-      return;
-    }
-    const namen = bereiche.map((b) => resetLabels[b]).join(', ');
-    if (!confirmDelete(`${namen} wirklich unwiderruflich löschen? Das betrifft auch bereits versendete/gesperrte Einträge und kann nicht rückgängig gemacht werden.`)) return;
-    for (const bereich of bereiche) {
-      await clearStore(bereich);
-    }
-    if (bereiche.includes('rechnungen')) await setSettings({ rechnungNummerDatum: '', rechnungNummerZaehler: 0 });
-    if (bereiche.includes('angebote')) await setSettings({ angebotNummerDatum: '', angebotNummerZaehler: 0 });
-    toast(`${namen} gelöscht`, 'success');
-    e.target.querySelectorAll('input[name="bereich"]').forEach((c) => { c.checked = false; });
   });
 }

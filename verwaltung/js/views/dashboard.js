@@ -1,79 +1,12 @@
 import { getAll, put, getSettings } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
+import { uid, formatDate, todayISO, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
 
-const CHART_UMSATZ_COLOR = '#1f8a4c';
-const CHART_AUSGABEN_COLOR = '#ef4444';
 const WEATHER_ICON = {
   0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️',
   51: '🌦️', 53: '🌦️', 55: '🌦️', 61: '🌧️', 63: '🌧️', 65: '🌧️',
   71: '🌨️', 73: '🌨️', 75: '🌨️', 80: '🌦️', 81: '🌧️', 82: '⛈️',
   95: '⛈️', 96: '⛈️', 99: '⛈️',
 };
-const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
-
-function lastNMonths(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${MONTH_SHORT[d.getMonth()]} ${String(d.getFullYear()).slice(2)}` });
-  }
-  return out;
-}
-
-function niceMax(v) {
-  if (v <= 0) return 100;
-  const magnitude = 10 ** Math.floor(Math.log10(v));
-  const steps = [1, 2, 2.5, 5, 10];
-  for (const s of steps) {
-    if (v <= s * magnitude) return s * magnitude;
-  }
-  return 10 * magnitude;
-}
-
-function buildLineChart(months, umsatz, ausgaben) {
-  const width = 680;
-  const height = 230;
-  const pad = { top: 12, right: 14, bottom: 26, left: 56 };
-  const innerW = width - pad.left - pad.right;
-  const innerH = height - pad.top - pad.bottom;
-  const max = niceMax(Math.max(1, ...umsatz, ...ausgaben));
-  const xStep = innerW / Math.max(1, months.length - 1);
-  const xScale = (i) => pad.left + i * xStep;
-  const yScale = (v) => pad.top + innerH - (v / max) * innerH;
-  const pathFor = (arr) => arr.map((v, i) => `${i === 0 ? 'M' : 'L'} ${xScale(i).toFixed(1)} ${yScale(v).toFixed(1)}`).join(' ');
-
-  const gridCount = 4;
-  const gridLines = Array.from({ length: gridCount + 1 }, (_, i) => {
-    const v = (max / gridCount) * i;
-    const y = yScale(v);
-    return `
-      <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${width - pad.right}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
-      <text x="${pad.left - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--text-mute)">${formatCurrency(v).replace(',00', '')}</text>
-    `;
-  }).join('');
-
-  const xLabels = months.map((m, i) => (i % 2 === 0 || months.length <= 6
-    ? `<text x="${xScale(i).toFixed(1)}" y="${height - 6}" text-anchor="middle" font-size="10" fill="var(--text-mute)">${m.label}</text>`
-    : '')).join('');
-
-  const markers = (arr, color) => arr.map((v, i) => `
-    <circle cx="${xScale(i).toFixed(1)}" cy="${yScale(v).toFixed(1)}" r="3.5" fill="${color}">
-      <title>${months[i].label}: ${formatCurrency(v)}</title>
-    </circle>
-  `).join('');
-
-  return `
-    <svg viewBox="0 0 ${width} ${height}" style="width:100%;height:auto;display:block" role="img" aria-label="Umsatz und Ausgaben je Monat">
-      ${gridLines}
-      ${xLabels}
-      <path d="${pathFor(ausgaben)}" fill="none" stroke="${CHART_AUSGABEN_COLOR}" stroke-width="2" stroke-linecap="round" stroke-dasharray="5,4"/>
-      <path d="${pathFor(umsatz)}" fill="none" stroke="${CHART_UMSATZ_COLOR}" stroke-width="2" stroke-linecap="round"/>
-      ${markers(ausgaben, CHART_AUSGABEN_COLOR)}
-      ${markers(umsatz, CHART_UMSATZ_COLOR)}
-    </svg>
-  `;
-}
 
 async function loadWeather(lat, lng) {
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&hourly=temperature_2m,weathercode&timezone=auto&forecast_days=1`;
@@ -83,9 +16,9 @@ async function loadWeather(lat, lng) {
 }
 
 export async function render(container) {
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog] = await Promise.all([
-    getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'),
+  const [projekte, termine, kunden, spalten, aufgaben, mitarbeiter, settings, katalog] = await Promise.all([
+    getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
+    getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'),
   ]);
   const niedrigBestand = katalog
     .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
@@ -94,46 +27,8 @@ export async function render(container) {
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
-  const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
 
-  const offen = rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
-  const ueberfaellig = offen.filter((r) => r.faelligAm && r.faelligAm < today).map((r) => {
-    const mahnungenFuerR = mahnungen.filter((m) => m.rechnungId === r.id).sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
-    const letzte = mahnungenFuerR[mahnungenFuerR.length - 1];
-    const wartetBis = letzte ? letzte.neueFrist : r.faelligAm;
-    return { ...r, mahnstufeCount: mahnungenFuerR.length, mahnBereit: !wartetBis || wartetBis < today, mahnWartetBis: wartetBis, mahnNextStufe: Math.min(mahnungenFuerR.length + 1, 3) };
-  });
-  const mahnBereitCount = ueberfaellig.filter((r) => r.mahnBereit).length;
-  const offenSumme = offen.reduce((s, r) => s + (r.brutto || 0), 0);
-  const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + (r.brutto || 0), 0);
   const aktiveProjekte = projekte.filter((p) => !spaltenById[p.status]?.geschlossen);
-
-  // --- Cashflow-Score ---
-  const imMahnverfahren = offen.filter((r) => mahnungen.some((m) => m.rechnungId === r.id));
-  const imZahlungsziel = offen.filter((r) => !imMahnverfahren.includes(r) && (!r.faelligAm || r.faelligAm >= today));
-  const alleAktuell = rechnungen.filter((r) => r.status === 'bezahlt');
-  const scoreBase = imZahlungsziel.length + imMahnverfahren.length;
-  const score = scoreBase === 0 ? 100 : Math.round((imZahlungsziel.length / scoreBase) * 100);
-  const scoreColor = score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warn)' : 'var(--danger)';
-  const scoreLabel = score >= 80 ? 'Gesund' : score >= 50 ? 'Beobachten' : 'Kritisch';
-
-  // --- Umsatz & Ausgaben chart (12 months) ---
-  const months = lastNMonths(12);
-  const umsatzByMonth = Object.fromEntries(months.map((m) => [m.key, 0]));
-  const ausgabenByMonth = Object.fromEntries(months.map((m) => [m.key, 0]));
-  for (const r of rechnungen) {
-    const key = (r.datum || '').slice(0, 7);
-    if (key in umsatzByMonth) umsatzByMonth[key] += Number(r.netto) || 0;
-  }
-  for (const a of ausgaben) {
-    const key = (a.datum || '').slice(0, 7);
-    if (key in ausgabenByMonth) ausgabenByMonth[key] += Number(a.betragNetto) || 0;
-  }
-  const umsatzSeries = months.map((m) => umsatzByMonth[m.key]);
-  const ausgabenSeries = months.map((m) => ausgabenByMonth[m.key]);
-  const umsatzSumme = umsatzSeries.reduce((s, v) => s + v, 0);
-  const ausgabenSumme = ausgabenSeries.reduce((s, v) => s + v, 0);
-  const uebrigSumme = umsatzSumme - ausgabenSumme;
 
   // --- Today's Termine ---
   const heute = termine.filter((t) => {
@@ -151,50 +46,12 @@ export async function render(container) {
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></div>
       <div class="kpi-card"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></div>
-      <div class="kpi-card kpi-warn"><div class="kpi-value">${offen.length}</div><div class="kpi-label">Offene Rechnungen &middot; ${formatCurrency(offenSumme)}</div></div>
-      <div class="kpi-card kpi-danger"><div class="kpi-value">${ueberfaellig.length}</div><div class="kpi-label">Überfällig &middot; ${formatCurrency(ueberfaelligSumme)}</div></div>
+      <div class="kpi-card"><div class="kpi-value">${heute.length}</div><div class="kpi-label">Termine heute</div></div>
+      <div class="kpi-card"><div class="kpi-value">${meineAufgaben.length}</div><div class="kpi-label">Offene Aufgaben</div></div>
     </div>
 
     <div class="dash-layout">
       <div class="dash-main">
-        <div class="card">
-          <div class="dash-score-row">
-            <div>
-              <div class="text-mute" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">Zahlungseingang</div>
-              <h2 style="margin:2px 0 2px">Cashflow: ${scoreLabel}</h2>
-              <p class="text-mute" style="margin:0;font-size:12.5px">Anteil Rechnungen im Zahlungsziel ohne Mahnverfahren</p>
-            </div>
-            <div class="dash-score-gauge" style="--score-color:${scoreColor}">
-              <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="var(--border)" stroke-width="8"/>
-                <circle cx="40" cy="40" r="34" fill="none" stroke="${scoreColor}" stroke-width="8" stroke-linecap="round"
-                  stroke-dasharray="${(score / 100 * 213.6).toFixed(1)} 213.6" transform="rotate(-90 40 40)"/></svg>
-              <span>${score}</span>
-            </div>
-          </div>
-          <div class="dash-score-stats">
-            <div><span class="badge badge-success">✓</span> Im Zahlungsziel<strong>${formatCurrency(imZahlungsziel.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${imZahlungsziel.length} Rechnungen</span></div>
-            <div><span class="badge badge-warn">!</span> Im Mahnverfahren<strong>${formatCurrency(imMahnverfahren.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${imMahnverfahren.length} Rechnungen</span></div>
-            <div><span class="badge badge-success">✓</span> Bezahlt<strong>${formatCurrency(alleAktuell.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${alleAktuell.length} Rechnungen</span></div>
-          </div>
-          <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>
-        </div>
-
-        <div class="card">
-          <div class="flex-row" style="justify-content:space-between;margin-bottom:6px">
-            <h2 style="margin:0">Umsatz &amp; Ausgaben</h2>
-            <div class="cal-legend" style="margin:0">
-              <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_UMSATZ_COLOR}"></span>Umsatz</span>
-              <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_AUSGABEN_COLOR}"></span>Ausgaben</span>
-            </div>
-          </div>
-          <div class="dash-score-stats" style="margin-top:0;padding-top:0;border-top:none;margin-bottom:12px">
-            <div><span class="text-mute">Einnahmen (12 Mon.)</span><strong style="color:${CHART_UMSATZ_COLOR}">${formatCurrency(umsatzSumme)}</strong></div>
-            <div><span class="text-mute">Ausgaben (12 Mon.)</span><strong style="color:${CHART_AUSGABEN_COLOR}">${formatCurrency(ausgabenSumme)}</strong></div>
-            <div><span class="text-mute">Übrig</span><strong style="color:${uebrigSumme >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(uebrigSumme)}</strong></div>
-          </div>
-          ${buildLineChart(months, umsatzSeries, ausgabenSeries)}
-        </div>
-
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
             <h2 style="margin:0">Projekt-Pipeline</h2>
@@ -270,29 +127,6 @@ export async function render(container) {
         </div>
       </div>
     </div>
-
-    ${ueberfaellig.length ? `
-      <div class="card">
-        <h2>Überfällige Rechnungen${mahnBereitCount > 0 ? ` <span class="badge badge-danger">${mahnBereitCount} bereit für nächste Mahnstufe</span>` : ''}</h2>
-        <table class="data-table">
-          <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Betrag</th><th>Mahnstatus</th></tr></thead>
-          <tbody>
-            ${ueberfaellig.map((r) => `
-              <tr>
-                <td>${escapeHtml(r.nummer)}</td>
-                <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
-                <td>${formatDate(r.faelligAm)}</td>
-                <td>${formatCurrency(r.brutto)}</td>
-                <td>${r.mahnBereit
-                  ? `<span class="badge badge-danger">Bereit: Stufe ${r.mahnNextStufe}</span>`
-                  : `<span class="badge">Wartet bis ${formatDate(r.mahnWartetBis)}</span>`}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-        <p class="hint"><a href="#/mahnungen">→ Zu den Mahnungen</a></p>
-      </div>
-    ` : ''}
 
     ${niedrigBestand.length ? `
       <div class="card">
