@@ -339,6 +339,8 @@ const DEFAULT_SETTINGS = {
   aiWorkerUrl: '',
   aiAppSecret: '',
   lexofficeApiKey: '',
+  lexofficeArbeitsstundeArtikelId: '',
+  lexofficeArbeitsstundeArtikelName: '',
   wetterOrt: 'Essen',
   wetterLat: 51.4556,
   wetterLng: 7.0116,

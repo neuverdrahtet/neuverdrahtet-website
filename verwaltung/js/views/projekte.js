@@ -7,6 +7,7 @@ import { renderDokumenteSection } from '../dokumente.js';
 import { renderNachkalkulation } from '../nachkalkulation.js';
 import { renderTeamchat } from '../teamchat.js';
 import { createBulkSelect } from '../bulkselect.js';
+import * as lexoffice from '../lexoffice.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
@@ -15,10 +16,10 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
-    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'),
+    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -253,6 +254,114 @@ export async function render(container, opts = {}) {
     });
   }
 
+  function pickLexofficeContact(contacts, firma) {
+    return new Promise((resolve) => {
+      const { body, close } = openModal({
+        title: `lexoffice-Kontakt für "${firma}" wählen`,
+        bodyHtml: `
+          <p class="hint">Es gibt mehrere passende Kontakte in lexoffice. Bitte den richtigen wählen.</p>
+          <div class="cal-event-list">
+            ${contacts.map((c) => `
+              <button type="button" class="btn" style="display:block;width:100%;text-align:left;margin-bottom:6px" data-id="${escapeHtml(c.id)}">
+                ${escapeHtml(c.company?.name || [c.person?.firstName, c.person?.lastName].filter(Boolean).join(' ') || c.id)}
+              </button>
+            `).join('')}
+          </div>
+          <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn" id="btn-cancel">Abbrechen</button></div>
+        `,
+      });
+      body.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', () => { close(); resolve(btn.dataset.id); });
+      });
+      body.querySelector('#btn-cancel').addEventListener('click', () => { close(); resolve(null); });
+    });
+  }
+
+  async function uebertrageAnLexoffice(projekt) {
+    if (!(await lexoffice.isConfigured())) {
+      toast('Bitte zuerst in den Einstellungen den lexoffice-API-Key hinterlegen.', 'danger');
+      return;
+    }
+    const kunde = kundenById[projekt.kundeId];
+    if (!kunde) { toast('Diesem Projekt ist kein Kunde zugewiesen.', 'danger'); return; }
+
+    const offeneZeiten = zeiterfassung.filter((z) => z.projektId === projekt.id && !z.lexofficeExportiert);
+    const offeneVerwendungen = verwendungen.filter((v) => v.projektId === projekt.id && !v.lexofficeExportiert);
+    const gesamtStunden = offeneZeiten.reduce((s, z) => s + (z.dauerMinuten || 0), 0) / 60;
+
+    if (!offeneZeiten.length && !offeneVerwendungen.length) {
+      toast('Keine offenen Zeiterfassungs- oder Verwendungs-Einträge für dieses Projekt.', 'danger');
+      return;
+    }
+    if (gesamtStunden > 0 && !settings.lexofficeArbeitsstundeArtikelId) {
+      toast('Bitte zuerst in den Einstellungen einen lexoffice-Artikel für "Arbeitsstunde" auswählen.', 'danger');
+      return;
+    }
+
+    const lineItems = [];
+    if (gesamtStunden > 0) {
+      lineItems.push({ type: 'material', id: settings.lexofficeArbeitsstundeArtikelId, quantity: Math.round(gesamtStunden * 100) / 100, unitName: 'Stunde' });
+    }
+    const fehlendeArtikel = [];
+    const katalogById = Object.fromEntries(katalog.map((k) => [k.id, k]));
+    for (const v of offeneVerwendungen) {
+      const k = katalogById[v.katalogId];
+      if (!k?.lexofficeArtikelId) { fehlendeArtikel.push(k?.bezeichnung || v.katalogId); continue; }
+      lineItems.push({ type: 'material', id: k.lexofficeArtikelId, quantity: v.menge, unitName: k.einheit || undefined });
+    }
+    if (fehlendeArtikel.length) {
+      toast(`Folgende Artikel sind noch nicht mit lexoffice verknüpft: ${fehlendeArtikel.join(', ')}. Bitte im Katalog abgleichen.`, 'danger');
+      return;
+    }
+
+    const berichte = dokumente.filter((d) => d.bezugTyp === 'projekt' && d.bezugId === projekt.id && d.kategorie === 'bericht')
+      .sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
+    if (berichte[0]) {
+      lineItems.push({ type: 'text', name: 'Protokoll/Bericht', description: `Siehe Dokumentation "${berichte[0].name}" vom ${formatDate(berichte[0].erstelltAm)} in der Projekt-Akte.` });
+    }
+
+    let contactId = kunde.lexofficeContactId;
+    if (!contactId) {
+      let contacts;
+      try {
+        contacts = await lexoffice.searchContacts(kunde.firma);
+      } catch (err) {
+        toast(err.message, 'danger');
+        return;
+      }
+      if (contacts.length === 1) {
+        contactId = contacts[0].id;
+      } else if (contacts.length === 0) {
+        toast(`Kein lexoffice-Kontakt für "${kunde.firma}" gefunden. Bitte in lexoffice anlegen.`, 'danger');
+        return;
+      } else {
+        contactId = await pickLexofficeContact(contacts, kunde.firma);
+        if (!contactId) return;
+      }
+      const updatedKunde = { ...kunde, lexofficeContactId: contactId };
+      await put('kunden', updatedKunde);
+      kundenById[kunde.id] = updatedKunde;
+    }
+
+    try {
+      const result = await lexoffice.createInvoiceDraft({ contactId, lineItems, remark: `Auftrag: ${projekt.titel}` });
+      for (const z of offeneZeiten) {
+        const updatedZ = { ...z, lexofficeExportiert: true };
+        await put('zeiterfassung', updatedZ);
+        Object.assign(z, updatedZ);
+      }
+      for (const v of offeneVerwendungen) {
+        const updatedV = { ...v, lexofficeExportiert: true };
+        await put('verwendungen', updatedV);
+        Object.assign(v, updatedV);
+      }
+      toast('Rechnungsentwurf in lexoffice erstellt.', 'success');
+      if (result?.id) window.open(`https://app.lexoffice.io/rechnungen/edit/${result.id}`, '_blank', 'noopener');
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  }
+
   function openForm(p) {
     const isEdit = !!p;
     const data = p || {
@@ -323,6 +432,7 @@ export async function render(container, opts = {}) {
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-lexoffice-transfer">🧾 An lexoffice übertragen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -360,6 +470,7 @@ export async function render(container, opts = {}) {
         title: 'Dokumente (Berichte, Stundenzettel, ...)',
         berichtContext: { settings, kunde: kundenById[data.kundeId] || null, projekt: data.titel },
       });
+      body.querySelector('#btn-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(data));
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
