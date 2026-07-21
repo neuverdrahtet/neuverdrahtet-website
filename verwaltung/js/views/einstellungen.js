@@ -273,6 +273,14 @@ export async function render(container) {
               <button type="submit" class="btn btn-primary">Speichern</button>
             </div>
           </form>
+          <div class="divider"></div>
+          <h2 style="font-size:14px">Arbeitsstunde-Artikel</h2>
+          <p class="hint">Beim „An lexoffice übertragen"-Button in der Projekt-Akte wird die erfasste Zeit als Menge dieses lexoffice-Artikels auf dem Rechnungsentwurf abgebildet.</p>
+          <div class="flex-row" style="gap:10px;align-items:center">
+            <span id="lexoffice-arbeitsstunde-status">${settings.lexofficeArbeitsstundeArtikelName ? `Ausgewählt: <strong>${escapeHtml(settings.lexofficeArbeitsstundeArtikelName)}</strong>` : 'Noch kein Artikel ausgewählt.'}</span>
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-lexoffice-arbeitsstunde-choose">Artikel wählen ...</button>
+          </div>
         </div>
 
         <div class="card settings-panel" data-panel="daten" hidden>
@@ -551,6 +559,52 @@ export async function render(container) {
     }
     btn.disabled = false;
     btn.textContent = 'Verbindung testen';
+  });
+
+  container.querySelector('#btn-lexoffice-arbeitsstunde-choose').addEventListener('click', async (e) => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = 'Lade ...';
+    let artikel;
+    try {
+      artikel = await lexoffice.fetchArtikel();
+    } catch (err) {
+      toast(err.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = 'Artikel wählen ...';
+      return;
+    }
+    btn.disabled = false;
+    btn.textContent = 'Artikel wählen ...';
+    const { body, close } = openModal({
+      title: 'Arbeitsstunde-Artikel wählen',
+      bodyHtml: `
+        <p class="hint">Wähle den Artikel aus deinem lexoffice-Artikelstamm, der beim Übertragen einer Zeiterfassung als Menge (Stunden) verwendet wird.</p>
+        <table class="data-table">
+          <thead><tr><th>Bezeichnung</th><th>Einheit</th><th class="text-right">Preis</th><th></th></tr></thead>
+          <tbody>
+            ${artikel.map((a) => `
+              <tr>
+                <td>${escapeHtml(a.title || a.name || '')}</td>
+                <td>${escapeHtml(a.unitName || '')}</td>
+                <td class="text-right">${a.price?.netPrice != null ? `${a.price.netPrice.toFixed(2)} €` : ''}</td>
+                <td><button type="button" class="btn btn-sm" data-id="${escapeHtml(a.id)}" data-name="${escapeHtml(a.title || a.name || '')}">Wählen</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn" id="btn-cancel">Schließen</button></div>
+      `,
+    });
+    body.querySelectorAll('button[data-id]').forEach((choose) => {
+      choose.addEventListener('click', async () => {
+        await setSettings({ lexofficeArbeitsstundeArtikelId: choose.dataset.id, lexofficeArbeitsstundeArtikelName: choose.dataset.name });
+        toast('Arbeitsstunde-Artikel gespeichert', 'success');
+        close();
+        render(container);
+      });
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
   });
 
   container.querySelector('#nr-form').addEventListener('submit', async (e) => {
