@@ -1,5 +1,5 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
-import { uid, escapeHtml, toast, todayISO, formatDateTime } from '../utils.js';
+import { uid, escapeHtml, toast, todayISO, formatDateTime, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails } from '../emailsync.js';
@@ -212,6 +212,7 @@ export async function render(container) {
         bodyHtml = `<p class="text-mute">(kein Textinhalt)</p>`;
       }
 
+      const zeigeKundeVorschlag = full.kategorie === 'kundenanfrage' && full.richtung !== 'ausgang' && !full.kundeAngelegtId;
       detailHost.innerHTML = `
         <div class="postfach-detail-header">
           <h2>${escapeHtml(full.subject)}</h2>
@@ -219,6 +220,8 @@ export async function render(container) {
           <div class="actions">
             <button class="btn" id="pf-reply-btn">↩️ Antworten</button>
             <button class="btn" id="pf-task-btn">✅ Als Aufgabe anlegen</button>
+            ${zeigeKundeVorschlag ? `<button class="btn" id="pf-kunde-btn">👤 Als neuen Kunden/Projekt anlegen</button>` : ''}
+            ${full.kundeAngelegtId ? `<span class="badge badge-success">✅ Kunde/Projekt angelegt</span>` : ''}
             <button class="btn btn-danger" id="pf-delete-btn">🗑️ Löschen</button>
           </div>
         </div>
@@ -241,6 +244,7 @@ export async function render(container) {
 
       detailHost.querySelector('#pf-reply-btn').addEventListener('click', () => openCompose({ replyTo: full }));
       detailHost.querySelector('#pf-task-btn').addEventListener('click', () => openTaskFromMessage(full));
+      detailHost.querySelector('#pf-kunde-btn')?.addEventListener('click', () => openKundeVorschlag(full));
       detailHost.querySelector('#pf-delete-btn').addEventListener('click', async () => {
         if (!confirmDelete('Diese E-Mail wirklich unwiderruflich löschen? Sie wandert dabei auch in den Gmail-Papierkorb.')) return;
         const btn = detailHost.querySelector('#pf-delete-btn');
@@ -321,6 +325,80 @@ export async function render(container) {
       }
       await put('ausgaben', prefill);
       toast('Anhang als Ausgabe/Beleg gespeichert – bitte in Ausgaben prüfen', 'success');
+    }
+
+    async function openKundeVorschlag(message) {
+      const [kunden, kanbanSpalten] = await Promise.all([getAll('kunden'), getAll('kanbanSpalten')]);
+      kanbanSpalten.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
+      const vorschlagEmail = extractEmailAddress(message.from);
+      const vorschlagName = (message.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || vorschlagEmail;
+      const bestehenderKunde = vorschlagEmail ? kunden.find((k) => (k.email || '').toLowerCase() === vorschlagEmail.toLowerCase()) : null;
+
+      const { body, close } = openModal({
+        title: 'Als neuen Kunden/Projekt anlegen',
+        bodyHtml: `
+          <form id="pf-kunde-form">
+            ${bestehenderKunde ? `<p class="hint">Zu dieser E-Mail-Adresse existiert bereits der Kunde <strong>${escapeHtml(bestehenderKunde.firma)}</strong> – es wird kein neuer Kunde angelegt, nur ein neues Projekt für diesen Kunden.</p>` : ''}
+            <div class="form-grid">
+              <div class="field col-span-2"><label>Firma/Name *</label><input name="firma" required value="${escapeHtml(bestehenderKunde?.firma || vorschlagName)}" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field"><label>E-Mail</label><input name="email" value="${escapeHtml(vorschlagEmail)}" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field"><label>Telefon</label><input name="telefon" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field col-span-2"><label>Projekt-Titel *</label><input name="titel" required value="${escapeHtml(message.subject || '')}"></div>
+            </div>
+            <div class="modal-actions">
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="pf-kunde-cancel">Abbrechen</button>
+              <button type="submit" class="btn btn-primary">Anlegen</button>
+            </div>
+          </form>
+        `,
+      });
+      body.querySelector('#pf-kunde-cancel').addEventListener('click', close);
+      body.querySelector('#pf-kunde-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const submitBtn = e.target.querySelector('button[type=submit]');
+        submitBtn.disabled = true;
+        try {
+          let kundeId;
+          if (bestehenderKunde) {
+            kundeId = bestehenderKunde.id;
+          } else {
+            const firma = (fd.get('firma') || '').toString().trim();
+            if (!firma) { submitBtn.disabled = false; return; }
+            const currentSettings = await getSettings();
+            const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+              '', { datum: currentSettings.kundeNummerDatum, zaehler: currentSettings.kundeNummerZaehler }
+            );
+            const neuerKunde = {
+              id: uid(), firma, ansprechpartner: '', strasse: '', plz: '', ort: '',
+              telefon: (fd.get('telefon') || '').toString().trim(),
+              email: (fd.get('email') || '').toString().trim(),
+              notizen: '', kundennummer: autoNummer,
+            };
+            await put('kunden', neuerKunde);
+            await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
+            kundeId = neuerKunde.id;
+          }
+          const titel = (fd.get('titel') || '').toString().trim();
+          if (!titel) { submitBtn.disabled = false; return; }
+          const projekt = {
+            id: uid(), titel, kundeId, status: kanbanSpalten[0]?.id || '', beschreibung: '',
+            start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
+          };
+          await put('projekte', projekt);
+          message.kundeAngelegtId = projekt.id;
+          await put('emails', message);
+          const idx = allEmails.findIndex((m) => m.id === message.id);
+          if (idx !== -1) allEmails[idx] = message;
+          toast(bestehenderKunde ? 'Neues Projekt für vorhandenen Kunden angelegt' : 'Kunde und Projekt angelegt', 'success');
+          close();
+          openMessage(message.id);
+        } catch (err) {
+          toast(`Anlegen fehlgeschlagen: ${err.message}`, 'danger');
+          submitBtn.disabled = false;
+        }
+      });
     }
 
     async function openTaskFromMessage(message) {
