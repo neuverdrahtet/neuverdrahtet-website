@@ -315,6 +315,7 @@ export async function getMessageFull(id) {
     html: acc.html,
     attachments: acc.attachments,
     unread: (d.labelIds || []).includes('UNREAD'),
+    labelIds: d.labelIds || [],
   };
 }
 

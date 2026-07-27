@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, KALK_KATEGORIEN } from '../db.js';
+import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
@@ -181,9 +181,7 @@ export async function render(container) {
             <div class="field"><label>Betrag netto (€)</label><input type="number" step="0.01" min="0" name="betragNetto" value="${data.betragNetto}"></div>
             <div class="field"><label>USt.-Satz (%)</label>
               <select name="steuersatz">
-                <option value="19" ${Number(data.steuersatz) === 19 ? 'selected' : ''}>19%</option>
-                <option value="7" ${Number(data.steuersatz) === 7 ? 'selected' : ''}>7%</option>
-                <option value="0" ${Number(data.steuersatz) === 0 ? 'selected' : ''}>0%</option>
+                ${USTSAETZE.map((s) => `<option value="${s.wert}" ${Number(data.steuersatz) === s.wert ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
               </select>
             </div>
             <div class="field"><label>Kunde</label>

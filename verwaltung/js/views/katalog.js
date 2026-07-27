@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings } from '../db.js';
+import { getAll, put, remove, getSettings, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -370,9 +370,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
             <div class="field"><label>Verkaufspreis VK netto (€) *</label><input type="number" step="0.01" min="0" name="preis" id="f-vk" required value="${data.preis}"></div>
             <div class="field"><label>USt.-Satz (%)</label>
               <select name="steuersatz">
-                <option value="19" ${Number(data.steuersatz) === 19 ? 'selected' : ''}>19%</option>
-                <option value="7" ${Number(data.steuersatz) === 7 ? 'selected' : ''}>7%</option>
-                <option value="0" ${Number(data.steuersatz) === 0 ? 'selected' : ''}>0%</option>
+                ${USTSAETZE.map((s) => `<option value="${s.wert}" ${Number(data.steuersatz) === s.wert ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
               </select>
             </div>
           </div>

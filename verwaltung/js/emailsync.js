@@ -25,6 +25,9 @@ function toStoredEmail(full) {
     unread: full.unread,
     messageIdHeader: full.messageIdHeader,
     referencesHeader: full.referencesHeader,
+    // "SENT" ist Gmails eigenes Label für von uns gesendete Mails - zuverlässiger
+    // als ein Vergleich der Absenderadresse (funktioniert auch bei mehreren Aliassen).
+    richtung: (full.labelIds || []).includes('SENT') ? 'ausgang' : 'eingang',
     importedAt: new Date().toISOString(),
   };
 }

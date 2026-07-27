@@ -764,6 +764,15 @@ export const ROUTE_ROLLEN = {
   einstellungen: ['admin'],
 };
 
+// Alle in Deutschland aktuell gültigen USt.-Sätze (§ 12 UStG) für die
+// Positions-/Artikel-Auswahl. Es gibt bewusst keine weiteren Werte – die
+// befristete Corona-Absenkung (16%/5%, Jul–Dez 2020) ist ausgelaufen.
+export const USTSAETZE = [
+  { wert: 19, titel: '19% – Regelsteuersatz' },
+  { wert: 7, titel: '7% – Ermäßigter Steuersatz' },
+  { wert: 0, titel: '0% – Steuerfrei / Kleinunternehmer' },
+];
+
 export const STEUERARTEN = [
   { id: 'regel', titel: 'Regelbesteuerung (USt. je Position)', hinweis: '' },
   { id: 'kleinunternehmer', titel: 'Kleinunternehmer § 19 UStG (keine USt.)', hinweis: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' },
