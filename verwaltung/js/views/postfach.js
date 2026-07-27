@@ -86,6 +86,7 @@ export async function render(container) {
   async function renderMailbox() {
     let allEmails = (await getAll('emails')).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
     let query = '';
+    let richtungFilter = 'alle';
     let selectedId = null;
 
     container.innerHTML = `
@@ -99,6 +100,11 @@ export async function render(container) {
       <p class="text-mute" style="margin:-4px 0 10px">${allEmails.length} E-Mails importiert · zuletzt synchronisiert: ${settings.emailLastSyncAt ? formatDateTime(settings.emailLastSyncAt) : 'nie'} · <a href="#" id="link-reimport">Kompletten Neuimport starten</a></p>
       <div class="search-bar">
         <input type="search" id="pf-search" placeholder="Suche nach Betreff, Absender oder Text ...">
+        <select id="pf-richtung">
+          <option value="alle">Alle</option>
+          <option value="eingang">📥 Eingang</option>
+          <option value="ausgang">📤 Ausgang</option>
+        </select>
       </div>
       <div class="postfach-layout">
         <div class="postfach-list" id="pf-list-host"></div>
@@ -112,9 +118,11 @@ export async function render(container) {
     const detailHost = container.querySelector('#pf-detail-host');
 
     function filtered() {
-      if (!query) return allEmails.slice(0, LISTE_STANDARD_LIMIT);
+      const byRichtung = (m) => richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter;
+      const base = allEmails.filter(byRichtung);
+      if (!query) return base.slice(0, LISTE_STANDARD_LIMIT);
       const q = query.toLowerCase();
-      return allEmails.filter((m) =>
+      return base.filter((m) =>
         (m.subject || '').toLowerCase().includes(q) ||
         (m.from || '').toLowerCase().includes(q) ||
         (m.text || '').toLowerCase().includes(q)
@@ -123,6 +131,7 @@ export async function render(container) {
 
     function renderList() {
       const list = filtered();
+      const gefiltertGesamt = allEmails.filter((m) => richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter).length;
       if (list.length === 0) {
         listHost.innerHTML = `<div class="empty-state">Keine E-Mails gefunden.</div>`;
         return;
@@ -136,7 +145,7 @@ export async function render(container) {
           <div class="postfach-row-subject">${escapeHtml(m.subject)}</div>
           <div class="text-mute postfach-row-snippet">${escapeHtml((m.text || '').slice(0, 140))}</div>
         </div>
-      `).join('') + (!query && allEmails.length > LISTE_STANDARD_LIMIT ? `<p class="hint">Zeigt die neuesten ${LISTE_STANDARD_LIMIT} E-Mails – zum Durchsuchen des gesamten Postfachs oben suchen.</p>` : '');
+      `).join('') + (!query && gefiltertGesamt > LISTE_STANDARD_LIMIT ? `<p class="hint">Zeigt die neuesten ${LISTE_STANDARD_LIMIT} E-Mails – zum Durchsuchen des gesamten Postfachs oben suchen.</p>` : '');
       listHost.querySelectorAll('.postfach-row').forEach((row) => {
         row.addEventListener('click', () => openMessage(row.dataset.id));
       });
@@ -369,6 +378,10 @@ export async function render(container) {
     const searchInput = container.querySelector('#pf-search');
     searchInput.addEventListener('input', () => {
       query = searchInput.value.trim();
+      renderList();
+    });
+    container.querySelector('#pf-richtung').addEventListener('change', (e) => {
+      richtungFilter = e.target.value;
       renderList();
     });
 
