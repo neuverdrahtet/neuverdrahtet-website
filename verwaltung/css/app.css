@@ -1200,9 +1200,17 @@ table.data-table th.col-select, table.data-table td.col-select {
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
   .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; }
 
-  .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; position: relative; }
+  .print-doc .print-header.pos-rechts { flex-direction: row-reverse; }
+  .print-doc .print-header.pos-rechts .print-meta { text-align: left; }
+  .print-doc .print-header.pos-mittig { justify-content: center; }
+  .print-doc .print-header.pos-mittig .print-meta { position: absolute; top: 0; right: 0; }
   .print-doc .print-logo-col { flex: 0 0 74mm; display: flex; justify-content: center; }
+  .print-doc .print-header.pos-rechts .print-logo-col { justify-content: flex-end; }
   .print-doc .print-logo { max-width: 62mm; max-height: 30mm; object-fit: contain; }
+  .print-doc .print-logo-klein .print-logo { max-width: 40mm; max-height: 20mm; }
+  .print-doc .print-logo-mittel .print-logo { max-width: 62mm; max-height: 30mm; }
+  .print-doc .print-logo-gross .print-logo { max-width: 86mm; max-height: 42mm; }
   .print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
   .print-doc .print-meta { text-align: right; min-width: 55mm; }
   .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
@@ -1222,14 +1230,14 @@ table.data-table th.col-select, table.data-table td.col-select {
     bottom: 8mm;
     padding-top: 6px;
     border-top: 1px solid #ccc;
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
     font-size: 9.5px;
     color: #444;
     line-height: 1.5;
     background: #fff;
   }
+  .print-doc .print-footer-zusatz { margin-bottom: 6px; white-space: pre-wrap; }
+  .print-doc .print-footer-spalten { display: flex; gap: 10px; }
+  .print-doc .print-footer-spalten > div { flex: 1; }
 }
 
 .text-mute { color: var(--text-mute); }

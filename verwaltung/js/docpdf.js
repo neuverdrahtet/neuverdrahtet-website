@@ -6,37 +6,96 @@ function logoFormat(dataUrl) {
   return /jpe?g/i.test(m[1]) ? 'JPEG' : 'PNG';
 }
 
+const LOGO_SIZES = {
+  klein: { maxW: 40, maxH: 20 },
+  mittel: { maxW: 62, maxH: 30 },
+  gross: { maxW: 86, maxH: 42 },
+};
+
+/** Zeichnet das Logo (oder ersatzweise den Firmennamen) an der eingestellten Position im Kopfbereich. */
+function drawHeaderLogo(doc, settings, marginX, rightX, y) {
+  const position = settings.dokLogoPosition || 'links';
+  const { maxW, maxH } = LOGO_SIZES[settings.dokLogoGroesse] || LOGO_SIZES.mittel;
+  const fmt = logoFormat(settings.logoDataUrl);
+  if (!fmt) {
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    if (position === 'rechts') doc.text(settings.firmenname || '', rightX, y + 4, { align: 'right' });
+    else if (position === 'mittig') doc.text(settings.firmenname || '', (marginX + rightX) / 2, y + 4, { align: 'center' });
+    else doc.text(settings.firmenname || '', marginX, y + 4, { align: 'left' });
+    doc.setFont(undefined, 'normal');
+    return;
+  }
+  try {
+    const props = doc.getImageProperties(settings.logoDataUrl);
+    const scale = Math.min(maxW / props.width, maxH / props.height, 1);
+    const drawW = props.width * scale;
+    const drawH = props.height * scale;
+    let logoX;
+    if (position === 'rechts') logoX = rightX - drawW;
+    else if (position === 'mittig') logoX = marginX + ((rightX - marginX) - drawW) / 2;
+    else logoX = marginX;
+    doc.addImage(settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
+  } catch (err) { /* ignore broken logo data */ }
+}
+
+/** Titel/Datum im Kopfbereich weichen bei rechts positioniertem Logo auf die linke Seite aus, damit nichts überlappt. */
+function headerCounterpart(settings, marginX, rightX) {
+  return settings.dokLogoPosition === 'rechts' ? { x: marginX, align: 'left' } : { x: rightX, align: 'right' };
+}
+
 function addFooter(doc, settings, marginX, rightX) {
   const pageCount = doc.internal.getNumberOfPages();
+  const zusatztext = (settings.dokFooterZusatztext || '').trim();
+  const spalten = [];
+  if (settings.dokFooterFirmendaten !== false) {
+    spalten.push([
+      settings.firmenname,
+      [settings.strasse, settings.plzOrt].filter(Boolean).join(', '),
+      settings.telefon,
+      settings.email,
+      settings.website,
+    ].filter(Boolean));
+  }
+  if (settings.dokFooterSteuerdaten !== false) {
+    spalten.push([
+      settings.ustId ? `USt-IdNr.: ${settings.ustId}` : '',
+      settings.steuernummer ? `Steuernummer: ${settings.steuernummer}` : '',
+      settings.inhaber ? `Inhaber: ${settings.inhaber}` : '',
+    ].filter(Boolean));
+  }
+  if (settings.dokFooterBankverbindung !== false) {
+    spalten.push([
+      settings.inhaber, settings.bank,
+      settings.iban ? `IBAN: ${settings.iban}` : '',
+      settings.bic ? `BIC: ${settings.bic}` : '',
+    ].filter(Boolean));
+  }
+
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setDrawColor(210);
     doc.line(marginX, 279, rightX, 279);
     doc.setFontSize(7.5);
     doc.setTextColor(120);
-    const col1 = [
-      settings.firmenname,
-      [settings.strasse, settings.plzOrt].filter(Boolean).join(', '),
-      settings.telefon,
-      settings.email,
-      settings.website,
-    ].filter(Boolean);
-    const col2 = [
-      settings.ustId ? `USt-IdNr.: ${settings.ustId}` : '',
-      settings.steuernummer ? `Steuernummer: ${settings.steuernummer}` : '',
-      settings.inhaber ? `Inhaber: ${settings.inhaber}` : '',
-    ].filter(Boolean);
-    const col3 = [
-      settings.inhaber, settings.bank,
-      settings.iban ? `IBAN: ${settings.iban}` : '',
-      settings.bic ? `BIC: ${settings.bic}` : '',
-    ].filter(Boolean);
-    const colX = [marginX, marginX + 62, marginX + 124];
+
+    let footerY = 282;
+    if (zusatztext) {
+      const lines = doc.splitTextToSize(zusatztext, rightX - marginX);
+      doc.text(lines, marginX, footerY);
+      footerY += lines.length * 3.3 + 1.5;
+    }
+
     const footerLineHeight = 3.3;
-    [col1, col2, col3].forEach((col, ci) => {
-      col.forEach((line, li) => doc.text(String(line), colX[ci], 282 + li * footerLineHeight));
-    });
-    doc.text(`Seite ${i}/${pageCount}`, rightX, 282, { align: 'right' });
+    if (spalten.length) {
+      const gap = (rightX - marginX) / spalten.length;
+      spalten.forEach((col, ci) => {
+        col.forEach((line, li) => doc.text(String(line), marginX + ci * gap, footerY + li * footerLineHeight));
+      });
+    }
+
+    if (settings.dokFooterSeitenzahl !== false) doc.text(`Seite ${i}/${pageCount}`, rightX, footerY, { align: 'right' });
   }
 }
 
@@ -52,30 +111,14 @@ export function buildDocPdfBlob(opts) {
   const accentRgb = hexToRgb(opts.settings.dokAkzentfarbe);
   const baseFont = Number(opts.settings.dokSchriftgroesse) || 10;
 
-  // --- Header: logo (centered in left column) + title & meta box (top-right) ---
-  const fmt = logoFormat(opts.settings.logoDataUrl);
-  if (fmt) {
-    try {
-      const props = doc.getImageProperties(opts.settings.logoDataUrl);
-      const logoColW = 74, maxW = 62, maxH = 30;
-      const scale = Math.min(maxW / props.width, maxH / props.height, 1);
-      const drawW = props.width * scale;
-      const drawH = props.height * scale;
-      const logoX = marginX + Math.max(0, (logoColW - drawW) / 2);
-      doc.addImage(opts.settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
-    } catch (err) { /* ignore broken logo data */ }
-  } else {
-    doc.setFontSize(13);
-    doc.setFont(undefined, 'bold');
-    doc.setTextColor(20);
-    doc.text(opts.settings.firmenname || '', marginX, y + 4);
-    doc.setFont(undefined, 'normal');
-  }
+  // --- Header: logo (an eingestellter Position) + Titel & Meta-Box (Gegenposition) ---
+  drawHeaderLogo(doc, opts.settings, marginX, rightX, y);
 
+  const { x: titleX, align: titleAlign } = headerCounterpart(opts.settings, marginX, rightX);
   doc.setFontSize(15);
   doc.setFont(undefined, 'bold');
   doc.setTextColor(20);
-  doc.text(opts.art, rightX, y, { align: 'right' });
+  doc.text(opts.art, titleX, y, { align: titleAlign });
   doc.setFont(undefined, 'normal');
 
   const metaRows = [
@@ -88,8 +131,13 @@ export function buildDocPdfBlob(opts) {
   doc.setTextColor(60);
   metaRows.forEach((row, i) => {
     const my = y + 6 + i * 4.6;
-    doc.text(row[0], rightX - 32, my, { align: 'left' });
-    doc.text(String(row[1] ?? ''), rightX, my, { align: 'right' });
+    if (titleAlign === 'right') {
+      doc.text(row[0], titleX - 32, my, { align: 'left' });
+      doc.text(String(row[1] ?? ''), titleX, my, { align: 'right' });
+    } else {
+      doc.text(row[0], titleX, my, { align: 'left' });
+      doc.text(String(row[1] ?? ''), titleX + 32, my, { align: 'right' });
+    }
   });
 
   y += 30;
@@ -214,28 +262,12 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
   const accentRgb = hexToRgb(settings.dokAkzentfarbe);
   const baseFont = Number(settings.dokSchriftgroesse) || 10;
 
-  const fmt = logoFormat(settings.logoDataUrl);
-  if (fmt) {
-    try {
-      const props = doc.getImageProperties(settings.logoDataUrl);
-      const logoColW = 74, maxW = 62, maxH = 30;
-      const scale = Math.min(maxW / props.width, maxH / props.height, 1);
-      const drawW = props.width * scale;
-      const drawH = props.height * scale;
-      const logoX = marginX + Math.max(0, (logoColW - drawW) / 2);
-      doc.addImage(settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
-    } catch (err) { /* ignore broken logo data */ }
-  } else {
-    doc.setFontSize(13);
-    doc.setFont(undefined, 'bold');
-    doc.setTextColor(20);
-    doc.text(settings.firmenname || '', marginX, y + 4);
-    doc.setFont(undefined, 'normal');
-  }
+  drawHeaderLogo(doc, settings, marginX, rightX, y);
 
+  const { x: dateX, align: dateAlign } = headerCounterpart(settings, marginX, rightX);
   doc.setFontSize(8);
   doc.setTextColor(110);
-  doc.text(formatDateTime(datum || new Date().toISOString()), rightX, y, { align: 'right' });
+  doc.text(formatDateTime(datum || new Date().toISOString()), dateX, y, { align: dateAlign });
 
   y += 24;
   doc.setDrawColor(180);

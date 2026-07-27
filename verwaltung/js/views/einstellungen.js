@@ -198,26 +198,49 @@ export async function render(container) {
 
         <div class="card settings-panel" data-panel="layout" hidden>
           <h2>Layout (Dokument-Design)</h2>
-          <p class="hint">Gilt für Angebote, Rechnungen und Mahnungen (PDF und Druckvorschau). Die Fußzeile mit Firmendaten, Bankverbindung und Seitenzahl ist immer am unteren Rand jeder Seite fixiert und verschiebt sich nicht, egal wie viel Text im Hauptteil steht.</p>
+          <p class="hint">Gilt für Angebote, Auftragsbestätigungen, Rechnungen, Mahnungen und Berichte/Protokolle (PDF und Druckvorschau). Die Fußzeile ist immer am unteren Rand jeder Seite fixiert und verschiebt sich nicht, egal wie viel Text im Hauptteil steht.</p>
           <form id="layout-form">
             <div class="form-grid">
               <div class="field"><label>Akzentfarbe (Tabellenköpfe)</label><input type="color" name="dokAkzentfarbe" id="layout-akzent" value="${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')}"></div>
               <div class="field"><label>Schriftgröße Fließtext (pt)</label><input type="number" min="8" max="14" step="0.5" name="dokSchriftgroesse" id="layout-schriftgroesse" value="${settings.dokSchriftgroesse || 10}"></div>
+              <div class="field"><label>Logo-Position</label>
+                <select name="dokLogoPosition" id="layout-logo-position">
+                  <option value="links" ${(settings.dokLogoPosition || 'links') === 'links' ? 'selected' : ''}>Links</option>
+                  <option value="mittig" ${settings.dokLogoPosition === 'mittig' ? 'selected' : ''}>Mittig</option>
+                  <option value="rechts" ${settings.dokLogoPosition === 'rechts' ? 'selected' : ''}>Rechts</option>
+                </select>
+              </div>
+              <div class="field"><label>Logo-Größe</label>
+                <select name="dokLogoGroesse" id="layout-logo-groesse">
+                  <option value="klein" ${settings.dokLogoGroesse === 'klein' ? 'selected' : ''}>Klein</option>
+                  <option value="mittel" ${(settings.dokLogoGroesse || 'mittel') === 'mittel' ? 'selected' : ''}>Mittel</option>
+                  <option value="gross" ${settings.dokLogoGroesse === 'gross' ? 'selected' : ''}>Groß</option>
+                </select>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <h3 style="font-size:13px;margin:0 0 8px">Fußzeile</h3>
+            <div class="form-grid">
+              <div class="field field-checkbox"><input type="checkbox" name="dokFooterFirmendaten" id="layout-footer-firma" ${settings.dokFooterFirmendaten !== false ? 'checked' : ''}><label for="layout-footer-firma">Firmendaten (Adresse, Telefon, E-Mail)</label></div>
+              <div class="field field-checkbox"><input type="checkbox" name="dokFooterSteuerdaten" id="layout-footer-steuer" ${settings.dokFooterSteuerdaten !== false ? 'checked' : ''}><label for="layout-footer-steuer">Steuer-Infos (USt-IdNr., Steuernummer, Inhaber)</label></div>
+              <div class="field field-checkbox"><input type="checkbox" name="dokFooterBankverbindung" id="layout-footer-bank" ${settings.dokFooterBankverbindung !== false ? 'checked' : ''}><label for="layout-footer-bank">Bankverbindung</label></div>
+              <div class="field field-checkbox"><input type="checkbox" name="dokFooterSeitenzahl" id="layout-footer-seite" ${settings.dokFooterSeitenzahl !== false ? 'checked' : ''}><label for="layout-footer-seite">Seitenzahl</label></div>
+              <div class="field col-span-2"><label>Zusatztext (z.B. Rechtshinweis, Slogan)</label><textarea name="dokFooterZusatztext" id="layout-footer-zusatz" placeholder="Erscheint als zusätzliche Zeile über der Fußzeile">${escapeHtml(settings.dokFooterZusatztext || '')}</textarea></div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
           <div class="divider"></div>
           <h3 style="font-size:13px;margin:0 0 8px">Vorschau</h3>
           <div class="dok-layout-preview" id="layout-preview" style="--dok-akzent:${escapeHtml(settings.dokAkzentfarbe || '#0f1b2d')};--dok-fontsize:${settings.dokSchriftgroesse || 10}px">
-            <div class="dlp-header">
+            <div class="dlp-header" id="layout-preview-header" style="justify-content:${settings.dokLogoPosition === 'rechts' ? 'flex-end' : settings.dokLogoPosition === 'mittig' ? 'center' : 'space-between'}">
               <div>${escapeHtml(settings.firmenname || 'Musterfirma GmbH')}</div>
-              <div class="dlp-titel">Rechnung</div>
+              ${settings.dokLogoPosition === 'mittig' ? '' : `<div class="dlp-titel">Rechnung</div>`}
             </div>
             <table class="dlp-table">
               <thead><tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Preis</th></tr></thead>
               <tbody><tr><td>1</td><td>Beispiel-Leistung</td><td>1</td><td>100,00 €</td></tr></tbody>
             </table>
-            <div class="dlp-footer">${escapeHtml(settings.firmenname || 'Musterfirma GmbH')} · Fußzeile bleibt immer am unteren Rand</div>
+            <div class="dlp-footer" id="layout-preview-footer">${settings.dokFooterZusatztext ? `${escapeHtml(settings.dokFooterZusatztext)}<br>` : ''}${escapeHtml(settings.firmenname || 'Musterfirma GmbH')} · Fußzeile bleibt immer am unteren Rand</div>
           </div>
         </div>
 
@@ -467,13 +490,27 @@ export async function render(container) {
   });
 
   const layoutPreview = container.querySelector('#layout-preview');
+  const layoutPreviewHeader = container.querySelector('#layout-preview-header');
+  const layoutPreviewFooter = container.querySelector('#layout-preview-footer');
   const layoutAkzentInput = container.querySelector('#layout-akzent');
   const layoutSchriftInput = container.querySelector('#layout-schriftgroesse');
+  const layoutLogoPosInput = container.querySelector('#layout-logo-position');
+  const layoutFooterZusatzInput = container.querySelector('#layout-footer-zusatz');
   layoutAkzentInput.addEventListener('input', () => {
     layoutPreview.style.setProperty('--dok-akzent', layoutAkzentInput.value);
   });
   layoutSchriftInput.addEventListener('input', () => {
     layoutPreview.style.setProperty('--dok-fontsize', `${Number(layoutSchriftInput.value) || 10}px`);
+  });
+  layoutLogoPosInput.addEventListener('change', () => {
+    const pos = layoutLogoPosInput.value;
+    layoutPreviewHeader.style.justifyContent = pos === 'rechts' ? 'flex-end' : pos === 'mittig' ? 'center' : 'space-between';
+    const titelEl = layoutPreviewHeader.querySelector('.dlp-titel');
+    if (titelEl) titelEl.hidden = pos === 'mittig';
+  });
+  layoutFooterZusatzInput.addEventListener('input', () => {
+    const zusatz = layoutFooterZusatzInput.value.trim();
+    layoutPreviewFooter.innerHTML = `${zusatz ? `${escapeHtml(zusatz)}<br>` : ''}${escapeHtml(settings.firmenname || 'Musterfirma GmbH')} · Fußzeile bleibt immer am unteren Rand`;
   });
   container.querySelector('#layout-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -481,6 +518,13 @@ export async function render(container) {
     await setSettings({
       dokAkzentfarbe: (fd.get('dokAkzentfarbe') || '#0f1b2d').toString(),
       dokSchriftgroesse: Number(fd.get('dokSchriftgroesse')) || 10,
+      dokLogoPosition: (fd.get('dokLogoPosition') || 'links').toString(),
+      dokLogoGroesse: (fd.get('dokLogoGroesse') || 'mittel').toString(),
+      dokFooterFirmendaten: fd.get('dokFooterFirmendaten') === 'on',
+      dokFooterSteuerdaten: fd.get('dokFooterSteuerdaten') === 'on',
+      dokFooterBankverbindung: fd.get('dokFooterBankverbindung') === 'on',
+      dokFooterSeitenzahl: fd.get('dokFooterSeitenzahl') === 'on',
+      dokFooterZusatztext: (fd.get('dokFooterZusatztext') || '').toString().trim(),
     });
     toast('Layout gespeichert', 'success');
   });
