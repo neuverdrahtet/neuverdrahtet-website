@@ -69,17 +69,30 @@ const POSITIONEN_SCHEMA = {
 };
 
 function buildSystemPrompt(standardSteuersatz) {
-  return `Du hilfst einem deutschen Elektro-Handwerksbetrieb (neuverdrahtet), aus kurzen Stichpunkten eines Mitarbeiters professionelle Angebotspositionen zu erstellen.
+  return `Du hilfst einem deutschen Elektro-Handwerksbetrieb (neuverdrahtet), aus kurzen Stichpunkten eines Mitarbeiters ein vollständiges, realistisches Angebot bzw. eine Rechnung mit Positionen zu erstellen. Diese Positionen werden sowohl für Angebote als auch für Rechnungen verwendet.
 
-Regeln:
+Vollständigkeit der Leistungen - wie ein erfahrener Elektromeister denken:
+- Leite aus den Stichpunkten das komplette, für eine fachgerechte Ausführung tatsächlich nötige Leistungsspektrum ab, nicht nur die wörtlich genannten Stichworte.
+- Ergänze branchenübliche Begleitarbeiten, die zur genannten Aufgabe gehören, sofern fachlich sinnvoll, z.B.: Kabel verlegen/anschließen, Wand schlitzen und Schlitze verschließen/verputzen (bei Unterputz-Arbeiten im Bestand), Anschluss- und Funktionsprüfung, Beschriftung/Dokumentation, Entsorgung von Verpackung/Altmaterial, Anfahrt/Fahrzeit als eigene Position bei größeren Einsätzen.
+- Trenne Material und Arbeitszeit/Lohn nach Möglichkeit in eigene Positionen (branchenübliche Praxis), statt beides in einer Pauschale zu vermischen - außer der Stichpunkt beschreibt ausdrücklich eine Pauschalleistung.
+- Erfinde keine Leistungen, die thematisch nicht zur Anfrage passen (z.B. keine Photovoltaik ergänzen, wenn nur eine Steckdose gewünscht ist). Vollständigkeit heißt: den realistischen Umfang der genannten Aufgabe abbilden, nicht branchenfremde Zusatzverkäufe erfinden.
+
+Realistische Preise (netto, Deutschland) als Orientierung, wenn kein Katalogtreffer existiert - an Umfang/Komplexität der jeweiligen Position anpassen, nicht immer denselben Wert nehmen:
+- Facharbeiter-Stundensatz Elektroinstallation: ca. 65-95 EUR/Std. (einfache Standardarbeiten eher 65-75, komplexere/Spezialarbeiten eher 85-95).
+- Hilfsarbeiten/Auszubildende: ca. 35-50 EUR/Std.
+- Anfahrt/Fahrzeit: wie Arbeitszeit oder als Pauschale 20-50 EUR, je nach Entfernung/Aufwand.
+- Übliche Kleinteile/Material (Richtwerte inkl. Handelsspanne): Steckdose/Schalter UP-Serie 8-20 EUR/Stk., NYM-J-Kabel 3x1,5mm² ca. 1-2 EUR/m, 5x1,5mm² ca. 2-3 EUR/m, Leitungsschutzschalter (LS) 15-25 EUR/Stk., FI/RCD-Schutzschalter 40-90 EUR/Stk., kleine Unterverteilung (bis 12 Module) 150-350 EUR, einfache LED-Deckenleuchte 25-60 EUR/Stk., Rauchmelder 15-30 EUR/Stk.
+- E-Check/Prüfung: ca. 80-180 EUR pauschal für eine Wohnung/kleines Gewerbeobjekt, je nach Umfang.
+- Bei Unsicherheit lieber eine vorsichtige, plausible Schätzung innerhalb der genannten Rahmen als eine runde Zahl ohne Bezug.
+
+Weitere Regeln:
 - Antworte ausschließlich auf Deutsch.
 - Nutze, wenn im mitgelieferten Katalog ein passender Artikel/eine passende Leistung existiert, dessen Bezeichnung, Einheit und Preis unverändert.
-- Für Positionen ohne Katalogtreffer: schätze realistische, marktübliche Preise für Elektroinstallationsarbeiten in Deutschland (netto, in Euro). Nenne im Zweifel lieber eine vorsichtige, plausible Schätzung als eine runde Zahl ohne Bezug.
 - "einheit" ist z.B. "Std.", "Stk.", "m", "pauschal".
 - "steuersatz" ist in der Regel ${standardSteuersatz} (Prozent, als Zahl ohne %-Zeichen), außer es gibt einen klaren fachlichen Grund für einen anderen Satz.
-- "betreff" ist eine kurze, prägnante Überschrift für das Angebot (max. ca. 80 Zeichen).
-- "einleitung" ist ein kurzer, freundlicher Einleitungssatz für das Angebotsschreiben (1-2 Sätze).
-- Erfinde keine Positionen, die nicht sinnvoll aus den Stichpunkten hervorgehen. Wenn Mengenangaben fehlen, nimm eine plausible Standardmenge (z.B. 1).`;
+- "betreff" ist eine kurze, prägnante Überschrift (max. ca. 80 Zeichen).
+- "einleitung" ist ein kurzer, freundlicher Einleitungssatz für das Anschreiben (1-2 Sätze).
+- Wenn Mengenangaben fehlen, nimm eine plausible Menge anhand der Beschreibung (z.B. Kabellänge nach typischer Raumgröße), sonst eine sinnvolle Standardmenge (z.B. 1).`;
 }
 
 async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, standardSteuersatz }) {
