@@ -68,7 +68,7 @@ export async function syncCalendar({ silent = false } = {}) {
   const inWindow = (t) => t.start && t.start >= timeMin.toISOString().slice(0, 16) && t.start <= timeMax.toISOString().slice(0, 16);
   const consumedGoogleIds = new Set();
 
-  let created = 0, updated = 0, pulled = 0, deletedLocal = 0, pushedNew = 0;
+  let created = 0, updated = 0, pulled = 0, deletedLocal = 0, pushedNew = 0, failed = 0;
 
   for (const termin of allTermine) {
     if (!termin.googleEventId) continue;
@@ -85,25 +85,36 @@ export async function syncCalendar({ silent = false } = {}) {
     const localChanged = !syncedAt || (termin.aktualisiertAm || '') > syncedAt;
     const googleChanged = !syncedAt || (gEvent.updated || '') > syncedAt;
 
-    if (googleChanged && (!localChanged || (gEvent.updated || '') >= (termin.aktualisiertAm || ''))) {
-      const fields = fromGoogleEvent(gEvent);
-      const merged = { ...termin, ...fields, googleSyncedAt: gEvent.updated, aktualisiertAm: new Date().toISOString() };
-      await put('termine', merged);
-      pulled++;
-    } else if (localChanged) {
-      const resp = await google.updateCalendarEvent(calendarId, termin.googleEventId, toGoogleEvent(termin));
-      await put('termine', { ...termin, googleSyncedAt: resp.updated });
-      updated++;
+    try {
+      if (googleChanged && (!localChanged || (gEvent.updated || '') >= (termin.aktualisiertAm || ''))) {
+        const fields = fromGoogleEvent(gEvent);
+        const merged = { ...termin, ...fields, googleSyncedAt: gEvent.updated, aktualisiertAm: new Date().toISOString() };
+        await put('termine', merged);
+        pulled++;
+      } else if (localChanged) {
+        const resp = await google.updateCalendarEvent(calendarId, termin.googleEventId, toGoogleEvent(termin));
+        await put('termine', { ...termin, googleSyncedAt: resp.updated });
+        updated++;
+      }
+    } catch (err) {
+      // Einzelner Termin blockt nicht die ganze Synchronisierung – z.B. wenn der
+      // Termin in Google einer geteilten Einladung entspricht, bei der wir nicht
+      // Organisator sind ("forbiddenForNonOrganizer") und daher nicht änderbar ist.
+      failed++;
     }
   }
 
   for (const termin of allTermine) {
     if (termin.googleEventId) continue;
     if (!inWindow(termin)) continue;
-    const resp = await google.insertCalendarEvent(calendarId, toGoogleEvent(termin));
-    await put('termine', { ...termin, googleEventId: resp.id, googleSyncedAt: resp.updated });
-    consumedGoogleIds.add(resp.id);
-    pushedNew++;
+    try {
+      const resp = await google.insertCalendarEvent(calendarId, toGoogleEvent(termin));
+      await put('termine', { ...termin, googleEventId: resp.id, googleSyncedAt: resp.updated });
+      consumedGoogleIds.add(resp.id);
+      pushedNew++;
+    } catch (err) {
+      failed++;
+    }
   }
 
   for (const [id, gEvent] of Object.entries(googleById)) {
@@ -117,7 +128,7 @@ export async function syncCalendar({ silent = false } = {}) {
     created++;
   }
 
-  return { created, updated, pulled, deletedLocal, pushedNew };
+  return { created, updated, pulled, deletedLocal, pushedNew, failed };
 }
 
 export async function deleteSyncedEvent(termin) {

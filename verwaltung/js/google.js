@@ -257,6 +257,18 @@ function walkMessageParts(part, acc) {
   }
 }
 
+/** Listet nur die nackten Nachrichten-IDs (kein Metadaten-Fanout) – für den Vollimport, wo ohnehin gleich der volle Body je Nachricht geladen wird. */
+export async function listMessageIds({ query = '', maxResults = 100, pageToken } = {}) {
+  const params = new URLSearchParams({ maxResults: String(maxResults), q: query });
+  if (pageToken) params.set('pageToken', pageToken);
+  const list = await apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`);
+  return {
+    nextPageToken: list.nextPageToken || null,
+    resultSizeEstimate: list.resultSizeEstimate || 0,
+    ids: (list.messages || []).map((m) => m.id),
+  };
+}
+
 /** Listet Nachrichten (Standard: Posteingang) mit Metadaten (ohne vollen Body) für die Übersichtsliste. */
 export async function listInboxMessages({ query = 'in:inbox', maxResults = 25, pageToken } = {}) {
   const params = new URLSearchParams({ maxResults: String(maxResults), q: query });

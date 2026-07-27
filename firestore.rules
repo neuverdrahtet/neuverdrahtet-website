@@ -21,7 +21,7 @@ service cloud.firestore {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
-        'lagerbewegungen'
+        'lagerbewegungen', 'emails'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
