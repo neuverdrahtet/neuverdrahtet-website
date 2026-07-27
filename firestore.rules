@@ -15,10 +15,12 @@ service cloud.firestore {
     function isAnyRole() { return hasRole(['admin', 'buero', 'mitarbeiter']); }
 
     // Sensible Geschäfts-/Finanz-/Personaldaten: nur Admin + Büro
-    // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/vorlagen/kanban).
+    // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/angebote/rechnungen/
+    // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
     function isSensitiveCollection(collectionId) {
       return collectionId in [
-        'kunden', 'mitarbeiter', 'katalog', 'vorlagen', 'kanbanSpalten',
+        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'rechnungen',
+        'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen'
       ];
     }
