@@ -16,7 +16,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -33,6 +33,7 @@ const STORES = {
   termine: 'id',
   katalog: 'id',
   angebote: 'id',
+  auftragsbestaetigungen: 'id',
   rechnungen: 'id',
   mahnungen: 'id',
   einstellungen: 'key',
@@ -315,9 +316,12 @@ const DEFAULT_SETTINGS = {
   standardSteuersatz: 19,
   standardAufschlagProzent: 20,
   angebotPrefix: 'AN-',
+  auftragsbestaetigungPrefix: 'AB-',
   rechnungPrefix: 'RE-',
   angebotNummerDatum: '',
   angebotNummerZaehler: 0,
+  auftragsbestaetigungNummerDatum: '',
+  auftragsbestaetigungNummerZaehler: 0,
   rechnungNummerDatum: '',
   rechnungNummerZaehler: 0,
   kundeNummerDatum: '',
@@ -740,6 +744,7 @@ export const ROUTE_ROLLEN = {
   katalog: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],
   angebote: ['admin', 'buero'],
+  auftragsbestaetigung: ['admin', 'buero'],
   rechnungen: ['admin', 'buero'],
   mahnungen: ['admin', 'buero'],
   ausgaben: ['admin', 'buero'],

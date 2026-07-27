@@ -148,6 +148,7 @@ export async function render(container) {
           <form id="nr-form">
             <div class="form-grid">
               <div class="field"><label>Angebots-Präfix</label><input name="angebotPrefix" value="${escapeHtml(settings.angebotPrefix)}"></div>
+              <div class="field"><label>Auftragsbestätigungs-Präfix</label><input name="auftragsbestaetigungPrefix" value="${escapeHtml(settings.auftragsbestaetigungPrefix)}"></div>
               <div class="field"><label>Rechnungs-Präfix</label><input name="rechnungPrefix" value="${escapeHtml(settings.rechnungPrefix)}"></div>
               <div class="field"><label>Standard USt.-Satz (%)</label><input type="number" name="standardSteuersatz" value="${settings.standardSteuersatz}"></div>
               <div class="field"><label>Angebot gültig (Tage)</label><input type="number" name="angebotGueltigTage" value="${settings.angebotGueltigTage}"></div>
@@ -328,6 +329,7 @@ export async function render(container) {
           <form id="reset-form" style="max-width:360px">
             <div class="field field-checkbox"><input type="checkbox" name="bereich" value="rechnungen" id="reset-rechnungen"><label for="reset-rechnungen">Rechnungen</label></div>
             <div class="field field-checkbox"><input type="checkbox" name="bereich" value="angebote" id="reset-angebote"><label for="reset-angebote">Angebote</label></div>
+            <div class="field field-checkbox"><input type="checkbox" name="bereich" value="auftragsbestaetigungen" id="reset-ab"><label for="reset-ab">Auftragsbestätigungen</label></div>
             <div class="field field-checkbox"><input type="checkbox" name="bereich" value="mahnungen" id="reset-mahnungen"><label for="reset-mahnungen">Mahnungen</label></div>
             <button type="submit" class="btn btn-danger" style="margin-top:12px">Ausgewählte Bereiche löschen</button>
           </form>
@@ -612,6 +614,7 @@ export async function render(container) {
     const fd = new FormData(e.target);
     await setSettings({
       angebotPrefix: fd.get('angebotPrefix') || 'AN-',
+      auftragsbestaetigungPrefix: fd.get('auftragsbestaetigungPrefix') || 'AB-',
       rechnungPrefix: fd.get('rechnungPrefix') || 'RE-',
       standardSteuersatz: Number(fd.get('standardSteuersatz')) || 19,
       angebotGueltigTage: Number(fd.get('angebotGueltigTage')) || 30,

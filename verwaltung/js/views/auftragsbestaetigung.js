@@ -6,30 +6,25 @@ import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
-import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 
-const STATUS_LABEL = {
-  entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
-};
-const STATUS_BADGE = {
-  entwurf: 'badge', versendet: 'badge-accent', angenommen: 'badge-success', abgelehnt: 'badge-danger',
-};
+const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt' };
+const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success' };
 
 export async function render(container) {
-  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine] = await Promise.all([
-    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'),
+  let [dokumente, kunden, projekte, katalog, settings, vorlagen, textbausteine, angebote] = await Promise.all([
+    getAll('auftragsbestaetigungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('angebote'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
-  angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
-  let filtered = angebote;
-  const bulk = createBulkSelect('angebote', { label: 'Angebote' });
+  dokumente.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
+  let filtered = dokumente;
+  const bulk = createBulkSelect('auftragsbestaetigungen', { label: 'Auftragsbestätigungen' });
 
   container.innerHTML = `
     <div class="view-header">
-      <h1>Angebote</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neues Angebot</button></div>
+      <h1>Auftragsbestätigungen</h1>
+      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neue Auftragsbestätigung</button></div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
@@ -45,7 +40,7 @@ export async function render(container) {
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const status = container.querySelector('#status-filter').value;
-    filtered = angebote.filter((a) => {
+    filtered = dokumente.filter((a) => {
       if (status && a.status !== status) return false;
       if (!q) return true;
       return [a.nummer, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -55,13 +50,13 @@ export async function render(container) {
 
   function renderTable() {
     if (filtered.length === 0) {
-      tableHost.innerHTML = `<div class="empty-state">Noch keine Angebote erstellt.</div>`;
+      tableHost.innerHTML = `<div class="empty-state">Noch keine Auftragsbestätigungen erstellt.</div>`;
       return;
     }
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th>Nummer</th><th>Kunde</th><th>Datum</th><th>Gültig bis</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Nummer</th><th>Kunde</th><th>Datum</th><th>Status</th><th class="text-right">Brutto</th></tr></thead>
         <tbody>
           ${filtered.map((a) => `
             <tr data-id="${a.id}">
@@ -69,7 +64,6 @@ export async function render(container) {
               <td>${escapeHtml(a.nummer)}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${formatDate(a.datum)}</td>
-              <td>${formatDate(a.gueltigBis)}</td>
               <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}">${STATUS_LABEL[a.status] || a.status}</span></td>
               <td class="text-right">${formatCurrency(a.brutto)}</td>
             </tr>
@@ -78,12 +72,12 @@ export async function render(container) {
       </table>
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
-      row.addEventListener('click', () => openForm(angebote.find((a) => a.id === row.dataset.id)));
+      row.addEventListener('click', () => openForm(dokumente.find((a) => a.id === row.dataset.id)));
     });
     bulk.wire(tableHost, {
       onChange: renderTable,
       onDeleted: (ids) => {
-        angebote = angebote.filter((a) => !ids.includes(a.id));
+        dokumente = dokumente.filter((a) => !ids.includes(a.id));
         filtered = filtered.filter((a) => !ids.includes(a.id));
         renderTable();
       },
@@ -94,24 +88,25 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
-  function openForm(a) {
+  function openForm(a, ausAngebot) {
     const isEdit = !!a;
     const data = a || {
-      id: uid(), nummer: '', kundeId: '', projektId: '', datum: todayISO(),
-      gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
-      status: 'entwurf', betreff: '', notizen: '', positionen: [], createdAt: new Date().toISOString(),
-      steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
+      id: uid(), nummer: '', kundeId: ausAngebot?.kundeId || '', projektId: ausAngebot?.projektId || '', datum: todayISO(),
+      status: 'entwurf', betreff: ausAngebot?.betreff || '', notizen: ausAngebot?.notizen || '',
+      positionen: ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : [],
+      angebotId: ausAngebot?.id || '', createdAt: new Date().toISOString(),
+      steuerart: ausAngebot?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
     };
 
     const suggestedNummer = !isEdit
-      ? nextDailyNummer(settings.angebotPrefix, { datum: settings.angebotNummerDatum, zaehler: settings.angebotNummerZaehler }).nummer
+      ? nextDailyNummer(settings.auftragsbestaetigungPrefix, { datum: settings.auftragsbestaetigungNummerDatum, zaehler: settings.auftragsbestaetigungNummerZaehler }).nummer
       : '';
 
     const { body, close } = openModal({
-      title: isEdit ? `Angebot ${data.nummer}` : 'Neues Angebot',
+      title: isEdit ? `Auftragsbestätigung ${data.nummer}` : 'Neue Auftragsbestätigung',
       wide: true,
       bodyHtml: `
-        <form id="ang-form">
+        <form id="ab-form">
           <div class="form-grid">
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}"></div>
             <div class="field"><label>Kunde *</label>
@@ -121,8 +116,7 @@ export async function render(container) {
               <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
-            <div class="field"><label>Gültig bis</label><input type="date" name="gueltigBis" value="${data.gueltigBis}"></div>
-            <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Angebot für Elektroinstallation"></div>
+            <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Auftragsbestätigung Elektroinstallation"></div>
             <div class="field col-span-2"><label>Steuerart</label>
               <select name="steuerart" id="f-steuerart">${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
@@ -131,19 +125,15 @@ export async function render(container) {
             </div>` : ''}
           </div>
           <div class="divider"></div>
-          <div class="flex-row" style="margin-bottom:10px">
-            <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
-          </div>
           <div id="pos-host"></div>
           <div id="tb-picker-host"></div>
-          <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
+          <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
-            ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-ab">→ Auftragsbestätigung erstellen</button>' : ''}
-            ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -152,7 +142,7 @@ export async function render(container) {
       `,
     });
 
-let editor = createPositionsEditor({
+    const editor = createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
@@ -175,59 +165,25 @@ let editor = createPositionsEditor({
       }
     });
 
-    body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
-      const stichpunkte = window.prompt('Stichpunkte für das Angebot (z.B. "3 Steckdosen Wohnzimmer, 1 neuer Sicherungskasten, Verkabelung Garage"):');
-      if (!stichpunkte || !stichpunkte.trim()) return;
-      const btn = body.querySelector('#btn-ki-erstellen');
-      btn.disabled = true;
-      btn.textContent = 'KI erstellt Vorschlag ...';
-      try {
-        const kundeId = body.querySelector('select[name="kundeId"]').value;
-        const kunde = kundenById[kundeId];
-        const result = await generateAngebotFromStichpunkte({
-          stichpunkte, kundeName: kunde?.firma, katalog,
-        });
-        if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
-        if (result.einleitung) {
-          const notizenField = body.querySelector('textarea[name="notizen"]');
-          notizenField.value = result.einleitung + (notizenField.value ? '\n\n' + notizenField.value : '');
-        }
-        const neuePositionen = [
-          ...editor.getPositionen(),
-          ...(result.positionen || []).map((p) => ({ ...p, id: uid() })),
-        ];
-        editor = createPositionsEditor({
-          host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen,
-          defaultSteuersatz: settings.standardSteuersatz, vorlagen,
-        });
-        toast(`${(result.positionen || []).length} Positionen von der KI übernommen`, 'success');
-      } catch (err) {
-        toast(err.message, 'danger');
-      }
-      btn.disabled = false;
-      btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
-    });
-
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Angebot ${data.nummer} wirklich löschen?`)) return;
-        await remove('angebote', data.id);
-        toast('Angebot gelöscht');
+        if (!confirmDelete(`Auftragsbestätigung ${data.nummer} wirklich löschen?`)) return;
+        await remove('auftragsbestaetigungen', data.id);
+        toast('Auftragsbestätigung gelöscht');
         close();
         render(container);
       });
       function docOpts() {
         const totals = editor.getTotals();
         return {
-          settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
-          refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
+          settings, art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
-          introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
+          introText: 'vielen Dank für Ihren Auftrag. Wir bestätigen hiermit folgende Leistungen:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
+          closingText: (data.notizen || '') + '\n\nWir freuen uns auf die Zusammenarbeit.',
         };
       }
       body.querySelector('#btn-print').addEventListener('click', () => {
@@ -239,9 +195,9 @@ let editor = createPositionsEditor({
           const kunde = kundenById[data.kundeId];
           openEmailComposer({
             to: kunde?.email || '',
-            subject: `Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
-            filename: `Angebot-${data.nummer}.pdf`,
+            subject: `Auftragsbestätigung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
         });
@@ -252,32 +208,10 @@ let editor = createPositionsEditor({
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
             pdfBlob: buildDocPdfBlob(docOpts()),
-            filename: `Angebot-${data.nummer}.pdf`,
+            filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
           });
-        });
-      }
-      const toAbBtn = body.querySelector('#btn-to-ab');
-      if (toAbBtn) {
-        toAbBtn.addEventListener('click', async () => {
-          const totals = editor.getTotals();
-          const abSettings = await getSettings();
-          const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-            abSettings.auftragsbestaetigungPrefix, { datum: abSettings.auftragsbestaetigungNummerDatum, zaehler: abSettings.auftragsbestaetigungNummerZaehler }
-          );
-          const auftragsbestaetigung = {
-            id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
-            datum: todayISO(), status: 'entwurf', betreff: data.betreff, notizen: data.notizen, steuerart: data.steuerart || 'regel',
-            positionen: editor.getPositionen().map((p) => ({ ...p, id: uid() })),
-            netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
-            createdAt: new Date().toISOString(),
-          };
-          await put('auftragsbestaetigungen', auftragsbestaetigung);
-          await setSettings({ auftragsbestaetigungNummerDatum: nDatum, auftragsbestaetigungNummerZaehler: nZaehler });
-          toast('Auftragsbestätigung aus Angebot erstellt', 'success');
-          close();
-          window.location.hash = '#/auftragsbestaetigung';
         });
       }
       const toRechnungBtn = body.querySelector('#btn-to-rechnung');
@@ -289,7 +223,7 @@ let editor = createPositionsEditor({
             rSettings.rechnungPrefix, { datum: rSettings.rechnungNummerDatum, zaehler: rSettings.rechnungNummerZaehler }
           );
           const rechnung = {
-            id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
+            id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, auftragsbestaetigungId: data.id,
             datum: todayISO(), faelligAm: addDays(todayISO(), rSettings.zahlungszielTage || 14),
             status: 'offen', betreff: data.betreff, notizen: data.notizen, steuerart: data.steuerart || 'regel',
             positionen: editor.getPositionen(), netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
@@ -297,14 +231,14 @@ let editor = createPositionsEditor({
           };
           await put('rechnungen', rechnung);
           await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
-          toast('Rechnung aus Angebot erstellt', 'success');
+          toast('Rechnung aus Auftragsbestätigung erstellt', 'success');
           close();
           window.location.hash = '#/rechnungen';
         });
       }
     }
 
-    body.querySelector('#ang-form').addEventListener('submit', async (e) => {
+    body.querySelector('#ab-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
@@ -312,7 +246,6 @@ let editor = createPositionsEditor({
       updated.kundeId = fd.get('kundeId') || '';
       updated.projektId = fd.get('projektId') || '';
       updated.datum = fd.get('datum') || todayISO();
-      updated.gueltigBis = fd.get('gueltigBis') || '';
       updated.betreff = (fd.get('betreff') || '').toString().trim();
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.steuerart = fd.get('steuerart') || 'regel';
@@ -331,14 +264,14 @@ let editor = createPositionsEditor({
       if (!isEdit) {
         const currentSettings = await getSettings();
         const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-          currentSettings.angebotPrefix, { datum: currentSettings.angebotNummerDatum, zaehler: currentSettings.angebotNummerZaehler }
+          currentSettings.auftragsbestaetigungPrefix, { datum: currentSettings.auftragsbestaetigungNummerDatum, zaehler: currentSettings.auftragsbestaetigungNummerZaehler }
         );
         if (!updated.nummer) updated.nummer = autoNummer;
-        await setSettings({ angebotNummerDatum: nDatum, angebotNummerZaehler: nZaehler });
+        await setSettings({ auftragsbestaetigungNummerDatum: nDatum, auftragsbestaetigungNummerZaehler: nZaehler });
       }
 
-      await put('angebote', updated);
-      toast(isEdit ? 'Angebot aktualisiert' : 'Angebot angelegt', 'success');
+      await put('auftragsbestaetigungen', updated);
+      toast(isEdit ? 'Auftragsbestätigung aktualisiert' : 'Auftragsbestätigung angelegt', 'success');
       close();
       render(container);
     });

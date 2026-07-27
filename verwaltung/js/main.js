@@ -10,6 +10,7 @@ import * as plantafel from './views/plantafel.js';
 import * as mitarbeiter from './views/mitarbeiter.js';
 import * as katalog from './views/katalog.js';
 import * as angebote from './views/angebote.js';
+import * as auftragsbestaetigung from './views/auftragsbestaetigung.js';
 import * as rechnungen from './views/rechnungen.js';
 import * as mahnungen from './views/mahnungen.js';
 import * as einstellungen from './views/einstellungen.js';
@@ -23,7 +24,7 @@ import * as geraete from './views/geraete.js';
 
 const routes = {
   dashboard, kunden, kanban, projekte, auftraege, plantafel, mitarbeiter,
-  katalog, angebote, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
+  katalog, angebote, auftragsbestaetigung, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
   ausgaben, postfach, buchhaltung, aufgaben, geraete,
 };
 
