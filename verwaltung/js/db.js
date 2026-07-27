@@ -356,6 +356,13 @@ const DEFAULT_SETTINGS = {
   theme: 'dark',
   dokAkzentfarbe: '#0f1b2d',
   dokSchriftgroesse: 10,
+  dokLogoPosition: 'links',
+  dokLogoGroesse: 'mittel',
+  dokFooterFirmendaten: true,
+  dokFooterSteuerdaten: true,
+  dokFooterBankverbindung: true,
+  dokFooterSeitenzahl: true,
+  dokFooterZusatztext: '',
 };
 
 // Gut unterscheidbare Farbfolge für automatisch vergebene Status-/Stufenfarben

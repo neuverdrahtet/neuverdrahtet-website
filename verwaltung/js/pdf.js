@@ -101,9 +101,32 @@ export function buildDocHtml({
     ? `<img src="${settings.logoDataUrl}" alt="${escapeHtml(settings.firmenname || '')}" class="print-logo">`
     : `<div class="print-firmenname">${escapeHtml(settings.firmenname || '')}</div>`;
 
+  const logoPosition = settings.dokLogoPosition || 'links';
+  const logoGroesse = settings.dokLogoGroesse || 'mittel';
+  const headerClass = `print-header pos-${logoPosition}`;
+
+  const footerBloecke = [];
+  if (settings.dokFooterFirmendaten !== false) {
+    footerBloecke.push(`<div>${[settings.firmenname, [settings.strasse, settings.plzOrt].filter(Boolean).join(', '), settings.telefon, settings.email].filter(Boolean).map(escapeHtml).join('<br>')}</div>`);
+  }
+  if (settings.dokFooterSteuerdaten !== false) {
+    footerBloecke.push(`<div>
+      ${settings.ustId ? `USt-IdNr.: ${escapeHtml(settings.ustId)}<br>` : ''}
+      ${settings.steuernummer ? `Steuernummer: ${escapeHtml(settings.steuernummer)}<br>` : ''}
+      ${settings.inhaber ? `Inhaber: ${escapeHtml(settings.inhaber)}` : ''}
+    </div>`);
+  }
+  if (settings.dokFooterBankverbindung !== false) {
+    footerBloecke.push(`<div>
+      ${[settings.inhaber, settings.bank].filter(Boolean).map(escapeHtml).join('<br>')}
+      ${settings.iban ? `<br>IBAN: ${escapeHtml(settings.iban)}` : ''}
+      ${settings.bic ? `<br>BIC: ${escapeHtml(settings.bic)}` : ''}
+    </div>`);
+  }
+
   return `
-    <div class="print-header">
-      <div class="print-logo-col">${logoOrName}</div>
+    <div class="${headerClass}">
+      <div class="print-logo-col print-logo-${logoGroesse}">${logoOrName}</div>
       <div class="print-meta">
         <div class="print-meta-title">${escapeHtml(art)}</div>
         ${metaRows.map((row) => `<div class="row"><span>${escapeHtml(row[0])}</span><span>${escapeHtml(String(row[1] ?? ''))}</span></div>`).join('')}
@@ -119,19 +142,8 @@ export function buildDocHtml({
     ${(steuerHinweis || (settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '')) ? `<p style="font-size:11px;margin-top:10px">${escapeHtml(steuerHinweis || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.')}</p>` : ''}
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
     <div class="print-footer">
-      <div>
-        ${[settings.firmenname, [settings.strasse, settings.plzOrt].filter(Boolean).join(', '), settings.telefon, settings.email].filter(Boolean).map(escapeHtml).join('<br>')}
-      </div>
-      <div>
-        ${settings.ustId ? `USt-IdNr.: ${escapeHtml(settings.ustId)}<br>` : ''}
-        ${settings.steuernummer ? `Steuernummer: ${escapeHtml(settings.steuernummer)}<br>` : ''}
-        ${settings.inhaber ? `Inhaber: ${escapeHtml(settings.inhaber)}` : ''}
-      </div>
-      <div>
-        ${[settings.inhaber, settings.bank].filter(Boolean).map(escapeHtml).join('<br>')}
-        ${settings.iban ? `<br>IBAN: ${escapeHtml(settings.iban)}` : ''}
-        ${settings.bic ? `<br>BIC: ${escapeHtml(settings.bic)}` : ''}
-      </div>
+      ${settings.dokFooterZusatztext ? `<div class="print-footer-zusatz">${escapeHtml(settings.dokFooterZusatztext)}</div>` : ''}
+      <div class="print-footer-spalten">${footerBloecke.join('')}</div>
     </div>
   `;
 }
