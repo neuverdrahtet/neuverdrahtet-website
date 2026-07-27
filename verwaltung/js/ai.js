@@ -29,6 +29,31 @@ export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, k
   return res.json();
 }
 
+/** Ordnet eine Charge von E-Mails per KI in Kategorien ein (kundenanfrage/rechnung-lieferant/werbung/sonstiges). */
+export async function classifyEmails({ emails }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const res = await fetch(settings.aiWorkerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Secret': settings.aiAppSecret || '',
+    },
+    body: JSON.stringify({ action: 'email-classify', emails }),
+  });
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 /** Lässt einen fotografierten Beleg per KI auslesen (Händler/Datum/Betrag/Kategorie). */
 export async function analyzeBeleg({ imageDataUrl, kategorien }) {
   const settings = await getSettings();

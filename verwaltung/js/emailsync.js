@@ -1,5 +1,10 @@
 import { getAll, put, setSettings } from './db.js';
 import * as google from './google.js';
+import { classifyEmails } from './ai.js';
+
+// Wie viele E-Mails pro KI-Aufruf zur Kategorisierung geschickt werden - ein
+// guter Kompromiss zwischen Aufrufanzahl (bei z.B. 500+ Mails) und Prompt-Größe.
+const CLASSIFY_BATCH_SIZE = 25;
 
 // Firestore-Dokumente dürfen max. 1 MiB groß sein - Mailbodys (v.a. HTML mit
 // eingebetteten Bildern) können das sprengen. Großzügig, aber sicher kappen.
@@ -28,6 +33,9 @@ function toStoredEmail(full) {
     // "SENT" ist Gmails eigenes Label für von uns gesendete Mails - zuverlässiger
     // als ein Vergleich der Absenderadresse (funktioniert auch bei mehreren Aliassen).
     richtung: (full.labelIds || []).includes('SENT') ? 'ausgang' : 'eingang',
+    // Leer bis classifyPendingEmails() sie per KI einsortiert hat (kundenanfrage/
+    // rechnung-lieferant/werbung/sonstiges) - läuft automatisch im Hintergrund.
+    kategorie: '',
     importedAt: new Date().toISOString(),
   };
 }
@@ -98,4 +106,37 @@ export async function incrementalSync({ onProgress } = {}) {
   await setSettings({ emailLastSyncAt: new Date().toISOString() });
   if (onProgress) onProgress({ done: stored, estimate: stored });
   return { neu: stored };
+}
+
+/**
+ * Sortiert alle noch nicht kategorisierten E-Mails per KI in eine der festen
+ * Kategorien ein (siehe EMAIL_KATEGORIEN in db.js). Läuft in Batches, damit bei
+ * großen Postfächern nicht hunderte Einzelaufrufe nötig sind, und schreibt das
+ * Ergebnis laufend zurück, damit die Anzeige schon während des Laufs aktuell wird.
+ */
+export async function classifyPendingEmails({ onProgress } = {}) {
+  const alle = await getAll('emails');
+  const offen = alle.filter((e) => !e.kategorie);
+  let erledigt = 0;
+  for (let i = 0; i < offen.length; i += CLASSIFY_BATCH_SIZE) {
+    const batch = offen.slice(i, i + CLASSIFY_BATCH_SIZE);
+    try {
+      const { ergebnisse } = await classifyEmails({
+        emails: batch.map((e) => ({ id: e.id, subject: e.subject, from: e.from, snippet: (e.text || '').slice(0, 300) })),
+      });
+      const kategorieById = new Map((ergebnisse || []).map((r) => [r.id, r.kategorie]));
+      for (const e of batch) {
+        const kategorie = kategorieById.get(e.id);
+        if (kategorie) {
+          await put('emails', { ...e, kategorie });
+          erledigt++;
+        }
+      }
+    } catch {
+      // Kategorisierung ist ein Komfort-Feature - ein fehlgeschlagener Batch
+      // (z.B. KI noch nicht eingerichtet) darf die restliche Anzeige nicht stören.
+    }
+    if (onProgress) onProgress({ done: erledigt, total: offen.length });
+  }
+  return { done: erledigt, total: offen.length };
 }
