@@ -1297,7 +1297,9 @@ table.data-table th.col-select, table.data-table td.col-select {
 .postfach-row:hover { border-color: #46464f; }
 .postfach-row.active { border-color: var(--accent); background: rgba(255, 90, 54, 0.08); }
 .postfach-row.unread strong, .postfach-row.unread .postfach-row-subject { font-weight: 700; }
-.postfach-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.postfach-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.postfach-row-top strong { flex: 1; }
+.postfach-select-all-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mute); padding: 2px 4px 6px; }
 .postfach-row-subject { font-size: 13px; margin: 2px 0; }
 .postfach-row-kategorie { margin: 2px 0; }
 .postfach-row-kategorie .badge { font-size: 10.5px; padding: 1px 7px; }

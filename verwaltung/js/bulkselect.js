@@ -8,8 +8,9 @@ import { confirmDelete } from './ui.js';
  * in die Tabelle einbauen, barHtml() vor die Tabelle setzen und nach dem
  * Neuzeichnen wire() aufrufen.
  */
-export function createBulkSelect(store, { label = 'Einträge' } = {}) {
+export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) {
   const selected = new Set();
+  const doDelete = deleteFn || ((id) => remove(store, id));
 
   function headerCell() {
     return `<th class="col-select"><input type="checkbox" class="bulk-select-all" title="Alle auswählen"></th>`;
@@ -59,10 +60,16 @@ export function createBulkSelect(store, { label = 'Einträge' } = {}) {
         e.stopPropagation();
         const ids = Array.from(selected);
         if (!confirmDelete(`${ids.length} ${label} wirklich unwiderruflich löschen?`)) return;
-        for (const id of ids) await remove(store, id);
-        selected.clear();
-        toast(`${ids.length} ${label} gelöscht`, 'success');
-        onDeleted(ids);
+        const done = [];
+        for (const id of ids) {
+          try {
+            await doDelete(id);
+            done.push(id);
+          } catch { /* einzelner Fehlschlag (z.B. Netzwerk) blockt nicht den Rest */ }
+        }
+        done.forEach((id) => selected.delete(id));
+        toast(done.length === ids.length ? `${done.length} ${label} gelöscht` : `${done.length} von ${ids.length} ${label} gelöscht`, done.length ? 'success' : 'danger');
+        onDeleted(done);
       });
     }
     const clearBtn = host.querySelector('#bulk-clear');

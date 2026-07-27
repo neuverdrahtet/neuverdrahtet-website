@@ -35,14 +35,31 @@ export async function classifyEmails({ emails }) {
   if (!settings.aiWorkerUrl) {
     throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
   }
-  const res = await fetch(settings.aiWorkerUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-App-Secret': settings.aiAppSecret || '',
-    },
-    body: JSON.stringify({ action: 'email-classify', emails }),
-  });
+  // Läuft unbeaufsichtigt im Hintergrund (siehe classifyPendingEmails in
+  // emailsync.js) - ohne Timeout würde ein hängender Worker-Aufruf die
+  // komplette restliche Kategorisierung für immer blockieren, statt nur
+  // diesen einen Batch zu überspringen.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let res;
+  try {
+    res = await fetch(settings.aiWorkerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Secret': settings.aiAppSecret || '',
+      },
+      body: JSON.stringify({ action: 'email-classify', emails }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Zeitüberschreitung beim KI-Worker (keine Antwort innerhalb von 45s).');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if (!res.ok) {
     let message = `Fehler (${res.status})`;
     try {
