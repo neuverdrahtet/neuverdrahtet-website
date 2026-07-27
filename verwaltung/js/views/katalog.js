@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText 
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
+import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
 const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
@@ -52,6 +53,7 @@ export async function render(container) {
       <h1>Artikel &amp; Leistungen</h1>
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
+        <button class="btn" id="btn-standard-import">📥 Standard-Katalog (Elektro) importieren</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
       </div>
@@ -181,7 +183,25 @@ export async function render(container) {
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
+  container.querySelector('#btn-standard-import').addEventListener('click', () => importStandardKatalog());
   container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
+
+  async function importStandardKatalog() {
+    const bestehendeBezeichnungen = new Set(items.map((i) => (i.bezeichnung || '').trim().toLowerCase()));
+    const neue = STANDARD_KATALOG_ELEKTRO.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase()));
+    if (neue.length === 0) {
+      toast('Alle Standard-Einträge sind bereits in deinem Katalog vorhanden', 'info');
+      return;
+    }
+    if (!window.confirm(`${neue.length} übliche Elektro-Leistungen/Materialien mit marktüblichen Richtpreisen in den Katalog übernehmen? Bereits vorhandene Bezeichnungen werden übersprungen. Preise können danach jederzeit angepasst werden.`)) return;
+    for (const v of neue) {
+      await put('katalog', {
+        id: uid(), ...v, komponenten: [], bestandTracking: false, bestand: 0, mindestbestand: 0,
+      });
+    }
+    toast(`${neue.length} Standard-Einträge übernommen${neue.length < STANDARD_KATALOG_ELEKTRO.length ? ` (${STANDARD_KATALOG_ELEKTRO.length - neue.length} bereits vorhanden übersprungen)` : ''}`, 'success');
+    render(container);
+  }
 
   function openLexofficeSync() {
     const { body, close } = openModal({
