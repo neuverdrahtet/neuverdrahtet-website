@@ -211,6 +211,75 @@ async function callClaudeBelegScan({ apiKey, model, imageDataUrl, kategorien }) 
   return JSON.parse(textBlock.text);
 }
 
+const EMAIL_KLASSIFIZIERUNG_SCHEMA = {
+  type: 'object',
+  properties: {
+    ergebnisse: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          kategorie: { type: 'string', enum: ['kundenanfrage', 'rechnung-lieferant', 'werbung', 'sonstiges'] },
+        },
+        required: ['id', 'kategorie'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['ergebnisse'],
+  additionalProperties: false,
+};
+
+function buildEmailKlassifizierungPrompt() {
+  return `Du sortierst E-Mails eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) nach Art. Für jede E-Mail in der Liste (id, Betreff, Absender, kurzer Textauszug) wählst du GENAU eine Kategorie:
+- "kundenanfrage": Anfragen, Rückfragen oder sonstige Kommunikation mit (potenziellen) Kunden zu Aufträgen, Terminen oder Angeboten - auch eigene gesendete Antworten darauf.
+- "rechnung-lieferant": Rechnungen, Bestellbestätigungen oder Belege von Lieferanten, Dienstleistern oder Software-Abos.
+- "werbung": Newsletter, Marketing-/Werbe-Mails, Produktangebote, Social-Media- oder Blog-Benachrichtigungen.
+- "sonstiges": alles andere, z.B. interne Mails, Kalendererinnerungen, Systembenachrichtigungen oder unklare Fälle.
+
+Antworte für JEDE übergebene E-Mail mit exakt ihrer id und der gewählten Kategorie, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge.`;
+}
+
+async function callClaudeEmailClassify({ apiKey, model, emails }) {
+  const liste = emails
+    .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${(e.snippet || '').slice(0, 200)}`)
+    .join('\n---\n');
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      system: buildEmailKlassifizierungPrompt(),
+      messages: [{ role: 'user', content: `Ordne folgende E-Mails ein:\n\n${liste}` }],
+      output_config: {
+        format: { type: 'json_schema', schema: EMAIL_KLASSIFIZIERUNG_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -259,6 +328,28 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           imageDataUrl: body.imageDataUrl,
           kategorien: body.kategorien,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'email-classify') {
+      if (!Array.isArray(body.emails) || body.emails.length === 0) {
+        return new Response(JSON.stringify({ error: 'Feld "emails" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeEmailClassify({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          emails: body.emails,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },

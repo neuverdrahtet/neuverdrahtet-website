@@ -1,8 +1,8 @@
-import { put, getAll, getSettings, setSettings } from '../db.js';
+import { put, getAll, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime } from '../utils.js';
 import { openModal } from '../ui.js';
 import * as google from '../google.js';
-import { fullImport, incrementalSync } from '../emailsync.js';
+import { fullImport, incrementalSync, classifyPendingEmails } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 
@@ -87,6 +87,7 @@ export async function render(container) {
     let allEmails = (await getAll('emails')).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
     let query = '';
     let richtungFilter = 'alle';
+    let kategorieFilter = 'alle';
     let selectedId = null;
 
     container.innerHTML = `
@@ -97,13 +98,17 @@ export async function render(container) {
           <button class="btn btn-primary" id="btn-compose">✏️ Neue E-Mail</button>
         </div>
       </div>
-      <p class="text-mute" style="margin:-4px 0 10px">${allEmails.length} E-Mails importiert · zuletzt synchronisiert: ${settings.emailLastSyncAt ? formatDateTime(settings.emailLastSyncAt) : 'nie'} · <a href="#" id="link-reimport">Kompletten Neuimport starten</a></p>
+      <p class="text-mute" style="margin:-4px 0 10px">${allEmails.length} E-Mails importiert · zuletzt synchronisiert: ${settings.emailLastSyncAt ? formatDateTime(settings.emailLastSyncAt) : 'nie'} · <a href="#" id="link-reimport">Kompletten Neuimport starten</a> <span id="pf-kat-status" class="text-mute"></span></p>
       <div class="search-bar">
         <input type="search" id="pf-search" placeholder="Suche nach Betreff, Absender oder Text ...">
         <select id="pf-richtung">
           <option value="alle">Alle</option>
           <option value="eingang">📥 Eingang</option>
           <option value="ausgang">📤 Ausgang</option>
+        </select>
+        <select id="pf-kategorie">
+          <option value="alle">Alle Kategorien</option>
+          ${EMAIL_KATEGORIEN.map((k) => `<option value="${k.id}">${k.icon} ${escapeHtml(k.titel)}</option>`).join('')}
         </select>
       </div>
       <div class="postfach-layout">
@@ -117,9 +122,14 @@ export async function render(container) {
     const listHost = container.querySelector('#pf-list-host');
     const detailHost = container.querySelector('#pf-detail-host');
 
+    function matchesFilters(m) {
+      const richtungOk = richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter;
+      const kategorieOk = kategorieFilter === 'alle' || m.kategorie === kategorieFilter;
+      return richtungOk && kategorieOk;
+    }
+
     function filtered() {
-      const byRichtung = (m) => richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter;
-      const base = allEmails.filter(byRichtung);
+      const base = allEmails.filter(matchesFilters);
       if (!query) return base.slice(0, LISTE_STANDARD_LIMIT);
       const q = query.toLowerCase();
       return base.filter((m) =>
@@ -131,21 +141,26 @@ export async function render(container) {
 
     function renderList() {
       const list = filtered();
-      const gefiltertGesamt = allEmails.filter((m) => richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter).length;
+      const gefiltertGesamt = allEmails.filter(matchesFilters).length;
       if (list.length === 0) {
         listHost.innerHTML = `<div class="empty-state">Keine E-Mails gefunden.</div>`;
         return;
       }
-      listHost.innerHTML = list.map((m) => `
+      listHost.innerHTML = list.map((m) => {
+        const kat = EMAIL_KATEGORIEN.find((k) => k.id === m.kategorie);
+        const katBadge = kat ? `<span class="badge ${kat.badge}" title="${escapeHtml(kat.titel)}">${kat.icon} ${escapeHtml(kat.titel)}</span>` : '';
+        return `
         <div class="postfach-row ${m.unread ? 'unread' : ''} ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
           <div class="postfach-row-top">
             <strong>${escapeHtml((m.from || '').split('<')[0].trim() || m.from)}</strong>
             <span class="text-mute">${escapeHtml(m.date)}</span>
           </div>
           <div class="postfach-row-subject">${escapeHtml(m.subject)}</div>
+          ${katBadge ? `<div class="postfach-row-kategorie">${katBadge}</div>` : ''}
           <div class="text-mute postfach-row-snippet">${escapeHtml((m.text || '').slice(0, 140))}</div>
         </div>
-      `).join('') + (!query && gefiltertGesamt > LISTE_STANDARD_LIMIT ? `<p class="hint">Zeigt die neuesten ${LISTE_STANDARD_LIMIT} E-Mails – zum Durchsuchen des gesamten Postfachs oben suchen.</p>` : '');
+      `;
+      }).join('') + (!query && gefiltertGesamt > LISTE_STANDARD_LIMIT ? `<p class="hint">Zeigt die neuesten ${LISTE_STANDARD_LIMIT} E-Mails – zum Durchsuchen des gesamten Postfachs oben suchen.</p>` : '');
       listHost.querySelectorAll('.postfach-row').forEach((row) => {
         row.addEventListener('click', () => openMessage(row.dataset.id));
       });
@@ -384,6 +399,10 @@ export async function render(container) {
       richtungFilter = e.target.value;
       renderList();
     });
+    container.querySelector('#pf-kategorie').addEventListener('change', (e) => {
+      kategorieFilter = e.target.value;
+      renderList();
+    });
 
     renderList();
 
@@ -399,5 +418,21 @@ export async function render(container) {
         });
       }
     }).catch(() => { /* stiller Hintergrund-Sync, Fehler nicht kritisch für die Anzeige */ });
+
+    // Automatische KI-Sortierung: läuft bei jedem Öffnen des Postfachs im
+    // Hintergrund für alle noch unkategorisierten Mails weiter (batchweise, damit
+    // auch bei sehr großen Postfächern nach und nach alles einsortiert wird).
+    if (settings.aiWorkerUrl) {
+      const katStatusEl = container.querySelector('#pf-kat-status');
+      classifyPendingEmails({
+        onProgress: ({ done, total }) => {
+          if (katStatusEl) katStatusEl.textContent = done < total ? `· 🏷️ kategorisiere ${done}/${total} ...` : '';
+          getAll('emails').then((fresh) => {
+            allEmails = fresh.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+            renderList();
+          });
+        },
+      }).catch(() => { /* Kategorisierung ist ein Komfort-Feature, Fehler nicht kritisch für die Anzeige */ });
+    }
   }
 }

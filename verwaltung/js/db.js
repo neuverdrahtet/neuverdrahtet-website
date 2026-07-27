@@ -773,6 +773,15 @@ export const USTSAETZE = [
   { wert: 0, titel: '0% – Steuerfrei / Kleinunternehmer' },
 ];
 
+// Kategorien für die automatische KI-Sortierung im Postfach (siehe emailsync.js
+// classifyPendingEmails() und den Cloudflare-Worker "email-classify"-Aktion).
+export const EMAIL_KATEGORIEN = [
+  { id: 'kundenanfrage', titel: 'Kundenanfrage', icon: '👤', badge: 'badge-accent' },
+  { id: 'rechnung-lieferant', titel: 'Rechnung/Lieferant', icon: '🧾', badge: 'badge-warn' },
+  { id: 'werbung', titel: 'Werbung', icon: '📢', badge: 'badge-purple' },
+  { id: 'sonstiges', titel: 'Sonstiges', icon: '📄', badge: '' },
+];
+
 export const STEUERARTEN = [
   { id: 'regel', titel: 'Regelbesteuerung (USt. je Position)', hinweis: '' },
   { id: 'kleinunternehmer', titel: 'Kleinunternehmer § 19 UStG (keine USt.)', hinweis: 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' },

@@ -1299,6 +1299,8 @@ table.data-table th.col-select, table.data-table td.col-select {
 .postfach-row.unread strong, .postfach-row.unread .postfach-row-subject { font-weight: 700; }
 .postfach-row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
 .postfach-row-subject { font-size: 13px; margin: 2px 0; }
+.postfach-row-kategorie { margin: 2px 0; }
+.postfach-row-kategorie .badge { font-size: 10.5px; padding: 1px 7px; }
 .postfach-row-snippet { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .postfach-detail {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
