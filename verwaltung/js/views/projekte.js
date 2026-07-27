@@ -16,9 +16,9 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
-    getAll('angebote'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
+    getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
     getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -369,6 +369,7 @@ export async function render(container, opts = {}) {
       start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
+    const linkedAuftragsbestaetigungen = isEdit ? auftragsbestaetigungen.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
     const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
@@ -415,6 +416,8 @@ export async function render(container, opts = {}) {
             <div class="divider"></div>
             <h2 style="font-size:14px;margin:0 0 8px">Verknüpfte Angebote</h2>
             ${linkedAngebote.length ? `<ul class="cal-event-list">${linkedAngebote.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Angebote verknüpft.</p>'}
+            <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Auftragsbestätigungen</h2>
+            ${linkedAuftragsbestaetigungen.length ? `<ul class="cal-event-list">${linkedAuftragsbestaetigungen.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Auftragsbestätigungen verknüpft.</p>'}
             <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
             ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
             <div class="divider"></div>
