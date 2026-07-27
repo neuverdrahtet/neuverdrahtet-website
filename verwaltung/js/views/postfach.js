@@ -1,10 +1,11 @@
-import { put, getAll, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
+import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime } from '../utils.js';
-import { openModal } from '../ui.js';
+import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 const LISTE_STANDARD_LIMIT = 200;
 
@@ -28,6 +29,14 @@ function blobToDataUrl(blob) {
 
 function calcBrutto(netto, steuersatz) {
   return Math.round(netto * (1 + (Number(steuersatz) || 0) / 100) * 100) / 100;
+}
+
+// Verschiebt die Mail in Gmails Papierkorb (30 Tage wiederherstellbar) UND
+// entfernt sie lokal - bewusst kein reines lokales Ausblenden, da der Nutzer
+// die Mail wirklich auch aus Gmail entfernt haben möchte.
+async function loeschEmail(id) {
+  await google.trashMessage(id);
+  await remove('emails', id);
 }
 
 function formatSize(bytes) {
@@ -89,6 +98,7 @@ export async function render(container) {
     let richtungFilter = 'alle';
     let kategorieFilter = 'alle';
     let selectedId = null;
+    const bulkSelect = createBulkSelect('emails', { label: 'E-Mails', deleteFn: loeschEmail });
 
     container.innerHTML = `
       <div class="view-header">
@@ -143,15 +153,19 @@ export async function render(container) {
       const list = filtered();
       const gefiltertGesamt = allEmails.filter(matchesFilters).length;
       if (list.length === 0) {
-        listHost.innerHTML = `<div class="empty-state">Keine E-Mails gefunden.</div>`;
+        listHost.innerHTML = bulkSelect.barHtml() + `<div class="empty-state">Keine E-Mails gefunden.</div>`;
+        bulkSelect.wire(listHost, { onChange: renderList, onDeleted: onBulkDeleted });
         return;
       }
-      listHost.innerHTML = list.map((m) => {
+      listHost.innerHTML = bulkSelect.barHtml() +
+        `<label class="postfach-select-all-row"><input type="checkbox" class="bulk-select-all"> Alle auswählen</label>` +
+        list.map((m) => {
         const kat = EMAIL_KATEGORIEN.find((k) => k.id === m.kategorie);
         const katBadge = kat ? `<span class="badge ${kat.badge}" title="${escapeHtml(kat.titel)}">${kat.icon} ${escapeHtml(kat.titel)}</span>` : '';
         return `
         <div class="postfach-row ${m.unread ? 'unread' : ''} ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
           <div class="postfach-row-top">
+            <input type="checkbox" class="bulk-select-row" data-id="${m.id}" ${bulkSelect.selected.has(m.id) ? 'checked' : ''}>
             <strong>${escapeHtml((m.from || '').split('<')[0].trim() || m.from)}</strong>
             <span class="text-mute">${escapeHtml(m.date)}</span>
           </div>
@@ -164,6 +178,16 @@ export async function render(container) {
       listHost.querySelectorAll('.postfach-row').forEach((row) => {
         row.addEventListener('click', () => openMessage(row.dataset.id));
       });
+      bulkSelect.wire(listHost, { onChange: renderList, onDeleted: onBulkDeleted });
+    }
+
+    function onBulkDeleted(ids) {
+      allEmails = allEmails.filter((m) => !ids.includes(m.id));
+      if (selectedId && ids.includes(selectedId)) {
+        selectedId = null;
+        detailHost.innerHTML = `<div class="empty-state">Wähle links eine E-Mail aus.</div>`;
+      }
+      renderList();
     }
 
     async function openMessage(id) {
@@ -195,6 +219,7 @@ export async function render(container) {
           <div class="actions">
             <button class="btn" id="pf-reply-btn">↩️ Antworten</button>
             <button class="btn" id="pf-task-btn">✅ Als Aufgabe anlegen</button>
+            <button class="btn btn-danger" id="pf-delete-btn">🗑️ Löschen</button>
           </div>
         </div>
         <div class="postfach-body-host">${bodyHtml}</div>
@@ -216,6 +241,22 @@ export async function render(container) {
 
       detailHost.querySelector('#pf-reply-btn').addEventListener('click', () => openCompose({ replyTo: full }));
       detailHost.querySelector('#pf-task-btn').addEventListener('click', () => openTaskFromMessage(full));
+      detailHost.querySelector('#pf-delete-btn').addEventListener('click', async () => {
+        if (!confirmDelete('Diese E-Mail wirklich unwiderruflich löschen? Sie wandert dabei auch in den Gmail-Papierkorb.')) return;
+        const btn = detailHost.querySelector('#pf-delete-btn');
+        btn.disabled = true;
+        btn.textContent = 'Lösche ...';
+        try {
+          await loeschEmail(full.id);
+          bulkSelect.selected.delete(full.id);
+          onBulkDeleted([full.id]);
+          toast('E-Mail gelöscht', 'success');
+        } catch (err) {
+          toast(`Löschen fehlgeschlagen: ${err.message}`, 'danger');
+          btn.disabled = false;
+          btn.textContent = '🗑️ Löschen';
+        }
+      });
       detailHost.querySelectorAll('[data-action="download"]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const att = full.attachments[Number(btn.dataset.attidx)];
@@ -322,9 +363,10 @@ export async function render(container) {
     function openCompose({ replyTo } = {}) {
       const to = replyTo ? extractEmailAddress(replyTo.from) : '';
       const subject = replyTo ? (/^re:/i.test(replyTo.subject) ? replyTo.subject : `Re: ${replyTo.subject}`) : '';
+      const signaturBlock = settings.emailSignature ? `\n\n${settings.emailSignature}` : '';
       const bodyText = replyTo
-        ? `\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
-        : '';
+        ? `${signaturBlock}\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
+        : signaturBlock;
       const { body, close } = openModal({
         title: replyTo ? 'Antworten' : 'Neue E-Mail',
         wide: true,

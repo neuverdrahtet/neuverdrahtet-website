@@ -339,6 +339,7 @@ const DEFAULT_SETTINGS = {
   emailImportDone: false,
   emailImportCount: 0,
   emailLastSyncAt: '',
+  emailSignature: '',
   stundensatz: 60,
   datevBeraterNr: '',
   datevMandantNr: '',

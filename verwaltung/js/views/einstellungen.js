@@ -15,6 +15,19 @@ function blobToDataUrl(blob) {
   });
 }
 
+// Gmail-Signaturen sind HTML - unser Postfach-Compose kann nur reinen Text
+// versenden, daher hier grob in Text umwandeln (Zeilenumbrüche erhalten,
+// Formatierung/Bilder gehen bewusst verloren) statt HTML zu verschicken.
+function htmlSignaturZuText(html) {
+  const mitUmbruechen = (html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n');
+  const div = document.createElement('div');
+  div.innerHTML = mitUmbruechen;
+  return (div.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 const NAV = [
   { group: 'Unternehmen & Team', items: [
     { id: 'firma', icon: '🏢', label: 'Firmendaten' },
@@ -263,6 +276,20 @@ export async function render(container) {
               <button type="button" class="btn" id="btn-google-connect">Mit Google verbinden</button>
               <button type="submit" class="btn btn-primary">Speichern</button>
             </div>
+          </form>
+
+          <div class="divider"></div>
+          <h2 style="font-size:14px">E-Mail-Signatur</h2>
+          <p class="hint">
+            Wird beim Verfassen neuer E-Mails im Postfach automatisch unter den Text gesetzt. Eine aus Gmail übernommene
+            Signatur wird dabei in reinen Text umgewandelt (Formatierungen/Bilder gehen verloren) und kann hier frei angepasst werden.
+          </p>
+          <div class="flex-row" style="gap:10px;align-items:center;margin-bottom:8px">
+            <button type="button" class="btn" id="btn-signature-import" ${google.isConnected() ? '' : 'disabled title="Erst mit Google verbinden"'}>Aus Gmail übernehmen</button>
+          </div>
+          <form id="signature-form">
+            <div class="field"><textarea name="emailSignature" rows="5" placeholder="Mit freundlichen Grüßen&#10;...">${escapeHtml(settings.emailSignature || '')}</textarea></div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
         </div>
 
@@ -583,6 +610,29 @@ export async function render(container) {
     google.disconnect();
     toast('Google-Verbindung getrennt');
     render(container);
+  });
+
+  container.querySelector('#btn-signature-import')?.addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-signature-import');
+    btn.disabled = true;
+    btn.textContent = 'Lädt ...';
+    try {
+      const html = await google.getSignature();
+      const text = htmlSignaturZuText(html);
+      container.querySelector('textarea[name="emailSignature"]').value = text;
+      toast(text ? 'Signatur aus Gmail übernommen – bitte prüfen und bei Bedarf anpassen' : 'In Gmail ist aktuell keine Signatur hinterlegt', text ? 'success' : 'info');
+    } catch (err) {
+      toast(`Übernehmen fehlgeschlagen: ${err.message}`, 'danger');
+    }
+    btn.disabled = false;
+    btn.textContent = 'Aus Gmail übernehmen';
+  });
+
+  container.querySelector('#signature-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({ emailSignature: (fd.get('emailSignature') || '').toString() });
+    toast('Signatur gespeichert', 'success');
   });
 
   container.querySelector('#lexoffice-form').addEventListener('submit', async (e) => {

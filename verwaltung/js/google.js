@@ -4,6 +4,7 @@ const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
   'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.send',
+  'https://www.googleapis.com/auth/gmail.settings.basic',
   'https://www.googleapis.com/auth/drive.file',
 ].join(' ');
 
@@ -332,6 +333,21 @@ export async function markAsRead(id) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ removeLabelIds: ['UNREAD'] }),
   });
+}
+
+/** Verschiebt eine Nachricht in den Gmail-Papierkorb (dort 30 Tage wiederherstellbar, kein Hard-Delete). */
+export async function trashMessage(id) {
+  return apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/trash`, {
+    method: 'POST',
+  });
+}
+
+/** Liest die in Gmail hinterlegte Standard-Signatur der primären Absenderadresse aus (HTML). */
+export async function getSignature() {
+  const data = await apiFetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs');
+  const sendAs = data.sendAs || [];
+  const primary = sendAs.find((s) => s.isPrimary) || sendAs[0];
+  return primary?.signature || '';
 }
 
 /** Verfasst/beantwortet eine einfache Text-E-Mail (ohne Anhang). */
