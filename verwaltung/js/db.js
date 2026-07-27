@@ -16,7 +16,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 12;
+const DB_VERSION = 13;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -52,6 +52,7 @@ const STORES = {
   aufgabenStatus: 'id',
   lagerbewegungen: 'id',
   verwendungen: 'id',
+  emails: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -335,6 +336,9 @@ const DEFAULT_SETTINGS = {
   googleCalendarId: 'primary',
   driveBackupEnabled: false,
   driveBackupLastAt: '',
+  emailImportDone: false,
+  emailImportCount: 0,
+  emailLastSyncAt: '',
   stundensatz: 60,
   datevBeraterNr: '',
   datevMandantNr: '',

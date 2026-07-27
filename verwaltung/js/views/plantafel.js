@@ -137,7 +137,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     btn.textContent = 'Synchronisiere ...';
     try {
       const result = await syncCalendar();
-      toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.`, 'success');
+      const failedHinweis = result.failed ? ` · ${result.failed} übersprungen (keine Berechtigung)` : '';
+      toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.${failedHinweis}`, 'success');
       render(container, _route, { autoSync: false });
     } catch (err) {
       toast(err.message, 'danger');
