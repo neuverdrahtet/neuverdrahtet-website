@@ -6,6 +6,7 @@ import { fullImport, incrementalSync, classifyPendingEmails } from '../emailsync
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 
 const LISTE_STANDARD_LIMIT = 200;
 
@@ -301,10 +302,13 @@ export async function render(container) {
     async function uebernehmeAlsBeleg(message, attachment) {
       const bytes = await google.getAttachmentData(message.id, attachment.attachmentId);
       const blob = bytesToBlob(bytes, attachment.mimeType);
+      const belegId = uid();
       let prefill = {
-        id: uid(), datum: todayISO(), kategorie: AUSGABEN_KATEGORIEN[AUSGABEN_KATEGORIEN.length - 1], beschreibung: `Anhang aus E-Mail: ${message.subject}`,
+        id: belegId, datum: todayISO(), kategorie: AUSGABEN_KATEGORIEN[AUSGABEN_KATEGORIEN.length - 1], beschreibung: `Anhang aus E-Mail: ${message.subject}`,
         lieferant: extractEmailAddress(message.from), betragNetto: 0, steuersatz: settings.standardSteuersatz || 19, betragBrutto: 0,
-        bezahltMit: 'überweisung', beleg: blob, projektId: '', kundeId: '', kalkKategorie: '',
+        bezahltMit: 'überweisung',
+        beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${belegId}`, blob) : blob,
+        projektId: '', kundeId: '', kalkKategorie: '',
       };
       if (attachment.mimeType.startsWith('image/')) {
         try {
