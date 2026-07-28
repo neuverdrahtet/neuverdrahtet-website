@@ -118,6 +118,7 @@ export async function classifyPendingEmails({ onProgress } = {}) {
   const alle = await getAll('emails');
   const offen = alle.filter((e) => !e.kategorie);
   let erledigt = 0;
+  let lastError = null;
   for (let i = 0; i < offen.length; i += CLASSIFY_BATCH_SIZE) {
     const batch = offen.slice(i, i + CLASSIFY_BATCH_SIZE);
     try {
@@ -132,11 +133,14 @@ export async function classifyPendingEmails({ onProgress } = {}) {
           erledigt++;
         }
       }
-    } catch {
+    } catch (err) {
       // Kategorisierung ist ein Komfort-Feature - ein fehlgeschlagener Batch
-      // (z.B. KI noch nicht eingerichtet) darf die restliche Anzeige nicht stören.
+      // darf die restliche Anzeige nicht stören, aber der Grund darf nicht
+      // spurlos verschwinden (sonst sieht man nur "kategorisiert nicht mehr"
+      // ohne jeden Hinweis, woran es liegt - siehe auch bulkselect.js).
+      lastError = err.message || String(err);
     }
-    if (onProgress) onProgress({ done: erledigt, total: offen.length });
+    if (onProgress) onProgress({ done: erledigt, total: offen.length, error: lastError });
   }
-  return { done: erledigt, total: offen.length };
+  return { done: erledigt, total: offen.length, error: lastError };
 }
