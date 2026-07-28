@@ -169,7 +169,6 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 .view {
   flex: 1;
   padding: 24px 28px 60px;
-  max-width: 1200px;
   min-width: 0;
 }
 
