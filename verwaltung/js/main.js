@@ -1,6 +1,7 @@
 import { openDB, ensureSeeded, getSettings, hasRouteAccess } from './db.js';
 import { initLock, lockNow } from './auth.js';
 import { applyDeviceClass } from './device.js';
+import { toast } from './utils.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
 import * as kanban from './views/kanban.js';
@@ -63,8 +64,13 @@ if (fullscreenBtn) {
       fullscreenBtn.textContent = document.fullscreenElement ? '🗗 Vollbild beenden' : '⛶ Vollbild';
     };
     fullscreenBtn.addEventListener('click', () => {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else document.documentElement.requestFullscreen().catch(() => { /* vom Nutzer/Browser abgelehnt - kein kritischer Fehler */ });
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch((err) => toast(`Vollbild beenden fehlgeschlagen: ${err.message || err}`, 'danger'));
+      } else {
+        document.documentElement.requestFullscreen().catch((err) => {
+          toast(`Vollbild wurde vom Browser verweigert: ${err.message || err}`, 'danger');
+        });
+      }
     });
     document.addEventListener('fullscreenchange', updateFullscreenBtn);
     updateFullscreenBtn();
