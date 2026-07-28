@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 14;
+const DB_VERSION = 15;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -55,6 +55,8 @@ const STORES = {
   verwendungen: 'id',
   emails: 'id',
   pushTokens: 'id',
+  fahrten: 'id',
+  anlagen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -431,8 +433,12 @@ const DEFAULT_SETTINGS = {
   mahnGebuehr: [0, 5, 10, 15],
   mahnfristTage: 10,
   angebotNachfassTage: 7,
+  skontoProzentStandard: 0,
+  skontoTageStandard: 0,
   pushNotifiedMahnungenAm: '',
   pushNotifiedGeraetePruefungAm: '',
+  pushNotifiedAnlagenPruefungAm: '',
+  emailErinnerungGesendetAm: '',
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',

@@ -197,6 +197,7 @@ export async function render(container) {
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       rechnungstyp: 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
+      skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
     };
     const locked = isEdit && !!data.versendet;
     const abschlaegeChecked = new Set((data.verrechneteAbschlaege || []).map((a) => a.rechnungId));
@@ -220,6 +221,8 @@ export async function render(container) {
             </div>
             <div class="field"><label>Rechnungsdatum</label><input type="date" name="datum" value="${data.datum}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm}" ${locked ? 'disabled' : ''}></div>
+            <div class="field"><label>Skonto (%)</label><input type="number" step="0.1" min="0" name="skontoProzent" value="${data.skontoProzent || 0}" ${locked ? 'disabled' : ''}></div>
+            <div class="field"><label>Skonto-Frist (Tage)</label><input type="number" min="0" name="skontoTage" value="${data.skontoTage || 0}" ${locked ? 'disabled' : ''}><span class="hint mb-0">0 % = kein Skonto-Hinweis auf der Rechnung.</span></div>
             <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Steuerart</label>
               <select name="steuerart" id="f-steuerart" ${locked ? 'disabled' : ''}>${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
@@ -420,7 +423,11 @@ let editor = createPositionsEditor({
           introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          closingText: (data.notizen || '') + `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
+          closingText: (data.notizen || '') +
+            (data.skontoProzent > 0
+              ? `\n\nBei Zahlung bis zum ${formatDate(addDays(data.datum, data.skontoTage || 0))} (${data.skontoTage || 0} Tage) gewähren wir ${data.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * data.skontoProzent) / 100)}).`
+              : '') +
+            `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
           abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
         };
       }
@@ -487,6 +494,8 @@ let editor = createPositionsEditor({
         updated.notizen = (fd.get('notizen') || '').toString().trim();
         updated.steuerart = fd.get('steuerart') || 'regel';
         updated.rechnungstyp = fd.get('rechnungstyp') || 'rechnung';
+        updated.skontoProzent = Number(fd.get('skontoProzent')) || 0;
+        updated.skontoTage = Number(fd.get('skontoTage')) || 0;
       }
       if (isEdit) {
         updated.status = fd.get('status') || data.status;

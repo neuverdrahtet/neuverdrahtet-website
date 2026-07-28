@@ -175,6 +175,8 @@ export async function render(container) {
               <div class="field"><label>Mahngebühr Stufe 1 (€)</label><input type="number" step="0.01" name="mahn1" value="${settings.mahnGebuehr?.[1] ?? 0}"></div>
               <div class="field"><label>Mahngebühr Stufe 2 (€)</label><input type="number" step="0.01" name="mahn2" value="${settings.mahnGebuehr?.[2] ?? 0}"></div>
               <div class="field"><label>Mahngebühr Stufe 3 (€)</label><input type="number" step="0.01" name="mahn3" value="${settings.mahnGebuehr?.[3] ?? 0}"></div>
+              <div class="field"><label>Skonto-Standard (%)</label><input type="number" step="0.1" min="0" name="skontoProzentStandard" value="${settings.skontoProzentStandard ?? 0}"><span class="hint mb-0">0 = kein Skonto voreingestellt. Lässt sich pro Rechnung anpassen.</span></div>
+              <div class="field"><label>Skonto-Frist (Tage)</label><input type="number" min="0" name="skontoTageStandard" value="${settings.skontoTageStandard ?? 0}"></div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
@@ -777,6 +779,8 @@ export async function render(container) {
       zahlungszielTage: Number(fd.get('zahlungszielTage')) || 14,
       mahnfristTage: Number(fd.get('mahnfristTage')) || 10,
       mahnGebuehr: [0, Number(fd.get('mahn1')) || 0, Number(fd.get('mahn2')) || 0, Number(fd.get('mahn3')) || 0],
+      skontoProzentStandard: Number(fd.get('skontoProzentStandard')) || 0,
+      skontoTageStandard: Number(fd.get('skontoTageStandard')) || 0,
     });
     toast('Einstellungen gespeichert', 'success');
   });
