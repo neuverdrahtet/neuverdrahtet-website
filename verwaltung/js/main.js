@@ -3,6 +3,7 @@ import { initLock, lockNow } from './auth.js';
 import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
+import { trySyncPendingUploads } from './blobstore.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
 import * as kanban from './views/kanban.js';
@@ -159,6 +160,14 @@ async function boot() {
   if (isBrowserCapable()) {
     initForegroundListener((title, body) => toast(`${title}${body ? ': ' + body : ''}`, 'info'));
   }
+  // Offline auf einer Baustelle gespeicherte Fotos/Dokumente/Belege (siehe
+  // blobstore.js) nachholen, sobald wieder Netz da ist - einmal jetzt beim
+  // Start (falls das Gerät schon wieder online ist) und bei jedem Wechsel
+  // von offline zu online während die App offen bleibt.
+  trySyncPendingUploads().catch(() => { /* nächster Versuch beim nächsten online-Event */ });
+  window.addEventListener('online', () => {
+    trySyncPendingUploads().catch(() => { /* erneuter Versuch beim nächsten online-Event */ });
+  });
   // Auf dem Handy landen Außendienstler meist direkt in der Zeiterfassung
   // statt im Büro-Dashboard – nur beim allerersten Aufruf ohne Hash.
   if (!window.location.hash && deviceType === 'phone' && hasRouteAccess(session.role, 'zeiterfassung')) {
