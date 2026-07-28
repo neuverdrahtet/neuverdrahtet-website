@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, formatDate, todayISO, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, todayISO, toast, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete, optionList } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { loadZXing } from '../vendorLoader.js';
@@ -427,9 +427,10 @@ export async function render(container) {
   function openForm(item) {
     const isEdit = !!item;
     const isGeraet = tab === 'geraete';
+    const neueId = uid();
     const data = item || (isGeraet
-      ? { id: uid(), name: '', kategorie: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: FARBEN[geraete.length % FARBEN.length], notizen: '', zugewiesenAn: '' }
-      : { id: uid(), bezeichnung: '', kennzeichen: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: FARBEN[flotten.length % FARBEN.length], notizen: '', zugewiesenAn: '' });
+      ? { id: neueId, name: '', kategorie: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' }
+      : { id: neueId, bezeichnung: '', kennzeichen: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' });
 
     const { body, close } = openModal({
       title: isEdit ? 'Bearbeiten' : (isGeraet ? 'Neues Gerät' : 'Neues Fahrzeug'),
@@ -453,9 +454,6 @@ export async function render(container) {
             </div>
             <div class="field"><label>Zugewiesen an</label>
               <select name="zugewiesenAn"><option value="">– Niemand / Lager –</option>${optionList(mitarbeiter, { selected: data.zugewiesenAn || '', placeholder: null })}</select>
-            </div>
-            <div class="field"><label>Farbe (Plantafel)</label>
-              <select name="farbe">${FARBEN.map((f) => `<option value="${f}" ${f === data.farbe ? 'selected' : ''}>${f}</option>`).join('')}</select>
             </div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
