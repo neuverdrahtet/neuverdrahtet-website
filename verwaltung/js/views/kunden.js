@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -8,6 +8,140 @@ import { createBulkSelect } from '../bulkselect.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
+
+// Kategorien für wiederkehrende Prüfungen auf Kundenanlagen (E-Check, DGUV V3,
+// ...) - bewusst unabhängig von den internen Geräte-Prüfungen (geraete.js),
+// da dort nur eigene Werkzeuge/Maschinen erfasst werden, nicht die beim
+// Kunden verbauten Anlagen.
+const ANLAGEN_KATEGORIEN = [
+  { id: 'echeck', titel: 'E-Check' },
+  { id: 'dguv-v3', titel: 'Wiederkehrende Prüfung (DGUV V3)' },
+  { id: 'uvv', titel: 'UVV-Prüfung' },
+  { id: 'blitzschutz', titel: 'Blitzschutzprüfung' },
+  { id: 'wartungsvertrag', titel: 'Wartungsvertrag' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+
+function anlagenKategorieTitel(id) {
+  return ANLAGEN_KATEGORIEN.find((k) => k.id === id)?.titel || id;
+}
+
+// Mountet die Liste der wiederkehrenden Prüfungen (Anlagen) eines Kunden -
+// z.B. E-Check/DGUV-V3-Termine für beim Kunden verbaute Anlagen, damit man
+// proaktiv Wartungsverträge bedienen kann statt nur auf Anfrage zu reagieren.
+async function mountAnlagenSection(host, kundeId) {
+  let anlagen = (await getAll('anlagen')).filter((a) => a.kundeId === kundeId);
+  anlagen.sort((a, b) => (a.naechstePruefung || '').localeCompare(b.naechstePruefung || ''));
+
+  function faelligkeitBadge(naechstePruefung) {
+    if (!naechstePruefung) return '';
+    const heute = todayISO();
+    if (naechstePruefung < heute) return `<span class="badge badge-danger">überfällig seit ${formatDate(naechstePruefung)}</span>`;
+    if (naechstePruefung <= addDays(heute, 30)) return `<span class="badge badge-warn">fällig ${formatDate(naechstePruefung)}</span>`;
+    return `<span class="badge">fällig ${formatDate(naechstePruefung)}</span>`;
+  }
+
+  function openAnlageForm(anlage) {
+    const isEdit = !!anlage;
+    const data = anlage || { id: uid(), kundeId, bezeichnung: '', kategorie: 'echeck', standort: '', intervallMonate: 12, letztePruefung: '', naechstePruefung: '', notizen: '' };
+    const { body, close } = openModal({
+      title: isEdit ? 'Anlage bearbeiten' : 'Neue Anlage/Wartungsobjekt',
+      bodyHtml: `
+        <form id="anlage-form">
+          <div class="form-grid">
+            <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}" placeholder="z.B. Elektroanlage Hauptgebäude"></div>
+            <div class="field"><label>Kategorie</label>
+              <select name="kategorie">${ANLAGEN_KATEGORIEN.map((k) => `<option value="${k.id}" ${k.id === data.kategorie ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Standort</label><input name="standort" value="${escapeHtml(data.standort || '')}"></div>
+            <div class="field"><label>Prüfintervall (Monate)</label><input type="number" min="1" name="intervallMonate" value="${data.intervallMonate || 12}"></div>
+            <div class="field"><label>Letzte Prüfung</label><input type="date" name="letztePruefung" value="${data.letztePruefung || ''}"></div>
+            <div class="field"><label>Nächste Prüfung</label><input type="date" name="naechstePruefung" value="${data.naechstePruefung || ''}"></div>
+            <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            ${isEdit ? '<button type="button" class="btn btn-danger" id="anlage-delete">Löschen</button>' : ''}
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="anlage-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#anlage-cancel').addEventListener('click', close);
+    // Nächste Prüfung automatisch aus letzter Prüfung + Intervall vorschlagen,
+    // bleibt aber frei überschreibbar (z.B. wenn ein Prüfer einen abweichenden Termin nennt).
+    const letzteInput = body.querySelector('input[name="letztePruefung"]');
+    const intervallInput = body.querySelector('input[name="intervallMonate"]');
+    const naechsteInput = body.querySelector('input[name="naechstePruefung"]');
+    function vorschlagNaechste() {
+      if (!letzteInput.value || naechsteInput.dataset.manuell === 'true') return;
+      const d = new Date(letzteInput.value + 'T00:00:00');
+      d.setMonth(d.getMonth() + (Number(intervallInput.value) || 12));
+      naechsteInput.value = d.toISOString().slice(0, 10);
+    }
+    letzteInput.addEventListener('change', vorschlagNaechste);
+    intervallInput.addEventListener('change', vorschlagNaechste);
+    naechsteInput.addEventListener('input', () => { naechsteInput.dataset.manuell = 'true'; });
+    body.querySelector('#anlage-delete')?.addEventListener('click', async () => {
+      if (!confirmDelete(`Anlage "${data.bezeichnung}" wirklich löschen?`)) return;
+      await remove('anlagen', data.id);
+      anlagen = anlagen.filter((a) => a.id !== data.id);
+      close();
+      renderList();
+      toast('Anlage gelöscht');
+    });
+    body.querySelector('#anlage-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = {
+        ...data,
+        bezeichnung: (fd.get('bezeichnung') || '').toString().trim(),
+        kategorie: fd.get('kategorie') || 'sonstiges',
+        standort: (fd.get('standort') || '').toString().trim(),
+        intervallMonate: Number(fd.get('intervallMonate')) || 12,
+        letztePruefung: fd.get('letztePruefung') || '',
+        naechstePruefung: fd.get('naechstePruefung') || '',
+        notizen: (fd.get('notizen') || '').toString().trim(),
+      };
+      if (!updated.bezeichnung) return;
+      await put('anlagen', updated);
+      const idx = anlagen.findIndex((a) => a.id === updated.id);
+      if (idx === -1) anlagen.push(updated); else anlagen[idx] = updated;
+      anlagen.sort((a, b) => (a.naechstePruefung || '').localeCompare(b.naechstePruefung || ''));
+      toast(isEdit ? 'Anlage aktualisiert' : 'Anlage angelegt', 'success');
+      close();
+      renderList();
+    });
+  }
+
+  function renderList() {
+    host.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span class="text-mute" style="font-size:12px">${anlagen.length} Anlage(n)/Wartungsobjekt(e)</span>
+        <button type="button" class="btn btn-sm" id="anlage-add">+ Anlage hinzufügen</button>
+      </div>
+      ${anlagen.length === 0 ? '<p class="text-mute" style="font-size:12px">Noch keine wiederkehrenden Prüfungen erfasst.</p>' : `
+        <ul class="cal-event-list">
+          ${anlagen.map((a) => `
+            <li data-id="${a.id}" style="cursor:pointer">
+              <div>
+                <strong>${escapeHtml(a.bezeichnung)}</strong>
+                <div class="text-mute">${escapeHtml(anlagenKategorieTitel(a.kategorie))}${a.standort ? ' · ' + escapeHtml(a.standort) : ''}</div>
+              </div>
+              ${faelligkeitBadge(a.naechstePruefung)}
+            </li>
+          `).join('')}
+        </ul>
+      `}
+    `;
+    host.querySelector('#anlage-add').addEventListener('click', () => openAnlageForm());
+    host.querySelectorAll('[data-id]').forEach((li) => {
+      li.addEventListener('click', () => openAnlageForm(anlagen.find((a) => a.id === li.dataset.id)));
+    });
+  }
+  renderList();
+}
 
 function parseKundenCsv(text) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
@@ -250,6 +384,9 @@ export async function render(container) {
             ${linkedAusgaben.length ? `<p class="hint">💶 ${linkedAusgaben.length} Ausgabe(n) diesem Kunden zugeordnet · ${formatCurrency(ausgabenSumme)} – Details in der Kundenakte.</p>` : ''}
             <p class="hint">Alle Aufträge, Wartungen, Projekte, Ausgaben und Dokumente dieses Kunden findest du gesammelt in der Kundenakte.</p>
             <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">🔧 Wiederkehrende Prüfungen (Anlagen)</h2>
+            <div id="anlagen-host"></div>
+            <div class="divider"></div>
             <div id="dok-host"></div>
           ` : ''}
           ${isEdit && data.email ? `
@@ -286,6 +423,7 @@ export async function render(container) {
     });
     if (isEdit) {
       body.querySelector('#btn-akte').addEventListener('click', () => openKundenakte(data));
+      mountAnlagenSection(body.querySelector('#anlagen-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'kunde', data.id, {
         kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente (Rechnungen, Angebote, Verträge, ...)',
       });

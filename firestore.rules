@@ -21,7 +21,7 @@ service cloud.firestore {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
-        'lagerbewegungen', 'emails'
+        'lagerbewegungen', 'emails', 'anlagen'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
@@ -30,7 +30,7 @@ service cloud.firestore {
       return collectionId in [
         'projekte', 'termine', 'zeiterfassung', 'fotos', 'aufgaben', 'dokumente',
         'kategorien', 'nachrichten', 'geraete', 'flotten', 'terminStatus', 'aufgabenStatus',
-        'verwendungen'
+        'verwendungen', 'fahrten'
       ];
     }
 

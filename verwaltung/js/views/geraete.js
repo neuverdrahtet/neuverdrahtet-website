@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, formatDate, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, todayISO, toast } from '../utils.js';
 import { openModal, confirmDelete, optionList } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { loadZXing } from '../vendorLoader.js';
@@ -19,6 +19,124 @@ function statusInfo(id) {
 
 function qrPayload(typ, id) {
   return `NVQR:${typ}:${id}`;
+}
+
+function downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Echtes Fahrten-Log je Fahrzeug (Datum/Start/Ziel/Zweck/km) statt nur eines
+// einzelnen Kilometerstand-Felds - für die steuerliche Nutzung (Privatanteil,
+// Betriebsausgaben) reicht eine Momentaufnahme nicht aus.
+async function mountFahrtenbuch(host, flotte, mitarbeiter, mitarbeiterById) {
+  let fahrten = (await getAll('fahrten')).filter((f) => f.flotteId === flotte.id);
+  fahrten.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+  let showForm = false;
+
+  function exportCsv() {
+    const rows = [['Datum', 'Fahrer', 'Start', 'Ziel', 'Zweck', 'km Start', 'km Ende', 'km gefahren', 'Privatfahrt']];
+    for (const f of [...fahrten].sort((a, b) => (a.datum || '').localeCompare(b.datum || ''))) {
+      rows.push([
+        formatDate(f.datum), mitarbeiterById[f.mitarbeiterId]?.name || '', f.start || '', f.ziel || '', f.zweck || '',
+        f.kmStart ?? '', f.kmEnde ?? '', f.kmGefahren ?? '', f.privat ? 'ja' : 'nein',
+      ]);
+    }
+    const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+    downloadFile(csv, `fahrtenbuch-${(flotte.kennzeichen || flotte.bezeichnung || 'fahrzeug').replace(/[^a-z0-9-]/gi, '_')}.csv`, 'text/csv;charset=utf-8');
+  }
+
+  function render() {
+    const gesamtKm = fahrten.reduce((s, f) => s + (Number(f.kmGefahren) || 0), 0);
+    host.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:6px">
+        <span class="text-mute" style="font-size:12px">${fahrten.length} Fahrten erfasst · ${gesamtKm} km gesamt</span>
+        <div class="flex-row" style="gap:6px">
+          ${fahrten.length ? '<button type="button" class="btn btn-sm" id="fb-export">📄 Als CSV exportieren</button>' : ''}
+          <button type="button" class="btn btn-sm" id="fb-add">+ Fahrt erfassen</button>
+        </div>
+      </div>
+      ${showForm ? `
+        <div id="fb-form" class="form-grid" style="margin-bottom:10px">
+          <div class="field"><label>Datum</label><input type="date" name="datum" value="${todayISO()}" required></div>
+          <div class="field"><label>Fahrer</label><select name="mitarbeiterId"><option value="">–</option>${optionList(mitarbeiter, { selected: '', placeholder: null })}</select></div>
+          <div class="field"><label>Start</label><input name="start" placeholder="z.B. Firma"></div>
+          <div class="field"><label>Ziel</label><input name="ziel" placeholder="z.B. Kunde XY"></div>
+          <div class="field col-span-2"><label>Zweck</label><input name="zweck" placeholder="Anlass der Fahrt"></div>
+          <div class="field"><label>km Start</label><input type="number" min="0" name="kmStart" value="${flotte.kilometerstand || 0}" required></div>
+          <div class="field"><label>km Ende</label><input type="number" min="0" name="kmEnde" required></div>
+          <div class="field col-span-2"><label><input type="checkbox" name="privat"> Privatfahrt</label></div>
+          <div class="modal-actions" style="border:none;padding-top:0;grid-column:1/-1">
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-sm" id="fb-cancel">Abbrechen</button>
+            <button type="button" class="btn btn-sm btn-primary" id="fb-save">Speichern</button>
+          </div>
+        </div>
+      ` : ''}
+      ${fahrten.length === 0 ? '<p class="text-mute" style="font-size:12px">Noch keine Fahrten erfasst.</p>' : `
+        <table class="table" style="font-size:12px">
+          <thead><tr><th>Datum</th><th>Fahrer</th><th>Start → Ziel</th><th>Zweck</th><th>km</th><th></th></tr></thead>
+          <tbody>
+            ${fahrten.map((f) => `
+              <tr>
+                <td>${formatDate(f.datum)}</td>
+                <td>${escapeHtml(mitarbeiterById[f.mitarbeiterId]?.name || '–')}</td>
+                <td>${escapeHtml(f.start || '')} → ${escapeHtml(f.ziel || '')}</td>
+                <td>${escapeHtml(f.zweck || '')}${f.privat ? ' <span class="badge">privat</span>' : ''}</td>
+                <td>${f.kmGefahren || 0} km</td>
+                <td><button type="button" class="btn btn-sm btn-ghost" data-del="${f.id}" title="Fahrt löschen">✕</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `}
+    `;
+    host.querySelector('#fb-export')?.addEventListener('click', exportCsv);
+    host.querySelector('#fb-add')?.addEventListener('click', () => { showForm = true; render(); });
+    host.querySelector('#fb-cancel')?.addEventListener('click', () => { showForm = false; render(); });
+    host.querySelector('#fb-save')?.addEventListener('click', async () => {
+      // Kein verschachteltes <form> möglich, da diese Sektion bereits innerhalb
+      // des äußeren Fahrzeug-Formulars (#ge-form) liegt - HTML erlaubt keine
+      // geschachtelten Formulare (der Browser würde das innere sonst stillschweigend
+      // entfernen). Deshalb Felder direkt auslesen statt über FormData/submit.
+      const form = host.querySelector('#fb-form');
+      const kmStart = Number(form.querySelector('[name="kmStart"]').value) || 0;
+      const kmEnde = Number(form.querySelector('[name="kmEnde"]').value) || 0;
+      if (kmEnde < kmStart) { toast('km Ende muss größer oder gleich km Start sein', 'danger'); return; }
+      const eintrag = {
+        id: uid(), flotteId: flotte.id, datum: form.querySelector('[name="datum"]').value || todayISO(),
+        mitarbeiterId: form.querySelector('[name="mitarbeiterId"]').value || '',
+        start: form.querySelector('[name="start"]').value.trim(),
+        ziel: form.querySelector('[name="ziel"]').value.trim(), zweck: form.querySelector('[name="zweck"]').value.trim(),
+        kmStart, kmEnde, kmGefahren: kmEnde - kmStart, privat: form.querySelector('[name="privat"]').checked,
+      };
+      await put('fahrten', eintrag);
+      // Kilometerstand des Fahrzeugs automatisch nachziehen, damit die nächste
+      // Fahrt wieder sinnvoll vorbelegt ist und die Stammdaten aktuell bleiben.
+      if (kmEnde > (Number(flotte.kilometerstand) || 0)) {
+        flotte.kilometerstand = kmEnde;
+        await put('flotten', flotte);
+      }
+      fahrten.unshift(eintrag);
+      showForm = false;
+      toast('Fahrt erfasst', 'success');
+      render();
+    });
+    host.querySelectorAll('[data-del]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirmDelete('Fahrt wirklich löschen?')) return;
+        await remove('fahrten', btn.dataset.del);
+        fahrten = fahrten.filter((f) => f.id !== btn.dataset.del);
+        render();
+      });
+    });
+  }
+  render();
 }
 
 export async function render(container) {
@@ -341,6 +459,11 @@ export async function render(container) {
             </div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
+          ${!isGeraet && isEdit ? `
+            <div class="divider"></div>
+            <h3 style="font-size:14px;margin:0 0 8px">🚗 Fahrtenbuch</h3>
+            <div id="fahrtenbuch-host"></div>
+          ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn" id="btn-qr">📱 QR-Code</button>' : ''}
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -362,6 +485,9 @@ export async function render(container) {
         close();
         render(container);
       });
+      if (!isGeraet) {
+        mountFahrtenbuch(body.querySelector('#fahrtenbuch-host'), data, mitarbeiter, mitarbeiterById);
+      }
     }
     body.querySelector('#ge-form').addEventListener('submit', async (e) => {
       e.preventDefault();
