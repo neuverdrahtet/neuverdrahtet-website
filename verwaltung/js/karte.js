@@ -2,6 +2,7 @@ import { put } from './db.js';
 import { escapeHtml, navigationUrl } from './utils.js';
 import { geocode } from './geocode.js';
 import { TERMIN_TYPEN } from './db.js';
+import { loadLeaflet } from './vendorLoader.js';
 
 function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
@@ -88,7 +89,12 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
     const statusEl = viewEl.querySelector('#karte-status');
     const mapEl = viewEl.querySelector('#map');
     if (!statusEl || !mapEl) return;
-    if (!window.L) { statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.'; return; }
+    try {
+      await loadLeaflet();
+    } catch {
+      statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.';
+      return;
+    }
 
     const mitOrt = termine.filter((t) => t.ort?.trim()).slice(0, 60);
     if (mitOrt.length === 0) {

@@ -1,3 +1,5 @@
+import { loadXlsx } from './vendorLoader.js';
+
 export function uid() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
@@ -171,6 +173,7 @@ function csvCellToText(cell) {
 }
 
 export async function excelFileToCsvText(file) {
+  await loadXlsx();
   if (!window.XLSX) throw new Error('Excel-Bibliothek konnte nicht geladen werden.');
   const buf = await file.arrayBuffer();
   const wb = window.XLSX.read(buf, { type: 'array' });

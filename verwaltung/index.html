@@ -14,7 +14,6 @@
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="css/app.css">
-<link rel="stylesheet" href="js/vendor/leaflet/leaflet.css">
 </head>
 <body>
 
@@ -82,11 +81,15 @@
 <div id="print-root" class="print-root"></div>
 <div id="toast-host" class="toast-host"></div>
 
-<script src="js/vendor/jspdf.umd.min.js"></script>
-<script src="js/vendor/jspdf.plugin.autotable.min.js"></script>
-<script src="js/vendor/xlsx.full.min.js"></script>
-<script src="js/vendor/leaflet/leaflet.js"></script>
-<script src="js/vendor/zxing/zxing.min.js"></script>
 <script type="module" src="js/main.js"></script>
+<!--
+  jsPDF wird auf fast jeder Dokumentenseite gebraucht, daher hier mit defer
+  geladen (parallel zu main.js, blockiert das Parsen aber nicht mehr).
+  xlsx/Leaflet/ZXing werden dagegen jeweils nur in einem einzelnen, seltenen
+  Feature gebraucht und deshalb erst bei Bedarf über vendorLoader.js
+  nachgeladen (siehe utils.js, karte.js, views/geraete.js).
+-->
+<script src="js/vendor/jspdf.umd.min.js" defer></script>
+<script src="js/vendor/jspdf.plugin.autotable.min.js" defer></script>
 </body>
 </html>
