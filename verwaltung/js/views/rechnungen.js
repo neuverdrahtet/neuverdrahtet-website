@@ -9,6 +9,7 @@ import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
+import * as lexoffice from '../lexoffice.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -95,6 +96,94 @@ export async function render(container) {
     });
   }
 
+  function pickLexofficeContact(contacts, firma) {
+    return new Promise((resolve) => {
+      const { body, close } = openModal({
+        title: `lexoffice-Kontakt für "${firma}" wählen`,
+        bodyHtml: `
+          <p class="hint">Es gibt mehrere passende Kontakte in lexoffice. Bitte den richtigen wählen.</p>
+          <div class="cal-event-list">
+            ${contacts.map((c) => `
+              <button type="button" class="btn" style="display:block;width:100%;text-align:left;margin-bottom:6px" data-id="${escapeHtml(c.id)}">
+                ${escapeHtml(c.company?.name || [c.person?.firstName, c.person?.lastName].filter(Boolean).join(' ') || c.id)}
+              </button>
+            `).join('')}
+          </div>
+          <div class="modal-actions"><span class="spacer"></span><button type="button" class="btn" id="btn-cancel">Abbrechen</button></div>
+        `,
+      });
+      body.querySelectorAll('button[data-id]').forEach((btn) => {
+        btn.addEventListener('click', () => { close(); resolve(btn.dataset.id); });
+      });
+      body.querySelector('#btn-cancel').addEventListener('click', () => { close(); resolve(null); });
+    });
+  }
+
+  /**
+   * Überträgt eine bereits im Programm erstellte Rechnung (mit eigenen Preisen)
+   * als Rechnungsentwurf nach lexoffice - unabhängig vom Zeiterfassung/
+   * Verwendungen-Export in der Projekt-Akte, der eigene lexoffice-Artikel
+   * voraussetzt. Hier gehen die Positionen als "custom"-Zeilen mit dem hier
+   * gepflegten Preis direkt mit, kein lexoffice-Artikelabgleich nötig.
+   */
+  async function uebertrageAnLexoffice(rechnung) {
+    if (!(await lexoffice.isConfigured())) {
+      toast('Bitte zuerst in den Einstellungen den lexoffice-API-Key hinterlegen.', 'danger');
+      return;
+    }
+    const kunde = kundenById[rechnung.kundeId];
+    if (!kunde) { toast('Dieser Rechnung ist kein Kunde zugewiesen.', 'danger'); return; }
+    if (!rechnung.positionen || rechnung.positionen.length === 0) {
+      toast('Diese Rechnung hat keine Positionen.', 'danger');
+      return;
+    }
+
+    let contactId = kunde.lexofficeContactId;
+    if (!contactId) {
+      let contacts;
+      try {
+        contacts = await lexoffice.searchContacts(kunde.firma);
+      } catch (err) {
+        toast(err.message, 'danger');
+        return;
+      }
+      if (contacts.length === 1) {
+        contactId = contacts[0].id;
+      } else if (contacts.length === 0) {
+        toast(`Kein lexoffice-Kontakt für "${kunde.firma}" gefunden. Bitte in lexoffice anlegen.`, 'danger');
+        return;
+      } else {
+        contactId = await pickLexofficeContact(contacts, kunde.firma);
+        if (!contactId) return;
+      }
+      const updatedKunde = { ...kunde, lexofficeContactId: contactId };
+      await put('kunden', updatedKunde);
+      kundenById[kunde.id] = updatedKunde;
+    }
+
+    const lineItems = rechnung.positionen.map((p) => ({
+      type: 'custom',
+      name: p.bezeichnung || 'Position',
+      description: p.beschreibung || undefined,
+      quantity: Number(p.menge) || 0,
+      unitName: p.einheit || 'Stück',
+      unitPrice: { currency: 'EUR', netAmount: Number(p.einzelpreis) || 0, taxRatePercentage: Number(p.steuersatz) || 0 },
+    }));
+
+    try {
+      const result = await lexoffice.createInvoiceDraft({
+        contactId, lineItems, remark: rechnung.betreff || `Rechnung ${rechnung.nummer}`,
+      });
+      const persisted = { ...rechnung, lexofficeId: result.id, lexofficeExportedAt: new Date().toISOString() };
+      await put('rechnungen', persisted);
+      Object.assign(rechnung, persisted);
+      toast('Rechnungsentwurf in lexoffice erstellt.', 'success');
+      if (result?.id) window.open(`https://app.lexoffice.io/rechnungen/edit/${result.id}`, '_blank', 'noopener');
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  }
+
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
@@ -165,6 +254,7 @@ export async function render(container) {
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
+            ${isEdit ? `<button type="button" class="btn" id="btn-lexoffice-transfer">🧾 ${data.lexofficeId ? 'In lexoffice öffnen' : 'An lexoffice übertragen'}</button>` : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -374,6 +464,13 @@ let editor = createPositionsEditor({
           if (!locked) await markVersendetUndSperren();
         });
       }
+      body.querySelector('#btn-lexoffice-transfer').addEventListener('click', () => {
+        if (data.lexofficeId) {
+          window.open(`https://app.lexoffice.io/rechnungen/edit/${data.lexofficeId}`, '_blank', 'noopener');
+          return;
+        }
+        uebertrageAnLexoffice(data);
+      });
     }
 
     body.querySelector('#re-form').addEventListener('submit', async (e) => {
