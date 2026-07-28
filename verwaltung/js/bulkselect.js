@@ -66,15 +66,23 @@ export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) 
         const frage = soft ? `${ids.length} ${label} in den Papierkorb verschieben?` : `${ids.length} ${label} wirklich unwiderruflich löschen?`;
         if (!confirmDelete(frage)) return;
         const done = [];
+        let lastError = null;
         for (const id of ids) {
           try {
             await doDelete(id);
             done.push(id);
-          } catch { /* einzelner Fehlschlag (z.B. Netzwerk) blockt nicht den Rest */ }
+          } catch (err) {
+            // Einzelner Fehlschlag (z.B. Netzwerk) blockt nicht den Rest, aber
+            // der Grund darf nicht stillschweigend verschwinden - sonst sieht
+            // man am Ende nur "0 von N gelöscht" ohne jeden Hinweis, woran es lag.
+            lastError = err;
+          }
         }
         done.forEach((id) => selected.delete(id));
         const verb = soft ? 'in den Papierkorb verschoben' : 'gelöscht';
-        toast(done.length === ids.length ? `${done.length} ${label} ${verb}` : `${done.length} von ${ids.length} ${label} ${verb}`, done.length ? 'success' : 'danger');
+        let meldung = done.length === ids.length ? `${done.length} ${label} ${verb}` : `${done.length} von ${ids.length} ${label} ${verb}`;
+        if (lastError) meldung += ` – Fehler: ${lastError.message || lastError}`;
+        toast(meldung, done.length === ids.length ? 'success' : 'danger');
         onDeleted(done);
       });
     }
