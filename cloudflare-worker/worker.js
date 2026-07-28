@@ -241,8 +241,19 @@ const EMAIL_KLASSIFIZIERUNG_SCHEMA = {
         properties: {
           id: { type: 'string' },
           kategorie: { type: 'string', enum: ['kundenanfrage', 'rechnung-lieferant', 'werbung', 'sonstiges'] },
+          kontakt: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              email: { type: 'string' },
+              telefon: { type: 'string' },
+              anliegen: { type: 'string' },
+            },
+            required: ['name', 'email', 'telefon', 'anliegen'],
+            additionalProperties: false,
+          },
         },
-        required: ['id', 'kategorie'],
+        required: ['id', 'kategorie', 'kontakt'],
         additionalProperties: false,
       },
     },
@@ -258,12 +269,16 @@ function buildEmailKlassifizierungPrompt() {
 - "werbung": Newsletter, Marketing-/Werbe-Mails, Produktangebote, Social-Media- oder Blog-Benachrichtigungen.
 - "sonstiges": alles andere, z.B. interne Mails, Kalendererinnerungen, Systembenachrichtigungen oder unklare Fälle.
 
-Antworte für JEDE übergebene E-Mail mit exakt ihrer id und der gewählten Kategorie, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge.`;
+Zusätzlich lieferst du für JEDE E-Mail ein "kontakt"-Objekt mit den Feldern name, email, telefon, anliegen (jeweils als String, leer "" wenn nicht zutreffend oder nicht auffindbar):
+- NUR bei Kategorie "kundenanfrage" befüllen: den Namen und die E-Mail-Adresse des tatsächlichen (potenziellen) Kunden - falls die Mail über ein Kontaktformular der eigenen Webseite eingeht, steht der echte Absender meist im Textauszug (z.B. "Name: ...", "E-Mail: ..."), NICHT im "Absender"-Feld, das dann nur den Formular-Versanddienst zeigt. Telefonnummer nur, wenn im Text explizit genannt. "anliegen" ist eine knappe 1-2 Satz Zusammenfassung, worum es geht.
+- Bei allen anderen Kategorien: alle vier Felder als leeren String "" lassen.
+
+Antworte für JEDE übergebene E-Mail mit exakt ihrer id, der gewählten Kategorie und dem kontakt-Objekt, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge und keine Kontaktdaten, die nicht im Text stehen.`;
 }
 
 async function callClaudeEmailClassify({ apiKey, model, emails }) {
   const liste = emails
-    .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${(e.snippet || '').slice(0, 200)}`)
+    .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${(e.snippet || '').slice(0, 1200)}`)
     .join('\n---\n');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
