@@ -1,4 +1,4 @@
-import { openDB, ensureSeeded, getSettings, hasRouteAccess } from './db.js';
+import { openDB, ensureSeeded, getSettings, hasRouteAccess, purgeOldTrash } from './db.js';
 import { initLock, lockNow } from './auth.js';
 import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
@@ -27,11 +27,12 @@ import * as buchhaltung from './views/buchhaltung.js';
 import * as auswertungen from './views/auswertungen.js';
 import * as aufgaben from './views/aufgaben.js';
 import * as geraete from './views/geraete.js';
+import * as papierkorb from './views/papierkorb.js';
 
 const routes = {
   dashboard, kunden, kanban, projekte, auftraege, plantafel, mitarbeiter,
   katalog, angebote, auftragsbestaetigung, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, postfach, buchhaltung, auswertungen, aufgaben, geraete,
+  ausgaben, postfach, buchhaltung, auswertungen, aufgaben, geraete, papierkorb,
 };
 
 const viewEl = document.getElementById('view');
@@ -181,6 +182,9 @@ async function boot() {
   window.addEventListener('online', () => {
     trySyncPendingUploads().catch(() => { /* erneuter Versuch beim nächsten online-Event */ });
   });
+  // Papierkorb: seit über 30 Tagen gelöschte Einträge beim Start endgültig
+  // entfernen (siehe db.js purgeOldTrash) - läuft still im Hintergrund.
+  purgeOldTrash().catch(() => { /* nächster Versuch beim nächsten Start */ });
   // Auf dem Handy landen Außendienstler meist direkt in der Zeiterfassung
   // statt im Büro-Dashboard – nur beim allerersten Aufruf ohne Hash.
   if (!window.location.hash && deviceType === 'phone' && hasRouteAccess(session.role, 'zeiterfassung')) {

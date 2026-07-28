@@ -211,9 +211,9 @@ let editor = createPositionsEditor({
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Angebot ${data.nummer} wirklich löschen?`)) return;
+        if (!confirmDelete(`Angebot ${data.nummer} in den Papierkorb verschieben?`)) return;
         await remove('angebote', data.id);
-        toast('Angebot gelöscht');
+        toast('Angebot in den Papierkorb verschoben');
         close();
         render(container);
       });

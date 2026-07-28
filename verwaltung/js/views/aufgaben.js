@@ -188,9 +188,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Aufgabe "${data.titel}" wirklich löschen?`)) return;
+        if (!confirmDelete(`Aufgabe "${data.titel}" in den Papierkorb verschieben?`)) return;
         await remove('aufgaben', data.id);
-        toast('Aufgabe gelöscht');
+        toast('Aufgabe in den Papierkorb verschoben');
         close();
         render(container);
       });

@@ -179,9 +179,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Projekt "${data.titel}" wirklich löschen?`)) return;
+        if (!confirmDelete(`Projekt "${data.titel}" in den Papierkorb verschieben?`)) return;
         await remove('projekte', data.id);
-        toast('Projekt gelöscht');
+        toast('Projekt in den Papierkorb verschoben');
         close();
         render(container);
       });

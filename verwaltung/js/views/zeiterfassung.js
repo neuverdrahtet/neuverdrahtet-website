@@ -3,7 +3,7 @@ import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbe
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
-import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from '../blobstore.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 
 const ARBEITSORTE = [
   { id: 'buero', titel: 'Büro' },
@@ -699,11 +699,9 @@ export async function render(container, route) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete('Tagesbericht wirklich löschen?')) return;
+        if (!confirmDelete('Tagesbericht in den Papierkorb verschieben?')) return;
         await remove('zeiterfassung', data.id);
-        for (const it of data.medien || []) { if (it.path) await deleteBlobFromStorage(it.path); }
-        if (data.unterschriftPath) await deleteBlobFromStorage(data.unterschriftPath);
-        toast('Tagesbericht gelöscht');
+        toast('Tagesbericht in den Papierkorb verschoben');
         close();
         render(container);
       });
@@ -826,9 +824,9 @@ export async function render(container, route) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete('Eintrag wirklich löschen?')) return;
+        if (!confirmDelete('Eintrag in den Papierkorb verschieben?')) return;
         await remove('zeiterfassung', data.id);
-        toast('Eintrag gelöscht');
+        toast('Eintrag in den Papierkorb verschoben');
         close();
         render(container);
       });

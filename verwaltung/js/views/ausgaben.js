@@ -4,7 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
-import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from '../blobstore.js';
+import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -251,10 +251,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete('Ausgabe wirklich löschen?')) return;
+        if (!confirmDelete('Ausgabe in den Papierkorb verschieben?')) return;
         await remove('ausgaben', data.id);
-        if (data.beleg?.path) await deleteBlobFromStorage(data.beleg.path);
-        toast('Ausgabe gelöscht');
+        toast('Ausgabe in den Papierkorb verschoben');
         close();
         render(container);
       });

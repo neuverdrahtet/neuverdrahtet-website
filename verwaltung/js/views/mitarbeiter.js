@@ -376,9 +376,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Mitarbeiter "${data.name}" wirklich löschen?`)) return;
+        if (!confirmDelete(`Mitarbeiter "${data.name}" in den Papierkorb verschieben?`)) return;
         await remove('mitarbeiter', data.id);
-        toast('Mitarbeiter gelöscht');
+        toast('Mitarbeiter in den Papierkorb verschoben');
         close();
         render(container);
       });

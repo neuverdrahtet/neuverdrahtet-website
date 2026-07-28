@@ -472,9 +472,9 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`"${data.bezeichnung}" wirklich löschen?`)) return;
+        if (!confirmDelete(`"${data.bezeichnung}" in den Papierkorb verschieben?`)) return;
         await remove('katalog', data.id);
-        toast('Eintrag gelöscht');
+        toast('Eintrag in den Papierkorb verschoben');
         close();
         render(container);
       });

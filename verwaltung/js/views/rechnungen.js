@@ -377,9 +377,9 @@ let editor = createPositionsEditor({
       const deleteBtn = body.querySelector('#btn-delete');
       if (deleteBtn) {
         deleteBtn.addEventListener('click', async () => {
-          if (!confirmDelete(`Rechnung ${data.nummer} wirklich löschen?`)) return;
+          if (!confirmDelete(`Rechnung ${data.nummer} in den Papierkorb verschieben?`)) return;
           await remove('rechnungen', data.id);
-          toast('Rechnung gelöscht');
+          toast('Rechnung in den Papierkorb verschoben');
           close();
           render(container);
         });
