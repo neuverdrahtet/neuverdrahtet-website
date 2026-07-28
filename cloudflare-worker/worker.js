@@ -276,9 +276,21 @@ Zusätzlich lieferst du für JEDE E-Mail ein "kontakt"-Objekt mit den Feldern na
 Antworte für JEDE übergebene E-Mail mit exakt ihrer id, der gewählten Kategorie und dem kontakt-Objekt, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge und keine Kontaktdaten, die nicht im Text stehen.`;
 }
 
+// Schneidet nie mitten in einem Surrogatpaar ab (z.B. Emoji, die in JS als
+// zwei UTF-16-Einheiten codiert sind) - sonst bleibt ein einzelnes, ungültiges
+// High-Surrogate-Zeichen übrig, das die Anthropic-API mit "no low surrogate
+// in string" ablehnt.
+function safeSlice(str, maxLen) {
+  if (!str || str.length <= maxLen) return str || '';
+  let end = maxLen;
+  const code = str.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return str.slice(0, end);
+}
+
 async function callClaudeEmailClassify({ apiKey, model, emails }) {
   const liste = emails
-    .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${(e.snippet || '').slice(0, 1200)}`)
+    .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${safeSlice(e.snippet || '', 1200)}`)
     .join('\n---\n');
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {

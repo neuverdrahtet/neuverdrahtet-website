@@ -12,9 +12,21 @@ const CLASSIFY_BATCH_SIZE = 25;
 // eingebetteten Bildern) können das sprengen. Großzügig, aber sicher kappen.
 const MAX_BODY_LEN = 300000;
 
+// Schneidet nie mitten in einem Surrogatpaar ab (z.B. Emoji, die in JS als
+// zwei UTF-16-Einheiten codiert sind) - sonst bleibt ein einzelnes, ungültiges
+// High-Surrogate-Zeichen übrig, das beim JSON-Versand an die Anthropic-API
+// mit "no low surrogate in string" fehlschlägt.
+function safeSlice(str, maxLen) {
+  if (!str || str.length <= maxLen) return str || '';
+  let end = maxLen;
+  const code = str.charCodeAt(end - 1);
+  if (code >= 0xd800 && code <= 0xdbff) end -= 1;
+  return str.slice(0, end);
+}
+
 function truncate(text) {
   if (!text || text.length <= MAX_BODY_LEN) return text || '';
-  return text.slice(0, MAX_BODY_LEN) + '\n\n[... gekürzt, Original in Gmail ansehen ...]';
+  return safeSlice(text, MAX_BODY_LEN) + '\n\n[... gekürzt, Original in Gmail ansehen ...]';
 }
 
 function toStoredEmail(full) {
@@ -175,7 +187,7 @@ export async function classifyPendingEmails({ onProgress } = {}) {
     const batch = offen.slice(i, i + CLASSIFY_BATCH_SIZE);
     try {
       const { ergebnisse } = await classifyEmails({
-        emails: batch.map((e) => ({ id: e.id, subject: e.subject, from: e.from, snippet: (e.text || '').slice(0, 1500) })),
+        emails: batch.map((e) => ({ id: e.id, subject: e.subject, from: e.from, snippet: safeSlice(e.text || '', 1500) })),
       });
       const ergebnisById = new Map((ergebnisse || []).map((r) => [r.id, r]));
       for (const e of batch) {
