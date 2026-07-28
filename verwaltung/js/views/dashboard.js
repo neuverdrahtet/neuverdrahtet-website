@@ -1,5 +1,7 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr } from '../utils.js';
+import * as google from '../google.js';
+import { syncCalendar } from '../googlesync.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -96,7 +98,23 @@ async function loadWeather(lat, lng) {
   return res.json();
 }
 
-export async function render(container) {
+export async function render(container, _route, { autoSync = true } = {}) {
+  // Termine kommen aus Google Calendar erst nach einem Sync in den lokalen
+  // Speicher - bisher stieß nur die Plantafel diesen Sync an, wodurch das
+  // Dashboard (Termine heute/diese Woche) veraltete Daten zeigen konnte,
+  // bis man einmal die Plantafel geöffnet hatte. Läuft im Hintergrund, damit
+  // der Seitenaufbau nicht blockiert wird (siehe Plantafel-Fix).
+  const backgroundSync = (autoSync && google.isConnected() && (await google.isConfigured()))
+    ? syncCalendar().catch(() => { /* silent: Sync-Fehler dürfen den Seitenaufbau nicht stören */ })
+    : null;
+  if (backgroundSync) {
+    backgroundSync.then(() => {
+      const nochAufDashboard = container.querySelector('#dash-clock');
+      const modalOffen = document.querySelector('.modal-backdrop');
+      if (nochAufDashboard && !modalOffen) render(container, null, { autoSync: false });
+    });
+  }
+
   const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog, angebote] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
     getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'), getAll('angebote'),
@@ -404,7 +422,7 @@ export async function render(container) {
       faelligAm: '', prioritaet: 'normal', status: 'offen', projektId: '', kundeId: '', createdAt: new Date().toISOString(), erledigtAm: '',
     });
     toast('Aufgabe angelegt', 'success');
-    render(container);
+    render(container, null, { autoSync: false });
   });
 
   const wetterCard = container.querySelector('#wetter-card');
@@ -439,13 +457,20 @@ export async function render(container) {
   });
 
   // Live-Uhr im Kopfbereich - zeigt immer das tatsächliche lokale Datum/Uhrzeit
-  // des Browsers, unabhängig davon, wann die Seite geladen wurde.
+  // des Browsers, unabhängig davon, wann die Seite geladen wurde. render()
+  // kann sich selbst erneut aufrufen (Aufgabe hinzufügen, Sync fertig) -
+  // einen eventuell schon laufenden Timer immer zuerst stoppen, sonst laufen
+  // mit jedem Re-Render weitere Intervalle unsichtbar im Hintergrund mit.
+  if (container._dashClockInterval) clearInterval(container._dashClockInterval);
   const clockEl = container.querySelector('#dash-clock');
   const clockFormatter = new Intl.DateTimeFormat('de-DE', { dateStyle: 'full', timeStyle: 'medium' });
   function updateClock() {
     clockEl.textContent = clockFormatter.format(new Date());
   }
   updateClock();
-  const clockInterval = setInterval(updateClock, 1000);
-  return () => clearInterval(clockInterval);
+  container._dashClockInterval = setInterval(updateClock, 1000);
+  return () => {
+    clearInterval(container._dashClockInterval);
+    container._dashClockInterval = null;
+  };
 }
