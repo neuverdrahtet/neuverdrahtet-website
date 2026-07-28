@@ -1,6 +1,8 @@
-import { getAll, put, setSettings } from './db.js';
+import { getAll, put, getSettings, setSettings } from './db.js';
 import * as google from './google.js';
 import { classifyEmails } from './ai.js';
+import { uid, nextDailyNummer } from './utils.js';
+import * as push from './push.js';
 
 // Wie viele E-Mails pro KI-Aufruf zur Kategorisierung geschickt werden - ein
 // guter Kompromiss zwischen Aufrufanzahl (bei z.B. 500+ Mails) und Prompt-Größe.
@@ -114,23 +116,79 @@ export async function incrementalSync({ onProgress } = {}) {
  * großen Postfächern nicht hunderte Einzelaufrufe nötig sind, und schreibt das
  * Ergebnis laufend zurück, damit die Anzeige schon während des Laufs aktuell wird.
  */
+const LEERER_KONTAKT = { name: '', email: '', telefon: '', anliegen: '' };
+
+// Legt bei einer als "kundenanfrage" erkannten E-Mail automatisch einen
+// Kunden (falls noch nicht vorhanden, per E-Mail-Adresse abgeglichen) samt
+// Projekt an - z.B. für Anfragen über das Kontaktformular der eigenen
+// Webseite. Der KI-Kontakt-Auszug (nicht das "Absender"-Feld!) liefert die
+// echten Kundendaten, da bei Formular-Mails im "Absender" oft nur der
+// Formular-Versanddienst steht, nicht der tatsächliche Interessent.
+async function autoErstelleKundeAusAnfrage(email) {
+  const kontakt = email.kontakt;
+  if (!kontakt?.email) return;
+  const [kunden, kanbanSpalten, settings] = await Promise.all([getAll('kunden'), getAll('kanbanSpalten'), getSettings()]);
+  kanbanSpalten.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
+  const bestehenderKunde = kunden.find((k) => (k.email || '').toLowerCase() === kontakt.email.toLowerCase());
+
+  let kundeId, kundeName;
+  if (bestehenderKunde) {
+    kundeId = bestehenderKunde.id;
+    kundeName = bestehenderKunde.firma;
+  } else {
+    const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+      '', { datum: settings.kundeNummerDatum, zaehler: settings.kundeNummerZaehler }
+    );
+    const neuerKunde = {
+      id: uid(), firma: kontakt.name || kontakt.email, ansprechpartner: '', strasse: '', plz: '', ort: '',
+      telefon: kontakt.telefon || '', email: kontakt.email, notizen: '', kundennummer: autoNummer,
+    };
+    await put('kunden', neuerKunde);
+    await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
+    kundeId = neuerKunde.id;
+    kundeName = neuerKunde.firma;
+  }
+
+  const titel = kontakt.anliegen || email.subject || 'Anfrage';
+  const projekt = {
+    id: uid(), titel, kundeId, status: kanbanSpalten[0]?.id || '',
+    beschreibung: `Automatisch aus E-Mail-Anfrage angelegt.\n\nBetreff: ${email.subject || ''}\n${kontakt.anliegen ? '\n' + kontakt.anliegen : ''}`,
+    start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
+  };
+  await put('projekte', projekt);
+  await put('emails', { ...email, kundeAngelegtId: projekt.id });
+
+  push.notifyRoles(['admin', 'buero'], {
+    title: 'Neuer Kunde aus E-Mail-Anfrage',
+    body: `${kundeName}: ${titel}`,
+    url: './index.html#/postfach',
+  }).catch(() => { /* Push ist ein Komfort-Feature */ });
+}
+
 export async function classifyPendingEmails({ onProgress } = {}) {
   const alle = await getAll('emails');
   const offen = alle.filter((e) => !e.kategorie);
+  const settings = await getSettings();
   let erledigt = 0;
   let lastError = null;
   for (let i = 0; i < offen.length; i += CLASSIFY_BATCH_SIZE) {
     const batch = offen.slice(i, i + CLASSIFY_BATCH_SIZE);
     try {
       const { ergebnisse } = await classifyEmails({
-        emails: batch.map((e) => ({ id: e.id, subject: e.subject, from: e.from, snippet: (e.text || '').slice(0, 300) })),
+        emails: batch.map((e) => ({ id: e.id, subject: e.subject, from: e.from, snippet: (e.text || '').slice(0, 1500) })),
       });
-      const kategorieById = new Map((ergebnisse || []).map((r) => [r.id, r.kategorie]));
+      const ergebnisById = new Map((ergebnisse || []).map((r) => [r.id, r]));
       for (const e of batch) {
-        const kategorie = kategorieById.get(e.id);
-        if (kategorie) {
-          await put('emails', { ...e, kategorie });
-          erledigt++;
+        const r = ergebnisById.get(e.id);
+        if (!r?.kategorie) continue;
+        const updated = { ...e, kategorie: r.kategorie, kontakt: r.kontakt || LEERER_KONTAKT };
+        await put('emails', updated);
+        erledigt++;
+        if (
+          settings.autoKundeAusAnfrage && updated.kategorie === 'kundenanfrage' &&
+          updated.richtung !== 'ausgang' && updated.kontakt.email && !updated.kundeAngelegtId
+        ) {
+          await autoErstelleKundeAusAnfrage(updated).catch(() => { /* Auto-Anlage darf die Kategorisierung nicht blockieren */ });
         }
       }
     } catch (err) {

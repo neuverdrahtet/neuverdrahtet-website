@@ -335,8 +335,14 @@ export async function render(container) {
     async function openKundeVorschlag(message) {
       const [kunden, kanbanSpalten] = await Promise.all([getAll('kunden'), getAll('kanbanSpalten')]);
       kanbanSpalten.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
-      const vorschlagEmail = extractEmailAddress(message.from);
-      const vorschlagName = (message.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || vorschlagEmail;
+      // Der KI-Kontakt-Auszug (falls vorhanden) hat Vorrang vor dem
+      // "Absender"-Feld: bei E-Mails über ein Kontaktformular der eigenen
+      // Webseite steht dort oft nur der Formular-Versanddienst, nicht der
+      // tatsächliche Interessent - dessen echte Daten stehen im Text.
+      const kiKontakt = message.kontakt;
+      const vorschlagEmail = kiKontakt?.email || extractEmailAddress(message.from);
+      const vorschlagName = kiKontakt?.name || (message.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || vorschlagEmail;
+      const vorschlagTelefon = kiKontakt?.telefon || '';
       const bestehenderKunde = vorschlagEmail ? kunden.find((k) => (k.email || '').toLowerCase() === vorschlagEmail.toLowerCase()) : null;
 
       const { body, close } = openModal({
@@ -347,8 +353,8 @@ export async function render(container) {
             <div class="form-grid">
               <div class="field col-span-2"><label>Firma/Name *</label><input name="firma" required value="${escapeHtml(bestehenderKunde?.firma || vorschlagName)}" ${bestehenderKunde ? 'disabled' : ''}></div>
               <div class="field"><label>E-Mail</label><input name="email" value="${escapeHtml(vorschlagEmail)}" ${bestehenderKunde ? 'disabled' : ''}></div>
-              <div class="field"><label>Telefon</label><input name="telefon" ${bestehenderKunde ? 'disabled' : ''}></div>
-              <div class="field col-span-2"><label>Projekt-Titel *</label><input name="titel" required value="${escapeHtml(message.subject || '')}"></div>
+              <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(vorschlagTelefon)}" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field col-span-2"><label>Projekt-Titel *</label><input name="titel" required value="${escapeHtml(kiKontakt?.anliegen || message.subject || '')}"></div>
             </div>
             <div class="modal-actions">
               <span class="spacer"></span>

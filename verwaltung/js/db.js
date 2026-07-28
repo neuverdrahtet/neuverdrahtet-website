@@ -435,6 +435,7 @@ const DEFAULT_SETTINGS = {
   angebotNachfassTage: 7,
   skontoProzentStandard: 0,
   skontoTageStandard: 0,
+  autoKundeAusAnfrage: true,
   pushNotifiedMahnungenAm: '',
   pushNotifiedGeraetePruefungAm: '',
   pushNotifiedAnlagenPruefungAm: '',
