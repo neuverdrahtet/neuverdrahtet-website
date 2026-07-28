@@ -3,6 +3,7 @@ import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
 import * as lexoffice from '../lexoffice.js';
+import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 
@@ -49,6 +50,7 @@ const NAV = [
     { id: 'google', icon: '📅', label: 'Google-Verbindung' },
     { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
     { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
+    { id: 'push', icon: '🔔', label: 'Benachrichtigungen' },
   ] },
   { group: 'Daten & Sicherheit', items: [
     { id: 'daten', icon: '💾', label: 'Datensicherung / Geräte-Sync' },
@@ -60,6 +62,9 @@ export async function render(container) {
   const textbausteine = await getAll('textbausteine');
   textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
   const isLight = settings.theme === 'light';
+  const pushCapable = push.isBrowserCapable();
+  const pushPermission = push.permissionState();
+  const pushSubscribed = pushCapable ? await push.isSubscribed() : false;
 
   container.innerHTML = `
     <div class="view-header">
@@ -332,6 +337,33 @@ export async function render(container) {
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-lexoffice-arbeitsstunde-choose">Artikel wählen ...</button>
           </div>
+        </div>
+
+        <div class="card settings-panel" data-panel="push" hidden>
+          <h2>Benachrichtigungen</h2>
+          <p class="hint">
+            Zeigt System-Benachrichtigungen auf diesem Gerät, z.B. für neue Postfach-Anfragen - auch wenn die App gerade nicht geöffnet ist.
+            Muss je Gerät/Browser einmal aktiviert werden (Handy, Laptop, ... jeweils einzeln).
+          </p>
+          ${!pushCapable ? `
+            <p class="hint">${!FIREBASE_ENABLED ? 'Benachrichtigungen benötigen die Firebase-Cloud-Anbindung (im lokalen Testmodus nicht verfügbar).' : 'Dieser Browser/dieses Gerät unterstützt Push-Benachrichtigungen nicht (z.B. iPhone-Safari ohne "Zum Home-Bildschirm hinzufügen").'}</p>
+          ` : `
+            <form id="push-vapid-form">
+              <div class="form-grid">
+                <div class="field col-span-2"><label>VAPID-Key (aus der Firebase-Konsole, Cloud Messaging)</label><input type="password" name="pushVapidKey" value="${escapeHtml(settings.pushVapidKey || '')}"></div>
+              </div>
+              <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+            </form>
+            <div class="divider"></div>
+            <div class="flex-row" style="gap:10px;align-items:center">
+              <span id="push-status" class="badge ${pushSubscribed ? 'badge-success' : 'badge'}">${pushSubscribed ? 'Aktiviert auf diesem Gerät' : pushPermission === 'denied' ? 'Vom Browser blockiert' : 'Nicht aktiviert'}</span>
+              <span class="spacer"></span>
+              ${pushSubscribed
+                ? '<button type="button" class="btn" id="btn-push-toggle">Auf diesem Gerät deaktivieren</button>'
+                : `<button type="button" class="btn" id="btn-push-toggle" ${!settings.pushVapidKey || pushPermission === 'denied' ? 'disabled' : ''}>Auf diesem Gerät aktivieren</button>`}
+            </div>
+            ${pushPermission === 'denied' ? '<p class="hint">Benachrichtigungen wurden für diese Seite im Browser blockiert - das lässt sich nur in den Browser-Einstellungen wieder ändern.</p>' : ''}
+          `}
         </div>
 
         <div class="card settings-panel" data-panel="daten" hidden>
@@ -702,6 +734,36 @@ export async function render(container) {
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
   });
+
+  const pushVapidForm = container.querySelector('#push-vapid-form');
+  if (pushVapidForm) {
+    pushVapidForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      await setSettings({ pushVapidKey: (fd.get('pushVapidKey') || '').toString().trim() });
+      toast('Einstellungen gespeichert', 'success');
+      render(container);
+    });
+  }
+
+  const pushToggleBtn = container.querySelector('#btn-push-toggle');
+  if (pushToggleBtn) {
+    pushToggleBtn.addEventListener('click', async () => {
+      pushToggleBtn.disabled = true;
+      try {
+        if (pushSubscribed) {
+          await push.unsubscribe();
+          toast('Benachrichtigungen auf diesem Gerät deaktiviert', 'success');
+        } else {
+          await push.subscribe();
+          toast('Benachrichtigungen auf diesem Gerät aktiviert', 'success');
+        }
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+      render(container);
+    });
+  }
 
   container.querySelector('#nr-form').addEventListener('submit', async (e) => {
     e.preventDefault();

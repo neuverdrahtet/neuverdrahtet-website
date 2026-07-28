@@ -86,6 +86,16 @@ service cloud.firestore {
       allow write: if isAdminOrBuero();
     }
 
+    // Push-Benachrichtigungs-Tokens (Firebase Cloud Messaging): ein Gerät
+    // gehört genau einem Nutzer - jeder darf nur seine eigenen Token-
+    // Dokumente anlegen/lesen/löschen. Das Versenden selbst läuft server-
+    // seitig über den Cloudflare Worker mit einem Firebase-Service-Account
+    // (Admin-Zugriff, umgeht diese Regeln) und liest dafür alle Tokens.
+    match /pushTokens/{tokenId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (
         (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||
