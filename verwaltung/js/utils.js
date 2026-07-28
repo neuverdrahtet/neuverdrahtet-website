@@ -40,6 +40,17 @@ export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Liefert den lokalen Kalendertag eines Date-Objekts als "JJJJ-MM-TT". NIE
+// d.toISOString().slice(0, 10) für lokale Datumsobjekte verwenden - das
+// rechnet erst in UTC um und verschiebt den Tag in Zeitzonen östlich von UTC
+// (z.B. Deutschland, UTC+1/+2) um einen Tag zurück.
+export function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function addDays(iso, days) {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() + days);

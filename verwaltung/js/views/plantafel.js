@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
-import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung } from '../utils.js';
+import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr } from '../utils.js';
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
@@ -31,18 +31,6 @@ function startOfWeek(d) {
 
 function toDateOnly(iso) {
   return (iso || '').slice(0, 10);
-}
-
-// Liefert den lokalen Kalendertag eines Date-Objekts als "JJJJ-MM-TT". NIE
-// d.toISOString().slice(0, 10) für lokale Datumsobjekte verwenden - das
-// rechnet erst in UTC um und verschiebt den Tag in Zeitzonen östlich von UTC
-// (z.B. Deutschland, UTC+1/+2) um einen Tag zurück, was Termine/Zellen der
-// Plantafel auf den falschen Tag springen lässt.
-function localDateStr(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 function addDaysStr(dateStr, days) {
