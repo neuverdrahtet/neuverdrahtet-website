@@ -16,6 +16,12 @@ const SCOPES = [
 let tokenClient = null;
 let accessToken = localStorage.getItem('nv-google-token') || null;
 let tokenExpiresAt = Number(localStorage.getItem('nv-google-token-exp') || 0);
+// Merkt sich, mit welchem Scope der aktuelle Token geholt wurde. Ändert sich
+// SCOPES im Code (z.B. weil eine neue Berechtigung wie gmail.modify dazukommt),
+// bleibt ein alter, noch nicht abgelaufener Token sonst unbemerkt zu schwach
+// und jeder Aufruf schlägt mit "insufficient authentication scopes" fehl,
+// ohne dass die App das erkennt oder von sich aus neu nach Zustimmung fragt.
+let grantedScope = localStorage.getItem('nv-google-token-scope') || '';
 let gisReady = false;
 let gisLoadPromise = null;
 
@@ -39,7 +45,7 @@ function loadGis() {
 }
 
 export function isConnected() {
-  return !!accessToken && Date.now() < tokenExpiresAt;
+  return !!accessToken && Date.now() < tokenExpiresAt && grantedScope === SCOPES;
 }
 
 export async function isConfigured() {
@@ -59,8 +65,10 @@ function requestToken(settings, prompt) {
         }
         accessToken = resp.access_token;
         tokenExpiresAt = Date.now() + (Number(resp.expires_in) || 3600) * 1000 - 30000;
+        grantedScope = SCOPES;
         localStorage.setItem('nv-google-token', accessToken);
         localStorage.setItem('nv-google-token-exp', String(tokenExpiresAt));
+        localStorage.setItem('nv-google-token-scope', grantedScope);
         resolve(accessToken);
         maybeAutoBackup().catch(() => { /* Auto-Backup ist ein Komfort-Feature, darf die Verbindung nicht stören */ });
       },
@@ -76,6 +84,13 @@ export async function connect() {
     throw new Error('Bitte zuerst in den Einstellungen die Google Client-ID hinterlegen.');
   }
   await loadGis();
+  // Hat sich der benötigte Scope seit dem letzten Verbinden geändert (z.B.
+  // neue Berechtigung im Code hinzugekommen), bringt ein stiller Versuch
+  // nichts - Google kann den fehlenden Scope ohne Zustimmungsdialog nicht
+  // stillschweigend nachreichen. Dann direkt den sichtbaren Dialog anzeigen.
+  if (grantedScope && grantedScope !== SCOPES) {
+    return await requestToken(settings, 'consent');
+  }
   try {
     // Erst still versuchen: Wenn der Nutzer schon einmal zugestimmt hat und die
     // Google-Sitzung im Browser noch aktiv ist, erneuert Google den Zugriff ohne
@@ -93,8 +108,10 @@ export function disconnect() {
   }
   accessToken = null;
   tokenExpiresAt = 0;
+  grantedScope = '';
   localStorage.removeItem('nv-google-token');
   localStorage.removeItem('nv-google-token-exp');
+  localStorage.removeItem('nv-google-token-scope');
 }
 
 async function ensureToken() {
