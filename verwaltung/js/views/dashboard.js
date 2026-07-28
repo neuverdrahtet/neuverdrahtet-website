@@ -111,7 +111,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     backgroundSync.then(() => {
       const nochAufDashboard = container.querySelector('#dash-clock');
       const modalOffen = document.querySelector('.modal-backdrop');
-      if (nochAufDashboard && !modalOffen) render(container, null, { autoSync: false });
+      if (nochAufDashboard && !modalOffen) render(container, null, { autoSync: false }).catch(() => { /* silent: still-Refresh darf nicht crashen */ });
     });
   }
 
@@ -201,7 +201,13 @@ export async function render(container, _route, { autoSync = true } = {}) {
   });
 
   container.innerHTML = `
-    <div class="view-header"><h1>Dashboard</h1><span id="dash-clock" class="text-mute"></span></div>
+    <div class="view-header">
+      <h1>Dashboard</h1>
+      <div class="actions">
+        <span id="dash-clock" class="text-mute"></span>
+        ${settings.googleClientId ? '<button class="btn btn-sm" id="btn-dash-sync">🔄 Mit Google synchronisieren</button>' : ''}
+      </div>
+    </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></div>
       <div class="kpi-card"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></div>
@@ -412,6 +418,27 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     ` : ''}
   `;
+
+  // Manueller Sync-Button (wie in der Plantafel): der automatische Hintergrund-
+  // Sync oben läuft nur an, wenn schon ein gültiges Google-Token vorliegt - ist
+  // es abgelaufen, passiert dort bewusst nichts (kein Popup im Hintergrund).
+  // Ohne diesen Button blieb das Dashboard dann dauerhaft veraltet, während die
+  // Plantafel über ihren eigenen Button (der auch ein abgelaufenes Token per
+  // Consent-Dialog erneuert) wieder aktuell wurde.
+  container.querySelector('#btn-dash-sync')?.addEventListener('click', async () => {
+    const btn = container.querySelector('#btn-dash-sync');
+    btn.disabled = true;
+    btn.textContent = 'Synchronisiere ...';
+    try {
+      await syncCalendar();
+      toast('Termine synchronisiert', 'success');
+      render(container, null, { autoSync: false });
+    } catch (err) {
+      toast(err.message, 'danger');
+      btn.disabled = false;
+      btn.textContent = '🔄 Mit Google synchronisieren';
+    }
+  });
 
   container.querySelector('#dash-aufgabe-add').addEventListener('click', async () => {
     const input = container.querySelector('#dash-aufgabe-input');
