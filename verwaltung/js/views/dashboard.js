@@ -1,5 +1,5 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
+import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr } from '../utils.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -171,7 +171,7 @@ export async function render(container) {
   const wocheTage = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStartDate);
     d.setDate(d.getDate() + i);
-    const dateStr = d.toISOString().slice(0, 10);
+    const dateStr = localDateStr(d);
     const termineTag = termine
       .filter((t) => {
         const s = (t.start || '').slice(0, 10);
@@ -183,7 +183,7 @@ export async function render(container) {
   });
 
   container.innerHTML = `
-    <div class="view-header"><h1>Dashboard</h1></div>
+    <div class="view-header"><h1>Dashboard</h1><span id="dash-clock" class="text-mute"></span></div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></div>
       <div class="kpi-card"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></div>
@@ -437,4 +437,15 @@ export async function render(container) {
   }).catch(() => {
     wetterCard.innerHTML = `<h2>Wetter</h2><p class="text-mute">Wetterdaten aktuell nicht verfügbar.</p>`;
   });
+
+  // Live-Uhr im Kopfbereich - zeigt immer das tatsächliche lokale Datum/Uhrzeit
+  // des Browsers, unabhängig davon, wann die Seite geladen wurde.
+  const clockEl = container.querySelector('#dash-clock');
+  const clockFormatter = new Intl.DateTimeFormat('de-DE', { dateStyle: 'full', timeStyle: 'medium' });
+  function updateClock() {
+    clockEl.textContent = clockFormatter.format(new Date());
+  }
+  updateClock();
+  const clockInterval = setInterval(updateClock, 1000);
+  return () => clearInterval(clockInterval);
 }
