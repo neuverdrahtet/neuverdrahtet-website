@@ -50,6 +50,29 @@ menuBtn.addEventListener('click', () => {
 sidebarBackdrop.addEventListener('click', closeSidebar);
 document.querySelectorAll('.sidebar-nav a').forEach((a) => a.addEventListener('click', closeSidebar));
 
+// Echtes Vollbild (ohne Adressleiste/Taskleiste) für Handy/Tablet/PC/Laptop
+// gleichermaßen über die Standard-Fullscreen-API. Auf iPhone-Safari gibt es
+// dafür keine Unterstützung für beliebige Elemente (nur für <video>) - dort
+// wird der Button ausgeblendet, da "Zum Home-Bildschirm hinzufügen" (bereits
+// als PWA eingerichtet) dort der einzige Weg zu einer vollbildartigen
+// Ansicht ist.
+const fullscreenBtn = document.getElementById('btn-fullscreen');
+if (fullscreenBtn) {
+  if (document.fullscreenEnabled) {
+    const updateFullscreenBtn = () => {
+      fullscreenBtn.textContent = document.fullscreenElement ? '🗗 Vollbild beenden' : '⛶ Vollbild';
+    };
+    fullscreenBtn.addEventListener('click', () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen().catch(() => { /* vom Nutzer/Browser abgelehnt - kein kritischer Fehler */ });
+    });
+    document.addEventListener('fullscreenchange', updateFullscreenBtn);
+    updateFullscreenBtn();
+  } else {
+    fullscreenBtn.hidden = true;
+  }
+}
+
 async function router() {
   const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
   const [routeName, ...rest] = hash.split('/');
