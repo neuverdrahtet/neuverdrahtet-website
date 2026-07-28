@@ -56,8 +56,20 @@ function daysBetweenStr(a, b) {
 }
 
 export async function render(container, _route, { autoSync = true } = {}) {
-  if (autoSync && google.isConnected() && (await google.isConfigured())) {
-    try { await syncCalendar(); } catch (err) { /* silent: don't interrupt view load */ }
+  // Der Google-Kalender-Sync (15-Monats-Fenster, ggf. viele einzelne API-
+  // Aufrufe) lief bisher VOR dem ersten Rendern und blockierte damit den
+  // kompletten Seitenaufbau - die Plantafel wirkte dadurch spürbar langsam.
+  // Stattdessen sofort mit den lokal vorhandenen Daten rendern und den Sync
+  // im Hintergrund laufen lassen; danach nur bei Bedarf still aktualisieren.
+  const backgroundSync = (autoSync && google.isConnected() && (await google.isConfigured()))
+    ? syncCalendar().catch(() => { /* silent: Sync-Fehler dürfen den Seitenaufbau nicht stören */ })
+    : null;
+  if (backgroundSync) {
+    backgroundSync.then(() => {
+      const nochAufPlantafel = container.querySelector('#pt-mode-tabs');
+      const modalOffen = document.querySelector('.modal-backdrop');
+      if (nochAufPlantafel && !modalOffen) render(container, null, { autoSync: false });
+    });
   }
 
   let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus] = await Promise.all([
