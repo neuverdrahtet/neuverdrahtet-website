@@ -252,8 +252,17 @@ const EMAIL_KLASSIFIZIERUNG_SCHEMA = {
             required: ['name', 'email', 'telefon', 'anliegen'],
             additionalProperties: false,
           },
+          termin: {
+            type: 'object',
+            properties: {
+              datum: { type: 'string' },
+              uhrzeit: { type: 'string' },
+            },
+            required: ['datum', 'uhrzeit'],
+            additionalProperties: false,
+          },
         },
-        required: ['id', 'kategorie', 'kontakt'],
+        required: ['id', 'kategorie', 'kontakt', 'termin'],
         additionalProperties: false,
       },
     },
@@ -262,7 +271,7 @@ const EMAIL_KLASSIFIZIERUNG_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildEmailKlassifizierungPrompt() {
+function buildEmailKlassifizierungPrompt(heute) {
   return `Du sortierst E-Mails eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) nach Art. Für jede E-Mail in der Liste (id, Betreff, Absender, kurzer Textauszug) wählst du GENAU eine Kategorie:
 - "kundenanfrage": Anfragen, Rückfragen oder sonstige Kommunikation mit (potenziellen) Kunden zu Aufträgen, Terminen oder Angeboten - auch eigene gesendete Antworten darauf.
 - "rechnung-lieferant": Rechnungen, Bestellbestätigungen oder Belege von Lieferanten, Dienstleistern oder Software-Abos.
@@ -273,7 +282,12 @@ Zusätzlich lieferst du für JEDE E-Mail ein "kontakt"-Objekt mit den Feldern na
 - NUR bei Kategorie "kundenanfrage" befüllen: den Namen und die E-Mail-Adresse des tatsächlichen (potenziellen) Kunden - falls die Mail über ein Kontaktformular der eigenen Webseite eingeht, steht der echte Absender meist im Textauszug (z.B. "Name: ...", "E-Mail: ..."), NICHT im "Absender"-Feld, das dann nur den Formular-Versanddienst zeigt. Telefonnummer nur, wenn im Text explizit genannt. "anliegen" ist eine knappe 1-2 Satz Zusammenfassung, worum es geht.
 - Bei allen anderen Kategorien: alle vier Felder als leeren String "" lassen.
 
-Antworte für JEDE übergebene E-Mail mit exakt ihrer id, der gewählten Kategorie und dem kontakt-Objekt, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge und keine Kontaktdaten, die nicht im Text stehen.`;
+Außerdem lieferst du für JEDE E-Mail ein "termin"-Objekt mit den Feldern datum (Format "JJJJ-MM-TT") und uhrzeit (Format "SS:MM"):
+- NUR bei Kategorie "kundenanfrage" befüllen, und NUR wenn im Text ein konkreter, eindeutiger Terminwunsch mit Datum UND Uhrzeit steht (z.B. "können Sie am 15.08. um 10 Uhr vorbeikommen?" oder "nächsten Dienstag um 14 Uhr passt mir"). Heutiges Datum ist ${heute || 'unbekannt'} - rechne relative Angaben ("nächsten Dienstag", "übermorgen") in ein konkretes Datum um.
+- Bei vagen oder mehrdeutigen Angaben (z.B. nur "nächste Woche" ohne Wochentag, "irgendwann im August", oder wenn Datum ODER Uhrzeit fehlt) beide Felder als leeren String "" lassen - lieber nichts eintragen als einen falschen Termin erfinden.
+- Bei allen anderen Kategorien: beide Felder als leeren String "" lassen.
+
+Antworte für JEDE übergebene E-Mail mit exakt ihrer id, der gewählten Kategorie, dem kontakt-Objekt und dem termin-Objekt, in derselben Reihenfolge wie die Eingabe. Erfinde keine zusätzlichen oder fehlenden Einträge und keine Kontakt- oder Termindaten, die nicht im Text stehen.`;
 }
 
 // Schneidet nie mitten in einem Surrogatpaar ab (z.B. Emoji, die in JS als
@@ -288,7 +302,7 @@ function safeSlice(str, maxLen) {
   return str.slice(0, end);
 }
 
-async function callClaudeEmailClassify({ apiKey, model, emails }) {
+async function callClaudeEmailClassify({ apiKey, model, emails, heute }) {
   const liste = emails
     .map((e) => `id: ${e.id}\nBetreff: ${e.subject || '(kein Betreff)'}\nAbsender: ${e.from || ''}\nAuszug: ${safeSlice(e.snippet || '', 1200)}`)
     .join('\n---\n');
@@ -303,7 +317,7 @@ async function callClaudeEmailClassify({ apiKey, model, emails }) {
     body: JSON.stringify({
       model,
       max_tokens: 4096,
-      system: buildEmailKlassifizierungPrompt(),
+      system: buildEmailKlassifizierungPrompt(heute),
       messages: [{ role: 'user', content: `Ordne folgende E-Mails ein:\n\n${liste}` }],
       output_config: {
         format: { type: 'json_schema', schema: EMAIL_KLASSIFIZIERUNG_SCHEMA },
@@ -508,6 +522,7 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           emails: body.emails,
+          heute: body.heute,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },

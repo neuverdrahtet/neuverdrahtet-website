@@ -310,6 +310,7 @@ export async function render(container) {
               <div class="field col-span-2"><label>Worker-URL</label><input name="aiWorkerUrl" placeholder="https://neuverdrahtet-ki-angebote.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.aiWorkerUrl || '')}"></div>
               <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="aiAppSecret" value="${escapeHtml(settings.aiAppSecret || '')}"></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="autoKundeAusAnfrage" id="auto-kunde" ${settings.autoKundeAusAnfrage !== false ? 'checked' : ''}><label for="auto-kunde">Kundenanfragen (z.B. vom Kontaktformular der Webseite) automatisch als Kunde/Projekt anlegen</label></div>
+              <div class="field field-checkbox col-span-2"><input type="checkbox" name="autoTerminAusAnfrage" id="auto-termin" ${settings.autoTerminAusAnfrage !== false ? 'checked' : ''}><label for="auto-termin">Bei eindeutigem Terminwunsch in der E-Mail (Datum + Uhrzeit) automatisch einen Termin in der Plantafel anlegen</label></div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
@@ -618,6 +619,7 @@ export async function render(container) {
       aiWorkerUrl: (fd.get('aiWorkerUrl') || '').toString().trim(),
       aiAppSecret: (fd.get('aiAppSecret') || '').toString().trim(),
       autoKundeAusAnfrage: fd.get('autoKundeAusAnfrage') === 'on',
+      autoTerminAusAnfrage: fd.get('autoTerminAusAnfrage') === 'on',
     });
     toast('KI-Einstellungen gespeichert', 'success');
   });

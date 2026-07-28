@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast } from '../utils.js';
+import { uid, escapeHtml, toast, openTerminMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 
@@ -176,6 +176,7 @@ export async function render(container) {
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neuer-termin">📅 + Termin</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -191,6 +192,15 @@ export async function render(container) {
         toast('Projekt in den Papierkorb verschoben');
         close();
         render(container);
+      });
+      body.querySelector('#btn-neuer-termin').addEventListener('click', () => {
+        const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
+        const prefill = {
+          titel: data.titel, kundeId: kunde?.id || '', projektId: data.id,
+          ort: kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '',
+        };
+        close();
+        openTerminMitVorbelegung(prefill);
       });
     }
     body.querySelector('#card-form').addEventListener('submit', async (e) => {

@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -435,6 +435,7 @@ export async function render(container, opts = {}) {
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neuer-termin">📅 + Termin</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-lexoffice-transfer">🧾 An lexoffice übertragen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -474,6 +475,15 @@ export async function render(container, opts = {}) {
         berichtContext: { settings, kunde: kundenById[data.kundeId] || null, projekt: data.titel },
       });
       body.querySelector('#btn-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(data));
+      body.querySelector('#btn-neuer-termin').addEventListener('click', () => {
+        const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
+        const prefill = {
+          titel: data.titel, kundeId: kunde?.id || '', projektId: data.id,
+          ort: kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '',
+        };
+        close();
+        openTerminMitVorbelegung(prefill);
+      });
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
