@@ -333,6 +333,8 @@ const DEFAULT_SETTINGS = {
   mahnGebuehr: [0, 5, 10, 15],
   mahnfristTage: 10,
   angebotNachfassTage: 7,
+  pushNotifiedMahnungenAm: '',
+  pushNotifiedGeraetePruefungAm: '',
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',
