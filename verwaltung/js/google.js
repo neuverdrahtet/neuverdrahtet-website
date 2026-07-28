@@ -197,19 +197,27 @@ function base64UrlEncodeBytes(bytes) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export async function sendEmailWithAttachment({ to, subject, bodyText, attachmentName, attachmentBlob }) {
+export async function sendEmailWithAttachment({
+  to, subject, bodyText, attachmentName, attachmentBlob, mimeType = 'application/pdf',
+  inReplyTo, referencesHeader, threadId,
+}) {
   const attachmentBytes = new Uint8Array(await attachmentBlob.arrayBuffer());
   const boundary = 'nvBoundary' + Date.now();
-  const headerPart =
+  let headerPart =
     `To: ${to}\r\n` +
-    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\n` +
+    `Subject: =?UTF-8?B?${btoa(unescape(encodeURIComponent(subject)))}?=\r\n`;
+  if (inReplyTo) {
+    headerPart += `In-Reply-To: ${inReplyTo}\r\n`;
+    headerPart += `References: ${(referencesHeader ? referencesHeader + ' ' : '') + inReplyTo}\r\n`;
+  }
+  headerPart +=
     `MIME-Version: 1.0\r\n` +
     `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n` +
     `--${boundary}\r\n` +
     `Content-Type: text/plain; charset="UTF-8"\r\n\r\n` +
     `${bodyText}\r\n\r\n` +
     `--${boundary}\r\n` +
-    `Content-Type: application/pdf; name="${attachmentName}"\r\n` +
+    `Content-Type: ${mimeType}; name="${attachmentName}"\r\n` +
     `Content-Disposition: attachment; filename="${attachmentName}"\r\n` +
     `Content-Transfer-Encoding: base64\r\n\r\n`;
   const footerPart = `\r\n--${boundary}--`;
@@ -224,10 +232,12 @@ export async function sendEmailWithAttachment({ to, subject, bodyText, attachmen
   combined.set(bodyBytes, headerBytes.length);
   const raw = base64UrlEncodeBytes(combined);
 
+  const body = { raw };
+  if (threadId) body.threadId = threadId;
   return apiFetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ raw }),
+    body: JSON.stringify(body),
   });
 }
 
