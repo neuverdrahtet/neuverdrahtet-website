@@ -23,13 +23,14 @@ import * as vorlagen from './views/vorlagen.js';
 import * as ausgaben from './views/ausgaben.js';
 import * as postfach from './views/postfach.js';
 import * as buchhaltung from './views/buchhaltung.js';
+import * as auswertungen from './views/auswertungen.js';
 import * as aufgaben from './views/aufgaben.js';
 import * as geraete from './views/geraete.js';
 
 const routes = {
   dashboard, kunden, kanban, projekte, auftraege, plantafel, mitarbeiter,
   katalog, angebote, auftragsbestaetigung, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, postfach, buchhaltung, aufgaben, geraete,
+  ausgaben, postfach, buchhaltung, auswertungen, aufgaben, geraete,
 };
 
 const viewEl = document.getElementById('view');
