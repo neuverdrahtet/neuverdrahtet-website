@@ -9,8 +9,8 @@ const SCOPES = [
 ].join(' ');
 
 let tokenClient = null;
-let accessToken = sessionStorage.getItem('nv-google-token') || null;
-let tokenExpiresAt = Number(sessionStorage.getItem('nv-google-token-exp') || 0);
+let accessToken = localStorage.getItem('nv-google-token') || null;
+let tokenExpiresAt = Number(localStorage.getItem('nv-google-token-exp') || 0);
 let gisReady = false;
 let gisLoadPromise = null;
 
@@ -42,12 +42,7 @@ export async function isConfigured() {
   return !!settings.googleClientId;
 }
 
-export async function connect() {
-  const settings = await getSettings();
-  if (!settings.googleClientId) {
-    throw new Error('Bitte zuerst in den Einstellungen die Google Client-ID hinterlegen.');
-  }
-  await loadGis();
+function requestToken(settings, prompt) {
   return new Promise((resolve, reject) => {
     tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: settings.googleClientId,
@@ -59,15 +54,32 @@ export async function connect() {
         }
         accessToken = resp.access_token;
         tokenExpiresAt = Date.now() + (Number(resp.expires_in) || 3600) * 1000 - 30000;
-        sessionStorage.setItem('nv-google-token', accessToken);
-        sessionStorage.setItem('nv-google-token-exp', String(tokenExpiresAt));
+        localStorage.setItem('nv-google-token', accessToken);
+        localStorage.setItem('nv-google-token-exp', String(tokenExpiresAt));
         resolve(accessToken);
         maybeAutoBackup().catch(() => { /* Auto-Backup ist ein Komfort-Feature, darf die Verbindung nicht stören */ });
       },
-      error_callback: (err) => reject(new Error(err?.message || 'Google-Anmeldung abgebrochen.')),
+      error_callback: (err) => reject(new Error(err?.message || err?.type || 'Google-Anmeldung abgebrochen.')),
     });
-    tokenClient.requestAccessToken({ prompt: isConnected() ? '' : 'consent' });
+    tokenClient.requestAccessToken({ prompt });
   });
+}
+
+export async function connect() {
+  const settings = await getSettings();
+  if (!settings.googleClientId) {
+    throw new Error('Bitte zuerst in den Einstellungen die Google Client-ID hinterlegen.');
+  }
+  await loadGis();
+  try {
+    // Erst still versuchen: Wenn der Nutzer schon einmal zugestimmt hat und die
+    // Google-Sitzung im Browser noch aktiv ist, erneuert Google den Zugriff ohne
+    // sichtbaren Dialog. Nur wenn das nicht klappt (erste Verbindung, Zugriff
+    // widerrufen o.ä.) kommt der normale Auswahl-/Zustimmungsdialog.
+    return await requestToken(settings, '');
+  } catch {
+    return await requestToken(settings, 'consent');
+  }
 }
 
 export function disconnect() {
@@ -76,8 +88,8 @@ export function disconnect() {
   }
   accessToken = null;
   tokenExpiresAt = 0;
-  sessionStorage.removeItem('nv-google-token');
-  sessionStorage.removeItem('nv-google-token-exp');
+  localStorage.removeItem('nv-google-token');
+  localStorage.removeItem('nv-google-token-exp');
 }
 
 async function ensureToken() {
@@ -97,7 +109,7 @@ async function apiFetch(url, options = {}) {
   });
   if (res.status === 401) {
     accessToken = null;
-    sessionStorage.removeItem('nv-google-token');
+    localStorage.removeItem('nv-google-token');
     throw new Error('Google-Sitzung abgelaufen. Bitte erneut verbinden.');
   }
   if (!res.ok) {
