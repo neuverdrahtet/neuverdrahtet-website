@@ -1,8 +1,13 @@
 import { getSettings, setSettings, exportAll } from './db.js';
 
+// gmail.modify (statt nur gmail.readonly) wird gebraucht, damit
+// markAsRead() (.../modify) und trashMessage() (.../trash) im Postfach
+// funktionieren - beide schlagen mit reinem gmail.readonly mit einem
+// 403 "insufficient authentication scopes" fehl. gmail.modify deckt
+// Lesen mit ab, ersetzt also gmail.readonly vollständig.
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
-  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.modify',
   'https://www.googleapis.com/auth/gmail.send',
   'https://www.googleapis.com/auth/gmail.settings.basic',
   'https://www.googleapis.com/auth/drive.file',
