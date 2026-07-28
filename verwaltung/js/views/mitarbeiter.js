@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, syncMitarbeiterOeffentlich, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
-import { uid, escapeHtml, formatDate, toast, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding } from '../utils.js';
+import { uid, escapeHtml, formatDate, toast, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -247,8 +247,9 @@ export async function render(container) {
 
   function openForm(m) {
     const isEdit = !!m;
+    const neueId = uid();
     const data = m || {
-      id: uid(), name: '', rolle: '', telefon: '', email: '', farbe: FARBEN[mitarbeiter.length % FARBEN.length],
+      id: neueId, name: '', rolle: '', telefon: '', email: '', farbe: farbeAusText(neueId, FARBEN),
       personalnummer: '', geburtsdatum: '', strasse: '', plz: '', ort: '',
       eintrittsdatum: '', austrittsdatum: '', vertragsart: 'Vollzeit', wochenstunden: 40,
       stundenlohn: '', gehaltMonatlich: '', urlaubsanspruchTage: 30,
@@ -282,11 +283,6 @@ export async function render(container) {
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
             <div class="field"><label>PLZ</label><input name="plz" value="${escapeHtml(data.plz || '')}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
-            <div class="field"><label>Kalenderfarbe</label>
-              <select name="farbe">
-                ${FARBEN.map((f) => `<option value="${f}" ${f === data.farbe ? 'selected' : ''}>${f}</option>`).join('')}
-              </select>
-            </div>
           </div>
 
           <div class="divider"></div>

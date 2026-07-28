@@ -5,6 +5,19 @@ export function uid() {
   return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
 }
 
+// Deterministische Farbe aus einem Text (z.B. der ID) ableiten - liefert für
+// denselben Text immer dieselbe Farbe aus der übergebenen Palette. So bekommt
+// jeder Eintrag (Mitarbeiter, Gerät, Kunde, ...) automatisch eine stabile,
+// unterscheidbare Farbe, ohne dass von Hand eine ausgewählt werden muss.
+export function farbeAusText(text, palette) {
+  let hash = 0;
+  const str = text || '';
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+  }
+  return palette[hash % palette.length];
+}
+
 export function formatCurrency(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
 }

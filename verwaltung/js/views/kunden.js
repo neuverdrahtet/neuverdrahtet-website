@@ -1,5 +1,7 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText } from '../utils.js';
+
+const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
@@ -153,9 +155,11 @@ function parseKundenCsv(text) {
     if (/^firma/i.test(cols[0] || '')) continue;
     const [firma, ansprechpartner, strasse, plz, ort, telefon, email, notizen] = cols;
     if (!firma) { errors.push(line); continue; }
+    const id = uid();
     rows.push({
-      id: uid(), firma, ansprechpartner: ansprechpartner || '', strasse: strasse || '',
+      id, firma, ansprechpartner: ansprechpartner || '', strasse: strasse || '',
       plz: plz || '', ort: ort || '', telefon: telefon || '', email: email || '', notizen: notizen || '',
+      farbe: farbeAusText(id, KUNDEN_FARBEN),
     });
   }
   return { rows, errors };
@@ -183,13 +187,15 @@ function parseLexofficeCsv(text) {
     const firma = firmenname || kontakt || [vorname, nachname].filter(Boolean).join(' ').trim();
     if (!firma) { errors.push(line); continue; }
     const ansprechpartner = ansprechpartner1 || [apVorname, apNachname].filter(Boolean).join(' ').trim();
+    const id = uid();
     rows.push({
-      id: uid(), firma, ansprechpartner,
+      id, firma, ansprechpartner,
       strasse: strasse1 || '', plz: plz1 || '', ort: ort1 || '',
       telefon: telefon1 || telefon2 || apTelefon || '',
       email: email1 || email2 || apEmail || '',
       notizen: ustId ? `USt-IdNr.: ${ustId}` : '',
       kundennummer: kundennummer || '',
+      farbe: farbeAusText(id, KUNDEN_FARBEN),
     });
   }
   return { rows, errors };
@@ -232,12 +238,13 @@ export async function render(container) {
       ${bulk.barHtml()}
       <table class="data-table">
         <thead><tr>
-          ${bulk.headerCell()}<th>Firma / Name</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
+          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
         </tr></thead>
         <tbody>
           ${filtered.map((k) => `
             <tr data-id="${k.id}">
               ${bulk.rowCell(k.id)}
+              <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${k.farbe || '#6b7280'}"></span></td>
               <td>${escapeHtml(k.firma)}</td>
               <td>${escapeHtml(k.ansprechpartner || '')}</td>
               <td>${escapeHtml(k.ort || '')}</td>
@@ -341,7 +348,8 @@ export async function render(container) {
 
   function openForm(kunde) {
     const isEdit = !!kunde;
-    const data = kunde || { id: uid(), firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '' };
+    const neueId = uid();
+    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));

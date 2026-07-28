@@ -462,7 +462,10 @@ export async function render(container, route) {
               <td>${e.startzeit && e.endzeit ? `${e.startzeit}–${e.endzeit}` : '–'}</td>
               <td>${escapeHtml(projekteById[e.projektId]?.titel || '')}</td>
               <td>${escapeHtml(mitarbeiterById[e.mitarbeiterId]?.name || '')}</td>
-              <td>${e.istTagesbericht ? '<span class="badge badge-accent">📝 Tagesbericht</span>' : escapeHtml(TAETIGKEITEN.find((t) => t.id === e.taetigkeit)?.titel || '')}</td>
+              <td>${e.istTagesbericht ? '<span class="badge badge-accent">📝 Tagesbericht</span>' : (() => {
+                const t = TAETIGKEITEN.find((tt) => tt.id === e.taetigkeit);
+                return t ? `<span class="badge" style="background:${t.farbe}22;color:${t.farbe}">${escapeHtml(t.titel)}</span>` : '';
+              })()}</td>
               <td>${formatDuration(e.dauerMinuten || 0)}</td>
               <td>${escapeHtml(e.beschreibung || '')}</td>
               <td><span class="badge ${e.abgerechnet ? 'badge-success' : 'badge'}">${e.abgerechnet ? 'abgerechnet' : 'offen'}</span></td>

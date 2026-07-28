@@ -509,12 +509,12 @@ export const BEREICHE = [
 ];
 
 export const TAETIGKEITEN = [
-  { id: 'baustelle', titel: 'Baustelle' },
-  { id: 'fahrtzeit', titel: 'Fahrtzeit' },
-  { id: 'materialbeschaffung', titel: 'Materialbeschaffung' },
-  { id: 'planung', titel: 'Planung' },
-  { id: 'buero', titel: 'Büro' },
-  { id: 'sonstiges', titel: 'Sonstiges' },
+  { id: 'baustelle', titel: 'Baustelle', farbe: STATUS_AUTO_PALETTE[7] },
+  { id: 'fahrtzeit', titel: 'Fahrtzeit', farbe: STATUS_AUTO_PALETTE[6] },
+  { id: 'materialbeschaffung', titel: 'Materialbeschaffung', farbe: STATUS_AUTO_PALETTE[2] },
+  { id: 'planung', titel: 'Planung', farbe: STATUS_AUTO_PALETTE[8] },
+  { id: 'buero', titel: 'Büro', farbe: STATUS_AUTO_PALETTE[0] },
+  { id: 'sonstiges', titel: 'Sonstiges', farbe: STATUS_AUTO_PALETTE[11] },
 ];
 
 export const GEWERKE = [
