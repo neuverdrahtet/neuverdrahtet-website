@@ -555,14 +555,18 @@ export async function render(container) {
     if (settings.aiWorkerUrl) {
       const katStatusEl = container.querySelector('#pf-kat-status');
       classifyPendingEmails({
-        onProgress: ({ done, total }) => {
-          if (katStatusEl) katStatusEl.textContent = done < total ? `· 🏷️ kategorisiere ${done}/${total} ...` : '';
+        onProgress: ({ done, total, error }) => {
+          if (katStatusEl) {
+            katStatusEl.textContent = error
+              ? `· ⚠️ Kategorisierung fehlgeschlagen: ${error}`
+              : (done < total ? `· 🏷️ kategorisiere ${done}/${total} ...` : '');
+          }
           getAll('emails').then((fresh) => {
             allEmails = fresh.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
             renderList();
           });
         },
-      }).catch(() => { /* Kategorisierung ist ein Komfort-Feature, Fehler nicht kritisch für die Anzeige */ });
+      }).catch((err) => { if (katStatusEl) katStatusEl.textContent = `· ⚠️ Kategorisierung fehlgeschlagen: ${err.message || err}`; });
     }
   }
 }
