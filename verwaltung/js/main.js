@@ -2,6 +2,7 @@ import { openDB, ensureSeeded, getSettings, hasRouteAccess } from './db.js';
 import { initLock, lockNow } from './auth.js';
 import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
+import { isBrowserCapable, initForegroundListener } from './push.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
 import * as kanban from './views/kanban.js';
@@ -151,6 +152,13 @@ async function boot() {
   await applyTheme();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
+  // Push-Nachrichten, die eintreffen während die App offen/im Vordergrund ist,
+  // zeigt der Browser NICHT automatisch als System-Benachrichtigung an (das
+  // übernimmt sonst der Service Worker im Hintergrund) - hier stattdessen als
+  // Toast, damit der Nutzer trotzdem etwas davon mitbekommt.
+  if (isBrowserCapable()) {
+    initForegroundListener((title, body) => toast(`${title}${body ? ': ' + body : ''}`, 'info'));
+  }
   // Auf dem Handy landen Außendienstler meist direkt in der Zeiterfassung
   // statt im Büro-Dashboard – nur beim allerersten Aufruf ohne Hash.
   if (!window.location.hash && deviceType === 'phone' && hasRouteAccess(session.role, 'zeiterfassung')) {
@@ -163,6 +171,6 @@ boot();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => { /* Offline-Support optional */ });
+    navigator.serviceWorker.register('./sw.js', { type: 'module' }).catch(() => { /* Offline-Support optional */ });
   });
 }

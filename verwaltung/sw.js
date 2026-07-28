@@ -1,3 +1,7 @@
+import { initializeApp } from './js/vendor/firebase/firebase-app.js';
+import { getMessaging, onBackgroundMessage } from './js/vendor/firebase/firebase-messaging-sw.js';
+import { firebaseConfig } from './js/firebase-config.js';
+
 const CACHE_NAME = 'nv-verwaltung-v1';
 
 self.addEventListener('install', () => {
@@ -31,3 +35,32 @@ self.addEventListener('fetch', (event) => {
       .catch(() => caches.match(event.request))
   );
 });
+
+// Push-Benachrichtigungen: nur wenn ein Firebase-Projekt konfiguriert ist
+// (im lokalen IndexedDB-Fallback-Modus gibt es keinen Messaging-Sender).
+if (firebaseConfig.projectId && firebaseConfig.messagingSenderId) {
+  const app = initializeApp(firebaseConfig);
+  const messaging = getMessaging(app);
+
+  onBackgroundMessage(messaging, (payload) => {
+    const data = payload.notification || payload.data || {};
+    self.registration.showNotification(data.title || 'neuverdrahtet Verwaltung', {
+      body: data.body || '',
+      icon: './icons/icon-192.png',
+      badge: './icons/icon-192.png',
+      data: { url: payload.data?.url || './index.html' },
+    });
+  });
+
+  self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const url = event.notification.data?.url || './index.html';
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+        const existing = clients.find((c) => c.url.includes('verwaltung/index.html'));
+        if (existing) return existing.focus();
+        return self.clients.openWindow(url);
+      })
+    );
+  });
+}

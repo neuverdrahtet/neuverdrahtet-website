@@ -16,7 +16,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -53,6 +53,7 @@ const STORES = {
   lagerbewegungen: 'id',
   verwendungen: 'id',
   emails: 'id',
+  pushTokens: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -350,6 +351,7 @@ const DEFAULT_SETTINGS = {
   lexofficeApiKey: '',
   lexofficeArbeitsstundeArtikelId: '',
   lexofficeArbeitsstundeArtikelName: '',
+  pushVapidKey: '',
   wetterOrt: 'Essen',
   wetterLat: 51.4556,
   wetterLng: 7.0116,
