@@ -3,6 +3,7 @@ import { initLock, lockNow } from './auth.js';
 import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
+import { checkPushTriggers } from './pushTriggers.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
@@ -159,6 +160,7 @@ async function boot() {
   // Toast, damit der Nutzer trotzdem etwas davon mitbekommt.
   if (isBrowserCapable()) {
     initForegroundListener((title, body) => toast(`${title}${body ? ': ' + body : ''}`, 'info'));
+    checkPushTriggers().catch(() => { /* Push ist ein Komfort-Feature, darf den Start nicht stören */ });
   }
   // Offline auf einer Baustelle gespeicherte Fotos/Dokumente/Belege (siehe
   // blobstore.js) nachholen, sobald wieder Netz da ist - einmal jetzt beim
