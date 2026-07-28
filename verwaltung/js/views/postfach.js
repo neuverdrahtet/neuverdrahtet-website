@@ -465,6 +465,7 @@ export async function render(container) {
               <div class="field col-span-2"><label>An *</label><input name="to" required value="${escapeHtml(to)}"></div>
               <div class="field col-span-2"><label>Betreff *</label><input name="subject" required value="${escapeHtml(subject)}"></div>
               <div class="field col-span-2"><label>Nachricht</label><textarea name="bodyText" rows="12">${escapeHtml(bodyText)}</textarea></div>
+              <div class="field col-span-2"><label>Anhang (optional)</label><input type="file" name="anhang"></div>
             </div>
             <div class="modal-actions">
               <span class="spacer"></span>
@@ -482,14 +483,22 @@ export async function render(container) {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sende ...';
         try {
-          await google.sendEmail({
+          const anhang = body.querySelector('input[name="anhang"]').files[0];
+          const gemeinsam = {
             to: (fd.get('to') || '').toString().trim(),
             subject: (fd.get('subject') || '').toString().trim(),
             bodyText: (fd.get('bodyText') || '').toString(),
             inReplyTo: replyTo?.messageIdHeader || undefined,
             referencesHeader: replyTo?.referencesHeader || undefined,
             threadId: replyTo?.threadId || undefined,
-          });
+          };
+          if (anhang) {
+            await google.sendEmailWithAttachment({
+              ...gemeinsam, attachmentName: anhang.name, attachmentBlob: anhang, mimeType: anhang.type || 'application/octet-stream',
+            });
+          } else {
+            await google.sendEmail(gemeinsam);
+          }
           toast('E-Mail gesendet', 'success');
           close();
         } catch (err) {
