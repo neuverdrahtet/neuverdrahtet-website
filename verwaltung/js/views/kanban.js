@@ -36,6 +36,7 @@ export async function render(container) {
           <div class="kanban-cards" data-col-body="${s.id}">
             ${cards.map((p) => `
               <div class="kanban-card" draggable="true" data-id="${p.id}" style="border-left-color:${escapeHtml(p.farbe || 'var(--accent)')}">
+                ${p.autoErstellt ? '<span class="badge badge-accent" style="display:block;width:fit-content;margin-bottom:4px">🆕 Neue Anfrage</span>' : ''}
                 <div class="title">${escapeHtml(p.titel)}</div>
                 <div class="meta">${escapeHtml(kundenById[p.kundeId]?.firma || '')}</div>
                 ${p.mitarbeiterIds?.length ? `<div class="meta">${p.mitarbeiterIds.map((id) => escapeHtml(mitarbeiterById[id]?.name || '')).filter(Boolean).join(', ')}</div>` : ''}
@@ -63,9 +64,15 @@ export async function render(container) {
         setTimeout(() => card.classList.add('dragging'), 0);
       });
       card.addEventListener('dragend', () => card.classList.remove('dragging'));
-      card.addEventListener('click', (e) => {
+      card.addEventListener('click', async (e) => {
         if (e.target.closest('.card-move')) return;
-        openCardForm(projekte.find((p) => p.id === card.dataset.id));
+        const p = projekte.find((p) => p.id === card.dataset.id);
+        if (p?.autoErstellt) {
+          p.autoErstellt = false;
+          await put('projekte', p);
+          renderBoard();
+        }
+        openCardForm(p);
       });
     });
 
