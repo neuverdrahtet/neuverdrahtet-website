@@ -332,6 +332,7 @@ const DEFAULT_SETTINGS = {
   angebotGueltigTage: 30,
   mahnGebuehr: [0, 5, 10, 15],
   mahnfristTage: 10,
+  angebotNachfassTage: 7,
   passcode: '',
   googleClientId: '',
   googleCalendarId: 'primary',

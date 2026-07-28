@@ -1,5 +1,5 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
+import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast } from '../utils.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -97,9 +97,9 @@ async function loadWeather(lat, lng) {
 }
 
 export async function render(container) {
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog] = await Promise.all([
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog, angebote] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'), getAll('angebote'),
   ]);
   const niedrigBestand = katalog
     .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
@@ -121,6 +121,12 @@ export async function render(container) {
   const offenSumme = offen.reduce((s, r) => s + (r.brutto || 0), 0);
   const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + (r.brutto || 0), 0);
   const aktiveProjekte = projekte.filter((p) => !spaltenById[p.status]?.geschlossen);
+
+  // --- Angebote ohne Rückmeldung (Nachfassen) ---
+  const nachfassGrenze = addDays(today, -(settings.angebotNachfassTage || 7));
+  const angeboteNachfassen = angebote
+    .filter((a) => a.status === 'versendet' && a.datum && a.datum <= nachfassGrenze)
+    .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
 
   // --- Cashflow-Score ---
   const imMahnverfahren = offen.filter((r) => mahnungen.some((m) => m.rechnungId === r.id));
@@ -346,6 +352,26 @@ export async function render(container) {
           </tbody>
         </table>
         <p class="hint"><a href="#/mahnungen">→ Zu den Mahnungen</a></p>
+      </div>
+    ` : ''}
+
+    ${angeboteNachfassen.length ? `
+      <div class="card">
+        <h2>Angebote ohne Rückmeldung <span class="badge badge-warn">${angeboteNachfassen.length}</span></h2>
+        <table class="data-table">
+          <thead><tr><th>Nummer</th><th>Kunde</th><th>Versendet am</th><th>Betrag</th></tr></thead>
+          <tbody>
+            ${angeboteNachfassen.map((a) => `
+              <tr>
+                <td>${escapeHtml(a.nummer)}</td>
+                <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
+                <td>${formatDate(a.datum)}</td>
+                <td>${formatCurrency(a.brutto)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <p class="hint"><a href="#/angebote">→ Zu den Angeboten</a></p>
       </div>
     ` : ''}
 
