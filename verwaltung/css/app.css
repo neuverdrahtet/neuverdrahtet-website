@@ -135,6 +135,21 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
 .sidebar-brand img { height: 26px; }
+.sidebar-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 10px 0;
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  color: #b9c6d4;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sidebar-search-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.sidebar-search-hint { font-size: 11px; color: #8fa1b3; }
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -413,6 +428,21 @@ table.data-table th.col-select, table.data-table td.col-select {
   box-shadow: 0 10px 40px rgba(0,0,0,0.25);
 }
 .modal.modal-wide { max-width: 920px; }
+.gs-group-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-mute); margin: 14px 0 6px; }
+.gs-group:first-child .gs-group-title { margin-top: 0; }
+.gs-result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.gs-result:hover { background: var(--card-2); }
 .modal-header {
   display: flex;
   justify-content: space-between;

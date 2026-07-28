@@ -4,6 +4,7 @@ import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
 import { checkPushTriggers } from './pushTriggers.js';
+import { openGlobalSearch } from './globalSearch.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import * as dashboard from './views/dashboard.js';
 import * as kunden from './views/kunden.js';
@@ -54,6 +55,15 @@ menuBtn.addEventListener('click', () => {
 });
 sidebarBackdrop.addEventListener('click', closeSidebar);
 document.querySelectorAll('.sidebar-nav a').forEach((a) => a.addEventListener('click', closeSidebar));
+
+const globalSearchBtn = document.getElementById('btn-global-search');
+if (globalSearchBtn) globalSearchBtn.addEventListener('click', () => { closeSidebar(); openGlobalSearch(); });
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && !document.getElementById('app').hidden) {
+    e.preventDefault();
+    openGlobalSearch();
+  }
+});
 
 // Echtes Vollbild (ohne Adressleiste/Taskleiste) für Handy/Tablet/PC/Laptop
 // gleichermaßen über die Standard-Fullscreen-API. Auf iPhone-Safari gibt es
