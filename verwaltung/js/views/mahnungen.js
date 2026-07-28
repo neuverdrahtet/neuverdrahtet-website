@@ -155,9 +155,9 @@ export async function render(container) {
     mahnungenTableHost.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        if (!confirmDelete('Mahnung wirklich löschen?')) return;
+        if (!confirmDelete('Mahnung in den Papierkorb verschieben?')) return;
         await remove('mahnungen', btn.dataset.id);
-        toast('Mahnung gelöscht');
+        toast('Mahnung in den Papierkorb verschoben');
         mahnungen = mahnungen.filter((m) => m.id !== btn.dataset.id);
         renderMahnungenTable();
       });
@@ -284,9 +284,9 @@ export async function render(container) {
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
     body.querySelector('#btn-delete-mahn').addEventListener('click', async () => {
-      if (!confirmDelete('Mahnung wirklich löschen?')) return;
+      if (!confirmDelete('Mahnung in den Papierkorb verschieben?')) return;
       await remove('mahnungen', m.id);
-      toast('Mahnung gelöscht');
+      toast('Mahnung in den Papierkorb verschoben');
       close();
       render(container);
     });

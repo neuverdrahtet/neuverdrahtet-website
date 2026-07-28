@@ -356,9 +356,9 @@ export async function render(container) {
     if (isEdit) {
       body.querySelector('#btn-qr').addEventListener('click', () => openQrModal(isGeraet ? 'geraet' : 'flotte', data));
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete('Wirklich löschen?')) return;
+        if (!confirmDelete('In den Papierkorb verschieben?')) return;
         await remove(storeName, data.id);
-        toast('Gelöscht');
+        toast('In den Papierkorb verschoben');
         close();
         render(container);
       });

@@ -2,6 +2,7 @@ import {
   collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, onSnapshot,
 } from './vendor/firebase/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { deleteBlobFromStorage } from './blobstore.js';
 
 // Solange kein echtes Firebase-Projekt in firebase-config.js hinterlegt ist,
 // läuft die App unverändert mit der bisherigen lokalen IndexedDB weiter (wie
@@ -253,8 +254,24 @@ export async function openDB() {
   return Promise.resolve(); // Firestore braucht kein explizites "Öffnen" wie IndexedDB
 }
 
-export async function getAll(storeName) {
-  return FIREBASE_ENABLED ? getAllFs(storeName) : getAllIdb(storeName);
+// Stores, für die "Löschen" ein Papierkorb ist (Soft-Delete statt echtem
+// Entfernen) - bewusst auf die Stores begrenzt, die schon die bestehende
+// Mehrfachauswahl+Löschen-Funktion haben; Hilfsdaten wie Kanban-Spalten,
+// Termine, E-Mails oder Verwendungen bleiben normale Hard-Deletes.
+export const TRASH_STORES = [
+  'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
+  'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen',
+];
+export function isTrashStore(storeName) {
+  return TRASH_STORES.includes(storeName);
+}
+
+const TRASH_TAGE = 30;
+
+export async function getAll(storeName, { includeDeleted = false } = {}) {
+  const rows = FIREBASE_ENABLED ? await getAllFs(storeName) : await getAllIdb(storeName);
+  if (includeDeleted || !isTrashStore(storeName)) return rows;
+  return rows.filter((r) => !r._geloescht);
 }
 
 export async function get(storeName, key) {
@@ -265,8 +282,89 @@ export async function put(storeName, value) {
   return FIREBASE_ENABLED ? putFs(storeName, value) : putIdb(storeName, value);
 }
 
+// Für Papierkorb-fähige Stores markiert remove() den Datensatz nur als
+// gelöscht (Update statt Delete) - er verschwindet aus getAll(), bleibt aber
+// per get()/getAllDeleted() erreichbar, bis er wiederhergestellt oder nach
+// TRASH_TAGE endgültig entfernt wird (siehe purgeOldTrash / hardRemove).
 export async function remove(storeName, key) {
+  if (isTrashStore(storeName)) {
+    const existing = await get(storeName, key);
+    if (existing) {
+      await put(storeName, { ...existing, _geloescht: true, _geloeschtAm: new Date().toISOString() });
+      // put() pflegt für 'mitarbeiter' den öffentlichen Namens-/Farb-Spiegel
+      // (mitarbeiterOeffentlich) automatisch nach - der kennt kein
+      // _geloescht-Feld, würde also in "Ich bin: ..."-Auswahlen weiter
+      // auftauchen. Deshalb hier explizit entfernen; restoreDeleted() legt
+      // ihn über denselben put()-Pfad automatisch wieder an.
+      if (storeName === 'mitarbeiter' && FIREBASE_ENABLED) {
+        await deleteDoc(doc(firestore, MITARBEITER_OEFFENTLICH, key)).catch(() => { /* ggf. schon weg */ });
+      }
+      return;
+    }
+  }
+  return hardRemove(storeName, key);
+}
+
+// Ausgaben/Zeiterfassung hängen Fotos/Belege/Unterschriften als Blobs in
+// Firebase Storage (siehe blobstore.js) - solange ein Datensatz nur im
+// Papierkorb liegt (remove()), bleiben diese Dateien unangetastet, damit
+// eine Wiederherstellung nicht auf kaputte Anhänge zeigt. Erst hier, beim
+// wirklichen Entfernen (manuell "Endgültig löschen" oder purgeOldTrash),
+// werden sie mit gelöscht.
+async function cleanupBlobs(storeName, record) {
+  if (!record) return;
+  if (storeName === 'ausgaben' && record.beleg?.path) {
+    await deleteBlobFromStorage(record.beleg.path).catch(() => { /* Blob ggf. schon weg */ });
+  }
+  if (storeName === 'zeiterfassung') {
+    for (const it of record.medien || []) {
+      if (it.path) await deleteBlobFromStorage(it.path).catch(() => { /* Blob ggf. schon weg */ });
+    }
+    if (record.unterschriftPath) {
+      await deleteBlobFromStorage(record.unterschriftPath).catch(() => { /* Blob ggf. schon weg */ });
+    }
+  }
+}
+
+export async function hardRemove(storeName, key) {
+  if (storeName === 'ausgaben' || storeName === 'zeiterfassung') {
+    await cleanupBlobs(storeName, await get(storeName, key));
+  }
   return FIREBASE_ENABLED ? removeFs(storeName, key) : removeIdb(storeName, key);
+}
+
+export async function restoreDeleted(storeName, key) {
+  const existing = await get(storeName, key);
+  if (!existing) return;
+  const { _geloescht, _geloeschtAm, ...rest } = existing;
+  await put(storeName, rest);
+}
+
+export async function getAllDeleted() {
+  const result = [];
+  for (const storeName of TRASH_STORES) {
+    const rows = await getAll(storeName, { includeDeleted: true });
+    for (const row of rows) {
+      if (row._geloescht) result.push({ storeName, ...row });
+    }
+  }
+  return result;
+}
+
+// Räumt beim App-Start endgültig auf: Datensätze, die schon länger als
+// TRASH_TAGE im Papierkorb liegen, werden wirklich gelöscht. Läuft still im
+// Hintergrund mit (wie trySyncPendingUploads) - ein einzelner Fehlschlag darf
+// den Start nicht blockieren.
+export async function purgeOldTrash() {
+  const grenze = Date.now() - TRASH_TAGE * 24 * 60 * 60 * 1000;
+  for (const storeName of TRASH_STORES) {
+    const rows = await getAll(storeName, { includeDeleted: true });
+    for (const row of rows) {
+      if (row._geloescht && row._geloeschtAm && new Date(row._geloeschtAm).getTime() < grenze) {
+        await hardRemove(storeName, row.id);
+      }
+    }
+  }
 }
 
 // Backfill für bereits vor diesem Fix angelegte Mitarbeiter-Datensätze, die
@@ -286,7 +384,7 @@ export async function clearStore(storeName) {
 export async function exportAll() {
   const data = {};
   for (const name of STORE_NAMES) {
-    data[name] = await getAll(name);
+    data[name] = await getAll(name, { includeDeleted: true });
   }
   data.__meta = { exportedAt: new Date().toISOString(), version: DB_VERSION };
   return data;
@@ -768,6 +866,7 @@ export const ROUTE_ROLLEN = {
   postfach: ['admin', 'buero'],
   buchhaltung: ['admin'],
   auswertungen: ['admin'],
+  papierkorb: ['admin'],
   einstellungen: ['admin'],
 };
 

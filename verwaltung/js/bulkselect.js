@@ -1,4 +1,4 @@
-import { remove } from './db.js';
+import { remove, isTrashStore } from './db.js';
 import { toast } from './utils.js';
 import { confirmDelete } from './ui.js';
 
@@ -11,6 +11,10 @@ import { confirmDelete } from './ui.js';
 export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) {
   const selected = new Set();
   const doDelete = deleteFn || ((id) => remove(store, id));
+  // Papierkorb-fähige Stores landen nur im Papierkorb (siehe db.js
+  // TRASH_STORES) - Text/Toast entsprechend anpassen, damit "unwiderruflich"
+  // nicht fälschlich suggeriert wird.
+  const soft = !deleteFn && isTrashStore(store);
 
   function headerCell() {
     return `<th class="col-select"><input type="checkbox" class="bulk-select-all" title="Alle auswählen"></th>`;
@@ -59,7 +63,8 @@ export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) 
       delBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         const ids = Array.from(selected);
-        if (!confirmDelete(`${ids.length} ${label} wirklich unwiderruflich löschen?`)) return;
+        const frage = soft ? `${ids.length} ${label} in den Papierkorb verschieben?` : `${ids.length} ${label} wirklich unwiderruflich löschen?`;
+        if (!confirmDelete(frage)) return;
         const done = [];
         for (const id of ids) {
           try {
@@ -68,7 +73,8 @@ export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) 
           } catch { /* einzelner Fehlschlag (z.B. Netzwerk) blockt nicht den Rest */ }
         }
         done.forEach((id) => selected.delete(id));
-        toast(done.length === ids.length ? `${done.length} ${label} gelöscht` : `${done.length} von ${ids.length} ${label} gelöscht`, done.length ? 'success' : 'danger');
+        const verb = soft ? 'in den Papierkorb verschoben' : 'gelöscht';
+        toast(done.length === ids.length ? `${done.length} ${label} ${verb}` : `${done.length} von ${ids.length} ${label} ${verb}`, done.length ? 'success' : 'danger');
         onDeleted(done);
       });
     }

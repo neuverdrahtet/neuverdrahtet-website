@@ -125,9 +125,9 @@ export async function render(container) {
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Vorlage "${data.name}" wirklich löschen?`)) return;
+        if (!confirmDelete(`Vorlage "${data.name}" in den Papierkorb verschieben?`)) return;
         await remove('vorlagen', data.id);
-        toast('Vorlage gelöscht');
+        toast('Vorlage in den Papierkorb verschoben');
         close();
         render(container);
       });

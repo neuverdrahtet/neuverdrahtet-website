@@ -290,9 +290,9 @@ export async function render(container) {
         kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente (Rechnungen, Angebote, Verträge, ...)',
       });
       body.querySelector('#btn-delete').addEventListener('click', async () => {
-        if (!confirmDelete(`Kunde "${data.firma}" wirklich löschen?`)) return;
+        if (!confirmDelete(`Kunde "${data.firma}" in den Papierkorb verschieben?`)) return;
         await remove('kunden', data.id);
-        toast('Kunde gelöscht');
+        toast('Kunde in den Papierkorb verschoben');
         close();
         render(container);
       });
