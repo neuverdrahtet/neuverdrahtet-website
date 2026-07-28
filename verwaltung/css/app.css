@@ -297,6 +297,18 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 }
 .card h2 { font-size: 15px; margin: 0 0 12px; }
 
+/* Auswertungen: horizontale Balkenlisten (Top-Kunden, Auslastung) */
+.auswertung-liste { display: flex; flex-direction: column; gap: 10px; }
+.auswertung-row { display: grid; grid-template-columns: 140px 1fr auto; align-items: center; gap: 10px; }
+.auswertung-row-label { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.auswertung-row-bar { background: var(--card-2); border-radius: 6px; height: 10px; overflow: hidden; }
+.auswertung-row-fill { background: var(--accent); height: 100%; border-radius: 6px; }
+.auswertung-row-value { font-size: 13px; font-weight: 600; white-space: nowrap; text-align: right; min-width: 70px; }
+@media (max-width: 600px) {
+  .auswertung-row { grid-template-columns: 90px 1fr auto; }
+  .auswertung-row-label { font-size: 12px; }
+}
+
 /* Table */
 #table-host {
   overflow-x: auto;
