@@ -93,7 +93,12 @@ service cloud.firestore {
     // (Admin-Zugriff, umgeht diese Regeln) und liest dafür alle Tokens.
     match /pushTokens/{tokenId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Admin/Büro dürfen zusätzlich alle Tokens lesen, um z.B. bei einer
+      // neuen Postfach-Nachricht alle admin/buero-Geräte benachrichtigen zu
+      // können (siehe push.js notifyRoles) - Tokens sind reine Geräte-
+      // Kennungen ohne Klartext-Wert außerhalb dieses Firebase-Projekts.
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdminOrBuero());
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /{collectionId}/{docId} {
