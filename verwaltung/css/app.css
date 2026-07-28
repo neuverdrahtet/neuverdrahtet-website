@@ -157,8 +157,12 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   padding: 14px 16px;
   border-top: 1px solid rgba(255,255,255,0.08);
   font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .sidebar-footer a { text-decoration: none; color: #8fa1b3; }
+.sidebar-footer #btn-fullscreen { width: 100%; justify-content: center; }
 .sidebar-user { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #dbe4ee; margin-bottom: 8px; }
 .sidebar-user #btn-lock { color: #dbe4ee; border-color: rgba(255,255,255,0.15); }
 
