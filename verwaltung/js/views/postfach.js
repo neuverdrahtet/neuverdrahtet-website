@@ -7,6 +7,7 @@ import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
+import * as push from '../push.js';
 
 const LISTE_STANDARD_LIMIT = 200;
 
@@ -540,6 +541,11 @@ export async function render(container) {
           allEmails = fresh.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
           renderList();
         });
+        push.notifyRoles(['admin', 'buero'], {
+          title: 'Neue Postfach-Nachricht',
+          body: `${result.neu} neue E-Mail${result.neu === 1 ? '' : 's'} im Postfach.`,
+          url: './index.html#/postfach',
+        }).catch(() => { /* Push ist ein Komfort-Feature, darf den Sync nicht stören */ });
       }
     }).catch(() => { /* stiller Hintergrund-Sync, Fehler nicht kritisch für die Anzeige */ });
 

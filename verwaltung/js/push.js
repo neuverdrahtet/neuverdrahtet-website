@@ -1,5 +1,7 @@
 import { getSettings, put, getAll, remove } from './db.js';
 import { firebaseConfig } from './firebase-config.js';
+import { getSession } from './auth.js';
+import { sendPushNotification } from './ai.js';
 
 // Push-Benachrichtigungen laufen über Firebase Cloud Messaging (Web Push) und
 // setzen daher ein konfiguriertes Firebase-Projekt voraus - im lokalen
@@ -44,7 +46,7 @@ export async function subscribe() {
   if (!token) throw new Error('Es konnte kein Push-Token erzeugt werden.');
 
   await put('pushTokens', {
-    id: token, userId: uidVal, userAgent: navigator.userAgent, updatedAt: new Date().toISOString(),
+    id: token, userId: uidVal, role: getSession().role || '', userAgent: navigator.userAgent, updatedAt: new Date().toISOString(),
   });
   return token;
 }
@@ -77,6 +79,24 @@ export async function isSubscribed() {
   } catch {
     return false;
   }
+}
+
+/**
+ * Löst eine Push-Benachrichtigung an alle Geräte aus, deren angemeldeter
+ * Nutzer eine der übergebenen Rollen hat - z.B. bei neuer Postfach-Nachricht
+ * an alle admin/buero-Geräte. Das eigene, gerade aktive Gerät wird
+ * ausgeklammert (wer die Aktion gerade selbst auslöst, muss sich nicht
+ * darüber benachrichtigen).
+ */
+export async function notifyRoles(roles, { title, body, url } = {}) {
+  if (!isBrowserCapable()) return;
+  const { auth } = await import('./firebase.js');
+  const eigenerUid = auth.currentUser?.uid;
+  const alle = await getAll('pushTokens');
+  const tokens = alle
+    .filter((t) => roles.includes(t.role) && t.userId !== eigenerUid)
+    .map((t) => t.id);
+  await sendPushNotification({ tokens, title, body, url });
 }
 
 /**

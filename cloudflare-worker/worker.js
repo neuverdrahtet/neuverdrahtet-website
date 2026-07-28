@@ -1,10 +1,12 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
- * Angebotspositionen erzeugen, oder analysiert ein fotografiertes Beleg-Bild
- * und liefert Händler/Datum/Betrag/Kategorie zurück. Der Anthropic-API-Key
- * bleibt ausschließlich hier im Worker (als Secret) – er wird NIE an den
+ * Angebotspositionen erzeugen, analysiert ein fotografiertes Beleg-Bild und
+ * liefert Händler/Datum/Betrag/Kategorie zurück, oder löst eine Firebase-
+ * Cloud-Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Die
+ * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
+ * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
  *
  * Deployment: siehe README.md in diesem Ordner.
@@ -17,6 +19,11 @@
  *                        Herkünfte, Standard: https://neuverdrahtet.com,https://www.neuverdrahtet.com
  *   MODEL_ID            (Variable, optional) – Standard: claude-opus-4-8
  *                        (günstigere Alternative z.B. claude-haiku-4-5)
+ *   FIREBASE_SERVICE_ACCOUNT_JSON (Secret, nur für Push-Benachrichtigungen
+ *                        nötig) – kompletter Inhalt einer Firebase-Service-
+ *                        Account-JSON-Datei (Firebase-Konsole -> Projekt-
+ *                        einstellungen -> Dienstkonten -> Neuen privaten
+ *                        Schlüssel generieren), als einzeiliger String.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -293,6 +300,88 @@ async function callClaudeEmailClassify({ apiKey, model, emails }) {
   return JSON.parse(textBlock.text);
 }
 
+// --- Push-Versand (Firebase Cloud Messaging HTTP v1, Server-Auth per Service Account) ---
+
+function base64UrlEncode(data) {
+  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function pemPrivateKeyToBinary(pem) {
+  const base64 = pem
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\s+/g, '');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes.buffer;
+}
+
+/** Signiert ein Google-OAuth2-Service-Account-JWT und tauscht es gegen einen Access-Token. */
+async function getGoogleAccessToken(serviceAccount, scope) {
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'RS256', typ: 'JWT' };
+  const claims = {
+    iss: serviceAccount.client_email,
+    scope,
+    aud: 'https://oauth2.googleapis.com/token',
+    iat: now,
+    exp: now + 3600,
+  };
+  const signingInput = `${base64UrlEncode(JSON.stringify(header))}.${base64UrlEncode(JSON.stringify(claims))}`;
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    pemPrivateKeyToBinary(serviceAccount.private_key),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', cryptoKey, new TextEncoder().encode(signingInput));
+  const jwt = `${signingInput}.${base64UrlEncode(signature)}`;
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Google-OAuth-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return data.access_token;
+}
+
+/** Sendet eine Push-Nachricht je Geräte-Token; ungültige/abgelaufene Tokens brechen die restlichen nicht ab. */
+async function sendFcmMessages({ serviceAccount, tokens, title, body, url }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/firebase.messaging');
+  return Promise.all(tokens.map(async (token) => {
+    try {
+      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          message: {
+            token,
+            notification: { title: title || 'neuverdrahtet Verwaltung', body: body || '' },
+            ...(url ? { webpush: { fcm_options: { link: url } } } : {}),
+          },
+        }),
+      });
+      return { token, ok: res.ok };
+    } catch {
+      return { token, ok: false };
+    }
+  }));
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -314,11 +403,6 @@ export default {
         status: 401, headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
-    if (!env.ANTHROPIC_API_KEY) {
-      return new Response(JSON.stringify({ error: 'Worker ist nicht korrekt eingerichtet (ANTHROPIC_API_KEY fehlt).' }), {
-        status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
-      });
-    }
 
     let body;
     try {
@@ -326,6 +410,40 @@ export default {
     } catch {
       return new Response(JSON.stringify({ error: 'Ungültiger Request-Body.' }), {
         status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Push-Versand braucht kein ANTHROPIC_API_KEY (anderer Secret-Satz), daher
+    // vor der Prüfung darauf abgehandelt.
+    if (body.action === 'push-send') {
+      if (!Array.isArray(body.tokens) || body.tokens.length === 0) {
+        return new Response(JSON.stringify({ error: 'Feld "tokens" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const results = await sendFcmMessages({
+          serviceAccount, tokens: body.tokens, title: body.title, body: body.body, url: body.url,
+        });
+        return new Response(JSON.stringify({ results }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (!env.ANTHROPIC_API_KEY) {
+      return new Response(JSON.stringify({ error: 'Worker ist nicht korrekt eingerichtet (ANTHROPIC_API_KEY fehlt).' }), {
+        status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
       });
     }
 

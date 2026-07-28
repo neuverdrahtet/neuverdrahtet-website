@@ -95,3 +95,25 @@ export async function analyzeBeleg({ imageDataUrl, kategorien }) {
   }
   return res.json();
 }
+
+/**
+ * Löst über denselben Cloudflare Worker eine Push-Benachrichtigung an die
+ * übergebenen FCM-Geräte-Tokens aus. Der Worker braucht dafür zusätzlich das
+ * Secret FIREBASE_SERVICE_ACCOUNT_JSON (siehe worker.js-Kommentar). Läuft
+ * bewusst "best effort" im Hintergrund - ein Fehler hier darf die eigentliche
+ * Aktion (z.B. Postfach-Sync), die die Benachrichtigung ausgelöst hat, nicht
+ * stören.
+ */
+export async function sendPushNotification({ tokens, title, body, url }) {
+  if (!tokens || tokens.length === 0) return;
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) return;
+  await fetch(settings.aiWorkerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Secret': settings.aiAppSecret || '',
+    },
+    body: JSON.stringify({ action: 'push-send', tokens, title, body, url }),
+  }).catch(() => { /* Push ist ein Komfort-Feature, darf den Aufrufer nicht stören */ });
+}
