@@ -169,7 +169,7 @@ export async function render(container) {
           <div class="postfach-row-top">
             <input type="checkbox" class="bulk-select-row" data-id="${m.id}" ${bulkSelect.selected.has(m.id) ? 'checked' : ''}>
             <strong>${escapeHtml((m.from || '').split('<')[0].trim() || m.from)}</strong>
-            <span class="text-mute">${escapeHtml(m.date)}</span>
+            <span class="text-mute">${escapeHtml(formatDateTime(m.dateSort) || m.date)}</span>
           </div>
           <div class="postfach-row-subject">${escapeHtml(m.subject)}</div>
           ${katBadge ? `<div class="postfach-row-kategorie">${katBadge}</div>` : ''}
@@ -218,7 +218,7 @@ export async function render(container) {
       detailHost.innerHTML = `
         <div class="postfach-detail-header">
           <h2>${escapeHtml(full.subject)}</h2>
-          <p class="text-mute">Von: ${escapeHtml(full.from)}<br>An: ${escapeHtml(full.to)} · ${escapeHtml(full.date)}</p>
+          <p class="text-mute">Von: ${escapeHtml(full.from)}<br>An: ${escapeHtml(full.to)} · ${escapeHtml(formatDateTime(full.dateSort) || full.date)}</p>
           <div class="actions">
             <button class="btn" id="pf-reply-btn">↩️ Antworten</button>
             <button class="btn" id="pf-task-btn">✅ Als Aufgabe anlegen</button>
@@ -454,7 +454,7 @@ export async function render(container) {
       const subject = replyTo ? (/^re:/i.test(replyTo.subject) ? replyTo.subject : `Re: ${replyTo.subject}`) : '';
       const signaturBlock = settings.emailSignature ? `\n\n${settings.emailSignature}` : '';
       const bodyText = replyTo
-        ? `${signaturBlock}\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
+        ? `${signaturBlock}\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${formatDateTime(replyTo.dateSort) || replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
         : signaturBlock;
       const { body, close } = openModal({
         title: replyTo ? 'Antworten' : 'Neue E-Mail',

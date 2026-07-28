@@ -33,10 +33,22 @@ function toDateOnly(iso) {
   return (iso || '').slice(0, 10);
 }
 
+// Liefert den lokalen Kalendertag eines Date-Objekts als "JJJJ-MM-TT". NIE
+// d.toISOString().slice(0, 10) für lokale Datumsobjekte verwenden - das
+// rechnet erst in UTC um und verschiebt den Tag in Zeitzonen östlich von UTC
+// (z.B. Deutschland, UTC+1/+2) um einen Tag zurück, was Termine/Zellen der
+// Plantafel auf den falschen Tag springen lässt.
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function addDaysStr(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 function daysBetweenStr(a, b) {
@@ -240,7 +252,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </div>
         <div class="plantafel-days" data-restype="${resType}" data-resid="${resource.id}" style="min-height:${rowHeight}px">
           ${weekDays().map((d, i) => {
-            const dateStr = toDateOnly(d.toISOString());
+            const dateStr = localDateStr(d);
             return `<div class="plantafel-day ${dateStr === todayStr ? 'is-today' : ''}" data-idx="${i}" data-date="${dateStr}"></div>`;
           }).join('')}
           <div class="plantafel-bars">
@@ -264,8 +276,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
   function renderGrid() {
     const days = weekDays();
     const weekEnd = days[6];
-    const weekStartStr = toDateOnly(days[0].toISOString());
-    const weekEndStr = toDateOnly(days[6].toISOString());
+    const weekStartStr = localDateStr(days[0]);
+    const weekEndStr = localDateStr(days[6]);
     weekTitle.textContent = `${fmtDay(weekStart)} – ${fmtDay(weekEnd)} ${weekEnd.getFullYear()}`;
 
     if (mitarbeiter.length === 0) {
@@ -273,7 +285,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       return;
     }
 
-    const todayStr = toDateOnly(new Date().toISOString());
+    const todayStr = localDateStr(new Date());
 
     host.innerHTML = `
       <div class="plantafel-grid">
@@ -281,7 +293,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div class="plantafel-cell plantafel-head"></div>
           <div class="plantafel-days-head">
             ${days.map((d) => {
-              const dateStr = toDateOnly(d.toISOString());
+              const dateStr = localDateStr(d);
               return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">${DOW[(d.getDay() + 6) % 7]}<br>${fmtDay(d)}</div>`;
             }).join('')}
           </div>
@@ -446,7 +458,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // ---------- Monat ----------
 
   function todayStrFn() {
-    return new Date().toISOString().slice(0, 10);
+    return localDateStr(new Date());
   }
 
   function terminsOnDay(dateStr) {
@@ -469,7 +481,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     for (let i = 0; i < 42; i++) {
       const d = new Date(gridStart);
       d.setDate(gridStart.getDate() + i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = localDateStr(d);
       const isOtherMonth = d.getMonth() !== viewMonth;
       const events = terminsOnDay(dateStr);
       html += `
@@ -517,7 +529,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
   function openForm(t, prefill) {
     const isEdit = !!t;
-    const todayStr = new Date().toISOString().slice(0, 10);
+    const todayStr = localDateStr(new Date());
     const data = t || {
       id: uid(), titel: prefill?.titel || '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
       ort: prefill?.ort || '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '',
