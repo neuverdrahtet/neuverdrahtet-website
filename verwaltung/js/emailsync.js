@@ -165,7 +165,10 @@ async function autoErstelleKundeAusAnfrage(email) {
   const projekt = {
     id: uid(), titel, kundeId, status: kanbanSpalten[0]?.id || '',
     beschreibung: `Automatisch aus E-Mail-Anfrage angelegt.\n\nBetreff: ${email.subject || ''}\n${kontakt.anliegen ? '\n' + kontakt.anliegen : ''}`,
-    start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
+    start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '',
+    // Auffällige Farbe + Kennzeichnung, damit die Karte im Kanban sofort ins
+    // Auge fällt - wird beim ersten Öffnen der Karte wieder zurückgesetzt.
+    farbe: '#ff5a36', autoErstellt: true, createdAt: new Date().toISOString(),
   };
   await put('projekte', projekt);
   await put('emails', { ...email, kundeAngelegtId: projekt.id });
