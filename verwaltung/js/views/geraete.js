@@ -2,6 +2,7 @@ import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, toast } from '../utils.js';
 import { openModal, confirmDelete, optionList } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { loadZXing } from '../vendorLoader.js';
 
 const FARBEN = ['#14b8a6', '#4d8bf0', '#a463f2', '#f0a020', '#ef4444', '#16a085', '#d35400', '#2c3e50'];
 
@@ -236,7 +237,9 @@ export async function render(container) {
     }
 
     async function startScanner() {
-      if (!window.ZXing) {
+      try {
+        await loadZXing();
+      } catch {
         body.querySelector('#scan-hint').textContent = 'Scanner-Bibliothek konnte nicht geladen werden.';
         return;
       }
@@ -281,17 +284,19 @@ export async function render(container) {
       `,
     });
     const svgHost = body.querySelector('#qr-svg-host');
-    if (window.ZXing) {
+    svgHost.innerHTML = `<p class="hint">Lädt ...</p>`;
+    loadZXing().then(() => {
       try {
         const writer = new window.ZXing.BrowserQRCodeSvgWriter();
         const svg = writer.write(payload, 220, 220);
+        svgHost.innerHTML = '';
         svgHost.appendChild(svg);
       } catch (err) {
         svgHost.innerHTML = `<p class="hint">QR-Code konnte nicht erzeugt werden.</p>`;
       }
-    } else {
-      svgHost.innerHTML = `<p class="hint">Scanner-Bibliothek nicht geladen.</p>`;
-    }
+    }).catch(() => {
+      svgHost.innerHTML = `<p class="hint">Scanner-Bibliothek konnte nicht geladen werden.</p>`;
+    });
     body.querySelector('#qr-print-btn').addEventListener('click', () => {
       const printWin = window.open('', '_blank', 'width=400,height=500');
       printWin.document.write(`<!DOCTYPE html><html><head><title>QR-Code ${escapeHtml(name)}</title></head><body style="text-align:center;font-family:sans-serif">${body.querySelector('#qr-print-area').innerHTML}</body></html>`);
