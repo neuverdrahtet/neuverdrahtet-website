@@ -178,6 +178,41 @@ async function autoErstelleKundeAusAnfrage(email) {
     body: `${kundeName}: ${titel}`,
     url: './index.html#/postfach',
   }).catch(() => { /* Push ist ein Komfort-Feature */ });
+
+  return { kundeId, projektId: projekt.id };
+}
+
+const DATUM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+const UHRZEIT_REGEX = /^\d{2}:\d{2}$/;
+
+// Legt bei einer als "kundenanfrage" erkannten E-Mail mit eindeutigem
+// Terminwunsch (Datum + Uhrzeit von der KI erkannt) automatisch einen Termin
+// in der Plantafel an - noch ohne Mitarbeiter-Zuweisung, damit das Büro ihn
+// nur noch bestätigen/verteilen muss statt ihn komplett neu anzulegen.
+async function autoErstelleTerminAusAnfrage(email, termin, { kundeId, projektId } = {}) {
+  if (!DATUM_REGEX.test(termin?.datum || '') || !UHRZEIT_REGEX.test(termin?.uhrzeit || '')) return;
+  const kontakt = email.kontakt;
+  const terminStatus = await getAll('terminStatus');
+  terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
+
+  const titel = kontakt?.anliegen || email.subject || 'Termin';
+  const neuerTermin = {
+    id: uid(), titel, typ: 'termin', start: `${termin.datum}T${termin.uhrzeit}`, ende: '', ort: '',
+    kundeId: kundeId || '', projektId: projektId || '',
+    mitarbeiterIds: [], geraeteIds: [], flottenIds: [],
+    notizen: `Automatisch aus E-Mail-Anfrage erkannt.\n\nBetreff: ${email.subject || ''}`,
+    // Auffällige Farbe + Kennzeichnung, damit der Termin in der Plantafel
+    // sofort ins Auge fällt - wird beim ersten Öffnen wieder zurückgesetzt.
+    farbe: '#ff5a36', autoErstellt: true, status: terminStatus[0]?.id || 'geplant',
+  };
+  await put('termine', neuerTermin);
+  await put('emails', { ...email, terminAngelegtId: neuerTermin.id });
+
+  push.notifyRoles(['admin', 'buero'], {
+    title: 'Neuer Termin aus E-Mail-Anfrage',
+    body: `${titel} am ${termin.datum} um ${termin.uhrzeit} Uhr`,
+    url: './index.html#/plantafel',
+  }).catch(() => { /* Push ist ein Komfort-Feature */ });
 }
 
 export async function classifyPendingEmails({ onProgress } = {}) {
@@ -199,11 +234,14 @@ export async function classifyPendingEmails({ onProgress } = {}) {
         const updated = { ...e, kategorie: r.kategorie, kontakt: r.kontakt || LEERER_KONTAKT };
         await put('emails', updated);
         erledigt++;
-        if (
-          settings.autoKundeAusAnfrage && updated.kategorie === 'kundenanfrage' &&
-          updated.richtung !== 'ausgang' && updated.kontakt.email && !updated.kundeAngelegtId
-        ) {
-          await autoErstelleKundeAusAnfrage(updated).catch(() => { /* Auto-Anlage darf die Kategorisierung nicht blockieren */ });
+        const istUnbeantworteteAnfrage = updated.kategorie === 'kundenanfrage' && updated.richtung !== 'ausgang';
+        let kundeProjekt = null;
+        if (istUnbeantworteteAnfrage && settings.autoKundeAusAnfrage && updated.kontakt.email && !updated.kundeAngelegtId) {
+          kundeProjekt = await autoErstelleKundeAusAnfrage(updated).catch(() => null);
+          // Auto-Anlage darf die Kategorisierung nicht blockieren
+        }
+        if (istUnbeantworteteAnfrage && settings.autoTerminAusAnfrage && !updated.terminAngelegtId) {
+          await autoErstelleTerminAusAnfrage(updated, r.termin, kundeProjekt || {}).catch(() => { /* Auto-Anlage darf die Kategorisierung nicht blockieren */ });
         }
       }
     } catch (err) {

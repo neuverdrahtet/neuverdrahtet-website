@@ -1,4 +1,5 @@
 import { getSettings } from './db.js';
+import { todayISO } from './utils.js';
 
 export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, katalog }) {
   const settings = await getSettings();
@@ -49,7 +50,7 @@ export async function classifyEmails({ emails }) {
         'Content-Type': 'application/json',
         'X-App-Secret': settings.aiAppSecret || '',
       },
-      body: JSON.stringify({ action: 'email-classify', emails }),
+      body: JSON.stringify({ action: 'email-classify', emails, heute: todayISO() }),
       signal: controller.signal,
     });
   } catch (err) {

@@ -436,6 +436,7 @@ const DEFAULT_SETTINGS = {
   skontoProzentStandard: 0,
   skontoTageStandard: 0,
   autoKundeAusAnfrage: true,
+  autoTerminAusAnfrage: true,
   pushNotifiedMahnungenAm: '',
   pushNotifiedGeraetePruefungAm: '',
   pushNotifiedAnlagenPruefungAm: '',

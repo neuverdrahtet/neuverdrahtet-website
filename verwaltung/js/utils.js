@@ -158,6 +158,28 @@ export function setCurrentMitarbeiterId(id) {
   localStorage.setItem(CURRENT_MA_KEY, id || '');
 }
 
+// Übergibt Vorbelegungsdaten (Kunde/Projekt/Ort/Titel) an die Plantafel und
+// springt dorthin - so muss der Nutzer das Termin-Formular nicht von Hand
+// aus der Projekt-Akte/Kanban-Karte heraus neu befüllen. sessionStorage statt
+// Query-Parameter, da der Router die Hash-Route sonst als Store-ID interpretiert.
+const PLANTAFEL_PREFILL_KEY = 'nv-plantafel-prefill';
+
+export function openTerminMitVorbelegung(prefill) {
+  try { sessionStorage.setItem(PLANTAFEL_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
+  window.location.hash = '#/plantafel';
+}
+
+export function nimmPlantafelVorbelegung() {
+  try {
+    const raw = sessionStorage.getItem(PLANTAFEL_PREFILL_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(PLANTAFEL_PREFILL_KEY);
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function debounce(fn, wait = 250) {
   let t;
   return (...args) => {

@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
-import { uid, escapeHtml, toast, navigationUrl } from '../utils.js';
+import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung } from '../utils.js';
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
@@ -250,7 +250,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
               return `
                 <div class="plantafel-bar" data-id="${it.termin.id}"
                   style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
-                  <span class="plantafel-bar-label">${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
                 </div>
               `;
@@ -311,10 +311,16 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
     // Click bar -> edit; drag handled separately (dragstart won't fire the click after a real drag)
     host.querySelectorAll('.plantafel-bar-label').forEach((label) => {
-      label.addEventListener('click', (e) => {
+      label.addEventListener('click', async (e) => {
         e.stopPropagation();
         const bar = label.closest('.plantafel-bar');
-        openForm(termine.find((t) => t.id === bar.dataset.id));
+        const t = termine.find((x) => x.id === bar.dataset.id);
+        if (t?.autoErstellt) {
+          t.autoErstellt = false;
+          await put('termine', t);
+          renderGrid();
+        }
+        openForm(t);
       });
     });
 
@@ -432,6 +438,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
+  // Kommt der Nutzer über den "+ Termin"-Schnellknopf aus Projekt-Akte/Kanban,
+  // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
+  const terminVorbelegung = nimmPlantafelVorbelegung();
+  if (terminVorbelegung) openForm(null, terminVorbelegung);
+
   // ---------- Monat ----------
 
   function todayStrFn() {
@@ -466,7 +477,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div class="day-num">${d.getDate()}</div>
           ${events.slice(0, 3).map((e) => {
             const farbe = e.farbe || typInfo(e.typ).farbe;
-            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(typInfo(e.typ).titel)}">${escapeHtml(e.titel)}</div>`;
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(typInfo(e.typ).titel)}">${e.autoErstellt ? '🆕 ' : ''}${escapeHtml(e.titel)}</div>`;
           }).join('')}
           ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
         </div>
@@ -475,9 +486,15 @@ export async function render(container, _route, { autoSync = true } = {}) {
     monatGrid.innerHTML = html;
 
     monatGrid.querySelectorAll('.cal-event').forEach((el) => {
-      el.addEventListener('click', (e) => {
+      el.addEventListener('click', async (e) => {
         e.stopPropagation();
-        openForm(termine.find((t) => t.id === el.dataset.id));
+        const t = termine.find((x) => x.id === el.dataset.id);
+        if (t?.autoErstellt) {
+          t.autoErstellt = false;
+          await put('termine', t);
+          renderMonatGrid();
+        }
+        openForm(t);
       });
     });
     monatGrid.querySelectorAll('.cal-day').forEach((el) => {
@@ -502,8 +519,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     const isEdit = !!t;
     const todayStr = new Date().toISOString().slice(0, 10);
     const data = t || {
-      id: uid(), titel: '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
-      ort: '', kundeId: '', projektId: '',
+      id: uid(), titel: prefill?.titel || '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
+      ort: prefill?.ort || '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '',
       mitarbeiterIds: prefill?.resType === 'mitarbeiter' ? [prefill.resId] : [],
       geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
       flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
