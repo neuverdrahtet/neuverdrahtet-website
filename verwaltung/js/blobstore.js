@@ -59,10 +59,10 @@ export async function deleteBlobFromStorage(path) {
 async function patchDocForPath(path, meta) {
   const { getAll, put } = await import('./db.js');
   const store = path.split('/')[0];
-  if (store === 'dokumente') {
-    const alle = await getAll('dokumente');
+  if (store === 'fotos' || store === 'dokumente') {
+    const alle = await getAll(store);
     const doc = alle.find((d) => d.path === path);
-    if (doc) await put('dokumente', { ...doc, ...meta });
+    if (doc) await put(store, { ...doc, ...meta });
   } else if (store === 'ausgaben') {
     const alle = await getAll('ausgaben');
     const eintrag = alle.find((a) => a.beleg?.path === path);
