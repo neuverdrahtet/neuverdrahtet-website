@@ -191,7 +191,7 @@ export async function render(container) {
   function openForm(r) {
     const isEdit = !!r;
     const data = r || {
-      id: uid(), nummer: '', kundeId: '', projektId: '', angebotId: null, datum: todayISO(),
+      id: uid(), nummer: '', kundeId: '', projektId: '', angebotId: null, datum: todayISO(), leistungsdatum: todayISO(),
       faelligAm: addDays(todayISO(), settings.zahlungszielTage || 14),
       status: 'offen', betreff: '', notizen: '', positionen: [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
@@ -220,6 +220,7 @@ export async function render(container) {
               <select name="projektId" ${locked ? 'disabled' : ''}><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
             </div>
             <div class="field"><label>Rechnungsdatum</label><input type="date" name="datum" value="${data.datum}" ${locked ? 'disabled' : ''}></div>
+            <div class="field"><label>Leistungsdatum</label><input type="date" name="leistungsdatum" value="${data.leistungsdatum || data.datum}" ${locked ? 'disabled' : ''}><span class="hint mb-0">Datum der Leistungserbringung/Lieferung (Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG) – kann vom Rechnungsdatum abweichen.</span></div>
             <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Skonto (%)</label><input type="number" step="0.1" min="0" name="skontoProzent" value="${data.skontoProzent || 0}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Skonto-Frist (Tage)</label><input type="number" min="0" name="skontoTage" value="${data.skontoTage || 0}" ${locked ? 'disabled' : ''}><span class="hint mb-0">0 % = kein Skonto-Hinweis auf der Rechnung.</span></div>
@@ -415,14 +416,19 @@ let editor = createPositionsEditor({
       function docOpts() {
         const totals = editor.getTotals();
         const istAbschlag = data.rechnungstyp === 'abschlag';
+        const kunde = kundenById[data.kundeId];
         return {
           settings, art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
+          leistungsdatum: data.leistungsdatum || data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
-          kunde: kundenById[data.kundeId], betreff: data.betreff,
+          kunde, betreff: data.betreff,
           projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
           introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
+          aufbewahrungsHinweis: kunde?.istPrivatperson
+            ? 'Hinweis gemäß § 14 Abs. 4 Nr. 9 UStG: Als Privatperson sind Sie verpflichtet, diese Rechnung sowie zugehörige Zahlungsbelege im Zusammenhang mit dieser Werklieferung/Leistung 2 Jahre lang aufzubewahren.'
+            : '',
           closingText: (data.notizen || '') +
             (data.skontoProzent > 0
               ? `\n\nBei Zahlung bis zum ${formatDate(addDays(data.datum, data.skontoTage || 0))} (${data.skontoTage || 0} Tage) gewähren wir ${data.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * data.skontoProzent) / 100)}).`
@@ -489,6 +495,7 @@ let editor = createPositionsEditor({
         updated.kundeId = fd.get('kundeId') || '';
         updated.projektId = fd.get('projektId') || '';
         updated.datum = fd.get('datum') || todayISO();
+        updated.leistungsdatum = fd.get('leistungsdatum') || updated.datum;
         updated.faelligAm = fd.get('faelligAm') || '';
         updated.betreff = (fd.get('betreff') || '').toString().trim();
         updated.notizen = (fd.get('notizen') || '').toString().trim();
@@ -519,6 +526,12 @@ let editor = createPositionsEditor({
         );
         if (!updated.nummer) updated.nummer = autoNummer;
         await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
+      }
+
+      if (!locked) {
+        const nummerNorm = (updated.nummer || '').trim().toLowerCase();
+        const dupe = rechnungen.some((r) => r.id !== updated.id && (r.nummer || '').trim().toLowerCase() === nummerNorm);
+        if (dupe) { toast(`Rechnungsnummer "${updated.nummer}" ist bereits vergeben – GoBD verlangt eindeutige Nummern.`, 'danger'); return; }
       }
 
       if (!locked) {
