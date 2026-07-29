@@ -17,6 +17,17 @@ function isNetworkError(err) {
     || /network|failed to fetch/i.test(err?.message || '');
 }
 
+// Ohne diese Absicherung blieb ein Upload, der wegen fehlender Storage-
+// Berechtigung/-Konfiguration am Backend nie eine Antwort bekommt, im
+// UI für immer auf "Lädt ..." hängen - kein Fehler, keine Rückmeldung.
+// Der Timeout sorgt dafür, dass der Nutzer nach spätestens 30s eine klare
+// Fehlermeldung sieht statt einer endlosen Wartezeit.
+function withTimeout(promise, ms, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 /**
  * Lädt einen Blob nach Firebase Storage hoch. Schlägt der Upload wegen
  * fehlendem Netz fehl (typischer Außendienst-Fall: Baustelle ohne Empfang),
@@ -32,8 +43,14 @@ export async function uploadBlobToStorage(path, blob) {
     const { storage } = await import('./firebase.js');
     const { ref, uploadBytes, getDownloadURL } = await import('./vendor/firebase/firebase-storage.js');
     const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, blob, { contentType: blob.type || 'application/octet-stream' });
-    const url = await getDownloadURL(storageRef);
+    await withTimeout(
+      uploadBytes(storageRef, blob, { contentType: blob.type || 'application/octet-stream' }),
+      30000, 'Hochladen abgebrochen (Zeitüberschreitung nach 30 Sekunden). Bitte Internetverbindung prüfen und erneut versuchen.',
+    );
+    const url = await withTimeout(
+      getDownloadURL(storageRef),
+      15000, 'Datei wurde hochgeladen, aber die Download-URL konnte nicht abgerufen werden (Zeitüberschreitung).',
+    );
     return { url, path, mime: blob.type || '', size: blob.size || 0 };
   } catch (err) {
     if (!isNetworkError(err)) throw err;
@@ -88,8 +105,11 @@ export async function trySyncPendingUploads() {
   for (const item of queued) {
     try {
       const storageRef = ref(storage, item.path);
-      await uploadBytes(storageRef, item.blob, { contentType: item.blob.type || 'application/octet-stream' });
-      const url = await getDownloadURL(storageRef);
+      await withTimeout(
+        uploadBytes(storageRef, item.blob, { contentType: item.blob.type || 'application/octet-stream' }),
+        30000, 'Zeitüberschreitung beim Hochladen.',
+      );
+      const url = await withTimeout(getDownloadURL(storageRef), 15000, 'Zeitüberschreitung beim Abrufen der Download-URL.');
       const meta = { url, path: item.path, mime: item.blob.type || '', size: item.blob.size || 0, pendingUpload: undefined };
       await patchDocForPath(item.path, meta);
       await removeQueuedUpload(item.path);
