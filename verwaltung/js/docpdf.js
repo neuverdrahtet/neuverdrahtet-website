@@ -125,6 +125,7 @@ export function buildDocPdfBlob(opts) {
     [`${opts.art}-Nr.:`, opts.nummer],
     opts.kunde?.kundennummer ? ['Kundennr.:', opts.kunde.kundennummer] : null,
     ['Datum:', formatDate(opts.datum)],
+    opts.leistungsdatum ? ['Leistungsdatum:', formatDate(opts.leistungsdatum)] : null,
     opts.refLabel ? [`${opts.refLabel}:`, opts.refValue] : null,
   ].filter(Boolean);
   doc.setFontSize(9);
@@ -140,7 +141,7 @@ export function buildDocPdfBlob(opts) {
     }
   });
 
-  y += 30;
+  y += 6 + metaRows.length * 4.6 + 6;
 
   // --- Sender line + recipient ---
   const absender = [opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt].filter(Boolean).join(' · ');
@@ -237,6 +238,13 @@ export function buildDocPdfBlob(opts) {
     const hinweisLines = doc.splitTextToSize(steuerHinweisText, 174);
     doc.text(hinweisLines, marginX, y);
     y += hinweisLines.length * 3.6 + 4;
+  }
+
+  if (opts.aufbewahrungsHinweis) {
+    doc.setFontSize(8);
+    const aufbLines = doc.splitTextToSize(opts.aufbewahrungsHinweis, 174);
+    doc.text(aufbLines, marginX, y);
+    y += aufbLines.length * 3.6 + 4;
   }
 
   if (opts.closingText) {

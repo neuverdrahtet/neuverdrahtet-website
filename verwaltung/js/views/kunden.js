@@ -349,7 +349,7 @@ export async function render(container) {
   function openForm(kunde) {
     const isEdit = !!kunde;
     const neueId = uid();
-    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
+    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', istPrivatperson: false, farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));
@@ -372,6 +372,10 @@ export async function render(container) {
             <div class="field"><label>PLZ</label><input name="plz" value="${escapeHtml(data.plz || '')}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
             <div class="field col-span-2"><button type="button" class="btn btn-sm" id="btn-kunde-navi">🧭 Navigation zur Adresse</button></div>
+            <div class="field col-span-2">
+              <label class="field-checkbox"><input type="checkbox" name="istPrivatperson" ${data.istPrivatperson ? 'checked' : ''}> Privatperson (kein Unternehmen)</label>
+              <span class="hint mb-0">Steuert den Aufbewahrungshinweis (§ 14 Abs. 4 Nr. 9 UStG) auf Rechnungen an diesen Kunden.</span>
+            </div>
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           ${isEdit ? `
@@ -483,6 +487,7 @@ export async function render(container) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       for (const [k, v] of fd.entries()) updated[k] = v.trim ? v.trim() : v;
+      updated.istPrivatperson = fd.get('istPrivatperson') === 'on';
       if (!updated.firma) return;
       if (!isEdit) {
         const currentSettings = await getSettings();

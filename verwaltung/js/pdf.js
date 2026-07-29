@@ -45,6 +45,8 @@ export function buildDocHtml({
   steuerHinweis,
   showPositions = true,
   abschlaege,
+  leistungsdatum,
+  aufbewahrungsHinweis,
 }) {
   const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
 
@@ -52,6 +54,7 @@ export function buildDocHtml({
     [`${art}-Nr.:`, nummer],
     kunde?.kundennummer ? ['Kundennr.:', kunde.kundennummer] : null,
     ['Datum:', formatDate(datum)],
+    leistungsdatum ? ['Leistungsdatum:', formatDate(leistungsdatum)] : null,
     refLabel ? [`${refLabel}:`, refValue] : null,
   ].filter(Boolean);
 
@@ -140,6 +143,7 @@ export function buildDocHtml({
     ${positionsHtml}
     ${totalsHtml}
     ${(steuerHinweis || (settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '')) ? `<p style="font-size:11px;margin-top:10px">${escapeHtml(steuerHinweis || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.')}</p>` : ''}
+    ${aufbewahrungsHinweis ? `<p style="font-size:11px;margin-top:4px">${escapeHtml(aufbewahrungsHinweis)}</p>` : ''}
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
     <div class="print-footer">
       ${settings.dokFooterZusatztext ? `<div class="print-footer-zusatz">${escapeHtml(settings.dokFooterZusatztext)}</div>` : ''}
