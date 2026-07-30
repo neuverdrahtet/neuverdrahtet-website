@@ -37,11 +37,14 @@ export const STANDARD_KATALOG_PUTZ = [
   leistung('Putzoberfläche filzen/glätten', 'm²', 6),
   leistung('Sanierputz gegen Feuchte/Salze auftragen', 'm²', 32),
   leistung('Kleinflächige Putzausbesserung/Rissesanierung', 'm²', 18),
+  leistung('Edel-/Dekorputz auftragen (Kellenwurf/Kratzputz)', 'm²', 35),
+  leistung('Stuckleiste/Zierprofil anbringen', 'm', 22),
 
   // --- Leistungen: Außenputz & Dämmung ---
   leistung('Außenputz auftragen (Grundputz + Oberputz, inkl. Gerüst)', 'm²', 45),
   leistung('Sockelputz wasserabweisend auftragen', 'm²', 38),
   leistung('Wärmedämmverbundsystem (WDVS) anbringen', 'm²', 85),
+  leistung('Altputz sanieren/Feuchtesanierung Fassade', 'm²', 48),
 
   // --- Materialien: Putze ---
   artikel('Kalkzementputz Maschinenputz (Sack 30kg)', 'Stk.', 12),
@@ -49,6 +52,8 @@ export const STANDARD_KATALOG_PUTZ = [
   artikel('Oberputz/Reibeputz (Sack 25kg)', 'Stk.', 22),
   artikel('Sanierputz (Sack 30kg)', 'Stk.', 28),
   artikel('Außenputz mineralisch (Sack 30kg)', 'Stk.', 16),
+  artikel('Edelputz/Dekorputz (Sack 25kg)', 'Stk.', 24),
+  artikel('Stuckleiste/Zierprofil (Meterware)', 'm', 8),
 
   // --- Materialien: Zubehör ---
   artikel('Haftgrund/Tiefgrund (Kanister 5L)', 'Stk.', 26),

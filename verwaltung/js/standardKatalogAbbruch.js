@@ -41,16 +41,25 @@ export const STANDARD_KATALOG_ABBRUCH = [
   leistung('Badewanne/Dusche demontieren', 'Stk.', 95),
   leistung('Heizkörper demontieren', 'Stk.', 55),
   leistung('Tür/Zarge ausbauen und entsorgen', 'Stk.', 45),
+  leistung('Fenster ausbauen und entsorgen', 'Stk.', 45),
+  leistung('Treppe demontieren', 'Stk.', 180),
+  leistung('Betonbauteil kernbohren (je Bohrung)', 'Stk.', 65),
+  leistung('Wanddurchbruch tragende Wand (inkl. Unterfangung/Träger)', 'Stk.', 850),
+  leistung('Dachstuhl/Dacheindeckung rückbauen', 'm²', 35),
 
   // --- Leistungen: Entsorgung & Baustelle ---
   leistung('Bauschutt-Entsorgung (je Tonne, inkl. Deponiegebühr)', 't', 95),
   leistung('Schuttcontainer 5m³ stellen, abholen und entsorgen (pauschal)', 'pauschal', 380),
+  leistung('Schuttcontainer 10m³ stellen, abholen und entsorgen (pauschal)', 'pauschal', 620),
   leistung('Staubschutzwand/Folienabtrennung einrichten', 'm²', 12),
   leistung('Entkernung Wohnung komplett (Richtwert je m² Wohnfläche)', 'm²', 45),
+  leistung('Schadstoffuntersuchung/Bestandsaufnahme vor Abbruch', 'pauschal', 350),
+  leistung('Gebäudeabriss komplett (Richtwert je m³ umbauter Raum)', 'm³', 85),
   leistung('Bauendreinigung nach Abbruch', 'm²', 6),
 
   // --- Materialien ---
   artikel('Bauschutt-Container/Big Bag (1m³) mieten', 'Stk.', 22),
+  artikel('Bauschutt-Container 10m³ mieten', 'Stk.', 45),
   artikel('Absperr-/Schutzfolie (Rolle 4x5m)', 'Stk.', 8),
   artikel('Malerkrepp/Klebeband für Abtrennung (Rolle)', 'Stk.', 4),
   artikel('Bauabsperrband (Rolle 500m)', 'Stk.', 12),

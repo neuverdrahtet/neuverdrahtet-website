@@ -41,6 +41,9 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
   leistung('Fußbodenheizung Bad verlegen', 'm²', 65),
   leistung('Bad-Lüfter/Lüftungsanlage einbauen', 'Stk.', 150),
   leistung('Spiegelschrank/Spiegel montieren', 'Stk.', 90),
+  leistung('Dusch-WC/Bidet montieren', 'Stk.', 380),
+  leistung('Waschtischunterschrank mit Auszügen montieren', 'Stk.', 280),
+  leistung('Barrierefreier Umbau (Haltegriffe, Stützklappgriffe, bodengleiche Dusche)', 'pauschal', 1200),
 
   // --- Leistungen: Komplettpaket ---
   leistung('Komplettbad-Sanierung Pauschalpaket (bis 8m², mittlere Preisklasse, schlüsselfertig)', 'pauschal', 14500),
@@ -61,4 +64,6 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
   artikel('Spiegelschrank mit Beleuchtung', 'Stk.', 220),
   artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
   artikel('Bad-Lüfter mit Nachlauf', 'Stk.', 65),
+  artikel('Dusch-WC (Basismodell)', 'Stk.', 650),
+  artikel('Haltegriff/Stützklappgriff barrierefrei', 'Stk.', 45),
 ];

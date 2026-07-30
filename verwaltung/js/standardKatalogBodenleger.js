@@ -32,6 +32,9 @@ export const STANDARD_KATALOG_BODENLEGER = [
   // --- Leistungen: Bodenbeläge verlegen ---
   leistung('Parkett verlegen (schwimmend)', 'm²', 18),
   leistung('Parkett verlegen (vollflächig verklebt)', 'm²', 26),
+  leistung('Parkett verlegen im Fischgrätmuster (Aufpreis je m²)', 'm²', 15),
+  leistung('Massivparkett schleifen und versiegeln', 'm²', 22),
+  leistung('Korkboden verlegen', 'm²', 16),
   leistung('Laminat verlegen', 'm²', 12),
   leistung('Vinyl-/Designboden verlegen (Klick)', 'm²', 14),
   leistung('Vinyl-/Designboden verlegen (vollflächig verklebt)', 'm²', 18),
@@ -55,6 +58,9 @@ export const STANDARD_KATALOG_BODENLEGER = [
   artikel('Laminat Klasse 32', 'm²', 11),
   artikel('Vinyl-/Designboden (Klick)', 'm²', 18),
   artikel('Vinyl-/Designboden (Bahnenware, verklebt)', 'm²', 20),
+  artikel('SPC-Vinylboden (rigide)', 'm²', 24),
+  artikel('Massivparkett Eiche', 'm²', 55),
+  artikel('Korkboden', 'm²', 20),
   artikel('Teppichboden Objektqualität', 'm²', 11),
   artikel('PVC-Bahnenware', 'm²', 14),
 
