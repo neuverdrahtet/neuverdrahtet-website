@@ -258,7 +258,147 @@ export function buildDocPdfBlob(opts) {
   return doc.output('blob');
 }
 
-export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, raeume, fotos, unterschriftKunde, unterschriftMitarbeiter }) {
+/** Zeichnet ein zweispaltiges Label/Wert-Raster (z.B. Geräte-Steckbrief, Messwerte). */
+function drawKopfdatenBlock(doc, block, marginX, rightX, y, baseFont, maxY) {
+  const felder = (block.felder || []).filter((f) => f.wert);
+  if (!felder.length) return y;
+  if (y > maxY - 16) { doc.addPage(); y = 20; }
+  if (block.titel) {
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(block.titel, marginX, y);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+  }
+  const colW = (rightX - marginX - 10) / 2;
+  let col = 0;
+  felder.forEach((f) => {
+    if (col === 0 && y > maxY - 10) { doc.addPage(); y = 20; }
+    const x = marginX + col * (colW + 10);
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text(f.label || '', x, y);
+    doc.setFontSize(baseFont);
+    doc.setTextColor(20);
+    doc.text(String(f.wert ?? ''), x, y + 4.5);
+    if (col === 1) y += 10;
+    col = 1 - col;
+  });
+  if (col === 1) y += 10;
+  return y + 4;
+}
+
+/** Zeichnet eine Liste von Ja/Nein-Fragen mit farblich hervorgehobener Antwort. */
+function drawJaNeinBlock(doc, block, marginX, rightX, y, baseFont, maxY) {
+  const antworten = (block.antworten || []).filter((a) => a.frage);
+  if (!antworten.length) return y;
+  if (y > maxY - 12) { doc.addPage(); y = 20; }
+  if (block.titel) {
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(block.titel, marginX, y);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+  }
+  doc.setFontSize(baseFont);
+  antworten.forEach((a) => {
+    if (y > maxY) { doc.addPage(); y = 20; }
+    doc.setTextColor(20);
+    const label = `${a.frage}: `;
+    doc.text(label, marginX, y);
+    const labelW = doc.getTextWidth(label);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(...(a.antwort === 'ja' ? [31, 138, 76] : [192, 57, 43]));
+    doc.text(a.antwort === 'ja' ? 'Ja' : 'Nein', marginX + labelW, y);
+    doc.setFont(undefined, 'normal');
+    y += 5.5;
+  });
+  return y + 3;
+}
+
+/** Zeichnet eine Liste abhakbarer Punkte (Sichtprüfung, Ergebnis, ...) als [X]/[ ]. */
+function drawChecklisteBlock(doc, block, marginX, rightX, y, baseFont, maxY) {
+  const punkte = (block.punkte || []).filter((p) => p.punkt);
+  if (!punkte.length) return y;
+  if (y > maxY - 12) { doc.addPage(); y = 20; }
+  if (block.titel) {
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(block.titel, marginX, y);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+  }
+  doc.setFontSize(baseFont);
+  doc.setTextColor(20);
+  punkte.forEach((p) => {
+    if (y > maxY) { doc.addPage(); y = 20; }
+    doc.text(`${p.checked ? '[X]' : '[ ]'} ${p.punkt}`, marginX, y);
+    y += 5.5;
+  });
+  return y + 3;
+}
+
+/** Zeichnet eine frei konfigurierte Tabelle mit optionaler Produkt-Berechnung (z.B. RPZ = B*A*E). */
+function drawTabelleBlock(doc, block, marginX, rightX, y, baseFont, accentRgb, maxY) {
+  const spalten = block.spalten || [];
+  const rows = (block.rows || []).filter((r) => spalten.some((s) => r[s]));
+  if (!spalten.length || !rows.length) return y;
+  if (y > maxY - 20) { doc.addPage(); y = 20; }
+  if (block.titel) {
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(block.titel, marginX, y);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+  }
+  const head = block.ergebnisSpalte ? [...spalten, block.ergebnisSpalte] : [...spalten];
+  const body = rows.map((row) => {
+    const cells = spalten.map((s) => (row[s] ?? '').toString());
+    if (block.ergebnisSpalte) {
+      const zahlen = spalten.slice(1).map((s) => Number(row[s]) || 0);
+      const produkt = zahlen.length ? zahlen.reduce((a, b) => a * b, 1) : '';
+      cells.push(produkt === '' ? '' : String(produkt));
+    }
+    return cells;
+  });
+  doc.autoTable({
+    startY: y,
+    margin: { left: marginX, right: marginX, bottom: 24 },
+    head: [head],
+    body,
+    styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+    headStyles: { fillColor: accentRgb },
+  });
+  return doc.lastAutoTable.finalY + 8;
+}
+
+/** Zeichnet ein 2-spaltiges Fotoraster ab der aktuellen Y-Position, seitenumbruchsicher. */
+function drawFotoGrid(doc, fotos, marginX, rightX, y, maxY) {
+  const fotoW = (rightX - marginX - 6) / 2;
+  const fotoH = 55;
+  fotos.forEach((dataUrl, i) => {
+    const col = i % 2;
+    if (col === 0 && y + fotoH > maxY) { doc.addPage(); y = 20; }
+    const x = marginX + col * (fotoW + 6);
+    try {
+      const fmtFoto = logoFormat(dataUrl) || 'JPEG';
+      doc.addImage(dataUrl, fmtFoto, x, y, fotoW, fotoH, undefined, 'FAST');
+    } catch (err) { /* ignore broken photo data */ }
+    if (col === 1) y += fotoH + 6;
+  });
+  if (fotos.length % 2 === 1) y += fotoH + 6;
+  return y + 2;
+}
+
+export function buildBerichtPdfBlob({
+  settings, titel, untertitel, text, datum, raeume, fotos,
+  unterschriftKunde, unterschriftMitarbeiter, unterschriften,
+  kopfdaten, jaNeinAntworten, checklisteAntworten, tabellenAbschnitte,
+}) {
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }
@@ -298,11 +438,15 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
     y += 3;
   }
 
+  const maxY = 270;
+  (kopfdaten || []).forEach((block) => { y = drawKopfdatenBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
+  (jaNeinAntworten || []).forEach((block) => { y = drawJaNeinBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
+  (tabellenAbschnitte || []).forEach((block) => { y = drawTabelleBlock(doc, block, marginX, rightX, y, baseFont, accentRgb, maxY); });
+
   doc.setFontSize(baseFont);
   doc.setTextColor(20);
   const bodyLines = doc.splitTextToSize(text || '', rightX - marginX);
   const lineHeight = 5;
-  const maxY = 270;
   bodyLines.forEach((line) => {
     if (y > maxY) {
       doc.addPage();
@@ -311,21 +455,43 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
     doc.text(line, marginX, y);
     y += lineHeight;
   });
+  y += 3;
 
-  const raeumeGefuellt = (raeume || []).filter((r) => r.raum || r.beschreibung);
+  (checklisteAntworten || []).forEach((block) => { y = drawChecklisteBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
+
+  const raeumeGefuellt = (raeume || []).filter((r) => r.raum || r.beschreibung || r.laenge || r.breite);
   if (raeumeGefuellt.length) {
     if (y > maxY - 20) { doc.addPage(); y = 20; }
     y += 4;
+    const mitMassen = raeumeGefuellt.some((r) => r.laenge || r.breite);
     doc.autoTable({
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
-      head: [['Raum / Bereich', 'Beschreibung / Zustand']],
-      body: raeumeGefuellt.map((r) => [r.raum || '', r.beschreibung || '']),
+      head: mitMassen
+        ? [['Raum / Bereich', 'Länge (m)', 'Breite (m)', 'm²', 'Beschreibung / Zustand']]
+        : [['Raum / Bereich', 'Beschreibung / Zustand']],
+      body: raeumeGefuellt.map((r) => {
+        if (!mitMassen) return [r.raum || '', r.beschreibung || ''];
+        const m2 = (Number(r.laenge) || 0) * (Number(r.breite) || 0);
+        return [r.raum || '', r.laenge ? String(r.laenge) : '', r.breite ? String(r.breite) : '', m2 ? m2.toFixed(2) : '', r.beschreibung || ''];
+      }),
       styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
       headStyles: { fillColor: accentRgb },
-      columnStyles: { 0: { cellWidth: 50 } },
+      columnStyles: mitMassen ? {} : { 0: { cellWidth: 50 } },
     });
     y = doc.lastAutoTable.finalY + 8;
+
+    const raeumeMitFotos = raeumeGefuellt.filter((r) => (r.fotos || []).filter(Boolean).length);
+    raeumeMitFotos.forEach((r) => {
+      if (y > maxY - 20) { doc.addPage(); y = 20; }
+      doc.setFontSize(9.5);
+      doc.setFont(undefined, 'bold');
+      doc.setTextColor(20);
+      doc.text(`Fotos – ${r.raum || 'Raum'}`, marginX, y);
+      doc.setFont(undefined, 'normal');
+      y += 5;
+      y = drawFotoGrid(doc, r.fotos.filter(Boolean), marginX, rightX, y, maxY);
+    });
   }
 
   const fotosGefuellt = (fotos || []).filter(Boolean);
@@ -337,45 +503,40 @@ export function buildBerichtPdfBlob({ settings, titel, untertitel, text, datum, 
     doc.text('Fotos', marginX, y);
     doc.setFont(undefined, 'normal');
     y += 6;
-    const fotoW = (rightX - marginX - 6) / 2;
-    const fotoH = 55;
-    fotosGefuellt.forEach((dataUrl, i) => {
-      const col = i % 2;
-      if (col === 0 && y + fotoH > maxY) { doc.addPage(); y = 20; }
-      const x = marginX + col * (fotoW + 6);
-      try {
-        const fmtFoto = logoFormat(dataUrl) || 'JPEG';
-        doc.addImage(dataUrl, fmtFoto, x, y, fotoW, fotoH, undefined, 'FAST');
-      } catch (err) { /* ignore broken photo data */ }
-      if (col === 1) y += fotoH + 6;
-    });
-    if (fotosGefuellt.length % 2 === 1) y += fotoH + 6;
-    y += 2;
+    y = drawFotoGrid(doc, fotosGefuellt, marginX, rightX, y, maxY);
   }
 
-  if (unterschriftKunde || unterschriftMitarbeiter) {
-    const sigW = 70, sigH = 26;
-    const col1X = marginX, col2X = marginX + sigW + 16;
+  const unterschriftenListe = (unterschriften && unterschriften.length)
+    ? unterschriften.filter((u) => u.dataUrl)
+    : [
+        unterschriftKunde ? { label: 'Unterschrift Kunde', dataUrl: unterschriftKunde } : null,
+        unterschriftMitarbeiter ? { label: 'Unterschrift Mitarbeiter', dataUrl: unterschriftMitarbeiter } : null,
+      ].filter(Boolean);
+  if (unterschriftenListe.length) {
+    const sigW = 70, sigH = 26, gap = 16;
     if (y + sigH + 12 > maxY) {
       doc.addPage();
       y = 20;
     }
     y += 8;
-    if (unterschriftKunde) {
-      try { doc.addImage(unterschriftKunde, 'PNG', col1X, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
-    }
-    if (unterschriftMitarbeiter) {
-      try { doc.addImage(unterschriftMitarbeiter, 'PNG', col2X, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
-    }
+    const sigRow = unterschriftenListe.slice(0, 2);
+    sigRow.forEach((u, i) => {
+      const x = marginX + i * (sigW + gap);
+      try { doc.addImage(u.dataUrl, 'PNG', x, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+    });
     y += sigH + 2;
     doc.setDrawColor(160);
-    doc.line(col1X, y, col1X + sigW, y);
-    doc.line(col2X, y, col2X + sigW, y);
+    sigRow.forEach((u, i) => {
+      const x = marginX + i * (sigW + gap);
+      doc.line(x, y, x + sigW, y);
+    });
     y += 4;
     doc.setFontSize(8);
     doc.setTextColor(110);
-    doc.text('Unterschrift Kunde', col1X, y);
-    doc.text('Unterschrift Mitarbeiter', col2X, y);
+    sigRow.forEach((u, i) => {
+      const x = marginX + i * (sigW + gap);
+      doc.text(u.label, x, y);
+    });
   }
 
   addFooter(doc, settings, marginX, rightX);

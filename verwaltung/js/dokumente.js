@@ -21,16 +21,29 @@ function blobToDataUrl(blob) {
 }
 
 /** Repeatable Raum/Zeile-Editor für Berichte (z.B. je Raum eine Zustandsnotiz). */
-function mountRaeumeEditor(host) {
+function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } = {}) {
   let rows = [];
+  function updateM2(row, i) {
+    if (!mitMassen) return;
+    const m2El = host.querySelector(`.rz-m2[data-i="${i}"]`);
+    const laenge = Number(row.laenge) || 0;
+    const breite = Number(row.breite) || 0;
+    if (m2El) m2El.textContent = laenge && breite ? (laenge * breite).toFixed(2) + ' m²' : '';
+  }
   function render() {
     host.innerHTML = `
       <div class="rz-list">
         ${rows.map((r, i) => `
-          <div class="flex-row" data-i="${i}" style="align-items:center;margin-bottom:6px">
+          <div class="flex-row flex-wrap" data-i="${i}" style="align-items:center;margin-bottom:6px;gap:6px">
             <input type="text" class="rz-raum" placeholder="Raum/Bereich" value="${escapeHtml(r.raum || '')}" style="flex:1">
+            ${mitMassen ? `
+              <input type="number" step="0.01" min="0" class="rz-laenge" placeholder="Länge (m)" value="${escapeHtml(r.laenge || '')}" style="width:90px">
+              <input type="number" step="0.01" min="0" class="rz-breite" placeholder="Breite (m)" value="${escapeHtml(r.breite || '')}" style="width:90px">
+              <span class="text-mute rz-m2" data-i="${i}" style="width:70px">${(Number(r.laenge) && Number(r.breite)) ? (Number(r.laenge) * Number(r.breite)).toFixed(2) + ' m²' : ''}</span>
+            ` : ''}
             <input type="text" class="rz-beschreibung" placeholder="Beschreibung/Zustand" value="${escapeHtml(r.beschreibung || '')}" style="flex:2">
             <button type="button" class="btn btn-sm btn-ghost rz-del" title="Entfernen">✕</button>
+            ${mitFotoProZeile ? `<div class="col-span-2" style="width:100%" data-foto-i="${i}"></div>` : ''}
           </div>
         `).join('') || '<p class="text-mute" style="font-size:12px">Noch keine Räume/Zeilen.</p>'}
       </div>
@@ -40,12 +53,25 @@ function mountRaeumeEditor(host) {
       const i = Number(row.dataset.i);
       row.querySelector('.rz-raum').addEventListener('input', (e) => { rows[i].raum = e.target.value; });
       row.querySelector('.rz-beschreibung').addEventListener('input', (e) => { rows[i].beschreibung = e.target.value; });
+      row.querySelector('.rz-laenge')?.addEventListener('input', (e) => { rows[i].laenge = e.target.value; updateM2(rows[i], i); });
+      row.querySelector('.rz-breite')?.addEventListener('input', (e) => { rows[i].breite = e.target.value; updateM2(rows[i], i); });
       row.querySelector('.rz-del').addEventListener('click', () => { rows.splice(i, 1); render(); });
     });
+    if (mitFotoProZeile) {
+      host.querySelectorAll('[data-foto-i]').forEach((el) => {
+        const i = Number(el.dataset.fotoI);
+        const editor = mountFotoEditor(el);
+        rows[i]._fotoEditor = editor;
+      });
+    }
     host.querySelector('.rz-add').addEventListener('click', () => { rows.push({ raum: '', beschreibung: '' }); render(); });
   }
   render();
-  return { getRaeume: () => rows.filter((r) => r.raum || r.beschreibung) };
+  return {
+    getRaeume: () => rows
+      .filter((r) => r.raum || r.beschreibung || r.laenge || r.breite)
+      .map((r) => ({ raum: r.raum, beschreibung: r.beschreibung, laenge: r.laenge, breite: r.breite, fotos: r._fotoEditor ? r._fotoEditor.getFotos() : [] })),
+  };
 }
 
 /** Foto-Aufnahme/-Upload für Berichte; komprimiert und embedded als DataURL. */
@@ -89,6 +115,126 @@ function mountFotoEditor(host) {
   }
   render();
   return { getFotos: () => fotos };
+}
+
+/** Zweispaltiges Label/Eingabefeld-Raster (z.B. Geräte-Steckbrief, Messwerte). */
+function mountKopfdatenEditor(host, { titel, felder }) {
+  host.innerHTML = `
+    ${titel ? `<p style="font-weight:600;margin:0 0 6px">${escapeHtml(titel)}</p>` : ''}
+    <div class="form-grid">
+      ${felder.map((f, i) => `
+        <div class="field"><label>${escapeHtml(f.label)}</label>
+          <input type="${f.typ === 'zahl' ? 'number' : f.typ === 'datum' ? 'date' : 'text'}" class="kd-input" data-i="${i}" ${f.typ === 'zahl' ? 'step="any"' : ''}>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  return {
+    getBlock: () => ({
+      titel,
+      felder: felder
+        .map((f, i) => ({ label: f.label, wert: host.querySelector(`.kd-input[data-i="${i}"]`).value.trim() }))
+        .filter((f) => f.wert),
+    }),
+  };
+}
+
+/** Liste von Ja/Nein-Fragen mit Ampel-Toggle (Standard: Nein). */
+function mountJaNeinEditor(host, { titel, fragen }) {
+  host.innerHTML = `
+    ${titel ? `<p style="font-weight:600;margin:0 0 6px">${escapeHtml(titel)}</p>` : ''}
+    <div class="rz-list">
+      ${fragen.map((f, i) => `
+        <div class="flex-row" style="align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px" data-i="${i}">
+          <span style="flex:1">${escapeHtml(f)}</span>
+          <div class="toggle-group jn-toggle" data-i="${i}">
+            <button type="button" data-val="ja">Ja</button>
+            <button type="button" data-val="nein" class="active">Nein</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  const state = fragen.map(() => 'nein');
+  host.querySelectorAll('.jn-toggle').forEach((grp) => {
+    const i = Number(grp.dataset.i);
+    grp.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state[i] = btn.dataset.val;
+        grp.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === btn));
+      });
+    });
+  });
+  return { getBlock: () => ({ titel, antworten: fragen.map((frage, i) => ({ frage, antwort: state[i] })) }) };
+}
+
+/** Liste abhakbarer Punkte (Sichtprüfung, Ergebnis, ...). */
+function mountChecklisteEditor(host, { titel, punkte }) {
+  host.innerHTML = `
+    ${titel ? `<p style="font-weight:600;margin:0 0 6px">${escapeHtml(titel)}</p>` : ''}
+    <div class="tag-list">
+      ${punkte.map((p, i) => `
+        <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+          <input type="checkbox" class="cl-check" data-i="${i}"> ${escapeHtml(p)}
+        </label>
+      `).join('')}
+    </div>
+  `;
+  return {
+    getBlock: () => ({
+      titel,
+      punkte: punkte.map((punkt, i) => ({ punkt, checked: host.querySelector(`.cl-check[data-i="${i}"]`).checked })),
+    }),
+  };
+}
+
+/** Frei konfigurierte Tabelle mit wiederholbaren Zeilen und optionaler Produkt-Berechnung (z.B. RPZ = B*A*E). */
+function mountTabelleEditor(host, { titel, spalten, ergebnisSpalte }) {
+  let rows = [{}];
+  function produkt(row) {
+    if (!ergebnisSpalte) return '';
+    const zahlen = spalten.slice(1).map((s) => Number(row[s]) || 0);
+    return zahlen.length ? zahlen.reduce((a, b) => a * b, 1) : '';
+  }
+  function render() {
+    host.innerHTML = `
+      ${titel ? `<p style="font-weight:600;margin:0 0 6px">${escapeHtml(titel)}</p>` : ''}
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead><tr>${spalten.map((s) => `<th>${escapeHtml(s)}</th>`).join('')}${ergebnisSpalte ? `<th>${escapeHtml(ergebnisSpalte)}</th>` : ''}<th></th></tr></thead>
+          <tbody>
+            ${rows.map((r, ri) => `
+              <tr data-ri="${ri}">
+                ${spalten.map((s, si) => `<td><input type="${si === 0 ? 'text' : 'number'}" ${si > 0 ? 'step="any"' : ''} class="tb-cell" data-ri="${ri}" data-s="${escapeHtml(s)}" value="${escapeHtml(r[s] ?? '')}" style="width:${si === 0 ? '140px' : '70px'}"></td>`).join('')}
+                ${ergebnisSpalte ? `<td class="tb-ergebnis" data-ri="${ri}">${produkt(r)}</td>` : ''}
+                <td><button type="button" class="btn btn-sm btn-ghost tb-del" data-ri="${ri}">✕</button></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-sm tb-add" style="margin-top:6px">+ Zeile hinzufügen</button>
+    `;
+    host.querySelectorAll('.tb-cell').forEach((input) => {
+      input.addEventListener('input', (e) => {
+        const ri = Number(e.target.dataset.ri);
+        rows[ri][e.target.dataset.s] = e.target.value;
+        const erg = host.querySelector(`.tb-ergebnis[data-ri="${ri}"]`);
+        if (erg) erg.textContent = produkt(rows[ri]);
+      });
+    });
+    host.querySelectorAll('.tb-del').forEach((btn) => {
+      btn.addEventListener('click', () => { rows.splice(Number(btn.dataset.ri), 1); render(); });
+    });
+    host.querySelector('.tb-add').addEventListener('click', () => { rows.push({}); render(); });
+  }
+  render();
+  return {
+    getBlock: () => ({
+      titel, spalten, ergebnisSpalte,
+      rows: rows.filter((r) => spalten.some((s) => r[s])),
+    }),
+  };
 }
 
 /**
@@ -189,6 +335,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const settings = berichtContext.settings || {};
     const kunde = berichtContext.kunde || null;
     const projekt = berichtContext.projekt || '';
+    const mitarbeiterName = berichtContext.mitarbeiter || '';
     const arbeitenItems = katalog.filter((k) => k.typ === 'leistung');
     const materialItems = katalog.filter((k) => k.typ === 'artikel');
     const zeitPresets = ['0.25', '0.5', '0.75', '1', '1.5', '2', '2.5', '3', '4', '5', '6', '7', '8'];
@@ -214,18 +361,17 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <div id="ber-arbeiten-picker"></div>
           <div id="ber-material-picker"></div>
         </div>
+        <div id="ber-abschnitte-host"></div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
+        <div id="ber-checkliste-host"></div>
         <div class="divider"></div>
-        <div class="field col-span-2"><label>Räume / Zeilen (optional, erscheinen als Tabelle im PDF)</label></div>
+        <div class="field col-span-2"><label id="ber-raeume-label">Räume / Zeilen (optional, erscheinen als Tabelle im PDF)</label></div>
         <div id="ber-raeume-host"></div>
         <div class="divider"></div>
         <div class="field col-span-2"><label>Fotos (optional)</label></div>
         <div id="ber-fotos-host"></div>
         <div class="divider"></div>
-        <div class="form-grid">
-          <div id="ber-sig-kunde-host"></div>
-          <div id="ber-sig-mitarbeiter-host"></div>
-        </div>
+        <div class="form-grid" id="ber-sig-host"></div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -261,16 +407,69 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       items: materialItems, label: 'Material – Auswahl (zusätzlich frei im Text ergänzbar)',
       placeholder: 'Material suchen ...', onInsert: appendToText,
     });
-    const raeumeEditor = mountRaeumeEditor(body.querySelector('#ber-raeume-host'));
+    const raeumeHost = body.querySelector('#ber-raeume-host');
+    const raeumeLabel = body.querySelector('#ber-raeume-label');
+    let raeumeEditor = mountRaeumeEditor(raeumeHost);
     const fotoEditor = mountFotoEditor(body.querySelector('#ber-fotos-host'));
-    const sigKunde = mountSignaturePad(body.querySelector('#ber-sig-kunde-host'), { label: 'Unterschrift Kunde' });
-    const sigMitarbeiter = mountSignaturePad(body.querySelector('#ber-sig-mitarbeiter-host'), { label: 'Unterschrift Mitarbeiter' });
+    const sigHost = body.querySelector('#ber-sig-host');
+    let sigPads = [];
+    function mountSigPads(labels) {
+      sigHost.innerHTML = '';
+      sigPads = labels.map((label) => {
+        const div = document.createElement('div');
+        sigHost.appendChild(div);
+        return { label, pad: mountSignaturePad(div, { label }) };
+      });
+    }
+    mountSigPads(['Unterschrift Kunde', 'Unterschrift Mitarbeiter']);
+
+    const abschnitteHost = body.querySelector('#ber-abschnitte-host');
+    const checklisteHost = body.querySelector('#ber-checkliste-host');
+    let kopfdatenEditoren = [];
+    let jaNeinEditoren = [];
+    let checklisteEditoren = [];
+    let tabellenEditoren = [];
+
+    function abschnittBox(host) {
+      const div = document.createElement('div');
+      div.style.marginBottom = '14px';
+      host.appendChild(div);
+      return div;
+    }
+
+    function renderAbschnitte(v) {
+      abschnitteHost.innerHTML = '';
+      checklisteHost.innerHTML = '';
+      kopfdatenEditoren = [];
+      jaNeinEditoren = [];
+      checklisteEditoren = [];
+      tabellenEditoren = [];
+      const abschnitte = v?.abschnitte || [];
+      let raeumeOptions = {};
+      let sigLabels = ['Unterschrift Kunde', 'Unterschrift Mitarbeiter'];
+      abschnitte.forEach((a) => {
+        if (a.typ === 'kopfdaten') kopfdatenEditoren.push(mountKopfdatenEditor(abschnittBox(abschnitteHost), a));
+        else if (a.typ === 'janein') jaNeinEditoren.push(mountJaNeinEditor(abschnittBox(abschnitteHost), a));
+        else if (a.typ === 'tabelle') tabellenEditoren.push(mountTabelleEditor(abschnittBox(abschnitteHost), a));
+        else if (a.typ === 'checkliste') checklisteEditoren.push(mountChecklisteEditor(abschnittBox(checklisteHost), a));
+        else if (a.typ === 'raeume') {
+          raeumeOptions = { mitMassen: !!a.mitMassen, mitFotoProZeile: !!a.mitFotoProZeile };
+          if (a.titel) raeumeLabel.textContent = a.titel;
+        } else if (a.typ === 'unterschriften' && Array.isArray(a.labels) && a.labels.length) {
+          sigLabels = a.labels;
+        }
+      });
+      if (!abschnitte.some((a) => a.typ === 'raeume')) raeumeLabel.textContent = 'Räume / Zeilen (optional, erscheinen als Tabelle im PDF)';
+      raeumeEditor = mountRaeumeEditor(raeumeHost, raeumeOptions);
+      mountSigPads(sigLabels);
+    }
 
     function substitute(text) {
       return (text || '')
         .replaceAll('{{firma}}', settings.firmenname || '')
         .replaceAll('{{kunde}}', kunde?.firma || '')
         .replaceAll('{{projekt}}', projekt)
+        .replaceAll('{{mitarbeiter}}', mitarbeiterName)
         .replaceAll('{{datum}}', formatDate(datumInput.value))
         .replaceAll('{{uhrzeit}}', uhrzeitInput.value || '');
     }
@@ -278,6 +477,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       const v = vorlagen.find((x) => x.id === vorlageSelect.value);
       titelInput.value = v?.name || 'Bericht';
       textArea.value = v ? substitute(v.textVorlage || '') : '';
+      renderAbschnitte(v);
     }
     vorlageSelect.addEventListener('change', fillText);
     fillText();
@@ -287,7 +487,11 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       return new Date(`${datumInput.value || todayISO()}T${uhrzeitInput.value || '00:00'}:00`).toISOString();
     }
     function currentUntertitel() {
-      return [kunde?.firma ? `Kunde: ${kunde.firma}` : '', projekt ? `Projekt: ${projekt}` : ''].filter(Boolean).join(' · ');
+      return [
+        kunde?.firma ? `Kunde: ${kunde.firma}` : '',
+        projekt ? `Projekt: ${projekt}` : '',
+        mitarbeiterName ? `Mitarbeiter: ${mitarbeiterName}` : '',
+      ].filter(Boolean).join(' · ');
     }
     function currentFilename() {
       return `${(titelInput.value || 'Bericht').replace(/[^a-z0-9äöüß _-]/gi, '')}-${datumInput.value || todayISO()}.pdf`;
@@ -297,7 +501,11 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         settings, titel: titelInput.value || 'Bericht',
         untertitel: currentUntertitel(), text: textArea.value, datum: currentDatumIso(),
         raeume: raeumeEditor.getRaeume(), fotos: fotoEditor.getFotos(),
-        unterschriftKunde: sigKunde.getDataUrl(), unterschriftMitarbeiter: sigMitarbeiter.getDataUrl(),
+        unterschriften: sigPads.map((s) => ({ label: s.label, dataUrl: s.pad.getDataUrl() })).filter((s) => s.dataUrl),
+        kopfdaten: kopfdatenEditoren.map((e) => e.getBlock()).filter((b) => b.felder.length),
+        jaNeinAntworten: jaNeinEditoren.map((e) => e.getBlock()),
+        checklisteAntworten: checklisteEditoren.map((e) => e.getBlock()),
+        tabellenAbschnitte: tabellenEditoren.map((e) => e.getBlock()).filter((b) => b.rows.length),
       });
     }
 

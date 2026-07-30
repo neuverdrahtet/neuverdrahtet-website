@@ -4,6 +4,116 @@ import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { createBulkSelect } from '../bulkselect.js';
 
+const ABSCHNITT_LABEL = {
+  kopfdaten: 'Kopfdaten (Steckbrief/Messwerte)',
+  janein: 'Ja/Nein-Fragen',
+  checkliste: 'Checkliste',
+  tabelle: 'Tabelle (mit Berechnung)',
+  raeume: 'Räume/Zeilen anpassen',
+  unterschriften: 'Unterschriften anpassen',
+};
+
+function configFieldsFor(a) {
+  if (a.typ === 'kopfdaten') {
+    return `
+      <div class="field"><label>Überschrift</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <div class="field"><label>Felder (ein Label pro Zeile)</label><textarea class="absch-input" data-field="felder" rows="4">${escapeHtml((a.felder || []).map((f) => f.label).join('\n'))}</textarea></div>
+    `;
+  }
+  if (a.typ === 'janein') {
+    return `
+      <div class="field"><label>Überschrift</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <div class="field"><label>Fragen (eine pro Zeile)</label><textarea class="absch-input" data-field="fragen" rows="4">${escapeHtml((a.fragen || []).join('\n'))}</textarea></div>
+    `;
+  }
+  if (a.typ === 'checkliste') {
+    return `
+      <div class="field"><label>Überschrift</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <div class="field"><label>Punkte (einer pro Zeile)</label><textarea class="absch-input" data-field="punkte" rows="4">${escapeHtml((a.punkte || []).join('\n'))}</textarea></div>
+    `;
+  }
+  if (a.typ === 'tabelle') {
+    return `
+      <div class="field"><label>Überschrift</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <div class="field"><label>Spalten (kommagetrennt, erste = Bezeichnung, weitere = Zahlenwerte)</label><input type="text" class="absch-input" data-field="spalten" value="${escapeHtml((a.spalten || []).join(', '))}"></div>
+      <div class="field"><label>Ergebnis-Spalte (optional, Produkt der Zahlenwerte, z.B. RPZ)</label><input type="text" class="absch-input" data-field="ergebnisSpalte" value="${escapeHtml(a.ergebnisSpalte || '')}"></div>
+    `;
+  }
+  if (a.typ === 'raeume') {
+    return `
+      <div class="field"><label>Überschrift (überschreibt Standard-Label)</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <label class="field-checkbox"><input type="checkbox" class="absch-check" data-field="mitMassen" ${a.mitMassen ? 'checked' : ''}> Mit Länge/Breite/m²-Feldern</label>
+      <label class="field-checkbox"><input type="checkbox" class="absch-check" data-field="mitFotoProZeile" ${a.mitFotoProZeile ? 'checked' : ''}> Mit Foto je Zeile</label>
+    `;
+  }
+  if (a.typ === 'unterschriften') {
+    return `
+      <div class="field"><label>Unterschrift-Beschriftungen (eine pro Zeile, ersetzt Standard "Kunde"/"Mitarbeiter")</label><textarea class="absch-input" data-field="labels" rows="2">${escapeHtml((a.labels || []).join('\n'))}</textarea></div>
+    `;
+  }
+  return '';
+}
+
+const ABSCHNITT_DEFAULTS = {
+  kopfdaten: (typ) => ({ typ, titel: 'Kopfdaten', felder: [] }),
+  janein: (typ) => ({ typ, titel: 'Fragen', fragen: [] }),
+  checkliste: (typ) => ({ typ, titel: 'Checkliste', punkte: [] }),
+  tabelle: (typ) => ({ typ, titel: 'Tabelle', spalten: [], ergebnisSpalte: '' }),
+  raeume: (typ) => ({ typ, titel: '', mitMassen: false, mitFotoProZeile: false }),
+  unterschriften: (typ) => ({ typ, labels: [] }),
+};
+
+/** Baukasten für strukturierte Bericht-Abschnitte (Kopfdaten/Ja-Nein/Checkliste/Tabelle/Räume/Unterschriften). */
+function renderAbschnitteEditor(host, abschnitteState) {
+  host.innerHTML = `
+    <div id="absch-list" style="margin-bottom:10px"></div>
+    <div class="flex-row">
+      <select id="absch-add-typ">
+        ${Object.entries(ABSCHNITT_LABEL).map(([typ, label]) => `<option value="${typ}">${escapeHtml(label)}</option>`).join('')}
+      </select>
+      <button type="button" class="btn btn-sm" id="btn-absch-add">+ Abschnitt hinzufügen</button>
+    </div>
+  `;
+  function renderList() {
+    const listHost = host.querySelector('#absch-list');
+    listHost.innerHTML = abschnitteState.map((a, i) => `
+      <div class="card" style="margin-bottom:8px;padding:10px" data-i="${i}">
+        <div class="flex-row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
+          <strong>${escapeHtml(ABSCHNITT_LABEL[a.typ] || a.typ)}</strong>
+          <button type="button" class="btn btn-sm btn-danger absch-del" data-i="${i}">✕</button>
+        </div>
+        ${configFieldsFor(a)}
+      </div>
+    `).join('') || '<p class="text-mute" style="font-size:12px">Noch keine zusätzlichen Abschnitte – der freie Text unten reicht bei einfachen Vorlagen völlig aus.</p>';
+    listHost.querySelectorAll('[data-i]').forEach((card) => {
+      const i = Number(card.dataset.i);
+      card.querySelectorAll('.absch-input').forEach((input) => {
+        input.addEventListener('input', (e) => {
+          const field = e.target.dataset.field;
+          if (field === 'spalten') {
+            abschnitteState[i][field] = e.target.value.split(',').map((s) => s.trim()).filter(Boolean);
+          } else if (['felder', 'fragen', 'punkte', 'labels'].includes(field)) {
+            const lines = e.target.value.split('\n').map((s) => s.trim()).filter(Boolean);
+            abschnitteState[i][field] = field === 'felder' ? lines.map((l) => ({ label: l, typ: 'text' })) : lines;
+          } else {
+            abschnitteState[i][field] = e.target.value;
+          }
+        });
+      });
+      card.querySelectorAll('.absch-check').forEach((cb) => {
+        cb.addEventListener('change', (e) => { abschnitteState[i][e.target.dataset.field] = e.target.checked; });
+      });
+      card.querySelector('.absch-del').addEventListener('click', () => { abschnitteState.splice(i, 1); renderList(); });
+    });
+  }
+  renderList();
+  host.querySelector('#btn-absch-add').addEventListener('click', () => {
+    const typ = host.querySelector('#absch-add-typ').value;
+    abschnitteState.push(ABSCHNITT_DEFAULTS[typ](typ));
+    renderList();
+  });
+}
+
 export async function render(container) {
   let [vorlagen, katalog, settings] = await Promise.all([getAll('vorlagen'), getAll('katalog'), getSettings()]);
   vorlagen.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -60,17 +170,22 @@ export async function render(container) {
 
   function openForm(v) {
     const isEdit = !!v;
-    const data = v || { id: uid(), typ: 'positionen', name: '', positionen: [], textVorlage: '' };
+    const data = v || { id: uid(), typ: 'positionen', name: '', positionen: [], textVorlage: '', abschnitte: [] };
+    let abschnitteState = (data.abschnitte || []).map((a) => ({ ...a }));
 
     function bodyFor(typ) {
       if (typ === 'dokumentation') {
         return `
           <div class="divider"></div>
+          <h2 style="font-size:14px;margin:0 0 8px">Strukturierte Abschnitte (optional)</h2>
+          <p class="hint">Zusätzlich zum freien Text: Kopfdaten-Steckbrief, Ja/Nein-Fragen, Checklisten, Berechnungstabellen (z.B. Risikomatrix), angepasste Räume/Zeilen oder Unterschrift-Beschriftungen – erscheinen beim Ausfüllen als eigene Formularfelder und werden strukturiert ins PDF übernommen.</p>
+          <div id="absch-host"></div>
+          <div class="divider"></div>
           <div class="field">
             <label>Text-Vorlage</label>
             <textarea name="textVorlage" style="min-height:220px" placeholder="Platzhalter: {{firma}}, {{kunde}}, {{projekt}}, {{datum}}">${escapeHtml(data.textVorlage || '')}</textarea>
           </div>
-          <p class="hint">Diese Vorlage steht bei Projekt-Dokumenten unter "Bericht aus Vorlage erstellen" zur Auswahl.</p>
+          <p class="hint">Diese Vorlage steht bei Projekt-/Mitarbeiter-Dokumenten unter "Bericht aus Vorlage erstellen" zur Auswahl.</p>
         `;
       }
       return `<div class="divider"></div><div id="pos-host"></div>`;
@@ -107,11 +222,13 @@ export async function render(container) {
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
     }) : null;
+    if (data.typ === 'dokumentation') renderAbschnitteEditor(body.querySelector('#absch-host'), abschnitteState);
 
     body.querySelector('#f-typ').addEventListener('change', (e) => {
       body.querySelector('#typ-body').innerHTML = bodyFor(e.target.value);
       if (e.target.value === 'dokumentation') {
         editor = null;
+        renderAbschnitteEditor(body.querySelector('#absch-host'), abschnitteState);
       } else {
         editor = createPositionsEditor({
           host: body.querySelector('#pos-host'),
@@ -142,6 +259,7 @@ export async function render(container) {
         typ,
         positionen: typ === 'dokumentation' ? [] : editor.getPositionen(),
         textVorlage: typ === 'dokumentation' ? (fd.get('textVorlage') || '').toString() : '',
+        abschnitte: typ === 'dokumentation' ? abschnitteState : [],
       };
       if (!updated.name) return;
       await put('vorlagen', updated);
