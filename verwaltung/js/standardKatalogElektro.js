@@ -63,6 +63,31 @@ export const STANDARD_KATALOG_ELEKTRO = [
   leistung('UVV-Prüfung', 'pauschal', 150),
   leistung('Blitzschutzprüfung', 'pauschal', 180),
 
+  // --- Leistungen: Blitzschutz & Erdung ---
+  leistung('Blitzschutz-Fangeinrichtung montieren (je m Dachfirst)', 'm', 35),
+  leistung('Blitzschutz-Ableitung montieren (je Fallrohr)', 'Stk.', 180),
+  leistung('Blitzschutzerdung/Fundamenterder anschließen', 'pauschal', 450),
+  leistung('Innerer Blitzschutz komplett einbauen (Typ 1+2+3, Kombi-Ableiter)', 'pauschal', 380),
+  leistung('Potentialausgleichsschiene montieren und anschließen', 'Stk.', 85),
+  leistung('Potentialausgleich herstellen (je Anschluss, Rohrleitung/Metallteil)', 'Stk.', 25),
+
+  // --- Leistungen: Sicherheitsbeleuchtung & Rettungswege ---
+  leistung('Sicherheitsleuchte/Notleuchte montieren und anschließen', 'Stk.', 65),
+  leistung('Rettungswegkennzeichnung (Piktogrammleuchte) montieren', 'Stk.', 55),
+  leistung('Zentralbatterieanlage-Stromkreis einbinden', 'Stk.', 120),
+  leistung('Funktionstest/Wartung Sicherheitsbeleuchtung (jährlich)', 'pauschal', 140),
+
+  // --- Leistungen: Gebäudeautomation (KNX/Smart Home) ---
+  leistung('KNX-Busleitung verlegen', 'm', 3.5),
+  leistung('KNX-Aktor/Sensor einbauen und programmieren', 'Stk.', 85),
+  leistung('KNX-Visualisierung/Zentrale einrichten', 'pauschal', 450),
+
+  // --- Leistungen: Sicherheitstechnik (Alarm/Video) ---
+  leistung('Einbruchmeldeanlage Grundinstallation (je Melder)', 'Stk.', 90),
+  leistung('Bewegungsmelder Einbruchmeldeanlage einbauen', 'Stk.', 60),
+  leistung('Videoüberwachungskamera montieren und anschließen', 'Stk.', 120),
+  leistung('Videorekorder/NVR einrichten und in Betrieb nehmen', 'pauschal', 180),
+
   // --- Leistungen: Smart Home, Netzwerk, E-Mobility ---
   leistung('Smart-Home-Grundinstallation (je Raum)', 'Stk.', 120),
   leistung('Wallbox Montage und Anschluss (bis 11kW)', 'pauschal', 380),
@@ -139,6 +164,27 @@ export const STANDARD_KATALOG_ELEKTRO = [
   artikel('Zählerschrank-Grundgerüst (2 Zähler)', 'Stk.', 260),
   artikel('Zählerschrank-Grundgerüst (3 Zähler)', 'Stk.', 340),
   artikel('Klemmen/Verbinder (Wago-Typ, Packung)', 'Stk.', 6),
+
+  // --- Materialien: Blitzschutz & Erdung ---
+  artikel('Fangstange/Fangleitung (Meterware)', 'm', 8),
+  artikel('Blitzableiter-Ableitung (Set je Fallrohr)', 'Stk.', 65),
+  artikel('Fundamenterder-Anschlussfahne', 'Stk.', 25),
+  artikel('Potentialausgleichsschiene (PAS)', 'Stk.', 35),
+  artikel('Erdungsleitung 16mm² (Meterware)', 'm', 2.5),
+
+  // --- Materialien: Sicherheitsbeleuchtung ---
+  artikel('Sicherheitsleuchte LED, Einzelbatterie', 'Stk.', 65),
+  artikel('Rettungswegleuchte/Piktogramm, Einzelbatterie', 'Stk.', 55),
+
+  // --- Materialien: Gebäudeautomation (KNX) ---
+  artikel('KNX-Busleitung (Meterware)', 'm', 1.1),
+  artikel('KNX-Schaltaktor, 4-fach', 'Stk.', 120),
+  artikel('KNX-Taster/Bedienelement', 'Stk.', 85),
+
+  // --- Materialien: Sicherheitstechnik (Alarm/Video) ---
+  artikel('Bewegungsmelder Einbruchmeldeanlage', 'Stk.', 45),
+  artikel('Überwachungskamera IP, Außenbereich', 'Stk.', 140),
+  artikel('Netzwerk-Videorekorder (NVR, 8-Kanal)', 'Stk.', 280),
 
   // --- Materialien: Beleuchtung ---
   artikel('LED-Deckenleuchte einfach (rund, 24W)', 'Stk.', 22),
