@@ -579,13 +579,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
               <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" data-bereich="${p.bereich || ''}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
             </div>
             <div class="field col-span-2"><label>Mitarbeiter</label>
-              <div class="tag-list">
-                ${mitarbeiter.map((m) => `
-                  <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
-                    <input type="checkbox" name="mitarbeiterIds" value="${m.id}" ${data.mitarbeiterIds?.includes(m.id) ? 'checked' : ''}> ${escapeHtml(m.name)}
-                  </label>
-                `).join('') || '<span class="text-mute">Keine Mitarbeiter angelegt.</span>'}
-              </div>
+              <div class="tag-list" id="mitarbeiter-checklist"></div>
               <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
             </div>
             ${geraete.length ? `
@@ -621,16 +615,29 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </form>
       `,
     });
-    function updateProjektBereichHint() {
+    function renderMitarbeiterChecklist(markeId, checkedIds) {
+      const host = body.querySelector('#mitarbeiter-checklist');
+      const sichtbar = mitarbeiter.filter((m) => !m.markeIds?.length || m.markeIds.includes(markeId));
+      host.innerHTML = sichtbar.map((m) => `
+        <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+          <input type="checkbox" name="mitarbeiterIds" value="${m.id}" ${checkedIds.includes(m.id) ? 'checked' : ''}> ${escapeHtml(m.name)}
+        </label>
+      `).join('') || '<span class="text-mute">Keine Mitarbeiter verfügbar.</span>';
+    }
+    function updateProjektBereichHint(checkedIds) {
       const select = body.querySelector('select[name="projektId"]');
       const bereichId = select.selectedOptions[0]?.dataset.bereich;
       const bereich = BEREICHE.find((b) => b.id === bereichId);
       const marke = markeFuerTermin({ projektId: select.value });
       const teile = [bereich ? bereich.titel : '', marke ? `🏷️ ${marke.name}` : ''].filter(Boolean);
       body.querySelector('#f-projekt-bereich').textContent = teile.length ? `(${teile.join(' · ')})` : '';
+      renderMitarbeiterChecklist(marke?.id || '', checkedIds);
     }
-    updateProjektBereichHint();
-    body.querySelector('select[name="projektId"]').addEventListener('change', updateProjektBereichHint);
+    updateProjektBereichHint(data.mitarbeiterIds || []);
+    body.querySelector('select[name="projektId"]').addEventListener('change', () => {
+      const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
+      updateProjektBereichHint(checkedIds);
+    });
 
     let farbeCustom = !!data.farbe;
     body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });

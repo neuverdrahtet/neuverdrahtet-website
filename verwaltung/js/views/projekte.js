@@ -415,13 +415,8 @@ export async function render(container, opts = {}) {
             <div class="field"><label>Farbe</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || '#2b7fd6')}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
             <div class="field col-span-2"><label>Zugewiesene Mitarbeiter</label>
-              <div class="tag-list">
-                ${mitarbeiter.map((m) => `
-                  <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
-                    <input type="checkbox" name="mitarbeiterIds" value="${m.id}" ${data.mitarbeiterIds?.includes(m.id) ? 'checked' : ''}> ${escapeHtml(m.name)}
-                  </label>
-                `).join('') || '<span class="text-mute">Keine Mitarbeiter angelegt.</span>'}
-              </div>
+              <div class="tag-list" id="mitarbeiter-checklist"></div>
+              ${marken.length > 0 ? '<p class="hint mb-0">Mitarbeiter mit Marken-Freigabe für eine andere Marke werden hier ausgeblendet.</p>' : ''}
             </div>
           </div>
           ${isEdit ? `
@@ -459,6 +454,20 @@ export async function render(container, opts = {}) {
     body.querySelector('#f-bereich').addEventListener('change', (e) => {
       const sel = body.querySelector('#f-kategorie');
       sel.innerHTML = kategorienForBereich(e.target.value).map((k) => `<option value="${k.id}">${escapeHtml(k.titel)}</option>`).join('');
+    });
+    function renderMitarbeiterChecklist(markeId, checkedIds) {
+      const host = body.querySelector('#mitarbeiter-checklist');
+      const sichtbar = mitarbeiter.filter((m) => !m.markeIds?.length || m.markeIds.includes(markeId));
+      host.innerHTML = sichtbar.map((m) => `
+        <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+          <input type="checkbox" name="mitarbeiterIds" value="${m.id}" ${checkedIds.includes(m.id) ? 'checked' : ''}> ${escapeHtml(m.name)}
+        </label>
+      `).join('') || '<span class="text-mute">Keine Mitarbeiter verfügbar.</span>';
+    }
+    renderMitarbeiterChecklist(data.markeId || '', data.mitarbeiterIds || []);
+    body.querySelector('select[name="markeId"]')?.addEventListener('change', (e) => {
+      const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
+      renderMitarbeiterChecklist(e.target.value, checkedIds);
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
     body.querySelector('#btn-proj-navi').addEventListener('click', () => {
