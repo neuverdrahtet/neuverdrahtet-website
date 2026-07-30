@@ -2140,6 +2140,14 @@ export async function ensureSeeded() {
   for (const v of missingDokuVorlagen) {
     await put('vorlagen', v);
   }
+  // Einmalige Migration: alte, vor dem Berichts-Baukasten gespeicherte Default-Vorlagen
+  // (noch ohne abschnitte) auf den aktuellen strukturierten Stand bringen.
+  for (const def of DEFAULT_DOKU_VORLAGEN) {
+    const bestehend = vorlagen.find((v) => v.id === def.id);
+    if (bestehend && def.abschnitte?.length && !bestehend.abschnitte?.length) {
+      await put('vorlagen', { ...def });
+    }
+  }
   const textbausteine = await getAll('textbausteine');
   const textbausteinIds = new Set(textbausteine.map((t) => t.id));
   const missingTextbausteine = DEFAULT_TEXTBAUSTEINE.filter((t) => !textbausteinIds.has(t.id));
