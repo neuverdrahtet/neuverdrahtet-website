@@ -952,6 +952,294 @@ Ort, Datum: {{datum}}`,
       { typ: 'unterschriften', labels: ['Verantwortlicher Unternehmer', 'Prüfer'] },
     ],
   },
+  {
+    id: 'vorlage-gefaehrdungsbeurteilung-arbschg', typ: 'dokumentation', name: 'Gefährdungsbeurteilung nach §5 ArbSchG',
+    textVorlage: `GEFÄHRDUNGSBEURTEILUNG NACH §5 ARBSCHG
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Zu beurteilende Tätigkeit / Arbeitsbereich:
+
+
+Erfasste Gefährdungen und implementierte Schutzmaßnahmen:
+(Gefährdung – Schutzmaßnahme – Delegiert an – Status)
+
+
+Anhang: Risikobeurteilung (Nohl-Matrix)
+Bewertung nach Schadensausmaß und Eintrittswahrscheinlichkeit.
+Gering = keine Maßnahmen notwendig · Mittel = Maßnahmen zur Risikoreduzierung empfohlen · Hoch = Maßnahmen dringend erforderlich
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Allgemein',
+        felder: [
+          { label: 'Unternehmensbereich', typ: 'text' },
+          { label: 'Verantwortliche Person', typ: 'text' },
+          { label: 'Erstellt durch', typ: 'text' },
+          { label: 'Version', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Gefährdungsfaktoren – Mechanisch/Elektrisch',
+        punkte: [
+          'Mechanische Gefährdungen übergreifend', 'Teile mit gefährlichen Oberflächen', 'Unkontrolliert bewegte Teile',
+          'Absturz', 'Sturz, Ausrutschen, Stolpern, Umknicken', 'Elektrischer Schlag', 'Elektrostatische Aufladungen', 'Lichtbögen',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Gefährdungsfaktoren – Gefahrstoffe/Biologisch/Brand',
+        punkte: [
+          'Gefährdungen durch Gefahrstoffe übergreifend', 'Einatmen von Gefahrstoffen', 'Hautkontakt mit Gefahrstoffen',
+          'Infektionsgefährdung durch Mikroorganismen', 'Allgemeine Brandgefahren', 'Gefahren durch explosionsfähige Atmosphäre',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Gefährdungsfaktoren – Arbeitsumgebung/Organisation',
+        punkte: [
+          'Klima (Hitze/Kälte)', 'Unzureichende Beleuchtung/Licht', 'Unzureichende Flucht- und Verkehrswege',
+          'Unzureichende Bewegungsfläche, Pausen-/Sanitärräume', 'Lärm', 'Fehlende Unterweisung',
+          'Fehlende Prüfung von Arbeitsmitteln', 'Fehlende Erste Hilfe', 'Fehlende Cybersicherheit bei MSR-Einrichtungen', 'Ungünstige Arbeitszeiten',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Physische/Psychische Belastung',
+        punkte: [
+          'Schwere dynamische Arbeit', 'Haltungsarbeit (Zwangshaltung)', 'Einseitige dynamische Arbeit, Körperbewegung',
+          'Ungenügend gestaltete Arbeitsorganisation', 'Ungenügend gestaltete Arbeitsaufgabe',
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Verantwortlicher'] },
+    ],
+  },
+  {
+    id: 'vorlage-pruefung-elektrischer-anlagen', typ: 'dokumentation', name: 'Prüfung elektrischer Anlagen',
+    textVorlage: `PRÜFUNG ELEKTRISCHER ANLAGEN
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Objekt-Bezeichnung / weitere Informationen:
+
+
+Beurteilung der Elektrofachkraft (Ergebnis, ggf. nächster Prüftermin):
+
+
+Hinweis: Die Prüfung erfolgte nach den geltenden Bestimmungen der DIN VDE 0100-600 / 0105-100. Sie umfasst
+nur zugängliche und überprüfbare Anlagenteile. Für verdeckte Installationen oder nach der Prüfung vorgenommene
+Änderungen wird keine Haftung übernommen. Festgestellte Mängel sind im Prüfprotokoll dokumentiert und dem
+Betreiber zur Kenntnis gegeben worden.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Auftragsnummer', typ: 'text' },
+          { label: 'Auftragsdatum', typ: 'datum' },
+          { label: 'Beginn der Prüfung', typ: 'text' },
+          { label: 'Netzbetreiber', typ: 'text' },
+          { label: 'Netz', typ: 'text' },
+          { label: 'Netzsystem', typ: 'text' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Art der Prüfung – DIN VDE 0100-600 / 0105-100', punkte: ['Neuanlage', 'Änderung', 'Erweiterung', 'Wiederholung', 'Instandsetzung'] },
+      { typ: 'checkliste', titel: 'Sonstige Grundlagen', punkte: ['E-Check', 'DGUV Vorschrift 3', 'BetrSichV'] },
+      { typ: 'checkliste', titel: 'Objekt-Art', punkte: ['Einfamilienhaus', 'Mehrfamilienhaus', 'Wohnung', 'Garage', 'Gewerbeeinheit / Büro', 'Außenanlage', 'Sonstiges'] },
+      {
+        typ: 'checkliste', titel: 'Sichtprüfung / Zustand der Anlage',
+        punkte: [
+          'Allgemeiner Zustand / Sauberkeit i.O.', 'Auswahl der Betriebsmittel geeignet', 'Berührungsschutz / Abdeckungen vorhanden',
+          'Leiterkennzeichnung normgerecht', 'Leitungsführung ordentlich', 'Leiterverbindungen fest',
+          'Stromkreise beschriftet', 'Schutz-/Überwachungseinrichtungen vorhanden', 'Schutzpotentialausgleich vollständig',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Erproben (Funktionsprüfung)',
+        punkte: [
+          'Funktionsprüfung der Anlage i.O.', 'FI-Schutzschalter (RCD) i.O.', 'Funktion Schutz-/Sicherheits-/Überwachungseinrichtung i.O.',
+          'Rechtsdrehfeld (Drehstromsteckdose) i.O.', 'Spannungsabfall geprüft i.O.', 'Gebäudesystemtechnik i.O.', 'Spannungspolarität i.O.',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Durchgängigkeit Potentialausgleichsystem',
+        punkte: [
+          'Fundamenterder', 'Ringerder', 'Haupterdungsschiene', 'Hauptschutzschalter', 'Heizungsanlage',
+          'Wasserzwischenzähler', 'Hauptwasserleitung', 'Gasinnenleitung', 'Klimaanlage', 'Aufzuganlage',
+          'EDV-Anlage', 'Telefonanlage', 'Blitzschutzanlage', 'Antennenanlage/BK', 'Gebäudekonstruktion',
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Messwerte',
+        felder: [
+          { label: 'Spannungsfall nachgewiesen (%)', typ: 'zahl' },
+          { label: 'Erdungswiderstand (Ω)', typ: 'zahl' },
+          { label: 'Verwendete Messgeräte', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Prüfplakette', fragen: ['Prüfplakette angebracht'] },
+      {
+        typ: 'kopfdaten', titel: 'Abschluss',
+        felder: [
+          { label: 'Ende Prüfung', typ: 'text' },
+          { label: 'Name vom Prüfer', typ: 'text' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
+    ],
+  },
+  {
+    id: 'vorlage-wiederholungspruefung-ortsveraenderlich', typ: 'dokumentation', name: 'Wiederholungsprüfung ortsveränderlicher elektrischer Geräte',
+    textVorlage: `WIEDERHOLUNGSPRÜFUNG ORTSVERÄNDERLICHER ELEKTRISCHER GERÄTE
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Bemerkungen/Mängel:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Kundennr.', typ: 'text' },
+          { label: 'Auftragsnr.', typ: 'text' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Prüfung nach', punkte: ['BetrSichV', 'TRBS 1201', 'DGUV Vorschrift 3', 'DGUV Vorschrift 4', 'VSG 1.4', 'DIN VDE 0701-0702'] },
+      {
+        typ: 'kopfdaten', titel: 'Prüfling',
+        felder: [
+          { label: 'Bezeichnung vom elektrischen Gerät', typ: 'text' },
+          { label: 'Typ', typ: 'text' },
+          { label: 'Hersteller', typ: 'text' },
+          { label: 'Fabrikat-Nr.', typ: 'text' },
+          { label: 'Inventar-Nr.', typ: 'text' },
+          { label: 'Nennspannung (V)', typ: 'zahl' },
+          { label: 'Nennstrom (A)', typ: 'zahl' },
+          { label: 'Nennleistung (W)', typ: 'zahl' },
+          { label: 'Frequenz (Hz)', typ: 'zahl' },
+          { label: 'Schutzklasse', typ: 'text' },
+          { label: 'Belastung (1-phasig/3-phasig)', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'janein', titel: '2. Sichtprüfung',
+        fragen: [
+          'Isolierung i.O.', 'Auswahl/Anwendung von Leitungen und Steckern i.O.', 'Netzstecker, Anschlussklemmen und -adern i.O.',
+          'Biegeschutz i.O.', 'Zugentlastung der Anschlussleitung i.O.', 'Befestigungen, Leitungshalterungen i.O.',
+          'Gehäuse und Schutzabdeckungen i.O.', 'Bedienbarkeit von Schaltern/Steuereinrichtungen i.O.',
+          'Lesbarkeit der Sicherheits-Aufschriften/Symbole i.O.', 'Lesbarkeit der Bemessungsdaten und Stellungsanzeigen i.O.',
+        ],
+      },
+      {
+        typ: 'janein', titel: '3. Gefahrenbeurteilung (erkennbar?)',
+        fragen: [
+          'Überlastung oder unsachgemäße Anwendung/Bedienung erkennbar', 'Unzulässige Eingriffe oder Veränderungen erkennbar',
+          'Sicherheitsbeeinträchtigende Verschmutzung, Korrosion oder Alterung erkennbar', 'Verschmutzung/Verstopfung der Kühlungsöffnungen erkennbar',
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '4. Messung',
+        felder: [
+          { label: 'RCD Auslösestrom (mA)', typ: 'text' },
+          { label: 'Auslösezeit (ms)', typ: 'text' },
+          { label: 'Isolationswiderstand (MΩ)', typ: 'text' },
+          { label: 'Schutzleiterstrom (mA)', typ: 'zahl' },
+          { label: 'Berührungsstrom (mA)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'janein', titel: 'Messung – Zustand i.O.', fragen: ['RCD i.O.', 'Isolationswiderstand i.O.', 'Schutzleiterstrom i.O.', 'Berührungsstrom i.O.'] },
+      {
+        typ: 'checkliste', titel: '5. Hinweise für den Auftraggeber/Betreiber',
+        punkte: [
+          'Bei der Überprüfung wurden keine Mängel festgestellt', 'Mängel wurden durch Reparatur beseitigt',
+          'Auf festgestellte Mängel hingewiesen', 'Das elektrische Gerät darf nicht weiter verwendet werden',
+        ],
+      },
+      { typ: 'checkliste', titel: '7. Gesamtbeurteilung – Prüfplakette', punkte: ['Ja, keine Mängel', 'Ja, kleine Mängel', 'Nein, mangelhaft'] },
+      {
+        typ: 'kopfdaten', titel: 'Gesamtbeurteilung',
+        felder: [
+          { label: 'Prüfdatum', typ: 'datum' },
+          { label: 'Nächster Prüftermin', typ: 'datum' },
+          { label: 'Name Prüfer', typ: 'text' },
+          { label: 'Verwendetes Messgerät (Typ & Fabrikat)', typ: 'text' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftraggeber', 'Unterschrift Prüfer'] },
+    ],
+  },
+  {
+    id: 'vorlage-installationsprotokoll-elektroanlage', typ: 'dokumentation', name: 'Installationsprotokoll Elektroanlage',
+    textVorlage: `INSTALLATIONSPROTOKOLL ELEKTROANLAGE
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Projektbeschreibung:
+
+
+Bemerkungen zum Vorzustand:
+
+
+Verwendete Materialien:
+
+
+Sonstige Bemerkungen:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Projekt',
+        felder: [
+          { label: 'Anlagenteil', typ: 'text' },
+          { label: 'Ausführungsdatum', typ: 'datum' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '1. Isolationsmessung',
+        felder: [
+          { label: 'Messgerät', typ: 'text' },
+          { label: 'Messwert (MΩ)', typ: 'text' },
+          { label: 'Messspannung (V)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'janein', titel: 'Isolationsmessung', fragen: ['Isolationsmessung bestanden'] },
+      {
+        typ: 'kopfdaten', titel: '2. Schleifenimpedanz (Zs)',
+        felder: [
+          { label: 'Kabel Typ & Querschnitt', typ: 'text' },
+          { label: 'Messwert (Ω)', typ: 'text' },
+          { label: 'Leitungsschutzschalter', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Schleifenimpedanz', fragen: ['Grenzwert eingehalten'] },
+      {
+        typ: 'kopfdaten', titel: '3. RCD-Prüfung',
+        felder: [
+          { label: 'Typ FI/RCD', typ: 'text' },
+          { label: 'Bemessungsstrom (mA)', typ: 'zahl' },
+          { label: 'Auslösestrom gemessen (mA)', typ: 'text' },
+          { label: 'Auslösezeit gemessen (ms)', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'RCD-Prüfung – Ergebnis', fragen: ['Funktionsprüfung Prüftaste i.O.', 'Messung bestanden'] },
+      { typ: 'janein', titel: 'Abschluss / Bestätigung', fragen: ['Anlage vollständig betriebsbereit', 'Gemeinsame Übergabe mit Auftraggeber vorgenommen'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Elektroinstallateur', 'Unterschrift Auftraggeber'] },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [
