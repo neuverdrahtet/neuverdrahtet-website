@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -374,6 +374,7 @@ export async function render(container, opts = {}) {
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedAuftragsbestaetigungen = isEdit ? auftragsbestaetigungen.filter((a) => a.projektId === data.id) : [];
     const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
+    const hatUeberfaelligeRechnung = linkedRechnungen.some((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < todayISO());
     const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
     const { body, close } = openModal({
@@ -440,6 +441,16 @@ export async function render(container, opts = {}) {
             <div class="divider"></div>
             <div id="dok-host"></div>
           ` : ''}
+          ${isEdit ? `
+            <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">Dokumente erstellen</h2>
+            <div class="flex-row flex-wrap" style="gap:6px;margin-bottom:4px">
+              <button type="button" class="btn btn-sm" id="btn-neues-angebot">📄 + Angebot</button>
+              <button type="button" class="btn btn-sm" id="btn-neue-rechnung">🧾 + Rechnung</button>
+              <button type="button" class="btn btn-sm" id="btn-neue-ab">✅ + Auftragsbestätigung</button>
+              ${hatUeberfaelligeRechnung ? '<button type="button" class="btn btn-sm btn-danger" id="btn-zu-mahnungen">🔔 Mahnung (überfällige Rechnung)</button>' : ''}
+            </div>
+          ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-neuer-termin">📅 + Termin</button>' : ''}
@@ -504,6 +515,25 @@ export async function render(container, opts = {}) {
         };
         close();
         openTerminMitVorbelegung(prefill);
+      });
+      function dokumentPrefill() {
+        return { kundeId: body.querySelector('select[name="kundeId"]').value || '', projektId: data.id };
+      }
+      body.querySelector('#btn-neues-angebot').addEventListener('click', () => {
+        close();
+        openDokumentMitVorbelegung('angebote', dokumentPrefill());
+      });
+      body.querySelector('#btn-neue-rechnung').addEventListener('click', () => {
+        close();
+        openDokumentMitVorbelegung('rechnungen', dokumentPrefill());
+      });
+      body.querySelector('#btn-neue-ab').addEventListener('click', () => {
+        close();
+        openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill());
+      });
+      body.querySelector('#btn-zu-mahnungen')?.addEventListener('click', () => {
+        close();
+        window.location.hash = '#/mahnungen';
       });
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {

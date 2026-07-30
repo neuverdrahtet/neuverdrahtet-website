@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -189,10 +189,15 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
-  function openForm(r) {
+  // Kommt der Nutzer über den "+ Rechnung"-Schnellknopf aus der Projekt-Akte,
+  // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
+  const rechnungVorbelegung = nimmDokumentVorbelegung();
+  if (rechnungVorbelegung) openForm(null, rechnungVorbelegung);
+
+  function openForm(r, prefill) {
     const isEdit = !!r;
     const data = r || {
-      id: uid(), nummer: '', kundeId: '', projektId: '', angebotId: null, datum: todayISO(), leistungsdatum: todayISO(),
+      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', angebotId: null, datum: todayISO(), leistungsdatum: todayISO(),
       faelligAm: addDays(todayISO(), settings.zahlungszielTage || 14),
       status: 'offen', betreff: '', notizen: '', positionen: [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',

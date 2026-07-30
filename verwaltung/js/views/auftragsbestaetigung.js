@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -89,10 +89,16 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
-  function openForm(a, ausAngebot) {
+  // Kommt der Nutzer über den "+ Auftragsbestätigung"-Schnellknopf aus der
+  // Projekt-Akte, liegt hier eine Vorbelegung bereit - Formular direkt
+  // vorausgefüllt öffnen.
+  const abVorbelegung = nimmDokumentVorbelegung();
+  if (abVorbelegung) openForm(null, null, abVorbelegung);
+
+  function openForm(a, ausAngebot, prefill) {
     const isEdit = !!a;
     const data = a || {
-      id: uid(), nummer: '', kundeId: ausAngebot?.kundeId || '', projektId: ausAngebot?.projektId || '', datum: todayISO(),
+      id: uid(), nummer: '', kundeId: ausAngebot?.kundeId || prefill?.kundeId || '', projektId: ausAngebot?.projektId || prefill?.projektId || '', datum: todayISO(),
       status: 'entwurf', betreff: ausAngebot?.betreff || '', notizen: ausAngebot?.notizen || '',
       positionen: ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : [],
       angebotId: ausAngebot?.id || '', createdAt: new Date().toISOString(),

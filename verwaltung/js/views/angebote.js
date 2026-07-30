@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -95,10 +95,15 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
 
-  function openForm(a) {
+  // Kommt der Nutzer über den "+ Angebot"-Schnellknopf aus der Projekt-Akte,
+  // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
+  const angebotVorbelegung = nimmDokumentVorbelegung();
+  if (angebotVorbelegung) openForm(null, angebotVorbelegung);
+
+  function openForm(a, prefill) {
     const isEdit = !!a;
     const data = a || {
-      id: uid(), nummer: '', kundeId: '', projektId: '', datum: todayISO(),
+      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
       status: 'entwurf', betreff: '', notizen: '', positionen: [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
