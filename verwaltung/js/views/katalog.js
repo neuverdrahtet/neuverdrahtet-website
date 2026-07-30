@@ -9,6 +9,7 @@ import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
 import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
 import { STANDARD_KATALOG_MALER } from '../standardKatalogMaler.js';
 import { STANDARD_KATALOG_TROCKENBAU } from '../standardKatalogTrockenbau.js';
+import { STANDARD_KATALOG_PUTZ } from '../standardKatalogPutz.js';
 import { STANDARD_KATALOG_KOMPLETTBAD } from '../standardKatalogKomplettbad.js';
 import { STANDARD_KATALOG_RENOVIERUNG } from '../standardKatalogRenovierung.js';
 
@@ -19,6 +20,7 @@ const STANDARD_KATALOGE = [
   { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
   { gewerk: 'maler', liste: STANDARD_KATALOG_MALER },
   { gewerk: 'trockenbau', liste: STANDARD_KATALOG_TROCKENBAU },
+  { gewerk: 'putz', liste: STANDARD_KATALOG_PUTZ },
   { gewerk: 'komplettbad', liste: STANDARD_KATALOG_KOMPLETTBAD },
   { gewerk: 'renovierung', liste: STANDARD_KATALOG_RENOVIERUNG },
 ];

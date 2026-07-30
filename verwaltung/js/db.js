@@ -525,6 +525,7 @@ export const GEWERKE = [
   { id: 'boden', titel: 'Bodenleger', farbe: '#8e6b3f' },
   { id: 'maler', titel: 'Maler', farbe: '#16a085' },
   { id: 'trockenbau', titel: 'Trockenbau', farbe: '#6b7280' },
+  { id: 'putz', titel: 'Putz/Stuckateur', farbe: '#be185d' },
   { id: 'komplettbad', titel: 'Komplettbad', farbe: '#8e44ad' },
   { id: 'renovierung', titel: 'Wohnungssanierung/Renovierung', farbe: '#0891b2' },
   { id: 'sonstiges', titel: 'Sonstiges', farbe: '#c0392b' },

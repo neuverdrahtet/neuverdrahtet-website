@@ -25,6 +25,7 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   leistung('Metallständerwand aufstellen, einfach beplankt', 'm²', 35),
   leistung('Metallständerwand aufstellen, doppelt beplankt (Schallschutz)', 'm²', 48),
   leistung('Vorsatzschale montieren', 'm²', 30),
+  leistung('Trockenputz aufbringen (Gipskartonplatten direkt auf Mauerwerk geklebt)', 'm²', 28),
   leistung('Feuerschutzwand F30/F90 (Aufpreis je m²)', 'm²', 15),
   leistung('Tür-/Fensteröffnung in Ständerwand einbauen', 'Stk.', 85),
   leistung('Revisionsklappe einbauen', 'Stk.', 45),
@@ -43,6 +44,7 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   artikel('Gipskartonplatte 12,5mm', 'm²', 3.5),
   artikel('Feuerschutzplatte GKF 12,5mm', 'm²', 5.5),
   artikel('Feuchtraumplatte GKBI 12,5mm', 'm²', 5.5),
+  artikel('Klebegips für Trockenputz (25kg Sack)', 'Stk.', 12),
 
   // --- Materialien: Profile & Dämmung ---
   artikel('CW-Profil 75mm (Stange 3m)', 'Stk.', 5),

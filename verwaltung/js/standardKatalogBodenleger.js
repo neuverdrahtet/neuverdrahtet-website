@@ -26,6 +26,7 @@ export const STANDARD_KATALOG_BODENLEGER = [
   leistung('Untergrund schleifen/vorbereiten', 'm²', 6),
   leistung('Untergrund grundieren', 'm²', 3),
   leistung('Ausgleichsmasse spachteln (bis 5mm)', 'm²', 9),
+  leistung('Bodenausgleich, dickschichtig (5-30mm)', 'm²', 16),
   leistung('Trittschalldämmung verlegen', 'm²', 3),
 
   // --- Leistungen: Bodenbeläge verlegen ---
@@ -45,6 +46,7 @@ export const STANDARD_KATALOG_BODENLEGER = [
 
   // --- Materialien: Untergrund ---
   artikel('Ausgleichs-/Spachtelmasse (25kg Sack)', 'Stk.', 16),
+  artikel('Ausgleichsmasse dickschichtig, bis 30mm (25kg Sack)', 'Stk.', 19),
   artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
   artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
 
