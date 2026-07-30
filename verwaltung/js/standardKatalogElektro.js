@@ -5,14 +5,15 @@
 // aufrufbar - bereits vorhandene Bezeichnungen werden dabei übersprungen.
 
 const STEUERSATZ = 19;
+const GEWERK = 'elektro';
 
 function leistung(bezeichnung, einheit, preis) {
-  return { typ: 'leistung', bezeichnung, beschreibung: '', einheit, einkaufspreis: 0, aufschlagProzent: 0, preis, steuersatz: STEUERSATZ };
+  return { typ: 'leistung', bezeichnung, beschreibung: '', einheit, einkaufspreis: 0, aufschlagProzent: 0, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
 function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   const preis = Math.round(einkaufspreis * (1 + aufschlagProzent / 100) * 100) / 100;
-  return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ };
+  return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
 export const STANDARD_KATALOG_ELEKTRO = [

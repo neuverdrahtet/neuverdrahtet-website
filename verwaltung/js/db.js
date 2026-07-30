@@ -520,11 +520,13 @@ export const TAETIGKEITEN = [
 
 export const GEWERKE = [
   { id: 'elektro', titel: 'Elektro', farbe: '#2b7fd6' },
+  { id: 'abbruch', titel: 'Abbruch', farbe: '#7f1d1d' },
   { id: 'fliesen', titel: 'Fliesen', farbe: '#f0a020' },
   { id: 'boden', titel: 'Bodenleger', farbe: '#8e6b3f' },
   { id: 'maler', titel: 'Maler', farbe: '#16a085' },
   { id: 'trockenbau', titel: 'Trockenbau', farbe: '#6b7280' },
   { id: 'komplettbad', titel: 'Komplettbad', farbe: '#8e44ad' },
+  { id: 'renovierung', titel: 'Wohnungssanierung/Renovierung', farbe: '#0891b2' },
   { id: 'sonstiges', titel: 'Sonstiges', farbe: '#c0392b' },
 ];
 

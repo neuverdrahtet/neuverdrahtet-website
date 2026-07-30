@@ -1,9 +1,27 @@
-import { getAll, put, remove, getSettings, USTSAETZE } from '../db.js';
+import { getAll, put, remove, getSettings, USTSAETZE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
 import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
+import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
+import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
+import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
+import { STANDARD_KATALOG_MALER } from '../standardKatalogMaler.js';
+import { STANDARD_KATALOG_TROCKENBAU } from '../standardKatalogTrockenbau.js';
+import { STANDARD_KATALOG_KOMPLETTBAD } from '../standardKatalogKomplettbad.js';
+import { STANDARD_KATALOG_RENOVIERUNG } from '../standardKatalogRenovierung.js';
+
+const STANDARD_KATALOGE = [
+  { gewerk: 'elektro', liste: STANDARD_KATALOG_ELEKTRO },
+  { gewerk: 'abbruch', liste: STANDARD_KATALOG_ABBRUCH },
+  { gewerk: 'fliesen', liste: STANDARD_KATALOG_FLIESEN },
+  { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
+  { gewerk: 'maler', liste: STANDARD_KATALOG_MALER },
+  { gewerk: 'trockenbau', liste: STANDARD_KATALOG_TROCKENBAU },
+  { gewerk: 'komplettbad', liste: STANDARD_KATALOG_KOMPLETTBAD },
+  { gewerk: 'renovierung', liste: STANDARD_KATALOG_RENOVIERUNG },
+];
 
 const TYP_LABEL = { artikel: 'Material', leistung: 'Leistung', geraet: 'Gerät', paket: 'Paket' };
 const TYP_BADGE = { artikel: 'badge-accent', leistung: 'badge-success', geraet: 'badge-warn', paket: 'badge-purple' };
@@ -53,7 +71,7 @@ export async function render(container) {
       <h1>Artikel &amp; Leistungen</h1>
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
-        <button class="btn" id="btn-standard-import">📥 Standard-Katalog (Elektro) importieren</button>
+        <button class="btn" id="btn-standard-import">📥 Standard-Kataloge importieren</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
       </div>
@@ -67,6 +85,10 @@ export async function render(container) {
         <option value="geraet">Gerät</option>
         <option value="paket">Paket</option>
       </select>
+      <select id="gewerk-filter">
+        <option value="">Alle Gewerke</option>
+        ${GEWERKE.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}
+      </select>
     </div>
     <div id="table-host"></div>
   `;
@@ -74,8 +96,10 @@ export async function render(container) {
 
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();
+    const gewerkFilter = container.querySelector('#gewerk-filter').value;
     filtered = items.filter((i) => {
       if (typeFilter && i.typ !== typeFilter) return false;
+      if (gewerkFilter && i.gewerk !== gewerkFilter) return false;
       if (!q) return true;
       return [i.bezeichnung, i.beschreibung].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -90,15 +114,17 @@ export async function render(container) {
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th><th>Bestand</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Gewerk</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th><th>Bestand</th></tr></thead>
         <tbody>
           ${filtered.map((i) => {
             const tracked = i.typ === 'artikel' && i.bestandTracking;
             const niedrig = tracked && Number(i.bestand ?? 0) <= Number(i.mindestbestand ?? 0);
+            const gewerk = GEWERKE.find((g) => g.id === i.gewerk);
             return `
             <tr data-id="${i.id}">
               ${bulk.rowCell(i.id)}
               <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
+              <td>${gewerk ? `<span class="badge" style="background:${escapeHtml(gewerk.farbe)}22;color:${escapeHtml(gewerk.farbe)}">${escapeHtml(gewerk.titel)}</span>` : ''}</td>
               <td>${escapeHtml(i.bezeichnung)}${i.lexofficeArtikelId ? ' <span title="Verknüpft mit lexoffice">🔗</span>' : ''}</td>
               <td>${escapeHtml(i.einheit || '')}</td>
               <td class="text-right">${i.einkaufspreis ? formatCurrency(i.einkaufspreis) : '–'}</td>
@@ -181,26 +207,59 @@ export async function render(container) {
     typeFilter = e.target.value;
     applyFilter();
   });
+  container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
-  container.querySelector('#btn-standard-import').addEventListener('click', () => importStandardKatalog());
+  container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());
   container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
 
-  async function importStandardKatalog() {
+  function openStandardKatalogAuswahl() {
     const bestehendeBezeichnungen = new Set(items.map((i) => (i.bezeichnung || '').trim().toLowerCase()));
-    const neue = STANDARD_KATALOG_ELEKTRO.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase()));
-    if (neue.length === 0) {
-      toast('Alle Standard-Einträge sind bereits in deinem Katalog vorhanden', 'info');
-      return;
-    }
-    if (!window.confirm(`${neue.length} übliche Elektro-Leistungen/Materialien mit marktüblichen Richtpreisen in den Katalog übernehmen? Bereits vorhandene Bezeichnungen werden übersprungen. Preise können danach jederzeit angepasst werden.`)) return;
-    for (const v of neue) {
-      await put('katalog', {
-        id: uid(), ...v, komponenten: [], bestandTracking: false, bestand: 0, mindestbestand: 0,
-      });
-    }
-    toast(`${neue.length} Standard-Einträge übernommen${neue.length < STANDARD_KATALOG_ELEKTRO.length ? ` (${STANDARD_KATALOG_ELEKTRO.length - neue.length} bereits vorhanden übersprungen)` : ''}`, 'success');
-    render(container);
+    const { body, close } = openModal({
+      title: 'Standard-Kataloge importieren',
+      bodyHtml: `
+        <form id="std-kat-form">
+          <p class="hint">Übliche Leistungen/Materialien je Gewerk mit marktüblichen Richtpreisen (Deutschland) als Startpunkt. Bereits vorhandene Bezeichnungen werden beim Import übersprungen, Preise können danach jederzeit angepasst werden.</p>
+          <div class="tag-list">
+            ${STANDARD_KATALOGE.map(({ gewerk, liste }) => {
+              const g = GEWERKE.find((x) => x.id === gewerk);
+              const neueCount = liste.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase())).length;
+              return `
+                <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                  <input type="checkbox" name="gewerke" value="${gewerk}" ${neueCount > 0 ? 'checked' : 'disabled'}>
+                  ${escapeHtml(g?.titel || gewerk)} <span class="text-mute">(${neueCount > 0 ? `${neueCount} neu` : 'bereits vollständig'})</span>
+                </label>
+              `;
+            }).join('')}
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Importieren</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#std-kat-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const ausgewaehlt = fd.getAll('gewerke');
+      if (ausgewaehlt.length === 0) { close(); return; }
+      let importiert = 0;
+      for (const gewerk of ausgewaehlt) {
+        const liste = STANDARD_KATALOGE.find((k) => k.gewerk === gewerk)?.liste || [];
+        const neue = liste.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase()));
+        for (const v of neue) {
+          await put('katalog', { id: uid(), ...v, komponenten: [], bestandTracking: false, bestand: 0, mindestbestand: 0 });
+          bestehendeBezeichnungen.add(v.bezeichnung.trim().toLowerCase());
+          importiert += 1;
+        }
+      }
+      toast(`${importiert} Standard-Einträge übernommen`, 'success');
+      close();
+      render(container);
+    });
   }
 
   function openLexofficeSync() {
@@ -315,7 +374,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
   function openForm(item) {
     const isEdit = !!item;
     const data = item || {
-      id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.',
+      id: uid(), typ: 'leistung', bezeichnung: '', beschreibung: '', einheit: 'Std.', gewerk: '',
       einkaufspreis: 0, aufschlagProzent: settings.standardAufschlagProzent ?? 20, preis: 0, steuersatz: settings.standardSteuersatz, komponenten: [],
       bestandTracking: false, bestand: 0, mindestbestand: 0,
     };
@@ -341,6 +400,12 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
             <div class="field"><label>Einheit</label>
               <input name="einheit" list="einheiten-presets" placeholder="auswählen oder frei eingeben" value="${escapeHtml(data.einheit || '')}">
               <datalist id="einheiten-presets">${EINHEITEN_PRESETS.map((e) => `<option value="${e}"></option>`).join('')}</datalist>
+            </div>
+            <div class="field"><label>Gewerk</label>
+              <select name="gewerk">
+                <option value="">– kein Gewerk –</option>
+                ${GEWERKE.map((g) => `<option value="${g.id}" ${g.id === data.gewerk ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}
+              </select>
             </div>
             <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>

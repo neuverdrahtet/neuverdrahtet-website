@@ -1,0 +1,65 @@
+// Standard-Katalog für das Gewerk Bodenleger: übliche Leistungen/Arbeits-
+// schritte und Materialien mit marktüblichen Netto-Preisen (Deutschland,
+// Richtwerte) als Startpunkt zum Import in den eigenen Katalog. Über den
+// Import-Dialog "Standard-Kataloge importieren" in Artikel & Leistungen
+// aufrufbar - bereits vorhandene Bezeichnungen werden dabei übersprungen.
+
+const STEUERSATZ = 19;
+const GEWERK = 'boden';
+
+function leistung(bezeichnung, einheit, preis) {
+  return { typ: 'leistung', bezeichnung, beschreibung: '', einheit, einkaufspreis: 0, aufschlagProzent: 0, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
+}
+
+function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
+  const preis = Math.round(einkaufspreis * (1 + aufschlagProzent / 100) * 100) / 100;
+  return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
+}
+
+export const STANDARD_KATALOG_BODENLEGER = [
+  // --- Leistungen: Arbeitszeit ---
+  leistung('Facharbeiterstunde Bodenleger', 'Std.', 48),
+  leistung('Helferstunde Bodenleger', 'Std.', 34),
+  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
+
+  // --- Leistungen: Untergrundvorbereitung ---
+  leistung('Alt-Bodenbelag entfernen und entsorgen', 'm²', 5),
+  leistung('Untergrund schleifen/vorbereiten', 'm²', 6),
+  leistung('Untergrund grundieren', 'm²', 3),
+  leistung('Ausgleichsmasse spachteln (bis 5mm)', 'm²', 9),
+  leistung('Trittschalldämmung verlegen', 'm²', 3),
+
+  // --- Leistungen: Bodenbeläge verlegen ---
+  leistung('Parkett verlegen (schwimmend)', 'm²', 18),
+  leistung('Parkett verlegen (vollflächig verklebt)', 'm²', 26),
+  leistung('Laminat verlegen', 'm²', 12),
+  leistung('Vinyl-/Designboden verlegen (Klick)', 'm²', 14),
+  leistung('Vinyl-/Designboden verlegen (vollflächig verklebt)', 'm²', 18),
+  leistung('Teppichboden verlegen (verklebt)', 'm²', 10),
+  leistung('PVC-Bahnenware verlegen', 'm²', 13),
+  leistung('Fußbodenheizung-Ausgleichsschicht einbringen', 'm²', 12),
+
+  // --- Leistungen: Abschlussarbeiten ---
+  leistung('Sockelleiste montieren', 'm', 6),
+  leistung('Übergangs-/Abschlussprofil setzen', 'Stk.', 15),
+  leistung('Treppenrenovierung mit Stufenbelag (je Stufe)', 'Stk.', 45),
+
+  // --- Materialien: Untergrund ---
+  artikel('Ausgleichs-/Spachtelmasse (25kg Sack)', 'Stk.', 16),
+  artikel('Grundierung/Tiefgrund (5L Kanister)', 'Stk.', 28),
+  artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
+
+  // --- Materialien: Beläge ---
+  artikel('Fertigparkett Eiche, gebürstet', 'm²', 32),
+  artikel('Laminat Klasse 32', 'm²', 11),
+  artikel('Vinyl-/Designboden (Klick)', 'm²', 18),
+  artikel('Vinyl-/Designboden (Bahnenware, verklebt)', 'm²', 20),
+  artikel('Teppichboden Objektqualität', 'm²', 11),
+  artikel('PVC-Bahnenware', 'm²', 14),
+
+  // --- Materialien: Kleber & Abschluss ---
+  artikel('Fußbodenkleber (Eimer 15kg)', 'Stk.', 42),
+  artikel('Dispersionskleber Vinyl (Eimer 14kg)', 'Stk.', 38),
+  artikel('Sockelleiste MDF/Kunststoff (Stange 2,5m)', 'Stk.', 4),
+  artikel('Übergangsprofil Alu', 'Stk.', 8),
+];
