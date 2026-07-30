@@ -67,8 +67,9 @@ function currentYearCount(termine, mitarbeiterId, typ) {
 }
 
 export async function render(container) {
-  let [mitarbeiter, termine] = await Promise.all([getAll('mitarbeiter'), getAll('termine')]);
+  let [mitarbeiter, termine, marken] = await Promise.all([getAll('mitarbeiter'), getAll('termine'), getAll('marken')]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   syncMitarbeiterOeffentlich().catch((err) => console.error('mitarbeiterOeffentlich-Sync fehlgeschlagen:', err));
   const bulk = createBulkSelect('mitarbeiter', { label: 'Mitarbeiter' });
 
@@ -255,7 +256,7 @@ export async function render(container) {
       stundenlohn: '', gehaltMonatlich: '', urlaubsanspruchTage: 30,
       iban: '', steuerId: '', sozialversicherungsnummer: '', krankenkasse: '',
       notfallkontaktName: '', notfallkontaktTelefon: '', notizen: '',
-      zugangscode: '', zugriffsrolle: 'mitarbeiter',
+      zugangscode: '', zugriffsrolle: 'mitarbeiter', markeIds: [],
     };
     const urlaubGenommen = isEdit ? currentYearCount(termine, data.id, 'urlaub') : 0;
     const krankTage = isEdit ? currentYearCount(termine, data.id, 'krank') : 0;
@@ -334,6 +335,19 @@ export async function render(container) {
             }).join('')}</ul>` : '<p class="text-mute">Noch keine Einträge (Urlaub/Krank/Schulung/Baustelle).</p>'}
           ` : ''}
 
+          ${marken.length > 0 ? `
+            <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">Marken-Freigabe</h2>
+            <div class="tag-list">
+              ${marken.map((mk) => `
+                <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                  <input type="checkbox" name="markeIds" value="${mk.id}" ${data.markeIds?.includes(mk.id) ? 'checked' : ''}> ${escapeHtml(mk.name)}
+                </label>
+              `).join('')}
+            </div>
+            <p class="hint">Nichts ausgewählt = für alle Marken einsetzbar. Sonst bei Projekten/Terminen der anderen Marke(n) nicht mehr zur Auswahl auswählbar.</p>
+          ` : ''}
+
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Zugang zur Verwaltung</h2>
           <div class="form-grid">
@@ -390,6 +404,7 @@ export async function render(container) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       for (const [k, v] of fd.entries()) updated[k] = v.trim ? v.trim() : v;
+      updated.markeIds = fd.getAll('markeIds');
       if (!updated.name) return;
       await put('mitarbeiter', updated);
       toast(isEdit ? 'Mitarbeiter aktualisiert' : 'Mitarbeiter angelegt', 'success');
