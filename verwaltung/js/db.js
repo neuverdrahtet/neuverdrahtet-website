@@ -1404,6 +1404,242 @@ Ort, Datum: {{datum}}`,
       { typ: 'unterschriften', labels: ['Unterschrift Auftraggeber', 'Unterschrift Auftragnehmer'] },
     ],
   },
+  {
+    id: 'vorlage-waermepumpe-wartung', typ: 'dokumentation', name: 'Wärmepumpe-Wartungsprotokoll',
+    textVorlage: `WÄRMEPUMPE WARTUNGSPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Zusätzliche Arbeiten:
+
+
+Bemerkungen / Mängel:
+
+
+Empfehlung:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Auftragsnummer', typ: 'text' },
+          { label: 'Servicetechniker', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Infos zur Wärmepumpe',
+        felder: [
+          { label: 'Typenbezeichnung', typ: 'text' },
+          { label: 'Software-Version', typ: 'text' },
+          { label: 'Seriennummer', typ: 'text' },
+          { label: 'Baujahr', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'checkliste', titel: '1–2. Elektrische Komponenten & Regelung',
+        punkte: [
+          'Überprüfung aller elektrischen Anschlüsse auf festen Sitz', 'Kontrolle der Stromaufnahme von Kompressor und Ventilatoren',
+          'Inspektion der Schaltschränke und Steuereinheiten', 'Test der Sicherheitseinrichtungen (z.B. Hochdruckschalter)',
+          'Kontrolle/Aktualisierung der Softwareversion', 'Überprüfung und Optimierung der Regelparameter',
+          'Test der Fernbedienung und Anzeigen', 'Auslesen und Analyse des Fehlerspeichers',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: '3–4. Hydraulisches System & Kältekreislauf',
+        punkte: [
+          'Überprüfung des Systemdrucks im Heizkreis', 'Kontrolle der Umwälzpumpen auf Funktion und Geräusche',
+          'Inspektion der Rohrleitungen und Anschlüsse auf Dichtheit', 'Überprüfung/Reinigung des Filters im Heizkreislauf',
+          'Kontrolle des Kältemitteldrucks und der -temperatur', 'Sichtprüfung auf Öl- und Kältemittelleckagen',
+          'Überprüfung der Kältemittelfüllung', 'Inspektion und Reinigung von Verdampfer und Kondensator',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: '5–6. Wärmetauscher, Ventile & Außeneinheit',
+        punkte: [
+          'Reinigung der Wärmetauscher (Luft/Wasser)', 'Kontrolle/Reinigung des Kondensatablaufs',
+          'Überprüfung aller Ventile auf Funktion und Dichtheit', 'Inspektion des Expansionsventils',
+          'Reinigung der Lamellen des Außengeräts', 'Kontrolle des Ventilators auf Beschädigungen und Unwucht',
+          'Überprüfung der Schalldämmung und Vibrationsdämpfer', 'Inspektion des Gehäuses auf Korrosion oder Beschädigungen',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: '7–8. Allgemeine Prüfungen & Abschluss',
+        punkte: [
+          'Sichtprüfung aller Komponenten auf Beschädigungen oder Verschleiß', 'Kontrolle der Geräuschentwicklung im Betrieb',
+          'Überprüfung der Isolierung aller Rohrleitungen', 'Dokumentation aller Messwerte und durchgeführten Arbeiten',
+          'Probelauf und Funktionstest aller Betriebsmodi', 'Optimierung der Effizienz durch Anpassung der Einstellungen',
+          'Beratung des Kunden zu energiesparendem Betrieb',
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Messwerte',
+        felder: [
+          { label: 'Anlagen-Druck (bar)', typ: 'zahl' },
+          { label: 'PH-Wert', typ: 'zahl' },
+          { label: 'Leitfähigkeit (µS/cm)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'janein', titel: 'Beurteilung', fragen: ['Zustand der Anlage mangelfrei', 'Anlage vollständig betriebsbereit'] },
+      {
+        typ: 'kopfdaten', titel: 'Abschluss',
+        felder: [
+          { label: 'Wartung abgeschlossen am', typ: 'datum' },
+          { label: 'Nächster Wartungstermin', typ: 'datum' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Kunde', 'Unterschrift Servicetechniker'] },
+    ],
+  },
+  {
+    id: 'vorlage-geraeteuebergabe', typ: 'dokumentation', name: 'Geräteübergabe',
+    textVorlage: `GERÄTEÜBERGABE
+
+Firma: {{firma}}
+Ausgabe an: {{mitarbeiter}}
+Datum: {{datum}}
+
+Weitere Angaben:
+
+
+Der Ausleihende erklärt mit seiner Unterschrift, dass er mit folgender Vereinbarung einverstanden ist und diese zur
+Kenntnis genommen hat: Das/die Gerät(e) sind zum vereinbarten Rückgabedatum in gereinigtem Zustand zu
+übergeben. Der Verleiher bleibt zu jedem Zeitpunkt Eigentümer. Bei Verlust, Diebstahl oder Defekt ist der Schaden
+durch den Ausleihenden zu ersetzen oder kann durch den Verleiher in Rechnung gestellt werden.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Gerät',
+        felder: [
+          { label: 'Gerät', typ: 'text' },
+          { label: 'Inventar-Nr.', typ: 'text' },
+          { label: 'Serien-Nr.', typ: 'text' },
+          { label: 'Zeitraum von', typ: 'datum' },
+          { label: 'Zeitraum bis', typ: 'datum' },
+        ],
+      },
+      { typ: 'janein', titel: 'Zustand', fragen: ['Gerät sauber übergeben'] },
+      { typ: 'checkliste', titel: 'Abrechnung', punkte: ['Tagessatz', 'Pauschal', 'Kostenfrei'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Verleiher', 'Unterschrift Leiher'] },
+    ],
+  },
+  {
+    id: 'vorlage-arbeitskleidung-uebergabe', typ: 'dokumentation', name: 'Arbeitskleidung Übergabe',
+    textVorlage: `ARBEITSKLEIDUNG ÜBERGABE
+
+Firma: {{firma}}
+Empfänger: {{mitarbeiter}}
+Datum: {{datum}}
+
+Information zum Eigentum:
+Die Arbeitsmittel bleiben Eigentum des Arbeitgebers und sind bei Beendigung des Arbeitsverhältnisses
+unaufgefordert zurückzugeben. Beschädigungen oder Verlust sind unverzüglich zu melden.
+
+Empfangsbestätigung:
+Hiermit bestätige ich den vollständigen Erhalt bzw. die vollständige Rückgabe der unten aufgeführten Arbeitsmittel
+in gepflegtem und funktionstüchtigem Zustand.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'checkliste', titel: 'Art des Vorgangs', punkte: ['Übergabe', 'Rückgabe'] },
+      { typ: 'tabelle', titel: 'Arbeitsmittel', spalten: ['Beschreibung', 'Anzahl', 'Zustand (Neu/Gebraucht)'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Empfänger', 'Unterschrift Übergeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-nutzungsrechte', typ: 'dokumentation', name: 'Nutzungsrechte (Arbeitsergebnisse/Urheberrechte)',
+    textVorlage: `NUTZUNGSRECHTE – ARBEITSERGEBNISSE, URHEBERRECHTE, ERFINDUNGEN
+
+zwischen {{firma}} und {{mitarbeiter}}
+
+Soweit nicht im Widerspruch zum Arbeitnehmererfindungsgesetz stehend oder durch die Regelungen eines
+Gesetzes verboten, erkennt der Arbeitnehmer an, dass seine gesamten Arbeitsergebnisse (allein oder gemeinsam
+mit anderen Personen geschaffene Ergebnisse einschließlich etwaiger gewerblicher Schutzrechte an solchen
+Arbeitsergebnissen), die im Zusammenhang mit seinem Anstellungsverhältnis geschaffen, entwickelt oder
+hergestellt worden sind ("Arbeitsergebnisse"), das ausschließliche Eigentum des Arbeitgebers darstellen.
+
+Der Arbeitnehmer räumt dem Arbeitgeber das ausschließliche und alleinige Nutzungsrecht an allen
+urheberrechtlich geschützten geistigen und schöpferischen Leistungen ein, die der Arbeitnehmer im Rahmen
+seiner Tätigkeit erbracht hat. Die Nutzungsrechte werden unwiderruflich und unbefristet übertragen. Dem
+Arbeitgeber steht das ausschließliche Recht zur vollständigen Verwendung und zur Veränderung jeglicher
+Arbeitsergebnisse ohne Beschränkung oder Verpflichtung irgendeiner Art zu.
+
+Außer im Rahmen und zum Zwecke der Nutzung im Zuge seines Anstellungsverhältnisses steht dem Arbeitnehmer
+kein Recht zu, die Arbeitsergebnisse zu verwenden. Der Arbeitnehmer verpflichtet sich, alle erforderlichen und
+gesetzlich zulässigen Maßnahmen zu ergreifen und jedes Schriftstück auf Verlangen des Unternehmens zu
+unterzeichnen, um das Recht des Arbeitgebers an Arbeitsergebnissen zu sichern oder zu übertragen. Der
+Arbeitnehmer verzichtet im Rahmen des gesetzlich Zulässigen auf alle sonstigen, ihm als Urheber/Schöpfer
+zustehenden Rechte an dem Werk, insbesondere auf die Ausübung des Rechts auf Namensnennung und das Recht
+auf Zugänglichmachung des Werkstücks.
+
+Die Übertragung der Rechte umfasst sämtliche übertragbaren Rechte des UrhG, also insbesondere das Recht zur
+Veröffentlichung, Vervielfältigung und Verbreitung, das Recht zur Ausstellung, das Vortrags-, Aufführungs- und
+Vorführungsrecht, das Recht zur öffentlichen Zugänglichmachung, das Senderecht, Recht der Wiedergabe durch
+Bild- und Tonträger, das Recht der Wiedergabe von Funksendungen. Darüber hinaus erteilt der Arbeitnehmer dem
+Arbeitgeber im Rahmen des gesetzlich Zulässigen seine Zustimmung zur Änderung und weiteren Bearbeitung.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'unterschriften', labels: ['Unterschrift Mitarbeiter', 'Unterschrift Arbeitgeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-einwilligung-foto-video', typ: 'dokumentation', name: 'Einwilligung zur Nutzung von Foto- & Videoaufnahmen',
+    textVorlage: `EINWILLIGUNG ZUR NUTZUNG VON FOTO- & VIDEOAUFNAHMEN
+
+zwischen {{firma}} und {{mitarbeiter}}
+
+Gegenstand:
+Fotografische Aufnahmen der/des Fotografierten am Arbeitsplatz oder auf Firmenevents.
+
+Verwendungszweck:
+Veröffentlichung im Internet zur bildlichen Darstellung des Ansprechpartners für die Dauer des
+Arbeitsverhältnisses, Postings auf Social Media (z.B. YouTube, Instagram, Google, WhatsApp), Webpräsenz,
+Homepage, Flyer, Visitenkarten etc., auch über das Arbeitsverhältnis hinaus.
+
+Erklärung:
+Der/die Fotografierte erklärt sein/ihr Einverständnis mit der (unentgeltlichen) Verwendung der fotografischen/
+Video-Aufnahmen seiner/ihrer Person für die oben beschriebenen Zwecke. Eine Verwendung für andere als die
+beschriebenen Zwecke oder ein Inverkehrbringen durch Überlassung der Aufnahmen an Dritte ist unzulässig.
+
+Der/die Fotografierte hat das Informationsschreiben zur Erhebung personenbezogener Daten im Rahmen der
+Nutzung von Fotoaufnahmen gemäß Art. 13 DSGVO erhalten und zur Kenntnis genommen. Diese Einwilligung ist
+freiwillig. Wird sie nicht erteilt, entstehen keine Nachteile. Diese Einwilligung kann jederzeit mit Wirkung für die
+Zukunft widerrufen werden.
+
+Ort, Datum: {{datum}}
+
+---
+
+INFORMATIONSSCHREIBEN ZUR ERHEBUNG PERSONENBEZOGENER DATEN (ART. 13 DSGVO)
+
+1. Verantwortlicher: {{firma}}
+2. Kontaktdaten des Datenschutzbeauftragten: siehe Firmenangaben
+3. Zwecke der Verarbeitung: siehe Verwendungszweck oben
+4. Rechtsgrundlage: Einwilligung (Art. 6 Abs. 1 lit. a DSGVO)
+5. Empfänger/Kategorien von Empfängern: Dienstleister, Social Media, Kunden
+6. Übermittlung in ein Drittland: nur nach ausdrücklicher Einwilligung nach Unterrichtung über die Risiken,
+   ggf. inkl. Übermittlung an Cloud-Lösungen, Webhosting, Drittanbieter und Drittländer
+7. Dauer der Speicherung: mindestens für die Dauer des Arbeitsverhältnisses, maximal 10 Jahre darüber hinaus
+8. Rechte der Betroffenen: Auskunft (Art. 15), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der
+   Verarbeitung (Art. 18), Widerspruch (Art. 21), Datenübertragbarkeit (Art. 20), Widerruf der Einwilligung (Art. 7 Abs. 3)
+9. Recht auf Widerruf: jederzeit mit Wirkung für die Zukunft, zu richten an den Verantwortlichen
+10. Recht auf Beschwerde bei einer Datenschutzaufsichtsbehörde
+11. Die Bereitstellung der personenbezogenen Daten ist für einen Vertragsabschluss erforderlich.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'unterschriften',
+        labels: ['Unterschrift Mitarbeiter (Einwilligung)', 'Unterschrift Arbeitgeber (Einwilligung)', 'Unterschrift Mitarbeiter (Infoschreiben)', 'Unterschrift Arbeitgeber (Infoschreiben)'],
+      },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [
