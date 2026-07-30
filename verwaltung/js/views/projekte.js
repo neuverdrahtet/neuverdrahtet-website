@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -209,7 +209,7 @@ export async function render(container, opts = {}) {
       <div class="flex-row" style="gap:6px;margin-bottom:10px">
         <select id="verwendung-katalog" style="flex:2">
           <option value="">– Artikel wählen –</option>
-          ${katalog.map((k) => `<option value="${k.id}">${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}</option>`).join('')}
+          ${katalogOptionsHtml(katalog, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}
         </select>
         <input type="number" id="verwendung-menge" placeholder="Menge" min="0" step="0.01" style="flex:1">
         <button type="button" class="btn btn-sm" id="btn-verwendung-add">+ hinzufügen</button>

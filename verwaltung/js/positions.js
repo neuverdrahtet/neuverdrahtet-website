@@ -1,4 +1,4 @@
-import { uid, calcTotals, formatCurrency, escapeHtml, toast } from './utils.js';
+import { uid, calcTotals, formatCurrency, escapeHtml, toast, katalogOptionsHtml } from './utils.js';
 import { put } from './db.js';
 
 function totalsHtml(totals) {
@@ -68,7 +68,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       <div class="flex-row flex-wrap" style="margin-bottom:14px">
         <select class="f-katalog-select">
           <option value="">Aus Katalog wählen ...</option>
-          ${katalog.map((k) => `<option value="${k.id}">${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})</option>`).join('')}
+          ${katalogOptionsHtml(katalog, (k) => `${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})`)}
         </select>
         <button type="button" class="btn btn-sm" id="btn-add-katalog">+ übernehmen</button>
         <button type="button" class="btn btn-sm" id="btn-add-manual">+ freie Position</button>
