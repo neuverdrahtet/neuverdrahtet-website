@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 15;
+const DB_VERSION = 16;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -57,6 +57,7 @@ const STORES = {
   pushTokens: 'id',
   fahrten: 'id',
   anlagen: 'id',
+  marken: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -1021,6 +1022,24 @@ export async function getSettings() {
 
 export async function setSetting(key, value) {
   await put('einstellungen', { key, value });
+}
+
+// Für Firmen mit mehreren Marken unter derselben Rechtseinheit (siehe
+// views/einstellungen.js "Marken"): überschreibt nur Name/Logo/Kontaktdaten
+// auf den globalen Settings, Steuernummer/USt-IdNr/Bank bleiben bewusst immer
+// aus den globalen Settings, da rechtlich/steuerlich eine einzige Firma bleibt.
+export function resolveMarkeSettings(settings, marke) {
+  if (!marke) return settings;
+  return {
+    ...settings,
+    firmenname: marke.name || settings.firmenname,
+    logoDataUrl: marke.logoDataUrl || settings.logoDataUrl,
+    strasse: marke.strasse || settings.strasse,
+    plzOrt: marke.plzOrt || settings.plzOrt,
+    telefon: marke.telefon || settings.telefon,
+    email: marke.email || settings.email,
+    website: marke.website || settings.website,
+  };
 }
 
 export async function setSettings(obj) {
