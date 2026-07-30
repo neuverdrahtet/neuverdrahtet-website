@@ -1,4 +1,5 @@
 import { loadXlsx } from './vendorLoader.js';
+import { GEWERKE } from './db.js';
 
 export function uid() {
   if (crypto.randomUUID) return crypto.randomUUID();
@@ -67,6 +68,29 @@ export function escapeHtml(str) {
   return String(str ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+// Baut <optgroup>-gruppierte <option>-Elemente für einen Katalog-<select>,
+// sortiert nach Gewerk (Reihenfolge wie GEWERKE) und innerhalb jeder Gruppe
+// alphabetisch nach Bezeichnung - für ein einheitliches, nach Gewerk
+// sortiertes Material-/Leistungs-Sortiment in Projekt-Akte, Angeboten und
+// Rechnungen.
+export function katalogOptionsHtml(katalog, labelFn) {
+  const gruppen = new Map();
+  for (const k of katalog) {
+    const gid = k.gewerk || '_ohne';
+    if (!gruppen.has(gid)) gruppen.set(gid, []);
+    gruppen.get(gid).push(k);
+  }
+  const reihenfolge = [...GEWERKE.map((g) => g.id), '_ohne'];
+  return reihenfolge
+    .filter((gid) => gruppen.has(gid))
+    .map((gid) => {
+      const items = gruppen.get(gid).sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || '', 'de'));
+      const titel = gid === '_ohne' ? 'Ohne Gewerk' : (GEWERKE.find((g) => g.id === gid)?.titel || gid);
+      return `<optgroup label="${escapeHtml(titel)}">${items.map((k) => `<option value="${k.id}">${labelFn(k)}</option>`).join('')}</optgroup>`;
+    })
+    .join('');
 }
 
 // Öffnet die Navigations-App des Geräts (Google Maps/Apple Maps je nach
