@@ -1,4 +1,4 @@
-import { getAll, put, remove, clearStore, syncMitarbeiterOeffentlich, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
+import { getAll, put, remove, clearStore, syncMitarbeiterOeffentlich, getSettings, ZUGRIFFSROLLEN, TERMIN_TYPEN } from '../db.js';
 import { uid, escapeHtml, formatDate, toast, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
@@ -53,6 +53,7 @@ function currentStatusFor(termine, mitarbeiterId) {
 const FARBEN = ['#f0a020', '#2b7fd6', '#1f8a4c', '#c0392b', '#8e44ad', '#16a085', '#d35400', '#2c3e50'];
 const VERTRAGSARTEN = ['Vollzeit', 'Teilzeit', 'Minijob', 'Werkstudent', 'Auszubildender', 'Praktikant'];
 const MA_DOKUMENT_KATEGORIEN = [
+  { id: 'bericht', titel: 'Bericht/Protokoll' },
   { id: 'vertrag', titel: 'Vertrag' },
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
@@ -67,7 +68,7 @@ function currentYearCount(termine, mitarbeiterId, typ) {
 }
 
 export async function render(container) {
-  let [mitarbeiter, termine, marken] = await Promise.all([getAll('mitarbeiter'), getAll('termine'), getAll('marken')]);
+  let [mitarbeiter, termine, marken, settings] = await Promise.all([getAll('mitarbeiter'), getAll('termine'), getAll('marken'), getSettings()]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   syncMitarbeiterOeffentlich().catch((err) => console.error('mitarbeiterOeffentlich-Sync fehlgeschlagen:', err));
@@ -394,6 +395,7 @@ export async function render(container) {
       });
       renderDokumenteSection(body.querySelector('#dok-host'), 'mitarbeiter', data.id, {
         kategorien: MA_DOKUMENT_KATEGORIEN, title: 'Dokumente (Vertrag, Ausweis, ...)',
+        berichtContext: { settings, kunde: null, projekt: '', mitarbeiter: data.name },
       });
       body.querySelector('#btn-abwesenheit').addEventListener('click', () => openAbwesenheitForm(data.id, close));
       body.querySelector('#link-zeituebersicht').addEventListener('click', () => close());

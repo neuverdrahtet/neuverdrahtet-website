@@ -825,6 +825,133 @@ Ort, Datum: {{datum}}
 
 Unterschrift Auftragnehmer:                     Unterschrift Auftraggeber/Kunde:`,
   },
+  {
+    id: 'vorlage-risikobewertung-vde0100-420', typ: 'dokumentation', name: 'Risikobewertung nach DIN VDE 0100-420',
+    textVorlage: `RISIKOBEWERTUNG NACH DIN VDE 0100-420
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+2. Bereits nach VDE 0100-420 ergriffene Maßnahmen
+
+Anlagentechnisch:
+
+
+Organisatorisch:
+
+
+Baulich:
+
+
+Allgemeiner Einsatz von AFDD:
+
+
+4. Bewertung
+
+Allgemeine Bewertung der Anlage:
+
+
+Bemerkungen/Mängel:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Kundennr.', typ: 'text' },
+          { label: 'Auftragsnr.', typ: 'text' },
+          { label: 'Objekt', typ: 'text' },
+          { label: 'Wohnung', typ: 'text' },
+          { label: 'Stockwerk', typ: 'text' },
+          { label: 'Adresse', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'janein', titel: '1. Vorhandene Räume',
+        fragen: [
+          'Räumlichkeiten mit Schlafgelegenheit',
+          'Räume oder Orte mit besonderem Brandrisiko',
+          'Räume oder Orte aus Bauteilen mit brennbaren Baustoffen, wenn diese einen geringeren Feuerwiderstand als feuerhemmend aufweisen',
+          'Räume oder Orte mit Gefährdungen für unersetzbare Güter',
+        ],
+      },
+      { typ: 'tabelle', titel: '3. Risikoanalyse (RPZ = B × A × E)', spalten: ['Ort', 'B', 'A', 'E'], ergebnisSpalte: 'RPZ' },
+      { typ: 'tabelle', titel: 'Ergriffene Maßnahmen bei RPZ ≥ 200', spalten: ['Maßnahme', 'B', 'A', 'E'], ergebnisSpalte: 'RPZ Neu' },
+      { typ: 'unterschriften', labels: ['Unterschrift Elektroplaner', 'Unterschrift Elektroinstallateur'] },
+    ],
+  },
+  {
+    id: 'vorlage-pruefung-instandgesetzte-geraete', typ: 'dokumentation', name: 'Prüfung: Instandgesetzte Geräte',
+    textVorlage: `PRÜFUNG: INSTANDGESETZTE GERÄTE
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Prüfer: {{mitarbeiter}}
+Datum: {{datum}}
+
+Kundenangaben (Mängel):
+
+
+Durchgeführte Reparaturarbeiten:
+
+
+Prüfung nach Instandsetzung – Ergänzende Prüfanforderungen nach DIN VDE 0701-0702:
+
+
+Nächster Prüftermin:
+
+Verwendete Messgeräte:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Allgemein',
+        felder: [
+          { label: 'Geräteart', typ: 'text' },
+          { label: 'Hersteller', typ: 'text' },
+          { label: 'Typenbezeichnung', typ: 'text' },
+          { label: 'Fabrikat-Nr.', typ: 'text' },
+          { label: 'Baujahr', typ: 'text' },
+          { label: 'Schutzklasse', typ: 'text' },
+          { label: 'Nennspannung (V)', typ: 'zahl' },
+          { label: 'Nennstrom (A)', typ: 'zahl' },
+          { label: 'Nennleistung (W)', typ: 'zahl' },
+          { label: 'Annahme/Anlieferung am', typ: 'datum' },
+          { label: 'Reparatur am', typ: 'datum' },
+          { label: 'Rückgabe/Abholung am', typ: 'datum' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Messung',
+        felder: [
+          { label: 'Schutzleiterwiderstand (Ω)', typ: 'zahl' },
+          { label: 'Isolationswiderstand (MΩ)', typ: 'zahl' },
+          { label: 'Schutzleiterstrom (mA)', typ: 'zahl' },
+          { label: 'Berührungsstrom (mA)', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Sichtprüfung',
+        punkte: ['Gehäuse i.O', 'sonstige mechanische Teile i.O', 'Geräte-Anschlußleitungen einschl. Steckvorrichtung mängelfrei'],
+      },
+      {
+        typ: 'checkliste', titel: 'Ergebnis',
+        punkte: [
+          'Funktions- und Sichtprüfung mängelfrei',
+          'Aufschriften vorhanden bzw. vervollständigt',
+          'Das Gerät kann nicht mehr instandgesetzt werden',
+          'Das Gerät hat erhebliche sicherheitstechnische Mängel (Brandgefahr / Gefahr durch elektrischen Schlag / Mechanische Gefahr)',
+          'Nennwerte stimmen mit den Herstellerdaten überein',
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Verantwortlicher Unternehmer', 'Prüfer'] },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [
