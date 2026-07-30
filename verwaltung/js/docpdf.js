@@ -514,29 +514,31 @@ export function buildBerichtPdfBlob({
       ].filter(Boolean);
   if (unterschriftenListe.length) {
     const sigW = 70, sigH = 26, gap = 16;
-    if (y + sigH + 12 > maxY) {
-      doc.addPage();
-      y = 20;
+    for (let rowStart = 0; rowStart < unterschriftenListe.length; rowStart += 2) {
+      const sigRow = unterschriftenListe.slice(rowStart, rowStart + 2);
+      if (y + sigH + 12 > maxY) {
+        doc.addPage();
+        y = 20;
+      }
+      y += 8;
+      sigRow.forEach((u, i) => {
+        const x = marginX + i * (sigW + gap);
+        try { doc.addImage(u.dataUrl, 'PNG', x, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+      });
+      y += sigH + 2;
+      doc.setDrawColor(160);
+      sigRow.forEach((u, i) => {
+        const x = marginX + i * (sigW + gap);
+        doc.line(x, y, x + sigW, y);
+      });
+      y += 4;
+      doc.setFontSize(8);
+      doc.setTextColor(110);
+      sigRow.forEach((u, i) => {
+        const x = marginX + i * (sigW + gap);
+        doc.text(u.label, x, y);
+      });
     }
-    y += 8;
-    const sigRow = unterschriftenListe.slice(0, 2);
-    sigRow.forEach((u, i) => {
-      const x = marginX + i * (sigW + gap);
-      try { doc.addImage(u.dataUrl, 'PNG', x, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
-    });
-    y += sigH + 2;
-    doc.setDrawColor(160);
-    sigRow.forEach((u, i) => {
-      const x = marginX + i * (sigW + gap);
-      doc.line(x, y, x + sigW, y);
-    });
-    y += 4;
-    doc.setFontSize(8);
-    doc.setTextColor(110);
-    sigRow.forEach((u, i) => {
-      const x = marginX + i * (sigW + gap);
-      doc.text(u.label, x, y);
-    });
   }
 
   addFooter(doc, settings, marginX, rightX);

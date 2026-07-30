@@ -711,6 +711,12 @@ Empfehlung für den Kunden:
 
 Ort, Datum: {{datum}}
 Unterschrift Techniker:                     Unterschrift Kunde:`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Auftragsdaten', felder: [{ label: 'Rapport-/Auftrags-Nr.', typ: 'text' }] },
+      { typ: 'checkliste', titel: 'Vorgangsart', punkte: ['Auftrag', 'Angebot', 'Lieferschein', 'Rechnung'] },
+      { typ: 'janein', titel: 'Abschluss', fragen: ['Alle Arbeiten abgeschlossen'] },
+      { typ: 'checkliste', titel: 'Zahlung erhalten', punkte: ['Karte', 'Bar', 'PayPal', 'Überweisung', 'Noch offen – Kunde zahlt nach Rechnungserhalt'] },
+    ],
   },
   {
     id: 'vorlage-abnahme', typ: 'dokumentation', name: 'Abnahmeprotokoll',
@@ -787,6 +793,10 @@ Aufgemessen von:
 
 Ort, Datum: {{datum}}
 Unterschrift:`,
+    abschnitte: [
+      { typ: 'raeume', titel: 'Aufmaß je Raum (mit Foto)', mitMassen: true, mitFotoProZeile: true },
+      { typ: 'unterschriften', labels: ['Unterschrift Ersteller'] },
+    ],
   },
   {
     id: 'vorlage-auftragsformular', typ: 'dokumentation', name: 'Auftragsformular',
@@ -1238,6 +1248,160 @@ Ort, Datum: {{datum}}`,
       { typ: 'janein', titel: 'RCD-Prüfung – Ergebnis', fragen: ['Funktionsprüfung Prüftaste i.O.', 'Messung bestanden'] },
       { typ: 'janein', titel: 'Abschluss / Bestätigung', fragen: ['Anlage vollständig betriebsbereit', 'Gemeinsame Übergabe mit Auftraggeber vorgenommen'] },
       { typ: 'unterschriften', labels: ['Unterschrift Elektroinstallateur', 'Unterschrift Auftraggeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-baubesprechungsprotokoll', typ: 'dokumentation', name: 'Baubesprechungsprotokoll',
+    textVorlage: `BAUBESPRECHUNGSPROTOKOLL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Teilnehmer:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Bauvorhaben',
+        felder: [
+          { label: 'Bauvorhaben-Nr.', typ: 'text' },
+          { label: 'Ort', typ: 'text' },
+          { label: 'Datum & Uhrzeit', typ: 'text' },
+        ],
+      },
+      { typ: 'tabelle', titel: 'Besprechungspunkte', spalten: ['Gewerk/Thema', 'Beschreibung', 'Verantwortlich', 'Erledigt bis'] },
+      { typ: 'unterschriften', labels: ['Unterschriftsfeld 1', 'Unterschriftsfeld 2', 'Unterschriftsfeld 3', 'Unterschriftsfeld 4'] },
+    ],
+  },
+  {
+    id: 'vorlage-bauabnahme', typ: 'dokumentation', name: 'Bauabnahme',
+    textVorlage: `BAUABNAHME
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum der Abnahme: {{datum}}
+
+Mängelliste:
+
+
+Besondere Hinweise / Vorbehalte:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Auftragsnummer', typ: 'text' },
+          { label: 'Ansprechpartner vor Ort', typ: 'text' },
+          { label: 'Projektadresse', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Abnahmezustand', fragen: ['Leistungen mängelfrei erbracht'] },
+      { typ: 'janein', titel: 'Nachbesserung', fragen: ['Nachbesserungen vereinbart'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftraggeber', 'Unterschrift Auftragnehmer'] },
+    ],
+  },
+  {
+    id: 'vorlage-pv-standortaufnahme', typ: 'dokumentation', name: 'PV-Standortaufnahme',
+    textVorlage: `PV-STANDORTAUFNAHME
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Architekt (Name, Kontaktdaten):
+
+
+Elektromeister (Name, Kontaktdaten):
+
+
+Dachdecker (Name, Kontaktdaten):
+
+
+Sonstige Angaben / Bemerkungen:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Auftragsdaten', felder: [{ label: 'Auftragsnr.', typ: 'text' }, { label: 'Prüfer', typ: 'text' }] },
+      {
+        typ: 'kopfdaten', titel: '1. Allgemein',
+        felder: [
+          { label: 'Anschrift Baustelle', typ: 'text' },
+          { label: 'Gebäudeart', typ: 'text' },
+          { label: 'Schneelastzone', typ: 'text' },
+          { label: 'Höhe ü. N.N. (m)', typ: 'zahl' },
+          { label: 'Windlastzone', typ: 'text' },
+          { label: 'Aktueller Stromverbrauch (kWh/a)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'janein', titel: 'Denkmalschutz', fragen: ['Denkmal- oder Ensembleschutz vorhanden'] },
+      {
+        typ: 'checkliste', titel: '2. Unterlagen',
+        punkte: [
+          'Lageplan', 'Grundriss', 'Dachaufsicht', 'Seitenansicht', 'Schnitt', 'Baubeschreibung',
+          'Foto Dach', 'Foto Hausansicht mit Dachfläche', 'Foto Zählerplatz', 'Foto Verschattungssituation',
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '3. Kundenwünsche',
+        felder: [
+          { label: 'PV-Modultyp', typ: 'text' },
+          { label: 'PV-Leistung ca. (kWp)', typ: 'zahl' },
+          { label: 'Maximal nutzbare Fläche (m²)', typ: 'zahl' },
+          { label: 'Erwünschter Energieertrag (kWh/a)', typ: 'zahl' },
+          { label: 'Maximale Investition (€)', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '4. Angaben zum Dach',
+        felder: [
+          { label: 'Dachneigung (°)', typ: 'zahl' },
+          { label: 'Traufhöhe (m)', typ: 'zahl' },
+          { label: 'Firsthöhe (m)', typ: 'zahl' },
+          { label: 'Dachform', typ: 'text' },
+          { label: 'Dachdeckung', typ: 'text' },
+          { label: 'Sparrenabstand (m)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Hinderliche Dachelemente', punkte: ['Schornstein', 'Antenne', 'Dachfenster', 'Blitzableiter', 'Gaube'] },
+      { typ: 'janein', titel: 'Dach – Zustand', fragen: ['Statik geprüft', 'Dachaufbau Wärmedämmung vorhanden', 'Zufahrtsmöglichkeit vorhanden'] },
+      {
+        typ: 'kopfdaten', titel: '5. PV-Generator, Wechselrichter & Zähler',
+        felder: [
+          { label: 'Ort für PV-Generator Erdung', typ: 'text' },
+          { label: 'Ort für Generatoranschlusskasten', typ: 'text' },
+          { label: 'Ort des Stromzählers', typ: 'text' },
+          { label: 'Ort für Wechselrichter', typ: 'text' },
+          { label: 'Ort für DC-Hauptschalter', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '6. Leitungen und Installation',
+        felder: [
+          { label: 'Entfernung PV-Generator zum Anschlusskasten (m)', typ: 'zahl' },
+          { label: 'Entfernung Anschlusskasten zum Wechselrichter (m)', typ: 'zahl' },
+          { label: 'Entfernung Wechselrichter zum Netzanschluss (m)', typ: 'zahl' },
+          { label: 'Entfernung Gesamt (m)', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: '7. Netzeinspeisung',
+        felder: [
+          { label: 'Name des Netzbetreibers', typ: 'text' },
+          { label: 'Ansprechpartner', typ: 'text' },
+          { label: 'Netzimpedanz (kΩ)', typ: 'zahl' },
+          { label: 'Netzeinspeisung bis (kVA)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'tabelle', titel: '8. Evaluierung der Verschattung', spalten: ['Dachfläche', 'Ausrichtung', 'Neigung', 'Verschattung'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftraggeber', 'Unterschrift Auftragnehmer'] },
     ],
   },
 ];

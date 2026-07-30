@@ -34,7 +34,7 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } 
     host.innerHTML = `
       <div class="rz-list">
         ${rows.map((r, i) => `
-          <div class="flex-row flex-wrap" data-i="${i}" style="align-items:center;margin-bottom:6px;gap:6px">
+          <div class="flex-row flex-wrap rz-row" data-i="${i}" style="align-items:center;margin-bottom:6px;gap:6px">
             <input type="text" class="rz-raum" placeholder="Raum/Bereich" value="${escapeHtml(r.raum || '')}" style="flex:1">
             ${mitMassen ? `
               <input type="number" step="0.01" min="0" class="rz-laenge" placeholder="Länge (m)" value="${escapeHtml(r.laenge || '')}" style="width:90px">
@@ -49,7 +49,7 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } 
       </div>
       <button type="button" class="btn btn-sm rz-add" style="margin-top:4px">+ Raum/Zeile hinzufügen</button>
     `;
-    host.querySelectorAll('[data-i]').forEach((row) => {
+    host.querySelectorAll('.rz-row').forEach((row) => {
       const i = Number(row.dataset.i);
       row.querySelector('.rz-raum').addEventListener('input', (e) => { rows[i].raum = e.target.value; });
       row.querySelector('.rz-beschreibung').addEventListener('input', (e) => { rows[i].beschreibung = e.target.value; });
@@ -205,7 +205,7 @@ function mountTabelleEditor(host, { titel, spalten, ergebnisSpalte }) {
           <tbody>
             ${rows.map((r, ri) => `
               <tr data-ri="${ri}">
-                ${spalten.map((s, si) => `<td><input type="${si === 0 ? 'text' : 'number'}" ${si > 0 ? 'step="any"' : ''} class="tb-cell" data-ri="${ri}" data-s="${escapeHtml(s)}" value="${escapeHtml(r[s] ?? '')}" style="width:${si === 0 ? '140px' : '70px'}"></td>`).join('')}
+                ${spalten.map((s, si) => { const numerisch = ergebnisSpalte && si > 0; return `<td><input type="${numerisch ? 'number' : 'text'}" ${numerisch ? 'step="any"' : ''} class="tb-cell" data-ri="${ri}" data-s="${escapeHtml(s)}" value="${escapeHtml(r[s] ?? '')}" style="width:${si === 0 || !ergebnisSpalte ? '140px' : '70px'}"></td>`; }).join('')}
                 ${ergebnisSpalte ? `<td class="tb-ergebnis" data-ri="${ri}">${produkt(r)}</td>` : ''}
                 <td><button type="button" class="btn btn-sm btn-ghost tb-del" data-ri="${ri}">✕</button></td>
               </tr>

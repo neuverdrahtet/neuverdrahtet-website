@@ -35,8 +35,8 @@ function configFieldsFor(a) {
   if (a.typ === 'tabelle') {
     return `
       <div class="field"><label>Überschrift</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
-      <div class="field"><label>Spalten (kommagetrennt, erste = Bezeichnung, weitere = Zahlenwerte)</label><input type="text" class="absch-input" data-field="spalten" value="${escapeHtml((a.spalten || []).join(', '))}"></div>
-      <div class="field"><label>Ergebnis-Spalte (optional, Produkt der Zahlenwerte, z.B. RPZ)</label><input type="text" class="absch-input" data-field="ergebnisSpalte" value="${escapeHtml(a.ergebnisSpalte || '')}"></div>
+      <div class="field"><label>Spalten (kommagetrennt)</label><input type="text" class="absch-input" data-field="spalten" value="${escapeHtml((a.spalten || []).join(', '))}"></div>
+      <div class="field"><label>Ergebnis-Spalte (optional). Wenn gesetzt: erste Spalte = Bezeichnung (Text), weitere Spalten = Zahlenwerte, Ergebnis = deren Produkt (z.B. RPZ). Wenn leer: alle Spalten frei als Text.</label><input type="text" class="absch-input" data-field="ergebnisSpalte" value="${escapeHtml(a.ergebnisSpalte || '')}"></div>
     `;
   }
   if (a.typ === 'raeume') {
