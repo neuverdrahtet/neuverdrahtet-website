@@ -559,23 +559,7 @@ Kunde: {{kunde}}
 Projekt/Objekt: {{projekt}}
 Datum der Prüfung: {{datum}}
 
-Geprüfte Anlage/Geräte:
-
-
 Prüfgrundlage: DIN VDE 0100 / DIN VDE 0701-0702
-
-1. Sichtprüfung
-   Zustand Leitungen/Anschlüsse: i.O. / n.i.O.
-   Kennzeichnung/Beschriftung: i.O. / n.i.O.
-
-2. Messungen
-   Isolationswiderstand:
-   Schutzleiterwiderstand:
-   Schleifenimpedanz:
-   Auslösung RCD (falls vorhanden):
-
-3. Funktionsprüfung
-   Ergebnis:
 
 Festgestellte Mängel:
 
@@ -583,12 +567,24 @@ Festgestellte Mängel:
 Empfohlene Maßnahmen:
 
 
-Prüfergebnis: bestanden / nicht bestanden
-
-Nächste Prüfung fällig am:
-
-Ort, Datum: {{datum}}
-Unterschrift Prüfer:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Auftragsdaten', felder: [{ label: 'Geprüfte Anlage/Geräte', typ: 'text' }] },
+      { typ: 'checkliste', titel: '1. Sichtprüfung', punkte: ['Zustand Leitungen/Anschlüsse i.O.', 'Kennzeichnung/Beschriftung i.O.'] },
+      {
+        typ: 'kopfdaten', titel: '2. Messungen',
+        felder: [
+          { label: 'Isolationswiderstand', typ: 'text' },
+          { label: 'Schutzleiterwiderstand', typ: 'text' },
+          { label: 'Schleifenimpedanz', typ: 'text' },
+          { label: 'Auslösung RCD (falls vorhanden)', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: '3. Funktionsprüfung', fragen: ['Funktionsprüfung bestanden'] },
+      { typ: 'janein', titel: 'Prüfergebnis', fragen: ['Prüfung bestanden'] },
+      { typ: 'kopfdaten', titel: 'Abschluss', felder: [{ label: 'Nächste Prüfung fällig am', typ: 'datum' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
+    ],
   },
   {
     id: 'vorlage-dguv-v3', typ: 'dokumentation', name: 'Wiederkehrende Prüfung (DGUV V3)',
@@ -599,24 +595,18 @@ Kunde: {{kunde}}
 Projekt/Objekt: {{projekt}}
 Prüfdatum: {{datum}}
 
-Geprüfte elektrische Anlage/Betriebsmittel:
-
-Prüfintervall: ☐ ortsfest  ☐ ortsveränderlich
-
-Prüfergebnisse:
-   Sichtprüfung: i.O. / n.i.O.
-   Erprobung/Funktionsprüfung: i.O. / n.i.O.
-   Messung: i.O. / n.i.O.
-
 Festgestellte Mängel:
 
 
-Gesamtergebnis: keine Mängel / Mängel beseitigt / Mängel vorhanden (Nachprüfung erforderlich)
-
-Nächste Prüfung fällig am:
-
-Ort, Datum: {{datum}}
-Unterschrift Prüfer:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Auftragsdaten', felder: [{ label: 'Geprüfte elektrische Anlage/Betriebsmittel', typ: 'text' }] },
+      { typ: 'checkliste', titel: 'Prüfintervall', punkte: ['ortsfest', 'ortsveränderlich'] },
+      { typ: 'janein', titel: 'Prüfergebnisse', fragen: ['Sichtprüfung i.O.', 'Erprobung/Funktionsprüfung i.O.', 'Messung i.O.'] },
+      { typ: 'checkliste', titel: 'Gesamtergebnis', punkte: ['keine Mängel', 'Mängel beseitigt', 'Mängel vorhanden (Nachprüfung erforderlich)'] },
+      { typ: 'kopfdaten', titel: 'Abschluss', felder: [{ label: 'Nächste Prüfung fällig am', typ: 'datum' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
+    ],
   },
   {
     id: 'vorlage-wartung', typ: 'dokumentation', name: 'Wartungsprotokoll',
@@ -641,10 +631,12 @@ Festgestellter Zustand der Anlage:
 Empfehlungen für den Kunden:
 
 
-Nächster Wartungstermin:
-
-Ort, Datum: {{datum}}
-Unterschrift Techniker:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'janein', titel: 'Beurteilung', fragen: ['Anlage funktionstüchtig und betriebsbereit'] },
+      { typ: 'kopfdaten', titel: 'Abschluss', felder: [{ label: 'Nächster Wartungstermin', typ: 'datum' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Techniker'] },
+    ],
   },
   {
     id: 'vorlage-tagesbericht', typ: 'dokumentation', name: 'Tagesbericht',
@@ -658,8 +650,6 @@ Datum: {{datum}}
 Anwesende Mitarbeiter:
 
 
-Wetter (bei Außenarbeiten):
-
 Ausgeführte Arbeiten:
 -
 -
@@ -668,17 +658,17 @@ Ausgeführte Arbeiten:
 Verwendetes Material:
 
 
-Arbeitszeit (von – bis):
-
-
 Besondere Vorkommnisse / Behinderungen:
 
 
 Offene Punkte für den nächsten Tag:
 
 
-Ort, Datum: {{datum}}
-Unterschrift:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Rahmendaten', felder: [{ label: 'Wetter (bei Außenarbeiten)', typ: 'text' }, { label: 'Arbeitszeit (von – bis)', typ: 'text' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift'] },
+    ],
   },
   {
     id: 'vorlage-servicebericht', typ: 'dokumentation', name: 'Servicebericht',
@@ -730,21 +720,18 @@ Datum der Abnahme: {{datum}}
 Umfang der abgenommenen Leistung:
 
 
-Die Leistung wurde geprüft und:
-☐ ohne Mängel abgenommen
-☐ mit folgenden Mängeln abgenommen (siehe unten)
-
 Festgestellte Mängel:
 
-
-Frist zur Mängelbeseitigung:
 
 Der Auftragnehmer bestätigt die fach- und normgerechte Ausführung der Arbeiten.
 Der Auftraggeber bestätigt die Übernahme der Leistung.
 
-Ort, Datum: {{datum}}
-
-Unterschrift Auftragnehmer:                     Unterschrift Auftraggeber/Kunde:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'janein', titel: 'Abnahmezustand', fragen: ['Leistung ohne Mängel abgenommen'] },
+      { typ: 'kopfdaten', titel: 'Frist', felder: [{ label: 'Frist zur Mängelbeseitigung', typ: 'datum' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftragnehmer', 'Unterschrift Auftraggeber/Kunde'] },
+    ],
   },
   {
     id: 'vorlage-maengel', typ: 'dokumentation', name: 'Mängelprotokoll',
@@ -755,21 +742,15 @@ Kunde: {{kunde}}
 Projekt/Objekt: {{projekt}}
 Datum: {{datum}}
 
-Festgestellte Mängel:
-Nr. | Beschreibung | Ort/Bauteil | Priorität (hoch/mittel/niedrig)
-1.
-2.
-3.
-
-Vereinbarte Frist zur Beseitigung:
-
-Zuständiger Mitarbeiter:
-
 Bemerkungen:
 
 
-Ort, Datum: {{datum}}
-Unterschrift:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'tabelle', titel: 'Festgestellte Mängel', spalten: ['Beschreibung', 'Ort/Bauteil', 'Priorität'] },
+      { typ: 'kopfdaten', titel: 'Frist', felder: [{ label: 'Vereinbarte Frist zur Beseitigung', typ: 'datum' }, { label: 'Zuständiger Mitarbeiter', typ: 'text' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift'] },
+    ],
   },
   {
     id: 'vorlage-aufmass', typ: 'dokumentation', name: 'Aufmaßprotokoll',
@@ -807,23 +788,9 @@ Kunde: {{kunde}}
 Projekt/Objekt: {{projekt}}
 Datum: {{datum}}
 
-Ansprechpartner Kunde:
-Telefon:
-E-Mail:
-
 Auftragsgegenstand / Beschreibung der Leistung:
 
 
-
-Vereinbarter Ausführungszeitraum (von – bis):
-
-Vereinbarter Preis: ☐ Festpreis  ☐ nach Aufwand
-Betrag (falls Festpreis):
-
-Zahlungsbedingungen:
-- Anzahlung:
-- Abschlagszahlung(en):
-- Restzahlung nach Fertigstellung:
 
 Besondere Vereinbarungen / Hinweise:
 
@@ -831,9 +798,14 @@ Besondere Vereinbarungen / Hinweise:
 
 Der Auftraggeber beauftragt hiermit die oben beschriebene Leistung zu den genannten Bedingungen.
 
-Ort, Datum: {{datum}}
-
-Unterschrift Auftragnehmer:                     Unterschrift Auftraggeber/Kunde:`,
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Ansprechpartner Kunde', felder: [{ label: 'Ansprechpartner', typ: 'text' }, { label: 'Telefon', typ: 'text' }, { label: 'E-Mail', typ: 'text' }] },
+      { typ: 'kopfdaten', titel: 'Rahmendaten', felder: [{ label: 'Vereinbarter Ausführungszeitraum (von – bis)', typ: 'text' }, { label: 'Betrag (falls Festpreis, €)', typ: 'zahl' }] },
+      { typ: 'checkliste', titel: 'Vereinbarter Preis', punkte: ['Festpreis', 'nach Aufwand'] },
+      { typ: 'kopfdaten', titel: 'Zahlungsbedingungen', felder: [{ label: 'Anzahlung', typ: 'text' }, { label: 'Abschlagszahlung(en)', typ: 'text' }, { label: 'Restzahlung nach Fertigstellung', typ: 'text' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftragnehmer', 'Unterschrift Auftraggeber/Kunde'] },
+    ],
   },
   {
     id: 'vorlage-risikobewertung-vde0100-420', typ: 'dokumentation', name: 'Risikobewertung nach DIN VDE 0100-420',
