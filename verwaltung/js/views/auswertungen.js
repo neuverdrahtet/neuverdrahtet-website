@@ -13,11 +13,14 @@ function barRow(label, value, max, formatValue) {
 }
 
 export async function render(container) {
-  const [rechnungen, angebote, zeiterfassung, kunden, mitarbeiter] = await Promise.all([
+  const [rechnungen, angebote, zeiterfassung, kunden, mitarbeiter, projekte, ausgaben, marken] = await Promise.all([
     getAll('rechnungen'), getAll('angebote'), getAll('zeiterfassung'), getAll('kunden'), getAll('mitarbeiter'),
+    getAll('projekte'), getAll('ausgaben'), getAll('marken'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
 
   // --- Top-Kunden nach Umsatz (alle nicht-stornierten Rechnungen) ---
   const umsatzByKunde = {};
@@ -51,6 +54,33 @@ export async function render(container) {
   const entschieden = angebotStatusCount.angenommen + angebotStatusCount.abgelehnt;
   const annahmequote = entschieden > 0 ? Math.round((angebotStatusCount.angenommen / entschieden) * 100) : null;
 
+  // --- Umsatz/Ausgaben je Marke (Rechnung/Ausgabe -> Projekt -> Marke; ohne
+  // Projektbezug lässt sich eine Ausgabe/Rechnung keiner Marke zuordnen) ---
+  const STANDARD_LABEL = 'Standard (Hauptfirma)';
+  const OHNE_PROJEKT_LABEL = 'Ohne Projektbezug';
+  function markeLabelFuerProjekt(projektId) {
+    const projekt = projekteById[projektId];
+    if (!projekt) return OHNE_PROJEKT_LABEL;
+    return markenById[projekt.markeId]?.name || STANDARD_LABEL;
+  }
+  const umsatzByMarke = {};
+  for (const r of rechnungen) {
+    if (r.status === 'storniert') continue;
+    const label = markeLabelFuerProjekt(r.projektId);
+    umsatzByMarke[label] = (umsatzByMarke[label] || 0) + (Number(r.brutto) || 0);
+  }
+  const ausgabenByMarke = {};
+  for (const a of ausgaben) {
+    const label = markeLabelFuerProjekt(a.projektId);
+    ausgabenByMarke[label] = (ausgabenByMarke[label] || 0) + (Number(a.betragBrutto) || 0);
+  }
+  const markenLabels = Array.from(new Set([...Object.keys(umsatzByMarke), ...Object.keys(ausgabenByMarke)]))
+    .sort((a, b) => (umsatzByMarke[b] || 0) - (umsatzByMarke[a] || 0));
+  const markenAuswertung = markenLabels.map((label) => ({
+    label, umsatz: umsatzByMarke[label] || 0, ausgabenSumme: ausgabenByMarke[label] || 0,
+  }));
+  const markenUmsatzMax = Math.max(1, ...markenAuswertung.map((m) => m.umsatz));
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Auswertungen</h1>
@@ -71,6 +101,31 @@ export async function render(container) {
           </div>
         `}
       </div>
+
+      ${marken.length > 0 ? `
+        <div class="card">
+          <h2>Umsatz &amp; Ausgaben nach Marke</h2>
+          <p class="hint">Zuordnung läuft über das Projekt einer Rechnung/Ausgabe. Ohne verknüpftes Projekt lässt sich der Betrag keiner Marke zuordnen.</p>
+          ${markenAuswertung.length === 0 ? '<p class="text-mute">Noch keine Rechnungen oder Ausgaben vorhanden.</p>' : `
+            <div class="auswertung-liste">
+              ${markenAuswertung.map((m) => barRow(m.label, m.umsatz, markenUmsatzMax, formatCurrency)).join('')}
+            </div>
+            <table class="data-table" style="margin-top:12px">
+              <thead><tr><th>Marke</th><th class="text-right">Umsatz</th><th class="text-right">Ausgaben</th><th class="text-right">Übrig</th></tr></thead>
+              <tbody>
+                ${markenAuswertung.map((m) => `
+                  <tr>
+                    <td>${escapeHtml(m.label)}</td>
+                    <td class="text-right">${formatCurrency(m.umsatz)}</td>
+                    <td class="text-right">${formatCurrency(m.ausgabenSumme)}</td>
+                    <td class="text-right">${formatCurrency(m.umsatz - m.ausgabenSumme)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `}
+        </div>
+      ` : ''}
 
       <div class="card">
         <h2>Top-Kunden nach Umsatz</h2>
