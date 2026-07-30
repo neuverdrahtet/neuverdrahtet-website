@@ -20,7 +20,6 @@ export const STANDARD_KATALOG_MALER = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Maler', 'Std.', 42),
   leistung('Helferstunde Maler', 'Std.', 32),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Vorbereitung ---
   leistung('Abklebe-/Abdeckarbeiten (Boden/Möbel schützen)', 'm²', 1.5),
@@ -48,7 +47,7 @@ export const STANDARD_KATALOG_MALER = [
   // --- Materialien: Farben ---
   artikel('Wandfarbe innen, weiß (10L Eimer)', 'Stk.', 42),
   artikel('Wandfarbe innen, Volltonfarbe (10L Eimer)', 'Stk.', 58),
-  artikel('Tiefgrund/Grundierung (10L Kanister)', 'Stk.', 32),
+  artikel('Tiefgrund/Grundierung Wand (10L Kanister)', 'Stk.', 32),
   artikel('Fassadenfarbe (12,5L Eimer)', 'Stk.', 82),
   artikel('Abtönfarbe/Pigment (Flasche)', 'Stk.', 6),
   artikel('Holzlasur/Holzlack (750ml)', 'Stk.', 20),
@@ -59,5 +58,5 @@ export const STANDARD_KATALOG_MALER = [
   artikel('Tapetenkleister (Packung)', 'Stk.', 7),
   artikel('Malervlies/Abdeckvlies (Rolle)', 'Stk.', 14),
   artikel('Malerkrepp (Rolle 50m)', 'Stk.', 4),
-  artikel('Silikon Sanitär, weiß (Kartusche)', 'Stk.', 8),
+  artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
 ];

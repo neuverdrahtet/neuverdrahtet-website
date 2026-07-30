@@ -72,6 +72,7 @@ export async function render(container) {
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
         <button class="btn" id="btn-standard-import">📥 Standard-Kataloge importieren</button>
+        <button class="btn" id="btn-duplikate">🔍 Duplikate prüfen</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
       </div>
@@ -211,7 +212,98 @@ export async function render(container) {
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
   container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());
+  container.querySelector('#btn-duplikate').addEventListener('click', () => openDuplikatCheck());
   container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
+
+  function normName(s) {
+    return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // Bezeichnung -> Gewerk aus allen Standard-Katalogen, um Alt-Einträge (z.B.
+  // vor Einführung des Gewerk-Felds importiert) automatisch nachträglich
+  // zuordnen zu können.
+  const standardGewerkByName = new Map();
+  for (const { liste } of STANDARD_KATALOGE) {
+    for (const v of liste) {
+      standardGewerkByName.set(`${v.typ}|${normName(v.bezeichnung)}`, v.gewerk);
+    }
+  }
+
+  function openDuplikatCheck() {
+    const dupGroups = Array.from(
+      items.reduce((map, i) => {
+        const key = `${i.typ}|${normName(i.bezeichnung)}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(i);
+        return map;
+      }, new Map()).values()
+    ).filter((g) => g.length > 1);
+    const fehlendesGewerk = items.filter((i) => !i.gewerk && standardGewerkByName.has(`${i.typ}|${normName(i.bezeichnung)}`));
+
+    const { body, close } = openModal({
+      title: 'Katalog prüfen',
+      wide: true,
+      bodyHtml: `
+        <h2 style="font-size:14px;margin:0 0 8px">Fehlendes Gewerk (${fehlendesGewerk.length})</h2>
+        ${fehlendesGewerk.length === 0 ? '<p class="text-mute">Keine Einträge ohne Gewerk gefunden, die sich eindeutig zuordnen lassen.</p>' : `
+          <p class="hint">Diese Einträge stammen erkennbar aus einem Standard-Katalog, haben aber (noch) kein Gewerk gesetzt – z.B. weil sie vor Einführung der Gewerke-Filterung importiert wurden.</p>
+          <ul class="cal-event-list">
+            ${fehlendesGewerk.map((i) => `<li><span>${escapeHtml(i.bezeichnung)}</span><span class="text-mute">→ ${escapeHtml(GEWERKE.find((g) => g.id === standardGewerkByName.get(`${i.typ}|${normName(i.bezeichnung)}`))?.titel || '')}</span></li>`).join('')}
+          </ul>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-fix-gewerk" style="margin-top:8px">Gewerk automatisch zuordnen (${fehlendesGewerk.length})</button>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Mögliche Duplikate (${dupGroups.length} Bezeichnung${dupGroups.length === 1 ? '' : 'en'})</h2>
+        ${dupGroups.length === 0 ? '<p class="text-mute">Keine doppelten Bezeichnungen gefunden.</p>' : `
+          <p class="hint">Einträge mit identischer Bezeichnung – prüfe Gewerk/Preis und lösche überzählige Zeilen.</p>
+          ${dupGroups.map((g) => `
+            <div class="card" style="margin-bottom:8px;padding:10px">
+              <strong>${escapeHtml(g[0].bezeichnung)}</strong> <span class="text-mute">(${TYP_LABEL[g[0].typ] || g[0].typ})</span>
+              <table class="data-table" style="margin-top:6px">
+                <thead><tr><th>Gewerk</th><th class="text-right">VK</th><th></th></tr></thead>
+                <tbody>
+                  ${g.map((i) => `
+                    <tr>
+                      <td>${escapeHtml(GEWERKE.find((x) => x.id === i.gewerk)?.titel || '– kein Gewerk –')}</td>
+                      <td class="text-right">${formatCurrency(i.preis)}</td>
+                      <td><button type="button" class="btn btn-sm btn-danger dup-del" data-id="${i.id}">Löschen</button></td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        `}
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Schließen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-fix-gewerk')?.addEventListener('click', async () => {
+      for (const i of fehlendesGewerk) {
+        i.gewerk = standardGewerkByName.get(`${i.typ}|${normName(i.bezeichnung)}`);
+        await put('katalog', i);
+      }
+      toast(`${fehlendesGewerk.length} Einträge mit Gewerk versehen`, 'success');
+      close();
+      render(container);
+    });
+    body.querySelectorAll('.dup-del').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const item = items.find((i) => i.id === btn.dataset.id);
+        if (!item || !confirmDelete(`"${item.bezeichnung}" wirklich löschen?`)) return;
+        await remove('katalog', item.id);
+        items = items.filter((i) => i.id !== item.id);
+        filtered = filtered.filter((i) => i.id !== item.id);
+        toast('Eintrag gelöscht', 'success');
+        close();
+        renderTable();
+        openDuplikatCheck();
+      });
+    });
+  }
 
   function openStandardKatalogAuswahl() {
     const bestehendeBezeichnungen = new Set(items.map((i) => (i.bezeichnung || '').trim().toLowerCase()));
