@@ -29,10 +29,13 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   leistung('Feuerschutzwand F30/F90 (Aufpreis je m²)', 'm²', 15),
   leistung('Tür-/Fensteröffnung in Ständerwand einbauen', 'Stk.', 85),
   leistung('Revisionsklappe einbauen', 'Stk.', 45),
+  leistung('Fensterlaibung im Trockenbau verkleiden', 'Stk.', 65),
 
   // --- Leistungen: Decken ---
   leistung('Abgehängte Decke montieren, einfach beplankt', 'm²', 32),
   leistung('Rasterdecke montieren', 'm²', 28),
+  leistung('Akustikdecke/Schallschutzplatten montieren', 'm²', 45),
+  leistung('Dachschrägen-Verkleidung im Ausbau montieren', 'm²', 42),
   leistung('Dämmung einbringen (Mineralwolle)', 'm²', 8),
 
   // --- Leistungen: Oberflächen ---
@@ -45,6 +48,8 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   artikel('Feuerschutzplatte GKF 12,5mm', 'm²', 5.5),
   artikel('Feuchtraumplatte GKBI 12,5mm', 'm²', 5.5),
   artikel('Klebegips für Trockenputz (25kg Sack)', 'Stk.', 12),
+  artikel('Akustik-Deckenplatte', 'm²', 12),
+  artikel('Dampfsperrfolie (Rolle, je m²)', 'm²', 1.8),
 
   // --- Materialien: Profile & Dämmung ---
   artikel('CW-Profil 75mm (Stange 3m)', 'Stk.', 5),

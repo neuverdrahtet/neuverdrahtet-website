@@ -33,7 +33,12 @@ export const STANDARD_KATALOG_FLIESEN = [
   leistung('Bodenfliesen verlegen (Standardformat)', 'm²', 50),
   leistung('Bodenfliesen verlegen (Großformat über 60x60)', 'm²', 65),
   leistung('Mosaikfliesen verlegen', 'm²', 80),
+  leistung('Naturstein verlegen (Marmor/Schiefer/Travertin)', 'm²', 90),
+  leistung('Fliesen auf Fliesen verlegen (Renovierung, ohne Altfliesen-Entfernung)', 'm²', 60),
   leistung('Sockelfliesen verlegen', 'm', 12),
+  leistung('Fensterbank fliesen', 'Stk.', 55),
+  leistung('Treppenstufen fliesen (je Stufe)', 'Stk.', 45),
+  leistung('Bordüre/Dekorstreifen verlegen', 'm', 15),
   leistung('Fliesenspiegel Küche verlegen (Pauschal bis 6m²)', 'pauschal', 380),
   leistung('Fliesenzuschnitt Sonderform/Aussparung', 'Stk.', 12),
 
@@ -53,6 +58,8 @@ export const STANDARD_KATALOG_FLIESEN = [
   artikel('Wandfliese Standard 25x40', 'm²', 18),
   artikel('Feinsteinzeug Großformat 60x60', 'm²', 34),
   artikel('Mosaikfliesen (Matte, ca. 30x30cm)', 'Stk.', 12),
+  artikel('Natursteinfliese (Marmor/Travertin, Standard)', 'm²', 70),
+  artikel('Fliesenkleber flexibel für Fliese-auf-Fliese (25kg Sack)', 'Stk.', 19),
   artikel('Sockelfliese passend', 'm', 6),
 
   // --- Materialien: Fugen & Sonstiges ---

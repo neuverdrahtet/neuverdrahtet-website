@@ -34,6 +34,10 @@ export const STANDARD_KATALOG_MALER = [
   leistung('Heizkörper lackieren', 'Stk.', 35),
   leistung('Fenster/Türen lasieren oder lackieren', 'Stk.', 45),
   leistung('Fassade streichen (ohne Gerüst)', 'm²', 18),
+  leistung('Wischtechnik/Lasurtechnik (Effektanstrich, Aufpreis je m²)', 'm²', 12),
+  leistung('Schimmelschutzanstrich auftragen', 'm²', 14),
+  leistung('Bodenbeschichtung Garage/Keller auftragen', 'm²', 22),
+  leistung('Graffiti entfernen/überstreichen', 'm²', 16),
 
   // --- Leistungen: Tapezieren ---
   leistung('Raufasertapete tapezieren', 'm²', 12),
@@ -51,6 +55,8 @@ export const STANDARD_KATALOG_MALER = [
   artikel('Fassadenfarbe (12,5L Eimer)', 'Stk.', 82),
   artikel('Abtönfarbe/Pigment (Flasche)', 'Stk.', 6),
   artikel('Holzlasur/Holzlack (750ml)', 'Stk.', 20),
+  artikel('Schimmelschutzfarbe (10L Eimer)', 'Stk.', 68),
+  artikel('Bodenbeschichtung Garage (5L Gebinde)', 'Stk.', 55),
 
   // --- Materialien: Tapeten & Zubehör ---
   artikel('Raufasertapete (Rolle)', 'Stk.', 11),

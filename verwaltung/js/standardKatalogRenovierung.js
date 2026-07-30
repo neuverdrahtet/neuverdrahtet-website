@@ -22,12 +22,16 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 25) {
 export const STANDARD_KATALOG_RENOVIERUNG = [
   // --- Leistungen: Pauschalpakete ---
   leistung('Vollsanierung Wohnung, Basis-Ausstattung (je m² Wohnfläche)', 'm²', 380),
+  leistung('Kernsanierung Komplett, gehobene Ausstattung (je m² Wohnfläche)', 'm²', 1250),
   leistung('Teilsanierung Zimmer (Malern + Bodenbelag)', 'm²', 95),
   leistung('Renovierung bei Mieterauszug (Malern + kleine Ausbesserungen)', 'm²', 28),
 
   // --- Leistungen: Baustellenorganisation ---
   leistung('Baustelleneinrichtung/-räumung', 'pauschal', 250),
   leistung('Bauleitung/Projektkoordination (je Woche)', 'pauschal', 450),
+  leistung('Rohbau-Bestandsaufnahme/Statik-Check koordinieren', 'pauschal', 280),
+  leistung('Bauwasser-/Baustromanschluss einrichten', 'pauschal', 180),
+  leistung('Baustellentoilette mieten (je Monat)', 'pauschal', 120),
   leistung('Schutzabdeckung Treppenhaus/Flure einrichten', 'pauschal', 180),
   leistung('Zwischenreinigung Baustelle (je Einsatz)', 'pauschal', 90),
   leistung('Baufeinreinigung/Endreinigung nach Sanierung', 'm²', 6),
@@ -38,4 +42,5 @@ export const STANDARD_KATALOG_RENOVIERUNG = [
   artikel('Bauschutt-Container 5m³ (Miete inkl. Entsorgung)', 'Stk.', 320),
   artikel('Kantenschutzprofile (Set)', 'Stk.', 12),
   artikel('Absperr-/Warnband (Rolle 500m)', 'Stk.', 12),
+  artikel('Bauzaun mieten (je m/Woche)', 'm', 2.5),
 ];
