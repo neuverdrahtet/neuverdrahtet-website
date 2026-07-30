@@ -1640,6 +1640,358 @@ Ort, Datum: {{datum}}`,
       },
     ],
   },
+  {
+    id: 'vorlage-personalfragebogen', typ: 'dokumentation', name: 'Personalfragebogen',
+    textVorlage: `PERSONALFRAGEBOGEN
+
+Firma: {{firma}}
+Name des Mitarbeiters: {{mitarbeiter}}
+Datum: {{datum}}
+
+Dieser Personalfragebogen dient zur Vorerfassung von Personaldaten für die Lohnabrechnung. Zur Wahrung der
+Aufbewahrungsfrist wird der ausgefüllte Personalfragebogen vom Arbeitgeber bzw. der lohnabrechnenden Stelle
+gespeichert.
+
+Erklärung des Arbeitnehmers: Ich versichere, dass die vorstehenden Angaben der Wahrheit entsprechen. Ich
+verpflichte mich, meinem Arbeitgeber alle Änderungen, insbesondere in Bezug auf weitere Beschäftigungen,
+unverzüglich mitzuteilen.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Persönliche Angaben',
+        felder: [
+          { label: 'Familienname ggf. Geburtsname', typ: 'text' },
+          { label: 'Vorname', typ: 'text' },
+          { label: 'Straße und Hausnr.', typ: 'text' },
+          { label: 'PLZ und Ort', typ: 'text' },
+          { label: 'Geburtsdatum', typ: 'datum' },
+          { label: 'Geburtsort, -land', typ: 'text' },
+          { label: 'Versicherungsnr. (SV-Ausweis)', typ: 'text' },
+          { label: 'Staatsangehörigkeit', typ: 'text' },
+          { label: 'IBAN', typ: 'text' },
+          { label: 'BIC', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Status', fragen: ['Schwerbehindert'] },
+      {
+        typ: 'kopfdaten', titel: 'Beschäftigung',
+        felder: [
+          { label: 'Personalnummer', typ: 'text' },
+          { label: 'Eintrittsdatum', typ: 'datum' },
+          { label: 'Berufsbezeichnung', typ: 'text' },
+          { label: 'Ausgeübte Tätigkeit', typ: 'text' },
+          { label: 'Kostenstelle', typ: 'text' },
+          { label: 'Abt.-Nummer', typ: 'text' },
+          { label: 'Personengruppe', typ: 'text' },
+          { label: 'Urlaubsanspruch (Tage/Kalenderjahr)', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'janein', titel: 'Beschäftigung – Details',
+        fragen: ['Probezeit', 'Hauptbeschäftigung (sonst Nebenbeschäftigung)', 'Vollzeit (sonst Teilzeit)', 'Weitere Beschäftigung wird ausgeübt', 'Arbeitsverhältnis ist befristet'],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Befristung (falls zutreffend)',
+        felder: [
+          { label: 'Befristung Arbeitsvertrag zum', typ: 'datum' },
+          { label: 'Abschluss Arbeitsvertrag am', typ: 'datum' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Steuer',
+        felder: [
+          { label: 'Identifikationsnummer', typ: 'text' },
+          { label: 'Steuerklasse/Faktor', typ: 'text' },
+          { label: 'Kinderfreibeträge', typ: 'zahl' },
+          { label: 'Konfession', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Sozialversicherung',
+        felder: [
+          { label: 'Gesetzl. Krankenkasse', typ: 'text' },
+          { label: 'UV-Gefahrentarif', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Sozialversicherung – Status', fragen: ['Elterneigenschaft'] },
+      {
+        typ: 'kopfdaten', titel: 'Entlohnung',
+        felder: [
+          { label: 'Grundgehalt (€/Monat)', typ: 'zahl' },
+          { label: 'Stundenlohn (€)', typ: 'zahl' },
+          { label: 'Verpflegungszuschuss (€/Monat)', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'VWL (falls Vertrag vorliegt)',
+        felder: [
+          { label: 'Empfänger VWL', typ: 'text' },
+          { label: 'Betrag (€)', typ: 'zahl' },
+          { label: 'AG-Anteil (€ mtl.)', typ: 'zahl' },
+          { label: 'Vertragsnr.', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Angaben zu den Arbeitspapieren',
+        punkte: [
+          'Arbeitsvertrag liegt vor', 'Bescheinigung über LSt.-Abzug liegt vor', 'SV-Ausweis liegt vor',
+          'Mitgliedsbescheinigung Krankenkasse liegt vor', 'VWL-Vertrag liegt vor', 'Nachweis Elterneigenschaft liegt vor',
+          'Vertrag Betriebliche Altersversorgung liegt vor', 'Schwerbehindertenausweis liegt vor',
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Arbeitnehmer', 'Unterschrift Arbeitgeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-datenschutzhinweise-beschaeftigte', typ: 'dokumentation', name: 'Datenschutzhinweise für Beschäftigte',
+    textVorlage: `DATENSCHUTZHINWEISE FÜR BESCHÄFTIGTE
+
+Firma: {{firma}}
+Name Arbeitnehmer: {{mitarbeiter}}
+Datum: {{datum}}
+
+Im Rahmen deiner Tätigkeit bei uns verarbeiten wir personenbezogene Daten. Die folgenden Hinweise geben dir
+einen Überblick über Art, Zweck und Rechtsgrundlage der Datenverarbeitung.
+
+Verarbeitete Daten & Zwecke:
+Wir verarbeiten Stammdaten (Name, Adresse, Geburtsdatum, Kontaktdaten), Vertragsdaten (Arbeitsvertrag,
+Position, Eintrittsdatum, Vergütung), Abrechnungsdaten (Bankverbindung, Steuer-ID, Sozialversicherungsnummer),
+Kommunikationsdaten, Leistungs- und Verhaltensdaten (z.B. Arbeitszeiten) sowie IT-Nutzungsdaten. Zwecke sind
+insbesondere die Durchführung und Verwaltung des Beschäftigungsverhältnisses, Lohn- und Gehaltsabrechnung,
+Einhaltung gesetzlicher Verpflichtungen, Organisation von Arbeitsabläufen, IT-Sicherheit sowie Personalentwicklung.
+
+Rechtsgrundlagen: §26 BDSG und ggf. Art. 6 Abs. 1 lit. c oder lit. f DSGVO.
+
+Dauer der Speicherung: so lange wie zur Erfüllung gesetzlicher Pflichten oder zur Geltendmachung, Ausübung oder
+Verteidigung von Rechtsansprüchen notwendig.
+
+Weitergabe & Verarbeitung: nur im Rahmen gesetzlicher Pflichten an z.B. Sozialversicherungsträger,
+Finanzbehörden oder Steuerberater. Die Verarbeitung findet ausschließlich innerhalb der EU statt.
+
+Deine Rechte: Auskunft, Berichtigung, Löschung, Einschränkung und Widerspruch gegen die Verarbeitung deiner
+Daten. Du kannst dich bei Fragen an den internen Datenschutzbeauftragten wenden und hast das Recht, dich bei
+der zuständigen Aufsichtsbehörde zu beschweren.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'unterschriften', labels: ['Unterschrift Arbeitnehmer (Erhalt/Kenntnisnahme)', 'Unterschrift Arbeitgeber (Unterweisung durchgeführt)'] },
+    ],
+  },
+  {
+    id: 'vorlage-bewirtungsbeleg', typ: 'dokumentation', name: 'Bewirtungsbeleg',
+    textVorlage: `BEWIRTUNGSBELEG
+
+Angaben zum Nachweis der Höhe und der geschäftlichen Veranlassung von Bewirtungsaufwendungen
+(§ 4 Abs. 5 Nr. 2 EStG)
+
+Firma: {{firma}}
+
+Anlass der Bewirtung:
+
+
+Bewirtete Personen intern:
+
+
+Bewirtete Personen extern:
+
+
+Sonstige Angaben:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Bewirtung',
+        felder: [
+          { label: 'Ort der Bewirtung', typ: 'text' },
+          { label: 'Datum der Bewirtung', typ: 'datum' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Beträge',
+        felder: [
+          { label: 'Rechnungsbetrag (€)', typ: 'zahl' },
+          { label: 'Trinkgeld (€)', typ: 'zahl' },
+          { label: 'Gesamtbetrag inkl. Trinkgeld (€)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Zahlungsart', punkte: ['Karte', 'PayPal', 'Bar'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Gastgeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-gefahrenunterweisung', typ: 'dokumentation', name: 'Gefahrenunterweisung',
+    textVorlage: `GEFAHRENUNTERWEISUNG
+
+Firma: {{firma}}
+Arbeitnehmer: {{mitarbeiter}}
+Datum: {{datum}}
+
+Grundsätze im Arbeits- und Gesundheitsschutz:
+Sicherheit am Arbeitsplatz und Schutz vor arbeitsbedingten Gesundheitsgefahren haben höchste Priorität. Jede/r
+Mitarbeiter/in ist vom ersten Tag an verpflichtet, sicher, gesundheits- und umweltgerecht zu arbeiten.
+
+Aufgaben im Arbeits- und Umweltschutz:
+- auf Ordnung und Sauberkeit bei der Arbeit achten
+- vermeiden, dass andere Personen durch eigene Handlungen oder Unterlassungen gefährdet werden
+- schriftliche und mündliche Anweisungen zum Arbeits- und Umweltschutz befolgen
+- die zur Verfügung gestellte persönliche Schutzausrüstung bestimmungsgemäß verwenden und pfleglich behandeln
+- Arbeitsmittel vor Verwendung durch Sichtkontrolle auf sicheren Zustand und Eignung prüfen
+- sicherheits- und gesundheitsbewusst arbeiten, sicherer Umgang mit Gefahrstoffen
+- Mängel wo möglich selbst abstellen oder umgehend dem Vorgesetzten melden
+- sicherheitswidriges Verhalten von Kollegen und Dritten ansprechen und/oder melden
+- Verbot von Alkohol und anderen Rauschmitteln beachten; in Arbeitsräumen und Fahrzeugen nicht rauchen
+
+Sonstige Bemerkungen:
+
+
+Information: Die oben genannten Punkte wurden einvernehmlich mit dem/der Arbeitnehmer/in durchgesprochen.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'checkliste', titel: 'Besprochen wurde auch',
+        punkte: [
+          'die besonderen Gefährdungen bei den auszuführenden Tätigkeiten', 'die Erste Hilfe (z.B. Verbandskästen)',
+          'das Verhalten bei Feuer', 'das Verbot, Fahrzeuge ohne gültigen Fahrausweis zu führen',
+          'die Maßnahmen zur Vermeidung von Unfällen und arbeitsbedingten Erkrankungen', 'das Verhalten bei Unfällen',
+          'die Meldung von Unfällen', 'die Notrufnummer', 'Maßnahmen des Brandschutzes',
+        ],
+      },
+      {
+        typ: 'checkliste', titel: 'Gezeigt wurden',
+        punkte: [
+          'der zukünftige Arbeitsplatz', 'die Flucht- und Rettungswege',
+          'wo sich Verbandskästen, Feuerlöscher und Abfallsammelstellen befinden', 'Tragen von PSA bei Arbeiten auf der Baustelle & beim Kunden',
+        ],
+      },
+      { typ: 'checkliste', titel: 'Empfangsbestätigung', punkte: ['Ich habe die Inhalte verstanden', 'Ich verpflichte mich, die entsprechenden Vorschriften und Verhaltensregeln zu beachten'] },
+      { typ: 'kopfdaten', titel: 'Unterweisung durch', felder: [{ label: 'Name des Unterweisenden', typ: 'text' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Arbeitnehmer', 'Unterschrift Arbeitgeber'] },
+    ],
+  },
+  {
+    id: 'vorlage-einzelauftrag-regiezettel', typ: 'dokumentation', name: 'Einzelauftrag / Regiezettel',
+    textVorlage: `EINZELAUFTRAG / REGIEZETTEL
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Art der auszuführenden Arbeiten:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Objekt',
+        felder: [
+          { label: 'Objekt/Baustellenadresse', typ: 'text' },
+          { label: 'Objektnummer', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Ausführung',
+        felder: [
+          { label: 'Datum', typ: 'datum' },
+          { label: 'Zeit der Ausführung', typ: 'text' },
+          { label: 'Verantwortliche(r)', typ: 'text' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Abrechnungsart', punkte: ['Pauschalpreis', 'Zeit', 'Quadratmeter', 'Stückpreis'] },
+      {
+        typ: 'kopfdaten', titel: 'Vereinbarter Preis',
+        felder: [
+          { label: 'Netto (€)', typ: 'zahl' },
+          { label: 'MwSt. (€)', typ: 'zahl' },
+          { label: 'Brutto (€)', typ: 'zahl' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Auftraggeber (Erhebung)'] },
+    ],
+  },
+  {
+    id: 'vorlage-sicherheitsbeleuchtung-fluchtwege', typ: 'dokumentation', name: 'Sicherheitsbeleuchtung/-stromversorgung & Kennzeichnung von Fluchtwegen',
+    textVorlage: `SICHERHEITSBELEUCHTUNG/-STROMVERSORGUNG | KENNZEICHNUNG VON FLUCHTWEGEN
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Einrichtungen für den technischen Brandschutz müssen dem Stand der Technik entsprechen und so beschaffen,
+bemessen, ausgeführt und in Stand gehalten sein, dass sie funktionstüchtig und jederzeit betriebsbereit sind.
+
+Weitere Informationen:
+
+
+Mit der Unterschrift bestätigt der Installateur/die Fachfirma, dass die installierten Sicherheitseinrichtungen
+funktionstüchtig und jederzeit betriebsbereit sind.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Auftragsdaten', felder: [{ label: 'Objekt', typ: 'text' }, { label: 'Auftrags-Nr.', typ: 'text' }] },
+      {
+        typ: 'janein', titel: '1. Sicherheitsstromversorgung',
+        fragen: [
+          'Einzelbatterieleuchten korrekt installiert', 'Gruppen- oder Zentralbatterie korrekt installiert',
+          'Funktionserhalt des Verteilnetzes entspricht der Nennbetriebsdauer', 'Eigentümer/Betreiber über Funktion und Wartung instruiert',
+        ],
+      },
+      {
+        typ: 'janein', titel: '2. Sicherheitsbeleuchtung',
+        fragen: [
+          'Jede Sicherheitsleuchte als solche erkennbar/gekennzeichnet', 'Umschaltzeiten normgerecht eingehalten',
+          'Minimale Nennbetriebsdauer 30 Minuten', 'Minimale Beleuchtungsstärke 1 Lux während 30 Minuten',
+        ],
+      },
+      {
+        typ: 'janein', titel: '3. Kennzeichnung von Fluchtwegen & Ausgängen',
+        fragen: [
+          'Rettungszeichen normgerecht montiert (Seitenlänge mind. 150 mm)', 'Dauerschaltung in Räumen mit großer Personenbelegung',
+          'Dauerschaltung in Verkaufsgeschäften',
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Installateur'] },
+    ],
+  },
+  {
+    id: 'vorlage-mittelspannungskabel-messung', typ: 'dokumentation', name: 'Mittelspannungskabel Messung',
+    textVorlage: `MITTELSPANNUNGSKABEL MESSUNG
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Anmerkungen:
+
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Auftragsbezeichnung', typ: 'text' },
+          { label: 'Prüfer', typ: 'text' },
+          { label: 'NC', typ: 'text' },
+          { label: 'Service', typ: 'text' },
+          { label: 'Spannung (kV)', typ: 'zahl' },
+          { label: 'Kabelkategorie', typ: 'text' },
+          { label: 'Kabelstrecke von', typ: 'text' },
+          { label: 'Kabelstrecke bis', typ: 'text' },
+          { label: 'Witterung', typ: 'text' },
+        ],
+      },
+      { typ: 'tabelle', titel: 'Beschreibung Prüfstrecke', spalten: ['Prüfobjekt', 'Garnitur', 'Typ', 'Kabel Typ', 'Hersteller', 'Querschnitt (mm²)', 'Länge (m)'] },
+      { typ: 'tabelle', titel: 'Isolationsprüfung', spalten: ['Phase', 'Isolationsmessung R (MΩ)', 'Prüfung U (kV)', 'Prüfung I (mA)'] },
+      { typ: 'tabelle', titel: 'Mantelprüfung (Kabel mit PE-Mantel)', spalten: ['Phase', 'Isolationsmessung R (MΩ)', 'Prüfung U (kV)', 'Prüfung I (mA)'] },
+      { typ: 'kopfdaten', titel: 'Messgeräte', felder: [{ label: 'Messgerät Isolationsprüfung', typ: 'text' }, { label: 'Messgerät Mantelprüfung', typ: 'text' }] },
+      { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [
