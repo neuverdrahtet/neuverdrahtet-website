@@ -115,9 +115,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
     });
   }
 
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog, angebote] = await Promise.all([
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog, angebote, marken] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'), getAll('angebote'),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'), getAll('angebote'), getAll('marken'),
   ]);
   const niedrigBestand = katalog
     .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
@@ -127,6 +127,12 @@ export async function render(container, _route, { autoSync = true } = {}) {
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
+  function markeFuerTermin(t) {
+    const projekt = projekteById[t.projektId];
+    return projekt ? markenById[projekt.markeId] : null;
+  }
 
   const offen = rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
   const ueberfaellig = offen.filter((r) => r.faelligAm && r.faelligAm < today).map((r) => {
@@ -172,6 +178,26 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const umsatzSumme = umsatzSeries.reduce((s, v) => s + v, 0);
   const ausgabenSumme = ausgabenSeries.reduce((s, v) => s + v, 0);
   const uebrigSumme = umsatzSumme - ausgabenSumme;
+
+  // --- Umsatz je Marke (aktuelles Jahr, wie Auswertungen-Seite) ---
+  const STANDARD_LABEL = 'Standard (Hauptfirma)';
+  const OHNE_PROJEKT_LABEL = 'Ohne Projektbezug';
+  function markeLabelFuerProjekt(projektId) {
+    const projekt = projekteById[projektId];
+    if (!projekt) return OHNE_PROJEKT_LABEL;
+    return markenById[projekt.markeId]?.name || STANDARD_LABEL;
+  }
+  const jahresbeginn = `${new Date().getFullYear()}-01-01`;
+  const umsatzByMarke = {};
+  for (const r of rechnungen) {
+    if (r.status === 'storniert' || (r.datum || '') < jahresbeginn) continue;
+    const label = markeLabelFuerProjekt(r.projektId);
+    umsatzByMarke[label] = (umsatzByMarke[label] || 0) + (Number(r.brutto) || 0);
+  }
+  const markenUmsatz = Object.entries(umsatzByMarke)
+    .map(([label, summe]) => ({ label, summe }))
+    .sort((a, b) => b.summe - a.summe);
+  const markenUmsatzMax = Math.max(1, ...markenUmsatz.map((m) => m.summe));
 
   // --- Today's Termine ---
   const heute = termine.filter((t) => {
@@ -255,6 +281,26 @@ export async function render(container, _route, { autoSync = true } = {}) {
           ${buildLineChart(months, umsatzSeries, ausgabenSeries)}
         </div>
 
+        ${marken.length > 0 ? `
+          <div class="card">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:6px">
+              <h2 style="margin:0">Umsatz nach Marke <span class="text-mute" style="font-size:12px;font-weight:400">(dieses Jahr)</span></h2>
+              <a class="text-mute" href="#/auswertungen" style="font-size:12.5px">Details →</a>
+            </div>
+            ${markenUmsatz.length === 0 ? '<p class="text-mute">Noch keine Rechnungen in diesem Jahr.</p>' : `
+              <div class="auswertung-liste">
+                ${markenUmsatz.map((m) => `
+                  <div class="auswertung-row">
+                    <div class="auswertung-row-label">${escapeHtml(m.label)}</div>
+                    <div class="auswertung-row-bar"><div class="auswertung-row-fill" style="width:${Math.max(2, Math.round((m.summe / markenUmsatzMax) * 100))}%"></div></div>
+                    <div class="auswertung-row-value">${formatCurrency(m.summe)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        ` : ''}
+
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
             <h2 style="margin:0">Projekt-Pipeline</h2>
@@ -282,7 +328,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
                     ${tag.termine.slice(0, 4).map((t) => `
                       <div class="dash-woche-termin">
                         <span class="dash-woche-dot" style="background:${escapeHtml(typFarbe(t.typ))}"></span>
-                        <span>${escapeHtml(t.titel)}</span>
+                        <span>${markeFuerTermin(t) ? '🏷️ ' : ''}${escapeHtml(t.titel)}</span>
                       </div>
                     `).join('')}
                     ${tag.termine.length > 4 ? `<div class="text-mute" style="font-size:11px">+${tag.termine.length - 4} weitere</div>` : ''}
@@ -344,12 +390,15 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
           ${heute.length === 0 ? '<p class="text-mute">Keine Termine heute.</p>' : `
             <ul class="cal-event-list">
-              ${heute.map((t) => `
+              ${heute.map((t) => {
+                const marke = markeFuerTermin(t);
+                return `
                 <li>
-                  <div><strong>${escapeHtml(t.titel)}</strong><div class="text-mute">${(t.start || '').slice(11, 16)}${t.kundeId && kundenById[t.kundeId] ? ' · ' + escapeHtml(kundenById[t.kundeId].firma) : ''}</div></div>
+                  <div><strong>${marke ? '🏷️ ' : ''}${escapeHtml(t.titel)}</strong><div class="text-mute">${(t.start || '').slice(11, 16)}${t.kundeId && kundenById[t.kundeId] ? ' · ' + escapeHtml(kundenById[t.kundeId].firma) : ''}${marke ? ' · ' + escapeHtml(marke.name) : ''}</div></div>
                   <a class="btn btn-sm" href="#/plantafel">Öffnen</a>
                 </li>
-              `).join('')}
+              `;
+              }).join('')}
             </ul>
           `}
         </div>

@@ -4,12 +4,13 @@ import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 
 export async function render(container) {
-  let [projekte, kunden, mitarbeiter, spalten] = await Promise.all([
-    getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
+  let [projekte, kunden, mitarbeiter, spalten, marken] = await Promise.all([
+    getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'), getAll('marken'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
 
   container.innerHTML = `
     <div class="view-header">
@@ -37,6 +38,7 @@ export async function render(container) {
             ${cards.map((p) => `
               <div class="kanban-card" draggable="true" data-id="${p.id}" style="border-left-color:${escapeHtml(p.farbe || 'var(--accent)')}">
                 ${p.autoErstellt ? '<span class="badge badge-accent" style="display:block;width:fit-content;margin-bottom:4px">🆕 Neue Anfrage</span>' : ''}
+                ${marken.length > 0 && p.markeId && markenById[p.markeId] ? `<span class="badge" style="display:block;width:fit-content;margin-bottom:4px">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : ''}
                 <div class="title">${escapeHtml(p.titel)}</div>
                 <div class="meta">${escapeHtml(kundenById[p.kundeId]?.firma || '')}</div>
                 ${p.mitarbeiterIds?.length ? `<div class="meta">${p.mitarbeiterIds.map((id) => escapeHtml(mitarbeiterById[id]?.name || '')).filter(Boolean).join(', ')}</div>` : ''}

@@ -114,7 +114,7 @@ export async function render(container, opts = {}) {
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th><th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th>${marken.length > 0 ? '<th>Marke</th>' : ''}<th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
           ${filtered.map((p) => `
             <tr data-id="${p.id}">
@@ -122,6 +122,7 @@ export async function render(container, opts = {}) {
               <td><span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span></td>
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
+              ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
               <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--border)')}22;color:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--text)')}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
               <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
               <td><span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span></td>

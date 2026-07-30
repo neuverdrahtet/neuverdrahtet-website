@@ -60,8 +60,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     });
   }
 
-  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'),
+  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus, marken] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'), getAll('marken'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -70,6 +70,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
+  function markeFuerTermin(t) {
+    const projekt = projekteById[t.projektId];
+    return projekt ? markenById[projekt.markeId] : null;
+  }
   const activeStatusFilter = new Set();
   let bereichFilter = '';
 
@@ -259,10 +264,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
             ${items.map((it) => {
               const farbe = it.termin.farbe || typInfo(it.termin.typ).farbe;
               const span = it.endIdx - it.startIdx + 1;
+              const marke = markeFuerTermin(it.termin);
               return `
-                <div class="plantafel-bar" data-id="${it.termin.id}"
+                <div class="plantafel-bar" data-id="${it.termin.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
                   style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
-                  <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
                 </div>
               `;
@@ -489,7 +495,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div class="day-num">${d.getDate()}</div>
           ${events.slice(0, 3).map((e) => {
             const farbe = e.farbe || typInfo(e.typ).farbe;
-            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(typInfo(e.typ).titel)}">${e.autoErstellt ? '🆕 ' : ''}${escapeHtml(e.titel)}</div>`;
+            const marke = markeFuerTermin(e);
+            const titleAttr = [typInfo(e.typ).titel, marke ? `Marke: ${marke.name}` : ''].filter(Boolean).join(' · ');
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(titleAttr)}">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</div>`;
           }).join('')}
           ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
         </div>
@@ -617,7 +625,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
       const select = body.querySelector('select[name="projektId"]');
       const bereichId = select.selectedOptions[0]?.dataset.bereich;
       const bereich = BEREICHE.find((b) => b.id === bereichId);
-      body.querySelector('#f-projekt-bereich').textContent = bereich ? `(${bereich.titel})` : '';
+      const marke = markeFuerTermin({ projektId: select.value });
+      const teile = [bereich ? bereich.titel : '', marke ? `🏷️ ${marke.name}` : ''].filter(Boolean);
+      body.querySelector('#f-projekt-bereich').textContent = teile.length ? `(${teile.join(' · ')})` : '';
     }
     updateProjektBereichHint();
     body.querySelector('select[name="projektId"]').addEventListener('change', updateProjektBereichHint);
