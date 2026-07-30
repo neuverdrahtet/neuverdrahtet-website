@@ -1964,6 +1964,112 @@ Ort, Datum: {{datum}}`,
       { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
     ],
   },
+  {
+    id: 'vorlage-brief', typ: 'dokumentation', name: 'Brief / Geschäftsschreiben',
+    textVorlage: `{{firma}}
+
+{{kunde}}
+
+
+Betreff:
+
+
+Sehr geehrte Damen und Herren,
+
+
+
+
+Mit freundlichen Grüßen
+{{firma}}
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Empfänger',
+        felder: [
+          { label: 'Ansprechpartner', typ: 'text' },
+          { label: 'Straße/Hausnummer', typ: 'text' },
+          { label: 'PLZ/Ort', typ: 'text' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Bezug',
+        felder: [
+          { label: 'Ihr Zeichen/Ihre Nachricht vom', typ: 'text' },
+          { label: 'Unser Zeichen', typ: 'text' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift'] },
+    ],
+  },
+  {
+    id: 'vorlage-arbeitsvertrag', typ: 'dokumentation', name: 'Arbeitsvertrag',
+    textVorlage: `ARBEITSVERTRAG
+
+zwischen
+
+{{firma}}
+– nachfolgend "Arbeitgeber" genannt –
+
+und
+
+{{mitarbeiter}}
+– nachfolgend "Arbeitnehmer" genannt –
+
+§ 1 Beginn und Dauer des Arbeitsverhältnisses
+Das Arbeitsverhältnis beginnt am {{datum}} und wird auf unbestimmte Zeit geschlossen, sofern nachfolgend keine Befristung vereinbart ist.
+
+§ 2 Tätigkeit
+Der Arbeitnehmer wird gemäß nachfolgender Vertragsdaten eingestellt. Der Arbeitgeber behält sich vor, dem Arbeitnehmer im Rahmen seiner Fähigkeiten und Fertigkeiten auch andere zumutbare Tätigkeiten zu übertragen.
+
+§ 3 Arbeitszeit
+Die wöchentliche Arbeitszeit richtet sich nach den nachfolgenden Vertragsdaten. Die Verteilung der Arbeitszeit auf die einzelnen Wochentage richtet sich nach den betrieblichen Erfordernissen.
+
+§ 4 Vergütung
+Die Vergütung richtet sich nach den nachfolgenden Vertragsdaten und wird jeweils zum Monatsende auf ein vom Arbeitnehmer benanntes Konto überwiesen.
+
+§ 5 Urlaub
+Der Arbeitnehmer hat Anspruch auf den in den Vertragsdaten genannten Erholungsurlaub pro Kalenderjahr.
+
+§ 6 Kündigung
+Für die Kündigung des Arbeitsverhältnisses gelten die gesetzlichen Kündigungsfristen, soweit in den Vertragsdaten keine abweichenden Fristen vereinbart sind.
+
+§ 7 Verschwiegenheit
+Der Arbeitnehmer verpflichtet sich, über alle betrieblichen und geschäftlichen Angelegenheiten, die ihm im Rahmen seiner Tätigkeit bekannt werden, Stillschweigen zu bewahren – auch über das Ende des Arbeitsverhältnisses hinaus.
+
+§ 8 Schlussbestimmungen
+Änderungen und Ergänzungen dieses Vertrages bedürfen der Schriftform. Sollte eine Bestimmung dieses Vertrages unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Vertragsdaten',
+        felder: [
+          { label: 'Position/Tätigkeit', typ: 'text' },
+          { label: 'Arbeitsort', typ: 'text' },
+          { label: 'Probezeit (Monate)', typ: 'text' },
+          { label: 'Befristet bis (falls befristet)', typ: 'datum' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Arbeitszeit & Vergütung',
+        felder: [
+          { label: 'Wochenstunden', typ: 'zahl' },
+          { label: 'Bruttogehalt/Stundenlohn (€)', typ: 'zahl' },
+          { label: 'Urlaubstage pro Jahr', typ: 'zahl' },
+        ],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Kündigungsfrist',
+        felder: [
+          { label: 'Kündigungsfrist während Probezeit', typ: 'text' },
+          { label: 'Kündigungsfrist nach Probezeit', typ: 'text' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Vereinbarte Nebenleistungen', punkte: ['Firmenfahrzeug', 'Werkzeug/Arbeitskleidung gestellt', 'Weiterbildungsbudget', 'Betriebliche Altersvorsorge'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Arbeitnehmer', 'Unterschrift Arbeitgeber'] },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [
