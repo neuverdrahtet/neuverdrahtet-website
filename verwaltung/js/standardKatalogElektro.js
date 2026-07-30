@@ -45,7 +45,16 @@ export const STANDARD_KATALOG_ELEKTRO = [
   leistung('Unterverteilung erweitern (je Modul)', 'Stk.', 45),
   leistung('Leitungsschutzschalter (LS) einbauen', 'Stk.', 25),
   leistung('FI/RCD-Schutzschalter einbauen', 'Stk.', 35),
+  leistung('FI/LS-Kombiautomat (RCBO) einbauen', 'Stk.', 30),
+  leistung('Verteilung komplett verdrahten und anschließen (je Modul)', 'Stk.', 12),
+  leistung('Verteilung beschriften und Stromlaufplan erstellen', 'pauschal', 60),
   leistung('Zählerschrank-Austausch (Basis)', 'pauschal', 450),
+  leistung('Zählerschrank komplett erneuern nach TAB (Multi-Zähler, ab 2 Zählerplätzen)', 'pauschal', 850),
+  leistung('Zählerplatz nachrüsten/erweitern (je Platz)', 'Stk.', 220),
+  leistung('SLS-Schalter einbauen (nach Vorgabe Netzbetreiber)', 'Stk.', 45),
+  leistung('Überspannungsschutz Typ 1/2 einbauen', 'Stk.', 65),
+  leistung('Hauptschalter/Trennschalter einbauen', 'Stk.', 35),
+  leistung('Anmeldung/Abstimmung mit Netzbetreiber (VNB)', 'pauschal', 45),
 
   // --- Leistungen: Prüfungen & Sicherheit ---
   leistung('Rauchmelder montieren (inkl. Funktionstest)', 'Stk.', 20),
@@ -57,9 +66,30 @@ export const STANDARD_KATALOG_ELEKTRO = [
   // --- Leistungen: Smart Home, Netzwerk, E-Mobility ---
   leistung('Smart-Home-Grundinstallation (je Raum)', 'Stk.', 120),
   leistung('Wallbox Montage und Anschluss (bis 11kW)', 'pauschal', 380),
+  leistung('Wallbox Montage und Anschluss (11-22kW, dreiphasig)', 'pauschal', 480),
+  leistung('Zuleitung Wallbox verlegen (Erdkabel, bis 15m)', 'pauschal', 320),
+  leistung('FI Typ B nachrüsten (Pflicht für Wallbox-Ladepunkte)', 'Stk.', 95),
+  leistung('Lastmanagement/dynamische Lastregelung einrichten', 'pauschal', 180),
+  leistung('Wallbox beim Netzbetreiber anmelden', 'pauschal', 40),
   leistung('Netzwerkdose setzen und anschließen', 'Stk.', 55),
   leistung('Antennendose setzen und anschließen', 'Stk.', 45),
   leistung('Klingelanlage/Gegensprechanlage installieren (Basis)', 'pauschal', 250),
+
+  // --- Leistungen: Photovoltaik ---
+  leistung('PV-Anlage Aufdachmontage (je kWp)', 'kWp', 650),
+  leistung('PV-Modul montieren und verkabeln (je Stk.)', 'Stk.', 45),
+  leistung('Wechselrichter montieren und anschließen', 'Stk.', 280),
+  leistung('DC-/AC-Verkabelung PV-Anlage verlegen', 'm', 6),
+  leistung('Einspeise-/Zweirichtungszähler einbauen', 'Stk.', 180),
+  leistung('Batteriespeicher montieren und anschließen', 'pauschal', 650),
+  leistung('Blitz-/Überspannungsschutz PV-Anlage (DC-seitig) einbauen', 'Stk.', 120),
+  leistung('PV-Anlage in Betrieb nehmen und beim Netzbetreiber anmelden', 'pauschal', 220),
+
+  // --- Leistungen: Wärmepumpe (Elektroanschluss) ---
+  leistung('Wärmepumpe elektrisch anschließen (Starkstromanschluss)', 'pauschal', 380),
+  leistung('Steuerleitung Wärmepumpe verlegen (Innen-/Außeneinheit)', 'm', 8),
+  leistung('Sperrzeiten-/Wärmepumpenzähler einbauen', 'Stk.', 150),
+  leistung('FI Typ B für Wärmepumpe einbauen', 'Stk.', 65),
 
   // --- Leistungen: Küche/Hausgeräte ---
   leistung('Herdanschluss (Starkstromdose) setzen', 'Stk.', 65),
@@ -92,9 +122,22 @@ export const STANDARD_KATALOG_ELEKTRO = [
   artikel('Leitungsschutzschalter (LS) B16, 3-polig', 'Stk.', 28),
   artikel('FI/RCD-Schutzschalter 25A/30mA, 2-polig', 'Stk.', 32),
   artikel('FI/RCD-Schutzschalter 40A/30mA, 4-polig', 'Stk.', 65),
+  artikel('FI/LS-Kombiautomat (RCBO) B16/30mA, 1+N-polig', 'Stk.', 45),
+  artikel('FI-Schutzschalter Typ B, 4-polig (für Wallbox/PV/Wärmepumpe)', 'Stk.', 220),
+  artikel('SLS-Schalter 3x63A (nach Vorgabe Netzbetreiber)', 'Stk.', 85),
+  artikel('Überspannungsschutz Kombi-Ableiter Typ 1/2, 3-polig', 'Stk.', 180),
+  artikel('Hauptschalter/Trennschalter 3-polig, 63A', 'Stk.', 35),
+  artikel('Sammelschiene (Meterware)', 'm', 3),
+  artikel('Reihenklemmen-Set (Sortimentsbox)', 'Stk.', 12),
+  artikel('Hutschiene TS35 (1m)', 'Stk.', 3.5),
+  artikel('Aderendhülsen (Sortimentsbox)', 'Stk.', 15),
   artikel('Unterverteilung Aufputz (12 Module)', 'Stk.', 55),
+  artikel('Unterverteilung Aufputz (24 Module)', 'Stk.', 75),
   artikel('Unterverteilung Unterputz (24 Module)', 'Stk.', 95),
+  artikel('Unterverteilung Unterputz (36 Module)', 'Stk.', 125),
   artikel('Zählerschrank-Grundgerüst (1 Zähler)', 'Stk.', 180),
+  artikel('Zählerschrank-Grundgerüst (2 Zähler)', 'Stk.', 260),
+  artikel('Zählerschrank-Grundgerüst (3 Zähler)', 'Stk.', 340),
   artikel('Klemmen/Verbinder (Wago-Typ, Packung)', 'Stk.', 6),
 
   // --- Materialien: Beleuchtung ---
@@ -108,7 +151,23 @@ export const STANDARD_KATALOG_ELEKTRO = [
   artikel('Netzwerkdose Cat6 UP', 'Stk.', 8),
   artikel('Antennendose UP (Kombi Sat/TV)', 'Stk.', 9),
   artikel('Wallbox 11kW (Basisgerät)', 'Stk.', 550, 20),
+  artikel('Wallbox 22kW (Basisgerät, dreiphasig)', 'Stk.', 750, 20),
+  artikel('Erdkabel NYY-J 5x6mm² (Wallbox-/Außenzuleitung)', 'm', 4.5),
   artikel('Klingeltrafo/Gegensprechanlage-Set (Basis)', 'Stk.', 90),
+
+  // --- Materialien: Photovoltaik ---
+  artikel('PV-Modul monokristallin, ca. 400Wp', 'Stk.', 140),
+  artikel('Wechselrichter Hybrid, bis 10kW', 'Stk.', 1400, 20),
+  artikel('Batteriespeicher 5kWh', 'Stk.', 2800, 20),
+  artikel('Solarkabel 6mm² (Meterware)', 'm', 1.2),
+  artikel('MC4-Steckverbinder-Set', 'Stk.', 8),
+  artikel('Unterkonstruktion Aufdach (je Modul)', 'Stk.', 25),
+  artikel('DC-Freischalter/Trennschalter PV', 'Stk.', 65),
+  artikel('Einspeise-/Zweirichtungszähler', 'Stk.', 140),
+
+  // --- Materialien: Wärmepumpe ---
+  artikel('Zuleitung Wärmepumpe NYY-J 5x6mm² (Erdkabel)', 'm', 4.5),
+  artikel('Sperrzeiten-/Wärmepumpenzähler', 'Stk.', 130),
 
   // --- Materialien: Hausgeräte-Anschluss ---
   artikel('Herdanschlussdose (Starkstrom CEE)', 'Stk.', 14),
