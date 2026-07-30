@@ -32,6 +32,7 @@ function htmlSignaturZuText(html) {
 const NAV = [
   { group: 'Unternehmen & Team', items: [
     { id: 'firma', icon: '🏢', label: 'Firmendaten' },
+    { id: 'marken', icon: '🏷️', label: 'Marken' },
     { id: 'rollen', icon: '🛡️', label: 'Rollen & Berechtigungen' },
     { id: 'zugang', icon: '🔒', label: 'Zugangscode' },
   ] },
@@ -61,6 +62,8 @@ export async function render(container) {
   const settings = await getSettings();
   const textbausteine = await getAll('textbausteine');
   textbausteine.sort((a, b) => (a.titel || '').localeCompare(b.titel || ''));
+  const marken = await getAll('marken');
+  marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const isLight = settings.theme === 'light';
   const pushCapable = push.isBrowserCapable();
   const pushPermission = push.permissionState();
@@ -124,6 +127,13 @@ export async function render(container) {
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
+        </div>
+
+        <div class="card settings-panel" data-panel="marken" hidden>
+          <h2>Marken</h2>
+          <p class="hint">Für ein zweites Unternehmen unter eigenem Namen, das rechtlich/steuerlich weiter zur selben Firma gehört (gleiche Steuernummer/Bankverbindung). Bei einem Projekt eine Marke auswählen – auf Angeboten, Rechnungen, Mahnungen und Berichten für dieses Projekt erscheinen dann Name/Logo dieser Marke statt der Firmendaten oben. Leer gelassene Felder übernehmen automatisch die Firmendaten.</p>
+          <div id="marken-list"></div>
+          <button class="btn btn-sm" id="btn-marke-new" style="margin-top:8px">+ Neue Marke</button>
         </div>
 
         <div class="card settings-panel" data-panel="rollen" hidden>
@@ -517,6 +527,126 @@ export async function render(container) {
   }
   renderTbList();
   container.querySelector('#btn-tb-new').addEventListener('click', () => openTbForm());
+
+  const markenListHost = container.querySelector('#marken-list');
+  function renderMarkenList() {
+    markenListHost.innerHTML = marken.length === 0
+      ? '<p class="text-mute">Noch keine Marken angelegt.</p>'
+      : `<ul class="cal-event-list">${marken.map((m) => `
+          <li data-id="${m.id}">
+            <div class="flex-row" style="align-items:center;gap:10px">
+              <div style="width:36px;height:36px;border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card-2);flex-shrink:0">
+                ${m.logoDataUrl ? `<img src="${escapeHtml(m.logoDataUrl)}" alt="" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span style="font-size:10px" class="text-mute">–</span>'}
+              </div>
+              <strong>${escapeHtml(m.name)}</strong>
+            </div>
+            <div class="flex-row">
+              <button type="button" class="btn btn-sm btn-ghost btn-marke-edit">Bearbeiten</button>
+              <button type="button" class="btn btn-sm btn-ghost btn-marke-del">Löschen</button>
+            </div>
+          </li>
+        `).join('')}</ul>`;
+    markenListHost.querySelectorAll('.btn-marke-edit').forEach((btn) => {
+      btn.addEventListener('click', () => openMarkeForm(marken.find((m) => m.id === btn.closest('li').dataset.id)));
+    });
+    markenListHost.querySelectorAll('.btn-marke-del').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.closest('li').dataset.id;
+        const m = marken.find((x) => x.id === id);
+        if (!confirmDelete(`Marke "${m.name}" wirklich löschen? Projekte, die diese Marke nutzen, fallen danach auf die Firmendaten zurück.`)) return;
+        await remove('marken', id);
+        const i = marken.findIndex((x) => x.id === id);
+        marken.splice(i, 1);
+        renderMarkenList();
+        toast('Marke gelöscht');
+      });
+    });
+  }
+  function openMarkeForm(m) {
+    const isEdit = !!m;
+    const data = m || { id: uid(), name: '', logoDataUrl: '', strasse: '', plzOrt: '', telefon: '', email: '', website: '' };
+    const { body, close } = openModal({
+      title: isEdit ? 'Marke bearbeiten' : 'Neue Marke',
+      bodyHtml: `
+        <form id="marke-form">
+          <div class="form-grid">
+            <div class="field col-span-2">
+              <label>Logo (für PDFs)</label>
+              <div class="flex-row" style="align-items:flex-start">
+                <div id="marke-logo-preview" style="width:88px;height:88px;border:1px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--card-2);flex-shrink:0">
+                  ${data.logoDataUrl ? `<img src="${escapeHtml(data.logoDataUrl)}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span class="text-mute" style="font-size:11px">Kein Logo</span>'}
+                </div>
+                <div class="flex-row flex-wrap">
+                  <label class="btn btn-sm" style="cursor:pointer">
+                    Logo hochladen
+                    <input type="file" id="marke-logo-input" accept="image/*" hidden>
+                  </label>
+                  ${data.logoDataUrl ? '<button type="button" class="btn btn-sm btn-danger" id="btn-marke-logo-remove">Entfernen</button>' : ''}
+                </div>
+              </div>
+            </div>
+            <div class="field col-span-2"><label>Name *</label><input name="name" required value="${escapeHtml(data.name)}"></div>
+          </div>
+          <p class="hint" style="margin-top:10px">Die folgenden Felder sind optional – leer gelassen, gelten die Firmendaten weiter.</p>
+          <div class="form-grid">
+            <div class="field"><label>Straße &amp; Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
+            <div class="field"><label>PLZ &amp; Ort</label><input name="plzOrt" value="${escapeHtml(data.plzOrt || '')}"></div>
+            <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
+            <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
+            <div class="field col-span-2"><label>Website</label><input name="website" value="${escapeHtml(data.website || '')}"></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#marke-logo-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const blob = await compressImage(file, { maxWidth: 400, quality: 0.9 });
+        data.logoDataUrl = await blobToDataUrl(blob);
+        body.querySelector('#marke-logo-preview').innerHTML = `<img src="${data.logoDataUrl}" alt="Logo" style="max-width:100%;max-height:100%;object-fit:contain">`;
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    const markeLogoRemoveBtn = body.querySelector('#btn-marke-logo-remove');
+    if (markeLogoRemoveBtn) {
+      markeLogoRemoveBtn.addEventListener('click', () => {
+        data.logoDataUrl = '';
+        body.querySelector('#marke-logo-preview').innerHTML = '<span class="text-mute" style="font-size:11px">Kein Logo</span>';
+        markeLogoRemoveBtn.remove();
+      });
+    }
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#marke-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const updated = {
+        ...data,
+        name: (fd.get('name') || '').toString().trim(),
+        strasse: (fd.get('strasse') || '').toString().trim(),
+        plzOrt: (fd.get('plzOrt') || '').toString().trim(),
+        telefon: (fd.get('telefon') || '').toString().trim(),
+        email: (fd.get('email') || '').toString().trim(),
+        website: (fd.get('website') || '').toString().trim(),
+      };
+      if (!updated.name) return;
+      await put('marken', updated);
+      if (!isEdit) marken.push(updated);
+      else Object.assign(m, updated);
+      marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+      toast(isEdit ? 'Marke aktualisiert' : 'Marke angelegt', 'success');
+      close();
+      renderMarkenList();
+    });
+  }
+  renderMarkenList();
+  container.querySelector('#btn-marke-new').addEventListener('click', () => openMarkeForm());
 
   container.querySelector('#logo-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
