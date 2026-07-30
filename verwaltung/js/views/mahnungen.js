@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings } from '../db.js';
+import { getAll, put, remove, getSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -14,11 +14,17 @@ const STUFE_TEXT = {
 };
 
 export async function render(container) {
-  let [rechnungen, kunden, mahnungen, settings] = await Promise.all([
-    getAll('rechnungen'), getAll('kunden'), getAll('mahnungen'), getSettings(),
+  let [rechnungen, kunden, mahnungen, settings, projekte, marken] = await Promise.all([
+    getAll('rechnungen'), getAll('kunden'), getAll('mahnungen'), getSettings(), getAll('projekte'), getAll('marken'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const rechnungenById = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
+  const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
+  function getEffectiveSettingsForMahnung(m) {
+    const projekt = projekteById[rechnungenById[m.rechnungId]?.projektId];
+    return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+  }
   const today = todayISO();
 
   const overdue = rechnungen
@@ -180,7 +186,7 @@ export async function render(container) {
       { bezeichnung: 'Mahngebühr', menge: 1, einheit: '', einzelpreis: m.gebuehr || 0, steuersatz: 0 },
     ];
     return {
-      settings, art: `${m.stufe}. Mahnung`, nummer: rech?.nummer || '', datum: m.datum,
+      settings: getEffectiveSettingsForMahnung(m), art: `${m.stufe}. Mahnung`, nummer: rech?.nummer || '', datum: m.datum,
       refLabel: 'Neue Zahlungsfrist', refValue: formatDate(m.neueFrist),
       kunde, betreff: `Zahlungserinnerung zu Rechnung ${rech?.nummer || ''} vom ${formatDate(rech?.datum)}`,
       introText: m.text,
@@ -201,7 +207,7 @@ export async function render(container) {
     openEmailComposer({
       to: kunde?.email || '',
       subject: `${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}`,
-      bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${m.text}\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+      bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${m.text}\n\nMit freundlichen Grüßen\n${getEffectiveSettingsForMahnung(m).firmenname}`,
       filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
       buildPdfBlob: () => buildDocPdfBlob(mahnungDocOpts(m)),
     });
@@ -213,7 +219,7 @@ export async function render(container) {
     const kunde = kundenById[rech?.kundeId];
     sendDocumentViaWhatsApp({
       phone: kunde?.telefon,
-      text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+      text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettingsForMahnung(m).firmenname}`,
       pdfBlob: buildDocPdfBlob(mahnungDocOpts(m)),
       filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
     });

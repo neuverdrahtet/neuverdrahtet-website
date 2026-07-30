@@ -1,4 +1,4 @@
-import { getAll, put, remove, clearStore, getSettings, setSettings, BEREICHE } from '../db.js';
+import { getAll, put, remove, clearStore, getSettings, setSettings, resolveMarkeSettings, BEREICHE } from '../db.js';
 import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText } from '../utils.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
@@ -202,13 +202,14 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben] = await Promise.all([
-    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'),
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken] = await Promise.all([
+    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   let filtered = kunden;
   const bulk = createBulkSelect('kunden', { label: 'Kunden' });
 
@@ -597,7 +598,7 @@ export async function render(container) {
         const host = det.querySelector('.akte-dok-host');
         renderDokumenteSection(host, 'projekt', p.id, {
           title: 'Dokumente',
-          berichtContext: { settings, kunde, projekt: p.titel },
+          berichtContext: { settings: resolveMarkeSettings(settings, markenById[p.markeId]), kunde, projekt: p.titel },
         });
       });
     });

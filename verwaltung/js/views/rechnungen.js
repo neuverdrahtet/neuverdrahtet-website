@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
@@ -16,10 +16,11 @@ const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt
 const RECHNUNGSTYP_LABEL = { rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung' };
 
 export async function render(container) {
-  let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine] = await Promise.all([
-    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'), getAll('textbausteine'),
+  let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken] = await Promise.all([
+    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   rechnungen.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = rechnungen;
   const today = todayISO();
@@ -413,12 +414,16 @@ let editor = createPositionsEditor({
           render(container);
         });
       }
+      function getEffectiveSettings() {
+        const projekt = projekte.find((p) => p.id === data.projektId);
+        return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+      }
       function docOpts() {
         const totals = editor.getTotals();
         const istAbschlag = data.rechnungstyp === 'abschlag';
         const kunde = kundenById[data.kundeId];
         return {
-          settings, art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
+          settings: getEffectiveSettings(), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
           leistungsdatum: data.leistungsdatum || data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
           kunde, betreff: data.betreff,
@@ -457,7 +462,7 @@ let editor = createPositionsEditor({
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Rechnung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
             filename: `Rechnung-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -470,7 +475,7 @@ let editor = createPositionsEditor({
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
             pdfBlob: buildDocPdfBlob(docOpts()),
             filename: `Rechnung-${data.nummer}.pdf`,
           });
