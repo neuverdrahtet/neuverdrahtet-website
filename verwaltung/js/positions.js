@@ -1,5 +1,5 @@
 import { uid, calcTotals, formatCurrency, escapeHtml, toast, katalogOptionsHtml } from './utils.js';
-import { put } from './db.js';
+import { put, GEWERKE } from './db.js';
 
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
@@ -15,6 +15,12 @@ function totalsHtml(totals) {
 
 export function createPositionsEditor({ host, katalog, positionen, defaultSteuersatz = 19, vorlagen = [], readOnly = false }) {
   let posState = (positionen || []).map((p) => ({ ...p, id: p.id || uid() }));
+  let gewerkFilter = '';
+
+  function katalogAuswahlHtml() {
+    const gefiltert = gewerkFilter ? katalog.filter((k) => k.gewerk === gewerkFilter) : katalog;
+    return `<option value="">Aus Katalog wählen ...</option>${katalogOptionsHtml(gefiltert, (k) => `${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})`)}`;
+  }
 
   function render() {
     const totals = calcTotals(posState);
@@ -66,9 +72,12 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         </tbody>
       </table>
       <div class="flex-row flex-wrap" style="margin-bottom:14px">
+        <select class="f-gewerk-filter" title="Gewerk zum Filtern wählen" style="max-width:190px">
+          <option value="">Alle Gewerke</option>
+          ${GEWERKE.map((g) => `<option value="${g.id}" ${gewerkFilter === g.id ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}
+        </select>
         <select class="f-katalog-select">
-          <option value="">Aus Katalog wählen ...</option>
-          ${katalogOptionsHtml(katalog, (k) => `${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})`)}
+          ${katalogAuswahlHtml()}
         </select>
         <button type="button" class="btn btn-sm" id="btn-add-katalog">+ übernehmen</button>
         <button type="button" class="btn btn-sm" id="btn-add-manual">+ freie Position</button>
@@ -93,6 +102,11 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       row.querySelector('.f-preis').addEventListener('input', (e) => { posState[i].einzelpreis = Number(e.target.value); updateSum(row, i); });
       row.querySelector('.f-steuer').addEventListener('input', (e) => { posState[i].steuersatz = Number(e.target.value); refreshTotalsOnly(); });
       row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
+    });
+
+    host.querySelector('.f-gewerk-filter').addEventListener('change', (e) => {
+      gewerkFilter = e.target.value;
+      host.querySelector('.f-katalog-select').innerHTML = katalogAuswahlHtml();
     });
 
     host.querySelector('#btn-add-katalog').addEventListener('click', () => {

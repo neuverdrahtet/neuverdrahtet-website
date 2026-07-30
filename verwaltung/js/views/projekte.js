@@ -33,6 +33,7 @@ export async function render(container, opts = {}) {
 
   let folder = ALLE_OFFEN;
   let filtered = projekte;
+  let verwendungGewerkFilter = '';
   const bulk = createBulkSelect('projekte', { label: 'Projekte' });
 
   container.innerHTML = `
@@ -207,9 +208,13 @@ export async function render(container, opts = {}) {
         <h2 style="font-size:14px;margin:0">Verwendetes Material / Leistungen</h2>
       </div>
       <div class="flex-row" style="gap:6px;margin-bottom:10px">
+        <select id="verwendung-gewerk" style="flex:1" title="Gewerk zum Filtern wählen">
+          <option value="">Alle Gewerke</option>
+          ${GEWERKE.map((g) => `<option value="${g.id}" ${verwendungGewerkFilter === g.id ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}
+        </select>
         <select id="verwendung-katalog" style="flex:2">
           <option value="">– Artikel wählen –</option>
-          ${katalogOptionsHtml(katalog, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}
+          ${katalogOptionsHtml(verwendungGewerkFilter ? katalog.filter((k) => k.gewerk === verwendungGewerkFilter) : katalog, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}
         </select>
         <input type="number" id="verwendung-menge" placeholder="Menge" min="0" step="0.01" style="flex:1">
         <button type="button" class="btn btn-sm" id="btn-verwendung-add">+ hinzufügen</button>
@@ -233,6 +238,11 @@ export async function render(container, opts = {}) {
         </table>
       `}
     `;
+    host.querySelector('#verwendung-gewerk').addEventListener('change', (e) => {
+      verwendungGewerkFilter = e.target.value;
+      const gefiltert = verwendungGewerkFilter ? katalog.filter((k) => k.gewerk === verwendungGewerkFilter) : katalog;
+      host.querySelector('#verwendung-katalog').innerHTML = `<option value="">– Artikel wählen –</option>${katalogOptionsHtml(gefiltert, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}`;
+    });
     host.querySelector('#btn-verwendung-add').addEventListener('click', async () => {
       const katalogId = host.querySelector('#verwendung-katalog').value;
       const menge = parseFloat(host.querySelector('#verwendung-menge').value);
