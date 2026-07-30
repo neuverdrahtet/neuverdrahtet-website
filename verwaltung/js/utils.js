@@ -204,6 +204,26 @@ export function nimmPlantafelVorbelegung() {
   }
 }
 
+// Gleiches Prinzip wie oben, aber routenunabhängig - für die "+ Angebot" /
+// "+ Rechnung" / "+ Auftragsbestätigung"-Schnellknöpfe aus der Projekt-Akte.
+const DOKUMENT_PREFILL_KEY = 'nv-dokument-prefill';
+
+export function openDokumentMitVorbelegung(route, prefill) {
+  try { sessionStorage.setItem(DOKUMENT_PREFILL_KEY, JSON.stringify(prefill)); } catch { /* ignore */ }
+  window.location.hash = `#/${route}`;
+}
+
+export function nimmDokumentVorbelegung() {
+  try {
+    const raw = sessionStorage.getItem(DOKUMENT_PREFILL_KEY);
+    if (!raw) return null;
+    sessionStorage.removeItem(DOKUMENT_PREFILL_KEY);
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export function debounce(fn, wait = 250) {
   let t;
   return (...args) => {
