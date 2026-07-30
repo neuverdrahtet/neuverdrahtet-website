@@ -23,7 +23,6 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Sanitär/Bad', 'Std.', 56),
   leistung('Helferstunde Sanitär/Bad', 'Std.', 36),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Vorarbeiten ---
   leistung('Bad-Entkernung komplett (bis 8m², inkl. Altfliesen/Sanitär demontieren)', 'pauschal', 950),

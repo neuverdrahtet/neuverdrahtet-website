@@ -20,14 +20,13 @@ export const STANDARD_KATALOG_ABBRUCH = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Abbruch', 'Std.', 46),
   leistung('Helferstunde Abbruch', 'Std.', 34),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Rückbau Wände/Decken ---
   leistung('Nichttragende Wand abbrechen (Ziegel/Kalksandstein)', 'm²', 32),
   leistung('Trockenbauwand rückbauen', 'm²', 16),
   leistung('Durchbruch/Maueröffnung herstellen (bis 1m²)', 'Stk.', 220),
   leistung('Abgehängte Decke/Rigipsdecke rückbauen', 'm²', 18),
-  leistung('Tapeten entfernen', 'm²', 6),
+  leistung('Tapete entfernen', 'm²', 6),
   leistung('Putz abschlagen (Wand)', 'm²', 14),
 
   // --- Leistungen: Bodenaufbau & Beläge ---

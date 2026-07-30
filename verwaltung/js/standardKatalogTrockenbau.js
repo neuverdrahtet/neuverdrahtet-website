@@ -20,7 +20,6 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Trockenbau', 'Std.', 46),
   leistung('Helferstunde Trockenbau', 'Std.', 34),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Wände ---
   leistung('Metallständerwand aufstellen, einfach beplankt', 'm²', 35),

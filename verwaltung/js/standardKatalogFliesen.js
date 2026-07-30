@@ -20,7 +20,6 @@ export const STANDARD_KATALOG_FLIESEN = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Fliesenleger', 'Std.', 52),
   leistung('Helferstunde Fliesenleger', 'Std.', 36),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Untergrund & Abdichtung ---
   leistung('Untergrund vorbereiten/grundieren', 'm²', 4),
@@ -47,7 +46,7 @@ export const STANDARD_KATALOG_FLIESEN = [
   artikel('Dichtschlämme/Verbundabdichtung (Eimer 5kg)', 'Stk.', 42),
   artikel('Dichtband/Dichtmanschetten-Set', 'Stk.', 26),
   artikel('Randentkopplungsband (Rolle 10m)', 'Stk.', 22),
-  artikel('Grundierung Haftgrund (5L Kanister)', 'Stk.', 30),
+  artikel('Grundierung Haftgrund Fliesen (5L Kanister)', 'Stk.', 30),
 
   // --- Materialien: Fliesen ---
   artikel('Bodenfliese Feinsteinzeug Standard 30x60', 'm²', 22),

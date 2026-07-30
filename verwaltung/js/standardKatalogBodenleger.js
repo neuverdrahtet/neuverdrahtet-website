@@ -20,7 +20,6 @@ export const STANDARD_KATALOG_BODENLEGER = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Bodenleger', 'Std.', 48),
   leistung('Helferstunde Bodenleger', 'Std.', 34),
-  leistung('Anfahrt/Fahrzeit (Nahbereich, pauschal)', 'pauschal', 35),
 
   // --- Leistungen: Untergrundvorbereitung ---
   leistung('Alt-Bodenbelag entfernen und entsorgen', 'm²', 5),
@@ -46,7 +45,7 @@ export const STANDARD_KATALOG_BODENLEGER = [
 
   // --- Materialien: Untergrund ---
   artikel('Ausgleichs-/Spachtelmasse (25kg Sack)', 'Stk.', 16),
-  artikel('Grundierung/Tiefgrund (5L Kanister)', 'Stk.', 28),
+  artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
   artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
 
   // --- Materialien: Beläge ---
