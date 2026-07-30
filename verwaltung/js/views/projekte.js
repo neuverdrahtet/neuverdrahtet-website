@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, BEREICHE, GEWERKE } from '../db.js';
+import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
@@ -16,16 +16,18 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
-    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'),
+    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
+  marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   projekte.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   if (bereichScope) projekte = projekte.filter((p) => bereichScope.includes(p.bereich));
 
@@ -366,7 +368,7 @@ export async function render(container, opts = {}) {
     const isEdit = !!p;
     const data = p || {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', createdAt: new Date().toISOString(),
+      start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedAuftragsbestaetigungen = isEdit ? auftragsbestaetigungen.filter((a) => a.projektId === data.id) : [];
@@ -392,6 +394,15 @@ export async function render(container, opts = {}) {
             <div class="field"><label>Bereich</label>
               <select name="bereich" id="f-bereich">${scopedBereiche.map((b) => `<option value="${b.id}" ${b.id === data.bereich ? 'selected' : ''}>${escapeHtml(b.titel)}</option>`).join('')}</select>
             </div>
+            ${marken.length > 0 ? `
+              <div class="field"><label>Marke</label>
+                <select name="markeId">
+                  <option value="">Standard (${escapeHtml(settings.firmenname)})</option>
+                  ${marken.map((m) => `<option value="${m.id}" ${m.id === data.markeId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+                </select>
+                <span class="hint mb-0">Bestimmt Name/Logo auf Angeboten, Rechnungen, Mahnungen und Berichten dieses Projekts.</span>
+              </div>
+            ` : ''}
             <div class="field"><label>Kategorie</label>
               <select name="kategorieId" id="f-kategorie">${kategorienForBereich(data.bereich).map((k) => `<option value="${k.id}" ${k.id === data.kategorieId ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
             </div>
@@ -472,7 +483,7 @@ export async function render(container, opts = {}) {
       renderFotoSection(body.querySelector('#foto-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
         title: 'Dokumente (Berichte, Stundenzettel, ...)',
-        berichtContext: { settings, kunde: kundenById[data.kundeId] || null, projekt: data.titel },
+        berichtContext: { settings: resolveMarkeSettings(settings, markenById[data.markeId]), kunde: kundenById[data.kundeId] || null, projekt: data.titel },
       });
       body.querySelector('#btn-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(data));
       body.querySelector('#btn-neuer-termin').addEventListener('click', () => {
@@ -490,7 +501,7 @@ export async function render(container, opts = {}) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
-      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'gewerk', 'farbe']) {
+      for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'gewerk', 'farbe', 'markeId']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.titel) return;

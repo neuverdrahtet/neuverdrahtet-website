@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
@@ -18,10 +18,11 @@ const STATUS_BADGE = {
 };
 
 export async function render(container) {
-  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine] = await Promise.all([
-    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'),
+  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
+    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = angebote;
   const bulk = createBulkSelect('angebote', { label: 'Angebote' });
@@ -217,10 +218,14 @@ let editor = createPositionsEditor({
         close();
         render(container);
       });
+      function getEffectiveSettings() {
+        const projekt = projekte.find((p) => p.id === data.projektId);
+        return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+      }
       function docOpts() {
         const totals = editor.getTotals();
         return {
-          settings, art: 'Angebot', nummer: data.nummer, datum: data.datum,
+          settings: getEffectiveSettings(), art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
@@ -240,7 +245,7 @@ let editor = createPositionsEditor({
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
             filename: `Angebot-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -252,7 +257,7 @@ let editor = createPositionsEditor({
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
             pdfBlob: buildDocPdfBlob(docOpts()),
             filename: `Angebot-${data.nummer}.pdf`,
           });

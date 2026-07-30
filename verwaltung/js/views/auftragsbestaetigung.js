@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, setSettings, STEUERARTEN } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
@@ -13,10 +13,11 @@ const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: '
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success' };
 
 export async function render(container) {
-  let [dokumente, kunden, projekte, katalog, settings, vorlagen, textbausteine, angebote] = await Promise.all([
-    getAll('auftragsbestaetigungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('angebote'),
+  let [dokumente, kunden, projekte, katalog, settings, vorlagen, textbausteine, angebote, marken] = await Promise.all([
+    getAll('auftragsbestaetigungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('angebote'), getAll('marken'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
+  const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   dokumente.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = dokumente;
   const bulk = createBulkSelect('auftragsbestaetigungen', { label: 'Auftragsbestätigungen' });
@@ -174,10 +175,14 @@ export async function render(container) {
         close();
         render(container);
       });
+      function getEffectiveSettings() {
+        const projekt = projekte.find((p) => p.id === data.projektId);
+        return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+      }
       function docOpts() {
         const totals = editor.getTotals();
         return {
-          settings, art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
+          settings: getEffectiveSettings(), art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
           kunde: kundenById[data.kundeId], betreff: data.betreff,
           projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
           introText: 'vielen Dank für Ihren Auftrag. Wir bestätigen hiermit folgende Leistungen:',
@@ -196,7 +201,7 @@ export async function render(container) {
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Auftragsbestätigung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -208,7 +213,7 @@ export async function render(container) {
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
             pdfBlob: buildDocPdfBlob(docOpts()),
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
           });
