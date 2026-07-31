@@ -770,10 +770,15 @@ export async function render(container) {
   container.querySelector('#google-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    await setSettings({
+    const patch = {
       googleClientId: (fd.get('googleClientId') || '').toString().trim(),
       googleCalendarId: (fd.get('googleCalendarId') || 'primary').toString().trim() || 'primary',
-    });
+    };
+    await setSettings(patch);
+    // Cache in google.js sofort nachziehen, damit ein direkt folgender Klick
+    // auf "Mit Google verbinden" nicht noch die alte/leere Client-ID aus dem
+    // beim App-Start gefüllten Cache verwendet.
+    google.updateCachedSettings(patch);
     toast('Google-Einstellungen gespeichert', 'success');
   });
 
