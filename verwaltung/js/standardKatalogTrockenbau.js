@@ -78,5 +78,7 @@ export const STANDARD_KATALOG_TROCKENBAU = [
     artikel('Revisionsklappe (Stk.)', 'Stk.', 22),
     artikel('Eckschutzschiene Metall (Stange 2,5m)', 'Stk.', 6),
     artikel('Knauf Uniflott Fugenspachtel (25kg Sack)', 'Stk.', 34.45),
+    artikel('Schlagdübel 8x60mm für UW-Profil-Befestigung (Packung 100 Stk.)', 'Stk.', 12),
+    artikel('Direktbefestiger/Schnellmontagedübel für Metallprofile (Packung 50 Stk.)', 'Stk.', 15),
   ]),
 ];

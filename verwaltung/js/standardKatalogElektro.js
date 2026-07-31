@@ -142,6 +142,32 @@ export const STANDARD_KATALOG_ELEKTRO = [
     artikel('Rahmen UP, 1-fach', 'Stk.', 2.5),
     artikel('Rahmen UP, 2-fach', 'Stk.', 4),
     artikel('Rahmen UP, 3-fach', 'Stk.', 5.5),
+    artikel('Wechselschalter UP, Serie Standard, weiß', 'Stk.', 4),
+    artikel('Serienschalter UP, Serie Standard, weiß', 'Stk.', 5),
+    artikel('Kreuzschalter UP, Serie Standard, weiß', 'Stk.', 6),
+    artikel('Taster UP (Treppenlicht/Klingel), Serie Standard, weiß', 'Stk.', 4.5),
+    artikel('Dimmer-Einsatz UP, Universal-LED, weiß', 'Stk.', 22),
+    artikel('Jalousie-/Rollladenschalter UP, weiß', 'Stk.', 16),
+    artikel('Bewegungsmelder-Schalter UP', 'Stk.', 28),
+    artikel('Steckdose AP mit Klappdeckel, IP44', 'Stk.', 10),
+    artikel('Steckdose UP 2-fach, weiß', 'Stk.', 7),
+    artikel('USB-Steckdose UP, Lade A+C, weiß', 'Stk.', 25),
+    artikel('CEE-Steckdose 16A, 5-polig, rot (Drehstrom, AP)', 'Stk.', 22),
+    artikel('CEE-Steckdose 32A, 5-polig, rot (Drehstrom, AP)', 'Stk.', 38),
+  ]),
+
+  // --- Materialien: Befestigung & Kleinmaterial ---
+  ...materialGruppe('Befestigung & Kleinmaterial', [
+    artikel('Drehstiftdübel 6x40mm (Packung 100 Stk.)', 'Stk.', 6),
+    artikel('Spreizdübel Nylon 8x40mm (Packung 100 Stk.)', 'Stk.', 8),
+    artikel('Metall-/Rahmendübel 8x60mm (Packung 50 Stk.)', 'Stk.', 14),
+    artikel('Universalschrauben 4x40mm, Senkkopf (Packung 200 Stk.)', 'Stk.', 9),
+    artikel('Unterputzdose (Schalterdose), Tiefe 45mm', 'Stk.', 0.6),
+    artikel('Kombi-Unterputzdose 2-fach', 'Stk.', 1.4),
+    artikel('Aufputz-Abzweigdose IP54', 'Stk.', 3.5),
+    artikel('Kabelbinder 200mm, UV-beständig (Packung 100 Stk.)', 'Stk.', 5),
+    artikel('Kabelschelle/Bügelschelle bis 10mm (Packung 25 Stk.)', 'Stk.', 6),
+    artikel('Rohrschelle für Installationsrohr M20 (Packung 25 Stk.)', 'Stk.', 7),
   ]),
 
   // --- Materialien: Kabel & Leitungen ---
