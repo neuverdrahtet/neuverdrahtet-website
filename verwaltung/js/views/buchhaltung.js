@@ -9,7 +9,10 @@ const BUCH_NAV = [
   { id: 'uebersicht', icon: '📊', label: 'Übersicht' },
   { id: 'kontenplan', icon: '📒', label: 'Kontenplan' },
   { id: 'journal', icon: '📓', label: 'Journal' },
+  { id: 'bilanz', icon: '⚖️', label: 'Bilanz & GuV' },
+  { id: 'offeneposten', icon: '📬', label: 'Offene Posten' },
 ];
+const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 
 function deNum(n) {
   return (Math.round(Number(n) * 100) / 100).toFixed(2).replace('.', ',');
@@ -93,6 +96,24 @@ export async function render(container) {
           </div>
           <p class="hint">Automatisch aus bezahlten Rechnungen und erfassten Ausgaben erzeugte Buchungssätze sind nicht direkt editierbar (nur über die Quelle korrigierbar) - nur manuell erfasste Buchungen lassen sich hier löschen.</p>
           <div id="journal-host"></div>
+        </div>
+        <div class="settings-panel" data-panel="bilanz" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Bilanz &amp; GuV</h2>
+            <div class="actions">
+              <label class="mb-0">GuV-Jahr <select id="bilanz-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select></label>
+              <label class="mb-0">Bilanz-Stichtag <input type="date" id="bilanz-stichtag" value="${todayISO()}"></label>
+            </div>
+          </div>
+          <div class="card" style="background:#fff6e0;border-color:#f0d78c">
+            <p class="mb-0">⚠️ Vereinfachte Darstellung ohne Eröffnungsbilanz-/Vorjahres-Eigenkapital-Fortschreibung - der Jahresüberschuss wird als rechnerische Restgröße gezeigt. Ersetzt keine Steuerberatung; die endgültige Bilanzierung bleibt Aufgabe deines Steuerberaters.</p>
+          </div>
+          <div id="bilanz-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="offeneposten" hidden>
+          <h2>Offene Posten (Debitoren)</h2>
+          <p class="hint">Offene/teilbezahlte Ausgangsrechnungen, sortiert nach Fälligkeit. Kreditoren (Lieferantenrechnungen) werden aktuell nicht abgebildet, da Ausgaben in dieser App nur als bereits bezahlte Belege erfasst werden.</p>
+          <div id="offeneposten-host"></div>
         </div>
       </div>
     </div>
@@ -473,7 +494,127 @@ export async function render(container) {
     });
   });
 
+  async function renderBilanz() {
+    const bilanzHost = container.querySelector('#bilanz-host');
+    const guvJahr = container.querySelector('#bilanz-jahr-select').value || String(new Date().getFullYear());
+    const stichtag = container.querySelector('#bilanz-stichtag').value || todayISO();
+    const konten = await getAll('konten');
+    konten.sort((a, b) => a.nummer.localeCompare(b.nummer));
+    const alleBuchungen = await getAll('buchungen');
+
+    // --- GuV: Erträge (Haben-Normalsaldo) minus Aufwendungen (Soll-Normalsaldo) des gewählten Jahres ---
+    const guvBuchungen = alleBuchungen.filter((b) => (b.datum || '').slice(0, 4) === guvJahr);
+    function summeJeKonto(buchungen, klassen, normalsaldoSoll) {
+      const summen = new Map();
+      for (const b of buchungen) {
+        for (const [kontoId, istSoll] of [[b.sollKontoId, true], [b.habenKontoId, false]]) {
+          const k = konten.find((x) => x.id === kontoId);
+          if (!k || !klassen.includes(k.klasse)) continue;
+          const vorzeichen = istSoll === normalsaldoSoll ? 1 : -1;
+          summen.set(k.id, (summen.get(k.id) || 0) + vorzeichen * b.betrag);
+        }
+      }
+      return Array.from(summen.entries()).map(([kontoId, betrag]) => ({ konto: konten.find((k) => k.id === kontoId), betrag })).filter((z) => z.betrag);
+    }
+    const ertraege = summeJeKonto(guvBuchungen, ['ertrag'], false);
+    const aufwendungen = summeJeKonto(guvBuchungen, ['aufwand'], true);
+    const summeErtraege = ertraege.reduce((s, z) => s + z.betrag, 0);
+    const summeAufwendungen = aufwendungen.reduce((s, z) => s + z.betrag, 0);
+    const jahresueberschuss = summeErtraege - summeAufwendungen;
+
+    // --- Bilanz zum Stichtag: kumulierte Salden seit je, unabhängig vom GuV-Jahr ---
+    const bilanzBuchungen = alleBuchungen.filter((b) => (b.datum || '') <= stichtag);
+    const aktiva = summeJeKonto(bilanzBuchungen, ['aktiv'], true);
+    const passiva = summeJeKonto(bilanzBuchungen, ['passiv'], false);
+    const summeAktiva = aktiva.reduce((s, z) => s + z.betrag, 0);
+    const summePassiva = passiva.reduce((s, z) => s + z.betrag, 0);
+    // Jahresüberschuss als Rest-Eigenkapital: gleicht Aktiva/Passiva rechnerisch aus (siehe Hinweistext oben).
+    const eigenkapitalRest = summeAktiva - summePassiva;
+
+    function zeilenHtml(zeilen) {
+      return zeilen.map((z) => `<tr><td>${escapeHtml(z.konto.nummer)} ${escapeHtml(z.konto.name)}</td><td class="text-right">${formatCurrency(z.betrag)}</td></tr>`).join('')
+        || '<tr><td colspan="2">Keine Buchungen.</td></tr>';
+    }
+
+    bilanzHost.innerHTML = `
+      <div class="card">
+        <h3>GuV ${guvJahr}</h3>
+        <table class="data-table">
+          <thead><tr><th>Ertragskonten</th><th class="text-right">Betrag</th></tr></thead>
+          <tbody>${zeilenHtml(ertraege)}</tbody>
+        </table>
+        <table class="data-table">
+          <thead><tr><th>Aufwandskonten</th><th class="text-right">Betrag</th></tr></thead>
+          <tbody>${zeilenHtml(aufwendungen)}</tbody>
+        </table>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-value">${formatCurrency(summeErtraege)}</div><div class="kpi-label">Summe Erträge</div></div>
+          <div class="kpi-card"><div class="kpi-value">${formatCurrency(summeAufwendungen)}</div><div class="kpi-label">Summe Aufwendungen</div></div>
+          <div class="kpi-card ${jahresueberschuss >= 0 ? '' : 'kpi-danger'}"><div class="kpi-value">${formatCurrency(jahresueberschuss)}</div><div class="kpi-label">Jahresüberschuss/-fehlbetrag</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h3>Bilanz zum ${formatDate(stichtag)}</h3>
+        <div class="form-grid">
+          <div>
+            <table class="data-table">
+              <thead><tr><th>Aktiva</th><th class="text-right">Betrag</th></tr></thead>
+              <tbody>${zeilenHtml(aktiva)}</tbody>
+              <tfoot><tr><td>Summe Aktiva</td><td class="text-right">${formatCurrency(summeAktiva)}</td></tr></tfoot>
+            </table>
+          </div>
+          <div>
+            <table class="data-table">
+              <thead><tr><th>Passiva</th><th class="text-right">Betrag</th></tr></thead>
+              <tbody>
+                ${zeilenHtml(passiva)}
+                <tr><td>Eigenkapital (Restgröße)</td><td class="text-right">${formatCurrency(eigenkapitalRest)}</td></tr>
+              </tbody>
+              <tfoot><tr><td>Summe Passiva</td><td class="text-right">${formatCurrency(summePassiva + eigenkapitalRest)}</td></tr></tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+  container.querySelector('#bilanz-jahr-select').addEventListener('change', renderBilanz);
+  container.querySelector('#bilanz-stichtag').addEventListener('change', renderBilanz);
+
+  function renderOffenePosten() {
+    const host = container.querySelector('#offeneposten-host');
+    const today = todayISO();
+    const offene = rechnungen
+      .filter((r) => r.status === 'offen' || r.status === 'teilbezahlt')
+      .sort((a, b) => (a.faelligAm || '').localeCompare(b.faelligAm || ''));
+    const summe = offene.reduce((s, r) => s + (r.brutto || 0), 0);
+    host.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${offene.length}</div><div class="kpi-label">Offene Rechnungen</div></div>
+        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summe)}</div><div class="kpi-label">Summe offen (brutto)</div></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Status</th><th class="text-right">Betrag (brutto)</th></tr></thead>
+        <tbody>
+          ${offene.map((r) => {
+            const overdue = r.faelligAm && r.faelligAm < today;
+            return `
+              <tr${overdue ? ' style="color:var(--danger,#c0392b)"' : ''}>
+                <td>${escapeHtml(r.nummer)}</td>
+                <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
+                <td>${formatDate(r.faelligAm)}${overdue ? ' ⚠️' : ''}</td>
+                <td>${escapeHtml(RECHNUNG_STATUS_LABEL[r.status] || r.status)}</td>
+                <td class="text-right">${formatCurrency(r.brutto)}</td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="5">Keine offenen Rechnungen.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
   renderContent();
   renderKontenplan();
   renderJournal();
+  renderBilanz();
+  renderOffenePosten();
 }
