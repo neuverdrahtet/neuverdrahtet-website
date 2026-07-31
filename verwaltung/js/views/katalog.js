@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText 
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
+import { parseDatanorm, readDatanormFile } from '../datanorm.js';
 import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
 import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
 import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
@@ -73,6 +74,7 @@ export async function render(container) {
       <h1>Artikel &amp; Leistungen</h1>
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
+        <button class="btn" id="btn-datanorm-import">📦 DATANORM importieren</button>
         <button class="btn" id="btn-standard-import">📥 Standard-Kataloge importieren</button>
         <button class="btn" id="btn-duplikate">🔍 Duplikate prüfen</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
@@ -241,6 +243,7 @@ export async function render(container) {
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
+  container.querySelector('#btn-datanorm-import').addEventListener('click', () => openDatanormImport());
   container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());
   container.querySelector('#btn-duplikate').addEventListener('click', () => openDuplikatCheck());
   container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
@@ -514,6 +517,60 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
       }
       for (const row of rows) await put('katalog', row);
       toast(`${rows.length} Einträge importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      render(container);
+    });
+  }
+
+  function openDatanormImport() {
+    const { body, close } = openModal({
+      title: 'DATANORM-Preisliste importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">DATANORM-Datei (.001/.002/.dyn/.txt) eines Großhändlers wählen - Artikelnummer, Bezeichnung, Einheit und Preis werden als Material übernommen. Bereits gefüllte Preise/Bezeichnungen im Katalog werden dadurch nicht verändert; bei gleicher Lieferanten-Art.-Nr. wird der bestehende Eintrag aktualisiert.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>DATANORM-Datei</label>
+          <input type="file" id="datanorm-file" accept=".001,.002,.dyn,.duo,.txt,text/plain">
+        </div>
+        <div id="datanorm-preview" class="text-mute"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-datanorm-import" disabled>Importieren</button>
+        </div>
+      `,
+    });
+    let parsed = null;
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    const importBtn = body.querySelector('#btn-do-datanorm-import');
+    body.querySelector('#datanorm-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await readDatanormFile(file);
+        parsed = parseDatanorm(text, { standardSteuersatz: settings.standardSteuersatz });
+        body.querySelector('#datanorm-preview').textContent = `${parsed.rows.length} Artikel gefunden${parsed.errors.length ? `, ${parsed.errors.length} Zeile(n) übersprungen` : ''}.`;
+        importBtn.disabled = parsed.rows.length === 0;
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    importBtn.addEventListener('click', async () => {
+      if (!parsed || parsed.rows.length === 0) return;
+      const byLieferantenNr = new Map(items.filter((i) => i.lieferantenArtikelnummer).map((i) => [i.lieferantenArtikelnummer, i]));
+      let neu = 0;
+      let aktualisiert = 0;
+      for (const row of parsed.rows) {
+        const bestehend = byLieferantenNr.get(row.lieferantenArtikelnummer);
+        if (bestehend) {
+          await put('katalog', { ...bestehend, bezeichnung: row.bezeichnung, einheit: row.einheit, preis: row.preis });
+          aktualisiert += 1;
+        } else {
+          await put('katalog', { ...row, id: uid() });
+          neu += 1;
+        }
+      }
+      toast(`DATANORM-Import: ${neu} neu, ${aktualisiert} aktualisiert.`, 'success');
       close();
       render(container);
     });

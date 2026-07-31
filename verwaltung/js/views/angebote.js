@@ -9,6 +9,7 @@ import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -30,7 +31,10 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Angebote</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neues Angebot</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
+        <button class="btn btn-primary" id="btn-new">+ Neues Angebot</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
@@ -94,6 +98,34 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
+
+  function openGaebImport() {
+    const { body, close } = openModal({
+      title: 'GAEB-Leistungsverzeichnis importieren',
+      bodyHtml: `
+        <p class="hint">GAEB-DA-XML-Datei (.x83/.d83/.xml) eines Architekten/Ausschreibers wählen - Positionen (Menge, Einheit, Text) werden als neues Angebot ohne Preise angelegt, die Preise kalkulierst du danach selbst.</p>
+        <div class="field"><label>GAEB-Datei</label><input type="file" id="gaeb-file" accept=".x83,.d83,.xml,application/xml,text/xml"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#gaeb-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      const { positionen, projektName, error } = parseGaebXml(text);
+      if (error || positionen.length === 0) {
+        toast(error || 'Keine Positionen in dieser Datei gefunden.', 'danger');
+        return;
+      }
+      close();
+      openForm(null, { positionen, betreff: projektName ? `Leistungsverzeichnis: ${projektName}` : '' });
+    });
+  }
 
   // Kommt der Nutzer über den "+ Angebot"-Schnellknopf aus der Projekt-Akte,
   // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
@@ -105,7 +137,7 @@ export async function render(container) {
     const data = a || {
       id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
-      status: 'entwurf', betreff: '', notizen: '', positionen: [], createdAt: new Date().toISOString(),
+      status: 'entwurf', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
     };
 
@@ -146,6 +178,7 @@ export async function render(container) {
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-gaeb-export" title="Bepreistes Leistungsverzeichnis im GAEB-Format">GAEB exportieren</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-ab">→ Auftragsbestätigung erstellen</button>' : ''}
@@ -242,6 +275,19 @@ let editor = createPositionsEditor({
       }
       body.querySelector('#btn-print').addEventListener('click', () => {
         printHtml(buildDocHtml(docOpts()), settings);
+      });
+      body.querySelector('#btn-gaeb-export').addEventListener('click', () => {
+        const opts = docOpts();
+        const blob = buildGaebBlob({
+          projektName: opts.betreff || opts.projekt || data.nummer, nummer: data.nummer, datum: data.datum,
+          positionen: opts.positionen, settings: opts.settings,
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = gaebFilename(data.nummer);
+        a.click();
+        URL.revokeObjectURL(url);
       });
       const emailBtn = body.querySelector('#btn-email');
       if (emailBtn) {
