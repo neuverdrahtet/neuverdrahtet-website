@@ -48,5 +48,8 @@ export const STANDARD_KATALOG_RENOVIERUNG = [
     artikel('Kantenschutzprofile (Set)', 'Stk.', 12),
     artikel('Absperr-/Warnband (Rolle 500m)', 'Stk.', 12),
     artikel('Bauzaun mieten (je m/Woche)', 'm', 2.5),
+    artikel('Layher Rollgerüst/Fahrgerüst mieten (Arbeitshöhe bis 6m, je Woche)', 'Stk.', 125),
+    artikel('Bagster Big Bag XL Bauschutt-Entsorgungssack (2m³)', 'Stk.', 16.8),
+    artikel('Tesa Präzisionskrepp Outdoor-Klebeband, UV-beständig (Rolle 50m)', 'Stk.', 10.5),
   ]),
 ];
