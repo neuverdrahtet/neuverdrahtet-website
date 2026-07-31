@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 16;
+const DB_VERSION = 17;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -58,6 +58,8 @@ const STORES = {
   fahrten: 'id',
   anlagen: 'id',
   marken: 'id',
+  konten: 'id',
+  buchungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -458,6 +460,9 @@ const DEFAULT_SETTINGS = {
   datevMandantNr: '',
   datevErloesKonto: '8400',
   datevAufwandKonto: '4900',
+  kontoBankId: 'konto-1200',
+  kontoKasseId: 'konto-1000',
+  ustvaZeitraum: 'monatlich',
   aiWorkerUrl: '',
   aiAppSecret: '',
   lexofficeApiKey: '',
@@ -2083,6 +2088,35 @@ export const TERMIN_TYPEN = [
   { id: 'urlaub', titel: 'Urlaub', farbe: '#1f8a4c' },
 ];
 
+// Kern-Kontenplan nach SKR03 (konsistent mit den bestehenden DATEV-Settings
+// datevErloesKonto/datevAufwandKonto, die bereits SKR03-Nummern sind). Bewusst
+// nur die am häufigsten gebrauchten Konten eines kleinen Handwerksbetriebs -
+// frei erweiterbar/anpassbar über die Kontenplan-Verwaltung in Buchhaltung.
+// Ersetzt keine steuerliche Beratung; die endgültige Kontenzuordnung gehört
+// weiterhin in die Hände des Steuerberaters.
+export const KONTEN_KLASSEN = [
+  { id: 'aktiv', titel: 'Aktivkonto (Vermögen)' },
+  { id: 'passiv', titel: 'Passivkonto (Schulden/Kapital)' },
+  { id: 'ertrag', titel: 'Ertragskonto (Erlöse)' },
+  { id: 'aufwand', titel: 'Aufwandskonto (Kosten)' },
+];
+export const DEFAULT_KONTEN = [
+  { id: 'konto-1000', nummer: '1000', name: 'Kasse', klasse: 'aktiv' },
+  { id: 'konto-1200', nummer: '1200', name: 'Bank', klasse: 'aktiv' },
+  { id: 'konto-1400', nummer: '1400', name: 'Forderungen aus Lieferungen und Leistungen', klasse: 'aktiv' },
+  { id: 'konto-1571', nummer: '1571', name: 'Abziehbare Vorsteuer 7 %', klasse: 'aktiv' },
+  { id: 'konto-1576', nummer: '1576', name: 'Abziehbare Vorsteuer 19 %', klasse: 'aktiv' },
+  { id: 'konto-1600', nummer: '1600', name: 'Verbindlichkeiten aus Lieferungen und Leistungen', klasse: 'passiv' },
+  { id: 'konto-1771', nummer: '1771', name: 'Umsatzsteuer 7 %', klasse: 'passiv' },
+  { id: 'konto-1776', nummer: '1776', name: 'Umsatzsteuer 19 %', klasse: 'passiv' },
+  { id: 'konto-1800', nummer: '1800', name: 'Privatentnahmen allgemein', klasse: 'passiv' },
+  { id: 'konto-1890', nummer: '1890', name: 'Privateinlagen', klasse: 'passiv' },
+  { id: 'konto-8300', nummer: '8300', name: 'Erlöse 7 % USt.', klasse: 'ertrag' },
+  { id: 'konto-8400', nummer: '8400', name: 'Erlöse 19 % USt.', klasse: 'ertrag' },
+  { id: 'konto-8125', nummer: '8125', name: 'Steuerfreie Umsätze (Export/IG-Lieferung/§13b)', klasse: 'ertrag' },
+  { id: 'konto-4900', nummer: '4900', name: 'Sonstige betriebliche Aufwendungen', klasse: 'aufwand' },
+];
+
 export const DEFAULT_TERMIN_STATUS = [
   { id: 'geplant', titel: 'Geplant', farbe: '#2b7fd6', reihenfolge: 0 },
   { id: 'dokumentiert', titel: 'Dokumentiert', farbe: '#8e44ad', reihenfolge: 1 },
@@ -2278,6 +2312,12 @@ export async function ensureSeeded() {
     if (r.stornoVonNummer && r.status !== 'storniert') {
       await put('rechnungen', { ...r, status: 'storniert', bezahltAm: '' });
     }
+  }
+  const konten = await getAll('konten');
+  const kontenIds = new Set(konten.map((k) => k.id));
+  const missingKonten = DEFAULT_KONTEN.filter((k) => !kontenIds.has(k.id));
+  for (const k of missingKonten) {
+    await put('konten', k);
   }
 }
 
