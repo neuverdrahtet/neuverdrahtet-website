@@ -45,6 +45,13 @@ function fromGoogleEvent(event) {
 }
 
 export async function syncCalendar({ silent = false } = {}) {
+  // ensureToken() als allererste Handlung: wird über einen Button-Klick (nicht
+  // silent) noch ein Anmelde-Popup fällig, darf davor kein echter Netzwerk-Await
+  // (wie der getSettings()-Read direkt danach) das kurze Zeitfenster verbrauchen,
+  // in dem mobile Browser einen Klick noch als Popup-Erlaubnis werten - siehe
+  // google.js connect()/preloadGis(). Im Hintergrund-Sync ist isConnected() vom
+  // Aufrufer bereits geprüft, ensureToken() kehrt dann ohne Popup sofort zurück.
+  if (!silent) await google.ensureToken();
   const settings = await getSettings();
   if (!settings.googleClientId) {
     throw new Error('Google ist noch nicht eingerichtet (Einstellungen → Google-Verbindung).');

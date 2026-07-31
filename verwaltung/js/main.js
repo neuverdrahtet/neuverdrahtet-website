@@ -178,14 +178,13 @@ async function boot() {
   await applyTheme();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
-  // Google-Anmeldeskript (GIS) schon jetzt im Hintergrund laden, statt erst
-  // beim ersten Klick auf "Mit Google verbinden/synchronisieren" - auf
-  // mobilen Browsern kann der Skript-Download sonst das kurze Zeitfenster
-  // aufbrauchen, in dem ein Klick noch ein Popup öffnen darf, und Google
-  // meldet dann "Failed to open popup window".
-  getSettings().then((settings) => {
-    if (settings.googleClientId) preloadGis();
-  }).catch(() => { /* Vorladen ist ein Komfort-Feature, darf den Start nicht stören */ });
+  // Google-Einstellungen + Anmeldeskript (GIS) schon jetzt im Hintergrund
+  // vorladen, statt erst beim ersten Klick auf "Mit Google
+  // verbinden/synchronisieren" - auf mobilen Browsern kann ein einziger
+  // echter Netzwerk-Await zwischen Klick und Popup-Aufruf das kurze
+  // Zeitfenster aufbrauchen, in dem ein Klick noch ein Popup öffnen darf,
+  // und Google meldet dann "Failed to open popup window".
+  preloadGis();
   // Push-Nachrichten, die eintreffen während die App offen/im Vordergrund ist,
   // zeigt der Browser NICHT automatisch als System-Benachrichtigung an (das
   // übernimmt sonst der Service Worker im Hintergrund) - hier stattdessen als

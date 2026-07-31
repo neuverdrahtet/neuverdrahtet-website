@@ -24,6 +24,10 @@ let tokenExpiresAt = Number(localStorage.getItem('nv-google-token-exp') || 0);
 let grantedScope = localStorage.getItem('nv-google-token-scope') || '';
 let gisReady = false;
 let gisLoadPromise = null;
+// Zwischengespeicherter Einstellungen-Stand, damit connect() beim Klick auf
+// "Verbinden/Synchronisieren" nicht erst auf einen frischen Firestore-Read
+// warten muss - siehe preloadGis()/connect() weiter unten.
+let cachedSettings = null;
 
 function loadGis() {
   if (gisLoadPromise) return gisLoadPromise;
@@ -78,18 +82,35 @@ function requestToken(settings, prompt) {
   });
 }
 
-/** Lädt das Google-Anmeldeskript schon beim App-Start vor (ohne Popup), damit
- * beim späteren Klick auf "Mit Google verbinden/synchronisieren" kein await
- * auf den Skript-Download mehr zwischen Klick und Popup-Öffnung liegt - auf
- * mobilen Browsern (v.a. Safari) verfällt das kurze Zeitfenster, in dem ein
- * Klick noch window.open() erlaubt, sonst und das Popup wird stillschweigend
- * blockiert ("Failed to open popup window"). */
+/** Lädt beim App-Start Einstellungen + Google-Anmeldeskript einmal im
+ * Hintergrund vor (ohne Popup), damit ein späterer Klick auf "Mit Google
+ * verbinden/synchronisieren" weder auf einen Firestore-Read noch auf den
+ * Skript-Download warten muss, bevor der Popup-Aufruf kommt - auf mobilen
+ * Browsern (v.a. Safari) verfällt schon bei einem einzigen echten
+ * Netzwerk-Await zwischen Klick und window.open() das kurze Zeitfenster, in
+ * dem der Klick noch ein Popup erlauben würde, und der Dialog wird
+ * stillschweigend blockiert ("Failed to open popup window"). */
 export function preloadGis() {
-  loadGis().catch(() => { /* schlägt das Vorladen fehl, versucht connect() es beim Klick erneut */ });
+  getSettings().then((settings) => {
+    cachedSettings = settings;
+    if (settings.googleClientId) loadGis().catch(() => { /* connect() versucht es beim Klick erneut */ });
+  }).catch(() => { /* Vorladen ist ein Komfort-Feature, darf den Start nicht stören */ });
+}
+
+/** Aktualisiert den zwischengespeicherten Einstellungen-Stand sofort nach dem
+ * Speichern in den Einstellungen, damit ein direkt danach folgender Klick auf
+ * "Mit Google verbinden" nicht noch die alte/leere Client-ID aus dem Cache
+ * verwendet (der Cache wird sonst nur einmal beim App-Start befüllt). */
+export function updateCachedSettings(patch) {
+  cachedSettings = { ...(cachedSettings || {}), ...patch };
 }
 
 export async function connect() {
-  const settings = await getSettings();
+  let settings = cachedSettings;
+  if (!settings?.googleClientId) {
+    settings = await getSettings();
+    cachedSettings = settings;
+  }
   if (!settings.googleClientId) {
     throw new Error('Bitte zuerst in den Einstellungen die Google Client-ID hinterlegen.');
   }
@@ -131,7 +152,7 @@ export function disconnect() {
   localStorage.removeItem('nv-google-token-scope');
 }
 
-async function ensureToken() {
+export async function ensureToken() {
   if (isConnected()) return accessToken;
   await connect();
   return accessToken;
