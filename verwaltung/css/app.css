@@ -1275,6 +1275,7 @@ table.data-table th.col-select, table.data-table td.col-select {
 
   .print-doc .print-unterschrift { margin-top: 22px; page-break-inside: avoid; }
   .print-doc .print-unterschrift-ort { font-size: 12px; margin-bottom: 20px; }
+  .print-doc .print-unterschrift-reihe { display: flex; gap: 20mm; }
   .print-doc .print-unterschrift-feld { width: 70mm; }
   .print-doc .print-unterschrift-bild { display: block; max-width: 70mm; max-height: 22mm; margin-bottom: -4px; }
   .print-doc .print-unterschrift-linie { border-top: 1px solid #333; margin-top: 22mm; }

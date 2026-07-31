@@ -10,11 +10,18 @@ import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { mountSignaturePad } from '../signature.js';
 import * as lexoffice from '../lexoffice.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
 const RECHNUNGSTYP_LABEL = { rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung' };
+const ZAHLUNGSARTEN = [
+  { id: 'ueberweisung', titel: 'Überweisung' },
+  { id: 'bar', titel: 'Barzahlung' },
+  { id: 'ec', titel: 'EC-/Kartenzahlung' },
+  { id: 'sonstige', titel: 'Sonstige' },
+];
 
 export async function render(container) {
   let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken] = await Promise.all([
@@ -205,6 +212,7 @@ export async function render(container) {
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       rechnungstyp: 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
       skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
+      zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
     };
     const locked = isEdit && !!data.versendet;
     const abschlaegeChecked = new Set((data.verrechneteAbschlaege || []).map((a) => a.rechnungId));
@@ -241,6 +249,10 @@ export async function render(container) {
                 <option value="abschlag" ${data.rechnungstyp === 'abschlag' ? 'selected' : ''}>Abschlagsrechnung</option>
               </select>
             </div>
+            <div class="field"><label>Zahlungsart</label>
+              <select name="zahlungsart" id="f-zahlungsart" ${locked ? 'disabled' : ''}>${ZAHLUNGSARTEN.map((z) => `<option value="${z.id}" ${z.id === (data.zahlungsart || 'ueberweisung') ? 'selected' : ''}>${escapeHtml(z.titel)}</option>`).join('')}</select>
+              <span class="hint mb-0">Bei Barzahlung müssen Kunde und Mitarbeiter unten unterschreiben.</span>
+            </div>
             ${isEdit ? `
               <div class="field"><label>Status</label>
                 <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -259,6 +271,15 @@ export async function render(container) {
           ${!locked ? '<div id="tb-picker-host"></div>' : ''}
           <div id="abschlaege-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen" ${locked ? 'disabled' : ''}>${escapeHtml(data.notizen || '')}</textarea></div>
+          <div id="bar-sig-section" ${(data.zahlungsart || 'ueberweisung') === 'bar' ? '' : 'hidden'}>
+            <div class="divider"></div>
+            <h2 style="font-size:14px;margin:0 0 8px">Unterschriften (Barzahlung)</h2>
+            <p class="hint">Bei Barzahlung müssen Kunde und Mitarbeiter den Erhalt der Zahlung hier auf dem Bildschirm/Tablet bestätigen. Beim Ausdrucken erscheinen zusätzlich immer leere Unterschriftslinien zum handschriftlichen Unterschreiben.</p>
+            <div class="flex-row flex-wrap" style="gap:20px">
+              <div id="sig-host-kunde" style="flex:1;min-width:260px"></div>
+              <div id="sig-host-mitarbeiter" style="flex:1;min-width:260px"></div>
+            </div>
+          </div>
           <div class="modal-actions">
             ${isEdit && !locked ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit && locked && data.status !== 'storniert' ? '<button type="button" class="btn btn-danger" id="btn-storno">Stornieren</button>' : ''}
@@ -282,6 +303,39 @@ let editor = createPositionsEditor({
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
       readOnly: locked,
+    });
+
+    function mountSigSection(host, initialUrl, label) {
+      let pad = null;
+      let url = initialUrl || '';
+      function renderView() {
+        if (locked) {
+          host.innerHTML = url
+            ? `<div class="field"><label>${escapeHtml(label)}</label><img src="${url}" alt="${escapeHtml(label)}" style="max-width:260px;max-height:110px;border:1px solid var(--border);border-radius:6px;background:#fff;display:block"></div>`
+            : `<div class="field"><label>${escapeHtml(label)}</label><p class="hint">Keine Unterschrift hinterlegt.</p></div>`;
+          return;
+        }
+        if (url) {
+          pad = null;
+          host.innerHTML = `
+            <div class="field">
+              <label>${escapeHtml(label)}</label>
+              <img src="${url}" alt="${escapeHtml(label)}" style="max-width:260px;max-height:110px;border:1px solid var(--border);border-radius:6px;background:#fff;display:block">
+              <button type="button" class="btn btn-sm btn-sig-neu" style="margin-top:6px;align-self:flex-start">Neu unterschreiben</button>
+            </div>
+          `;
+          host.querySelector('.btn-sig-neu').addEventListener('click', () => { url = ''; renderView(); });
+        } else {
+          pad = mountSignaturePad(host, { label });
+        }
+      }
+      renderView();
+      return { getDataUrl: () => url || (pad && !pad.isEmpty() ? pad.getDataUrl() : '') };
+    }
+    const sigKunde = mountSigSection(body.querySelector('#sig-host-kunde'), data.unterschriftKunde, 'Unterschrift Kunde');
+    const sigMitarbeiter = mountSigSection(body.querySelector('#sig-host-mitarbeiter'), data.unterschriftMitarbeiter, 'Unterschrift Mitarbeiter');
+    body.querySelector('#f-zahlungsart').addEventListener('change', (e) => {
+      body.querySelector('#bar-sig-section').hidden = e.target.value !== 'bar';
     });
 
     if (!locked) {
@@ -429,6 +483,8 @@ let editor = createPositionsEditor({
         const totals = editor.getTotals();
         const istAbschlag = data.rechnungstyp === 'abschlag';
         const kunde = kundenById[data.kundeId];
+        const zahlungsartLive = body.querySelector('#f-zahlungsart')?.value || data.zahlungsart || 'ueberweisung';
+        const istBar = zahlungsartLive === 'bar';
         return {
           settings: getEffectiveSettings(), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
           leistungsdatum: data.leistungsdatum || data.datum,
@@ -448,6 +504,11 @@ let editor = createPositionsEditor({
             `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
           abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
           faelligAm: data.faelligAm, steuerart: data.steuerart || 'regel',
+          zeigeUnterschriftsfeld: istBar,
+          unterschriftKunde: sigKunde.getDataUrl() || null,
+          zeigeZweiteUnterschrift: istBar,
+          unterschriftMitarbeiter: sigMitarbeiter.getDataUrl() || null,
+          zweiteUnterschriftLabel: 'Unterschrift Mitarbeiter',
         };
       }
       async function markVersendetUndSperren() {
@@ -525,6 +586,9 @@ let editor = createPositionsEditor({
         updated.rechnungstyp = fd.get('rechnungstyp') || 'rechnung';
         updated.skontoProzent = Number(fd.get('skontoProzent')) || 0;
         updated.skontoTage = Number(fd.get('skontoTage')) || 0;
+        updated.zahlungsart = fd.get('zahlungsart') || 'ueberweisung';
+        updated.unterschriftKunde = sigKunde.getDataUrl() || '';
+        updated.unterschriftMitarbeiter = sigMitarbeiter.getDataUrl() || '';
       }
       if (isEdit) {
         updated.status = fd.get('status') || data.status;
