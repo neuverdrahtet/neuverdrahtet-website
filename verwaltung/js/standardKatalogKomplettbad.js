@@ -83,5 +83,7 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
     artikel('Hansgrohe Focus 100 Waschtischarmatur (mit Ablaufgarnitur)', 'Stk.', 77.8),
     artikel('HEWI Stützklappgriff/Haltegriff barrierefrei (Serie 801, Edelstahl)', 'Stk.', 95),
     artikel('Emco Spiegelschrank mit LED-Beleuchtung', 'Stk.', 300),
+    artikel('Injektionsmörtel-Befestigungsset für Haltegriffe/Vorwandinstallation', 'Stk.', 18),
+    artikel('Metalldübel M8/M10 für Sanitärobjekte (Packung 20 Stk.)', 'Stk.', 11),
   ]),
 ];
