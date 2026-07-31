@@ -6,6 +6,7 @@ import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 
 const STUFE_TEXT = {
   1: (settings, frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
@@ -78,10 +79,42 @@ export async function render(container) {
   const bereitCount = overdue.filter((o) => o.bereit).length;
 
   mahnungen.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
-  const bulk = createBulkSelect('mahnungen', { label: 'Mahnungen' });
+
+  function exportFilename(m) {
+    const rech = rechnungenById[m.rechnungId];
+    return `Mahnung-Stufe${m.stufe}-${(rech?.nummer || m.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
+  }
+  async function exportPdf(items, zipFilename) {
+    if (items.length === 0) { toast('Keine Mahnungen zum Exportieren', 'info'); return; }
+    if (items.length > 1) toast(`${items.length} PDFs werden erstellt ...`, 'info');
+    await exportDokumenteAlsPdf(items, { buildPdfBlob: (m) => buildDocPdfBlob(mahnungDocOpts(m)), filenameFor: exportFilename, zipFilename });
+  }
+  function exportCsv(items) {
+    if (items.length === 0) { toast('Keine Mahnungen zum Exportieren', 'info'); return; }
+    const rows = [['Rechnung', 'Kunde', 'Stufe', 'Datum', 'Neue Zahlungsfrist', 'Mahngebühr', 'Rechnungsbetrag']];
+    for (const m of items) {
+      const rech = rechnungenById[m.rechnungId];
+      rows.push([rech?.nummer || '', kundenById[rech?.kundeId]?.firma || '', m.stufe, formatDate(m.datum), formatDate(m.neueFrist), m.gebuehr, rech?.brutto || '']);
+    }
+    downloadCsv(rows, 'Mahnungen-Export.csv');
+  }
+
+  const bulk = createBulkSelect('mahnungen', {
+    label: 'Mahnungen',
+    extraActions: [
+      { id: 'bulk-export-pdf', label: '📄 Als PDF', onClick: (ids) => exportPdf(mahnungen.filter((m) => ids.includes(m.id)), 'Mahnungen-Auswahl.zip') },
+      { id: 'bulk-export-csv', label: '📊 Als CSV', onClick: (ids) => exportCsv(mahnungen.filter((m) => ids.includes(m.id))) },
+    ],
+  });
 
   container.innerHTML = `
-    <div class="view-header"><h1>Mahnungen</h1></div>
+    <div class="view-header">
+      <h1>Mahnungen</h1>
+      <div class="actions">
+        <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
+        <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
+      </div>
+    </div>
 
     <div class="card">
       <div class="view-header" style="margin-bottom:10px">
@@ -126,6 +159,9 @@ export async function render(container) {
       createdAt: new Date().toISOString(),
     };
   }
+
+  container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(mahnungen, 'Mahnungen-Export.zip'));
+  container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(mahnungen));
 
   const btnBulkMahnung = container.querySelector('#btn-bulk-mahnung');
   if (btnBulkMahnung) {

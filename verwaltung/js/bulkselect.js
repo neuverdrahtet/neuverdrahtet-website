@@ -8,7 +8,7 @@ import { confirmDelete } from './ui.js';
  * in die Tabelle einbauen, barHtml() vor die Tabelle setzen und nach dem
  * Neuzeichnen wire() aufrufen.
  */
-export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) {
+export function createBulkSelect(store, { label = 'Einträge', deleteFn, extraActions = [] } = {}) {
   const selected = new Set();
   const doDelete = deleteFn || ((id) => remove(store, id));
   // Papierkorb-fähige Stores landen nur im Papierkorb (siehe db.js
@@ -30,6 +30,7 @@ export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) 
       <div class="bulk-bar">
         <span>${selected.size} ${label} ausgewählt</span>
         <button type="button" class="btn btn-sm" id="bulk-clear">Auswahl aufheben</button>
+        ${extraActions.map((a) => `<button type="button" class="btn btn-sm" id="${a.id}">${a.label}</button>`).join('')}
         <button type="button" class="btn btn-sm btn-danger" id="bulk-delete">🗑 Löschen</button>
       </div>
     `;
@@ -94,6 +95,10 @@ export function createBulkSelect(store, { label = 'Einträge', deleteFn } = {}) 
         onChange();
       });
     }
+    extraActions.forEach((a) => {
+      const btn = host.querySelector(`#${a.id}`);
+      if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); a.onClick(Array.from(selected)); });
+    });
   }
 
   function clear() {
