@@ -44,7 +44,7 @@ if (firebaseConfig.projectId && firebaseConfig.messagingSenderId) {
 
   onBackgroundMessage(messaging, (payload) => {
     const data = payload.notification || payload.data || {};
-    self.registration.showNotification(data.title || 'neuverdrahtet Verwaltung', {
+    self.registration.showNotification(data.title || 'Werkora', {
       body: data.body || '',
       icon: './icons/icon-192.png',
       badge: './icons/icon-192.png',
