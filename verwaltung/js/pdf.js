@@ -49,6 +49,9 @@ export function buildDocHtml({
   aufbewahrungsHinweis,
   zeigeUnterschriftsfeld,
   unterschriftKunde,
+  zeigeZweiteUnterschrift,
+  unterschriftMitarbeiter,
+  zweiteUnterschriftLabel,
 }) {
   const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
 
@@ -150,10 +153,18 @@ export function buildDocHtml({
     ${zeigeUnterschriftsfeld ? `
     <div class="print-unterschrift">
       <div class="print-unterschrift-ort">Ort, Datum: ____________________________</div>
-      <div class="print-unterschrift-feld">
-        ${unterschriftKunde ? `<img src="${unterschriftKunde}" class="print-unterschrift-bild" alt="Unterschrift Kunde">` : ''}
-        <div class="print-unterschrift-linie"></div>
-        <div class="print-unterschrift-label">Unterschrift Kunde</div>
+      <div class="print-unterschrift-reihe">
+        <div class="print-unterschrift-feld">
+          ${unterschriftKunde ? `<img src="${unterschriftKunde}" class="print-unterschrift-bild" alt="Unterschrift Kunde">` : ''}
+          <div class="print-unterschrift-linie"></div>
+          <div class="print-unterschrift-label">Unterschrift Kunde</div>
+        </div>
+        ${zeigeZweiteUnterschrift ? `
+        <div class="print-unterschrift-feld">
+          ${unterschriftMitarbeiter ? `<img src="${unterschriftMitarbeiter}" class="print-unterschrift-bild" alt="${escapeHtml(zweiteUnterschriftLabel || 'Unterschrift Mitarbeiter')}">` : ''}
+          <div class="print-unterschrift-linie"></div>
+          <div class="print-unterschrift-label">${escapeHtml(zweiteUnterschriftLabel || 'Unterschrift Mitarbeiter')}</div>
+        </div>` : ''}
       </div>
     </div>` : ''}
     <div class="print-footer">

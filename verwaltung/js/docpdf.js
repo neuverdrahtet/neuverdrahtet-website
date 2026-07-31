@@ -271,15 +271,21 @@ export async function buildDocPdfBlob(opts) {
     doc.text('Ort, Datum: ______________________________', marginX, y);
     y += 12;
     const sigW = 70, sigH = 22;
+    const col2X = marginX + sigW + 16;
     if (opts.unterschriftKunde) {
       try { doc.addImage(opts.unterschriftKunde, 'PNG', marginX, y - sigH + 4, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
     }
+    if (opts.zeigeZweiteUnterschrift && opts.unterschriftMitarbeiter) {
+      try { doc.addImage(opts.unterschriftMitarbeiter, 'PNG', col2X, y - sigH + 4, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+    }
     doc.setDrawColor(160);
     doc.line(marginX, y, marginX + sigW, y);
+    if (opts.zeigeZweiteUnterschrift) doc.line(col2X, y, col2X + sigW, y);
     y += 4;
     doc.setFontSize(8);
     doc.setTextColor(110);
     doc.text('Unterschrift Kunde', marginX, y);
+    if (opts.zeigeZweiteUnterschrift) doc.text(opts.zweiteUnterschriftLabel || 'Unterschrift Mitarbeiter', col2X, y);
   }
 
   addFooter(doc, opts.settings, marginX, rightX);
