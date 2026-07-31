@@ -11,6 +11,7 @@ const BUCH_NAV = [
   { id: 'journal', icon: '📓', label: 'Journal' },
   { id: 'bilanz', icon: '⚖️', label: 'Bilanz & GuV' },
   { id: 'offeneposten', icon: '📬', label: 'Offene Posten' },
+  { id: 'ustva', icon: '🧾', label: 'USt.-Voranmeldung' },
 ];
 const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 
@@ -34,6 +35,27 @@ function downloadFile(content, filename, mime) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/** Summiert Buchungssätze je Konto einer bestimmten Kontenklasse, vorzeichenrichtig
+ * nach deren Normalsaldo (Soll oder Haben) - z.B. für GuV, Bilanz, USt.-Voranmeldung. */
+function summeJeKonto(buchungen, konten, klassen, normalsaldoSoll) {
+  const summen = new Map();
+  for (const b of buchungen) {
+    for (const [kontoId, istSoll] of [[b.sollKontoId, true], [b.habenKontoId, false]]) {
+      const k = konten.find((x) => x.id === kontoId);
+      if (!k || !klassen.includes(k.klasse)) continue;
+      const vorzeichen = istSoll === normalsaldoSoll ? 1 : -1;
+      summen.set(k.id, (summen.get(k.id) || 0) + vorzeichen * b.betrag);
+    }
+  }
+  return Array.from(summen.entries()).map(([kontoId, betrag]) => ({ konto: konten.find((k) => k.id === kontoId), betrag })).filter((z) => z.betrag);
+}
+function kontoSumme(zeilen, nummer) {
+  return zeilen.find((z) => z.konto?.nummer === nummer)?.betrag || 0;
+}
+function letzterTagDesMonats(jahr, monat) {
+  return new Date(Number(jahr), monat, 0).getDate();
 }
 
 export async function render(container) {
@@ -114,6 +136,18 @@ export async function render(container) {
           <h2>Offene Posten (Debitoren)</h2>
           <p class="hint">Offene/teilbezahlte Ausgangsrechnungen, sortiert nach Fälligkeit. Kreditoren (Lieferantenrechnungen) werden aktuell nicht abgebildet, da Ausgaben in dieser App nur als bereits bezahlte Belege erfasst werden.</p>
           <div id="offeneposten-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="ustva" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">USt.-Voranmeldung</h2>
+            <div class="actions">
+              <select id="ustva-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+              <select id="ustva-periode-select"></select>
+              <button class="btn" id="btn-export-ustva-csv">📊 Als CSV</button>
+            </div>
+          </div>
+          <p class="hint">Voranmeldungszeitraum (monatlich/vierteljährlich) wird in Einstellungen → Finanzen &amp; Kalkulation festgelegt. Werte aus dem Journal, keine offizielle ELSTER-Kennziffern-Zuordnung - Übermittlung bleibt Aufgabe deines Steuerberaters.</p>
+          <div id="ustva-host"></div>
         </div>
       </div>
     </div>
@@ -504,28 +538,16 @@ export async function render(container) {
 
     // --- GuV: Erträge (Haben-Normalsaldo) minus Aufwendungen (Soll-Normalsaldo) des gewählten Jahres ---
     const guvBuchungen = alleBuchungen.filter((b) => (b.datum || '').slice(0, 4) === guvJahr);
-    function summeJeKonto(buchungen, klassen, normalsaldoSoll) {
-      const summen = new Map();
-      for (const b of buchungen) {
-        for (const [kontoId, istSoll] of [[b.sollKontoId, true], [b.habenKontoId, false]]) {
-          const k = konten.find((x) => x.id === kontoId);
-          if (!k || !klassen.includes(k.klasse)) continue;
-          const vorzeichen = istSoll === normalsaldoSoll ? 1 : -1;
-          summen.set(k.id, (summen.get(k.id) || 0) + vorzeichen * b.betrag);
-        }
-      }
-      return Array.from(summen.entries()).map(([kontoId, betrag]) => ({ konto: konten.find((k) => k.id === kontoId), betrag })).filter((z) => z.betrag);
-    }
-    const ertraege = summeJeKonto(guvBuchungen, ['ertrag'], false);
-    const aufwendungen = summeJeKonto(guvBuchungen, ['aufwand'], true);
+    const ertraege = summeJeKonto(guvBuchungen, konten, ['ertrag'], false);
+    const aufwendungen = summeJeKonto(guvBuchungen, konten, ['aufwand'], true);
     const summeErtraege = ertraege.reduce((s, z) => s + z.betrag, 0);
     const summeAufwendungen = aufwendungen.reduce((s, z) => s + z.betrag, 0);
     const jahresueberschuss = summeErtraege - summeAufwendungen;
 
     // --- Bilanz zum Stichtag: kumulierte Salden seit je, unabhängig vom GuV-Jahr ---
     const bilanzBuchungen = alleBuchungen.filter((b) => (b.datum || '') <= stichtag);
-    const aktiva = summeJeKonto(bilanzBuchungen, ['aktiv'], true);
-    const passiva = summeJeKonto(bilanzBuchungen, ['passiv'], false);
+    const aktiva = summeJeKonto(bilanzBuchungen, konten, ['aktiv'], true);
+    const passiva = summeJeKonto(bilanzBuchungen, konten, ['passiv'], false);
     const summeAktiva = aktiva.reduce((s, z) => s + z.betrag, 0);
     const summePassiva = passiva.reduce((s, z) => s + z.betrag, 0);
     // Jahresüberschuss als Rest-Eigenkapital: gleicht Aktiva/Passiva rechnerisch aus (siehe Hinweistext oben).
@@ -612,9 +634,89 @@ export async function render(container) {
     `;
   }
 
+  async function ustvaZeitraeume() {
+    const aktuelleSettings = await getSettings();
+    const vierteljaehrlich = aktuelleSettings.ustvaZeitraum === 'vierteljaehrlich';
+    if (vierteljaehrlich) {
+      return { vierteljaehrlich, optionen: [1, 2, 3, 4].map((q) => ({ wert: q, label: `${q}. Quartal` })) };
+    }
+    return { vierteljaehrlich, optionen: MONTHS.map((m, i) => ({ wert: i + 1, label: m })) };
+  }
+  function periodenRange(jahr, vierteljaehrlich, periode) {
+    const startMonat = vierteljaehrlich ? (periode - 1) * 3 + 1 : periode;
+    const endMonat = vierteljaehrlich ? startMonat + 2 : periode;
+    const von = `${jahr}-${String(startMonat).padStart(2, '0')}-01`;
+    const bis = `${jahr}-${String(endMonat).padStart(2, '0')}-${String(letzterTagDesMonats(jahr, endMonat)).padStart(2, '0')}`;
+    return { von, bis };
+  }
+
+  async function renderUstva() {
+    const host = container.querySelector('#ustva-host');
+    const jahrSelect = container.querySelector('#ustva-jahr-select');
+    const periodeSelect = container.querySelector('#ustva-periode-select');
+    const { vierteljaehrlich, optionen } = await ustvaZeitraeume();
+    const optionenKey = vierteljaehrlich ? 'q' : 'm';
+    if (periodeSelect.dataset.filled !== optionenKey) {
+      periodeSelect.innerHTML = optionen.map((o) => `<option value="${o.wert}">${escapeHtml(o.label)}</option>`).join('');
+      periodeSelect.dataset.filled = optionenKey;
+    }
+
+    const jahr = jahrSelect.value || String(new Date().getFullYear());
+    const periode = Number(periodeSelect.value) || 1;
+    const { von, bis } = periodenRange(jahr, vierteljaehrlich, periode);
+
+    const konten = await getAll('konten');
+    const alleBuchungen = await getAll('buchungen');
+    const periodenBuchungen = alleBuchungen.filter((b) => (b.datum || '') >= von && (b.datum || '') <= bis);
+
+    const erloese = summeJeKonto(periodenBuchungen, konten, ['ertrag'], false);
+    const ust = summeJeKonto(periodenBuchungen, konten, ['passiv'], false);
+    const vorsteuerZeilen = summeJeKonto(periodenBuchungen, konten, ['aktiv'], true).filter((z) => z.konto.nummer === '1571' || z.konto.nummer === '1576');
+
+    const umsatz19 = kontoSumme(erloese, '8400');
+    const umsatz7 = kontoSumme(erloese, '8300');
+    const umsatzSteuerfrei = kontoSumme(erloese, '8125');
+    const ust19 = kontoSumme(ust, '1776');
+    const ust7 = kontoSumme(ust, '1771');
+    const vorsteuer = vorsteuerZeilen.reduce((s, z) => s + z.betrag, 0);
+    const zahllast = ust19 + ust7 - vorsteuer;
+
+    host.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(umsatz19)}</div><div class="kpi-label">Umsätze 19 %</div></div>
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(umsatz7)}</div><div class="kpi-label">Umsätze 7 %</div></div>
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(umsatzSteuerfrei)}</div><div class="kpi-label">Steuerfreie Umsätze</div></div>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(ust19 + ust7)}</div><div class="kpi-label">Umsatzsteuer (19 %: ${formatCurrency(ust19)}, 7 %: ${formatCurrency(ust7)})</div></div>
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(vorsteuer)}</div><div class="kpi-label">Abziehbare Vorsteuer</div></div>
+        <div class="kpi-card ${zahllast >= 0 ? 'kpi-warn' : ''}"><div class="kpi-value">${formatCurrency(zahllast)}</div><div class="kpi-label">${zahllast >= 0 ? 'Zahllast' : 'Erstattung'}</div></div>
+      </div>
+      <p class="hint">Zeitraum: ${formatDate(von)} – ${formatDate(bis)}</p>
+    `;
+
+    container.querySelector('#btn-export-ustva-csv').onclick = () => {
+      const rows = [
+        ['Zeitraum', `${von} – ${bis}`],
+        ['Umsätze 19 %', deNum(umsatz19)],
+        ['Umsätze 7 %', deNum(umsatz7)],
+        ['Steuerfreie Umsätze', deNum(umsatzSteuerfrei)],
+        ['Umsatzsteuer 19 %', deNum(ust19)],
+        ['Umsatzsteuer 7 %', deNum(ust7)],
+        ['Abziehbare Vorsteuer', deNum(vorsteuer)],
+        [zahllast >= 0 ? 'Zahllast' : 'Erstattung', deNum(Math.abs(zahllast))],
+      ];
+      const csv = rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+      downloadFile(csv, `ustva-${jahr}-${vierteljaehrlich ? 'Q' + periode : String(periode).padStart(2, '0')}.csv`, 'text/csv;charset=utf-8');
+    };
+  }
+  container.querySelector('#ustva-jahr-select').addEventListener('change', renderUstva);
+  container.querySelector('#ustva-periode-select').addEventListener('change', renderUstva);
+
   renderContent();
   renderKontenplan();
   renderJournal();
   renderBilanz();
   renderOffenePosten();
+  renderUstva();
 }

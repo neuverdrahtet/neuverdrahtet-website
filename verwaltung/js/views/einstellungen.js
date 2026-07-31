@@ -224,6 +224,12 @@ export async function render(container) {
               <div class="field"><label>DATEV Mandanten-Nr.</label><input name="datevMandantNr" value="${escapeHtml(settings.datevMandantNr || '')}"></div>
               <div class="field"><label>Erlöskonto (SKR)</label><input name="datevErloesKonto" value="${escapeHtml(settings.datevErloesKonto)}"></div>
               <div class="field"><label>Aufwandskonto (SKR)</label><input name="datevAufwandKonto" value="${escapeHtml(settings.datevAufwandKonto)}"></div>
+              <div class="field"><label>USt.-Voranmeldungszeitraum</label>
+                <select name="ustvaZeitraum">
+                  <option value="monatlich" ${settings.ustvaZeitraum !== 'vierteljaehrlich' ? 'selected' : ''}>Monatlich</option>
+                  <option value="vierteljaehrlich" ${settings.ustvaZeitraum === 'vierteljaehrlich' ? 'selected' : ''}>Vierteljährlich</option>
+                </select>
+              </div>
             </div>
             <p class="hint">Die DATEV-Felder werden nur für den Buchhaltungsexport benötigt – bitte mit deinem Steuerberater abstimmen.</p>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
@@ -751,6 +757,7 @@ export async function render(container) {
       datevMandantNr: (fd.get('datevMandantNr') || '').toString().trim(),
       datevErloesKonto: (fd.get('datevErloesKonto') || '8400').toString().trim(),
       datevAufwandKonto: (fd.get('datevAufwandKonto') || '4900').toString().trim(),
+      ustvaZeitraum: fd.get('ustvaZeitraum') === 'vierteljaehrlich' ? 'vierteljaehrlich' : 'monatlich',
     });
     toast('Gespeichert', 'success');
   });
