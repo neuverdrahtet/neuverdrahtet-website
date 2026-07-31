@@ -9,6 +9,7 @@ import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
+import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 
 const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt', storniert: 'Storniert' };
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success', storniert: 'badge-danger' };
@@ -28,12 +29,54 @@ export async function render(container) {
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   dokumente.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = dokumente;
-  const bulk = createBulkSelect('auftragsbestaetigungen', { label: 'Auftragsbestätigungen' });
+
+  function exportOptsFor(a) {
+    const kunde = kundenById[a.kundeId];
+    const projekt = projekte.find((p) => p.id === a.projektId);
+    return {
+      settings: resolveMarkeSettings(settings, markenById[projekt?.markeId]), art: 'Auftragsbestätigung', nummer: a.nummer, datum: a.datum,
+      kunde, betreff: a.betreff, projekt: projekt?.titel || '',
+      introText: 'vielen Dank für Ihren Auftrag. Wir bestätigen hiermit folgende Leistungen:',
+      positionen: a.positionen, totals: calcTotals(a.positionen),
+      steuerHinweis: STEUERARTEN.find((s) => s.id === a.steuerart)?.hinweis || '',
+      closingText: (a.notizen || '') + '\n\nWir freuen uns auf die Zusammenarbeit.',
+      zeigeUnterschriftsfeld: true,
+      unterschriftKunde: a.unterschriftKunde || null,
+    };
+  }
+  function exportFilename(a) {
+    return `Auftragsbestaetigung-${(a.nummer || a.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
+  }
+  async function exportPdf(items, zipFilename) {
+    if (items.length === 0) { toast('Keine Auftragsbestätigungen zum Exportieren', 'info'); return; }
+    if (items.length > 1) toast(`${items.length} PDFs werden erstellt ...`, 'info');
+    await exportDokumenteAlsPdf(items, { buildPdfBlob: (a) => buildDocPdfBlob(exportOptsFor(a)), filenameFor: exportFilename, zipFilename });
+  }
+  function exportCsv(items) {
+    if (items.length === 0) { toast('Keine Auftragsbestätigungen zum Exportieren', 'info'); return; }
+    const rows = [['Nummer', 'Kunde', 'Datum', 'Status', 'Netto', 'USt.', 'Brutto']];
+    for (const a of items) {
+      rows.push([a.nummer, kundenById[a.kundeId]?.firma || '', formatDate(a.datum), STATUS_LABEL[a.status] || a.status, a.netto, a.steuer, a.brutto]);
+    }
+    downloadCsv(rows, 'Auftragsbestaetigungen-Export.csv');
+  }
+
+  const bulk = createBulkSelect('auftragsbestaetigungen', {
+    label: 'Auftragsbestätigungen',
+    extraActions: [
+      { id: 'bulk-export-pdf', label: '📄 Als PDF', onClick: (ids) => exportPdf(dokumente.filter((a) => ids.includes(a.id)), 'Auftragsbestaetigungen-Auswahl.zip') },
+      { id: 'bulk-export-csv', label: '📊 Als CSV', onClick: (ids) => exportCsv(dokumente.filter((a) => ids.includes(a.id))) },
+    ],
+  });
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Auftragsbestätigungen</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neue Auftragsbestätigung</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
+        <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
+        <button class="btn btn-primary" id="btn-new">+ Neue Auftragsbestätigung</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
@@ -96,6 +139,8 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Auftragsbestaetigungen-Export.zip'));
+  container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
 
   // Kommt der Nutzer über den "+ Auftragsbestätigung"-Schnellknopf aus der
   // Projekt-Akte, liegt hier eine Vorbelegung bereit - Formular direkt

@@ -11,6 +11,7 @@ import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
 import { mountSignaturePad } from '../signature.js';
+import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -42,13 +43,53 @@ export async function render(container) {
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = angebote;
-  const bulk = createBulkSelect('angebote', { label: 'Angebote' });
+
+  function exportOptsFor(a) {
+    const projekt = projekte.find((p) => p.id === a.projektId);
+    return {
+      settings: resolveMarkeSettings(settings, markenById[projekt?.markeId]), art: 'Angebot', nummer: a.nummer, datum: a.datum,
+      refLabel: 'Gültig bis', refValue: formatDate(a.gueltigBis),
+      kunde: kundenById[a.kundeId], betreff: a.betreff, projekt: projekt?.titel || '',
+      introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
+      positionen: a.positionen, totals: calcTotals(a.positionen),
+      steuerHinweis: STEUERARTEN.find((s) => s.id === a.steuerart)?.hinweis || '',
+      closingText: (a.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
+      zeigeUnterschriftsfeld: true,
+      unterschriftKunde: a.unterschriftKunde || null,
+    };
+  }
+  function exportFilename(a) {
+    return `Angebot-${(a.nummer || a.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
+  }
+  async function exportPdf(items, zipFilename) {
+    if (items.length === 0) { toast('Keine Angebote zum Exportieren', 'info'); return; }
+    if (items.length > 1) toast(`${items.length} PDFs werden erstellt ...`, 'info');
+    await exportDokumenteAlsPdf(items, { buildPdfBlob: (a) => buildDocPdfBlob(exportOptsFor(a)), filenameFor: exportFilename, zipFilename });
+  }
+  function exportCsv(items) {
+    if (items.length === 0) { toast('Keine Angebote zum Exportieren', 'info'); return; }
+    const rows = [['Nummer', 'Kunde', 'Datum', 'Gültig bis', 'Status', 'Netto', 'USt.', 'Brutto']];
+    for (const a of items) {
+      rows.push([a.nummer, kundenById[a.kundeId]?.firma || '', formatDate(a.datum), formatDate(a.gueltigBis), STATUS_LABEL[a.status] || a.status, a.netto, a.steuer, a.brutto]);
+    }
+    downloadCsv(rows, 'Angebote-Export.csv');
+  }
+
+  const bulk = createBulkSelect('angebote', {
+    label: 'Angebote',
+    extraActions: [
+      { id: 'bulk-export-pdf', label: '📄 Als PDF', onClick: (ids) => exportPdf(angebote.filter((a) => ids.includes(a.id)), 'Angebote-Auswahl.zip') },
+      { id: 'bulk-export-csv', label: '📊 Als CSV', onClick: (ids) => exportCsv(angebote.filter((a) => ids.includes(a.id))) },
+    ],
+  });
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Angebote</h1>
       <div class="actions">
         <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
+        <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
+        <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn btn-primary" id="btn-new">+ Neues Angebot</button>
       </div>
     </div>
@@ -115,6 +156,8 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
+  container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Angebote-Export.zip'));
+  container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
 
   function openGaebImport() {
     const { body, close } = openModal({

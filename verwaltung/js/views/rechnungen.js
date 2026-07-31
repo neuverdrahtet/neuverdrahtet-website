@@ -12,6 +12,7 @@ import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import * as lexoffice from '../lexoffice.js';
+import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -67,12 +68,71 @@ export async function render(container) {
   rechnungen.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = rechnungen;
   const today = todayISO();
-  const bulk = createBulkSelect('rechnungen', { label: 'Rechnungen' });
+
+  function exportOptsFor(r) {
+    const istAbschlag = r.rechnungstyp === 'abschlag';
+    const kunde = kundenById[r.kundeId];
+    const projekt = projekte.find((p) => p.id === r.projektId);
+    const istBar = r.zahlungsart === 'bar';
+    const totals = calcTotals(r.positionen);
+    return {
+      settings: resolveMarkeSettings(settings, markenById[projekt?.markeId]), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: r.nummer, datum: r.datum,
+      leistungsdatum: r.leistungsdatum || r.datum,
+      refLabel: 'Zahlbar bis', refValue: formatDate(r.faelligAm),
+      kunde, betreff: r.betreff, projekt: projekt?.titel || '',
+      introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
+      positionen: r.positionen, totals,
+      steuerHinweis: STEUERARTEN.find((s) => s.id === r.steuerart)?.hinweis || '',
+      aufbewahrungsHinweis: kunde?.istPrivatperson
+        ? 'Hinweis gemäß § 14 Abs. 4 Nr. 9 UStG: Als Privatperson sind Sie verpflichtet, diese Rechnung sowie zugehörige Zahlungsbelege im Zusammenhang mit dieser Werklieferung/Leistung 2 Jahre lang aufzubewahren.'
+        : '',
+      closingText: (r.notizen || '') +
+        (r.skontoProzent > 0
+          ? `\n\nBei Zahlung bis zum ${formatDate(addDays(r.datum, r.skontoTage || 0))} (${r.skontoTage || 0} Tage) gewähren wir ${r.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * r.skontoProzent) / 100)}).`
+          : '') +
+        `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(r.faelligAm)} auf unser unten genanntes Konto.`,
+      abschlaege: !istAbschlag && r.verrechneteAbschlaege?.length ? r.verrechneteAbschlaege : undefined,
+      faelligAm: r.faelligAm, steuerart: r.steuerart || 'regel',
+      zeigeUnterschriftsfeld: istBar,
+      unterschriftKunde: r.unterschriftKunde || null,
+      zeigeZweiteUnterschrift: istBar,
+      unterschriftMitarbeiter: r.unterschriftMitarbeiter || null,
+      zweiteUnterschriftLabel: 'Unterschrift Mitarbeiter',
+    };
+  }
+  function exportFilename(r) {
+    return `${r.rechnungstyp === 'abschlag' ? 'Abschlagsrechnung' : 'Rechnung'}-${(r.nummer || r.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
+  }
+  async function exportPdf(items, zipFilename) {
+    if (items.length === 0) { toast('Keine Rechnungen zum Exportieren', 'info'); return; }
+    if (items.length > 1) toast(`${items.length} PDFs werden erstellt ...`, 'info');
+    await exportDokumenteAlsPdf(items, { buildPdfBlob: (r) => buildDocPdfBlob(exportOptsFor(r)), filenameFor: exportFilename, zipFilename });
+  }
+  function exportCsv(items) {
+    if (items.length === 0) { toast('Keine Rechnungen zum Exportieren', 'info'); return; }
+    const rows = [['Nummer', 'Kunde', 'Rechnungsart', 'Datum', 'Fällig am', 'Status', 'Zahlungsart', 'Netto', 'USt.', 'Brutto']];
+    for (const r of items) {
+      rows.push([r.nummer, kundenById[r.kundeId]?.firma || '', RECHNUNGSTYP_LABEL[r.rechnungstyp] || 'Rechnung', formatDate(r.datum), formatDate(r.faelligAm), STATUS_LABEL[r.status] || r.status, ZAHLUNGSARTEN.find((z) => z.id === r.zahlungsart)?.titel || '', r.netto, r.steuer, r.brutto]);
+    }
+    downloadCsv(rows, 'Rechnungen-Export.csv');
+  }
+
+  const bulk = createBulkSelect('rechnungen', {
+    label: 'Rechnungen',
+    extraActions: [
+      { id: 'bulk-export-pdf', label: '📄 Als PDF', onClick: (ids) => exportPdf(rechnungen.filter((r) => ids.includes(r.id)), 'Rechnungen-Auswahl.zip') },
+      { id: 'bulk-export-csv', label: '📊 Als CSV', onClick: (ids) => exportCsv(rechnungen.filter((r) => ids.includes(r.id))) },
+    ],
+  });
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Rechnungen</h1>
-      <div class="actions"><button class="btn btn-primary" id="btn-new">+ Neue Rechnung</button></div>
+      <div class="actions">
+        <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
+        <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
+        <button class="btn btn-primary" id="btn-new">+ Neue Rechnung</button>
+      </div>
     </div>
     <div class="search-bar">
       <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
@@ -231,6 +291,8 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
+  container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
 
   // Kommt der Nutzer über den "+ Rechnung"-Schnellknopf aus der Projekt-Akte,
   // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
