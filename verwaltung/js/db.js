@@ -2267,6 +2267,16 @@ export async function ensureSeeded() {
       await put('aufgabenStatus', s);
     }
   }
+  // Einmalige Korrektur: Stornorechnungen wurden früher mit status:'bezahlt'
+  // angelegt statt 'storniert' - dadurch verfälschte ihr negativer Betrag
+  // Auswertungen/Dashboard (z.B. "Bezahlt"-Summe, Umsatz nach Marke), obwohl
+  // die stornierte Original-Rechnung dort bereits korrekt ausgeschlossen wird.
+  const rechnungen = await getAll('rechnungen');
+  for (const r of rechnungen) {
+    if (r.stornoVonNummer && r.status !== 'storniert') {
+      await put('rechnungen', { ...r, status: 'storniert', bezahltAm: '' });
+    }
+  }
 }
 
 export async function getSettings() {
