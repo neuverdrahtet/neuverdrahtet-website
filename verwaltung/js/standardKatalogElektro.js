@@ -3,6 +3,10 @@
 // Richtwerte) als Startpunkt zum Import in den eigenen Katalog. Über den
 // Button "Standard-Katalog (Elektro) importieren" in Artikel & Leistungen
 // aufrufbar - bereits vorhandene Bezeichnungen werden dabei übersprungen.
+// Materialien sind zusätzlich mit einer Unterkategorie (z.B. "Kabel &
+// Leitungen", "Sicherungsautomaten", "Zählerschränke & Unterverteilung")
+// versehen, über die sich die Katalog-Auswahl in Projekt-Akte, Angeboten
+// und Rechnungen zusätzlich zum Gewerk feiner filtern lässt.
 
 const STEUERSATZ = 19;
 const GEWERK = 'elektro';
@@ -14,6 +18,11 @@ function leistung(bezeichnung, einheit, preis) {
 function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   const preis = Math.round(einkaufspreis * (1 + aufschlagProzent / 100) * 100) / 100;
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
+}
+
+// Ordnet einer Gruppe von Materialien eine gemeinsame Unterkategorie zu.
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
 }
 
 export const STANDARD_KATALOG_ELEKTRO = [
@@ -125,96 +134,156 @@ export const STANDARD_KATALOG_ELEKTRO = [
   leistung('Entsorgung Altmaterial/Verpackung (je Einsatz)', 'pauschal', 15),
 
   // --- Materialien: Steckdosen & Schalter ---
-  artikel('Steckdose UP, Serie Standard, weiß', 'Stk.', 4),
-  artikel('Schalter UP, Serie Standard (Aus/Wechsel), weiß', 'Stk.', 4),
-  artikel('Steckdose UP, Serie gehoben (Design)', 'Stk.', 12),
-  artikel('Feuchtraum-Steckdose IP44', 'Stk.', 9),
-  artikel('Rahmen UP, 1-fach', 'Stk.', 2.5),
-  artikel('Rahmen UP, 2-fach', 'Stk.', 4),
-  artikel('Rahmen UP, 3-fach', 'Stk.', 5.5),
+  ...materialGruppe('Steckdosen & Schalter', [
+    artikel('Steckdose UP, Serie Standard, weiß', 'Stk.', 4),
+    artikel('Schalter UP, Serie Standard (Aus/Wechsel), weiß', 'Stk.', 4),
+    artikel('Steckdose UP, Serie gehoben (Design)', 'Stk.', 12),
+    artikel('Feuchtraum-Steckdose IP44', 'Stk.', 9),
+    artikel('Rahmen UP, 1-fach', 'Stk.', 2.5),
+    artikel('Rahmen UP, 2-fach', 'Stk.', 4),
+    artikel('Rahmen UP, 3-fach', 'Stk.', 5.5),
+  ]),
 
-  // --- Materialien: Kabel & Leerrohr ---
-  artikel('NYM-J 3x1,5mm² Kabel', 'm', 0.9),
-  artikel('NYM-J 3x2,5mm² Kabel', 'm', 1.2),
-  artikel('NYM-J 5x1,5mm² Kabel', 'm', 1.7),
-  artikel('NYM-J 5x2,5mm² Kabel', 'm', 2.2),
-  artikel('NYM-J 5x6mm² Kabel (Starkstrom)', 'm', 5.5),
-  artikel('Installationsrohr M20 (Leerrohr)', 'm', 0.6),
-  artikel('Kabelkanal 40x20mm (2m Stange)', 'Stk.', 5),
+  // --- Materialien: Kabel & Leitungen ---
+  ...materialGruppe('Kabel & Leitungen', [
+    artikel('NYM-J 3x1,5mm² Kabel', 'm', 0.9),
+    artikel('NYM-J 3x2,5mm² Kabel', 'm', 1.2),
+    artikel('NYM-J 3x4mm² Kabel', 'm', 1.8),
+    artikel('NYM-J 5x1,5mm² Kabel', 'm', 1.7),
+    artikel('NYM-J 5x2,5mm² Kabel', 'm', 2.2),
+    artikel('NYM-J 5x4mm² Kabel', 'm', 3.2),
+    artikel('NYM-J 5x6mm² Kabel (Starkstrom)', 'm', 5.5),
+    artikel('NYM-J 5x10mm² Kabel (Starkstrom/Herd)', 'm', 7.5),
+    artikel('NYY-J 3x1,5mm² Erdkabel', 'm', 0.95),
+    artikel('NYY-J 3x2,5mm² Erdkabel', 'm', 1.6),
+    artikel('NYY-J 5x2,5mm² Erdkabel', 'm', 2.4),
+    artikel('NYY-J 5x6mm² Erdkabel', 'm', 4.5),
+    artikel('NYY-J 5x10mm² Erdkabel', 'm', 9.5),
+    artikel('H07V-U 1,5mm² Aderleitung, starr (Leerrohr)', 'm', 0.25),
+    artikel('H07V-K 1,5mm² Aderleitung, flexibel (Leerrohr)', 'm', 0.3),
+    artikel('YSLY-JZ 5x1,5mm² Steuerleitung', 'm', 2.2),
+    artikel('J-Y(ST)Y 2x2x0,8 Fernmelde-/Busleitung', 'm', 0.55),
+    artikel('Netzwerkkabel Cat7 (Verlegekabel, Meterware)', 'm', 1.1),
+    artikel('Koaxialkabel SAT/Antenne (Meterware)', 'm', 0.6),
+    artikel('Installationsrohr M20 (Leerrohr)', 'm', 0.6),
+    artikel('Kabelkanal 40x20mm (2m Stange)', 'Stk.', 5),
+  ]),
 
-  // --- Materialien: Verteilung & Absicherung ---
-  artikel('Leitungsschutzschalter (LS) B16, 1-polig', 'Stk.', 9),
-  artikel('Leitungsschutzschalter (LS) B16, 3-polig', 'Stk.', 28),
-  artikel('FI/RCD-Schutzschalter 25A/30mA, 2-polig', 'Stk.', 32),
-  artikel('FI/RCD-Schutzschalter 40A/30mA, 4-polig', 'Stk.', 65),
-  artikel('FI/LS-Kombiautomat (RCBO) B16/30mA, 1+N-polig', 'Stk.', 45),
-  artikel('FI-Schutzschalter Typ B, 4-polig (für Wallbox/PV/Wärmepumpe)', 'Stk.', 220),
-  artikel('SLS-Schalter 3x63A (nach Vorgabe Netzbetreiber)', 'Stk.', 85),
-  artikel('Überspannungsschutz Kombi-Ableiter Typ 1/2, 3-polig', 'Stk.', 180),
-  artikel('Hauptschalter/Trennschalter 3-polig, 63A', 'Stk.', 35),
-  artikel('Sammelschiene (Meterware)', 'm', 3),
-  artikel('Reihenklemmen-Set (Sortimentsbox)', 'Stk.', 12),
-  artikel('Hutschiene TS35 (1m)', 'Stk.', 3.5),
-  artikel('Aderendhülsen (Sortimentsbox)', 'Stk.', 15),
-  artikel('Unterverteilung Aufputz (12 Module)', 'Stk.', 55),
-  artikel('Unterverteilung Aufputz (24 Module)', 'Stk.', 75),
-  artikel('Unterverteilung Unterputz (24 Module)', 'Stk.', 95),
-  artikel('Unterverteilung Unterputz (36 Module)', 'Stk.', 125),
-  artikel('Zählerschrank-Grundgerüst (1 Zähler)', 'Stk.', 180),
-  artikel('Zählerschrank-Grundgerüst (2 Zähler)', 'Stk.', 260),
-  artikel('Zählerschrank-Grundgerüst (3 Zähler)', 'Stk.', 340),
-  artikel('Klemmen/Verbinder (Wago-Typ, Packung)', 'Stk.', 6),
+  // --- Materialien: Sicherungsautomaten ---
+  ...materialGruppe('Sicherungsautomaten', [
+    artikel('Leitungsschutzschalter (LS) B16, 1-polig', 'Stk.', 9),
+    artikel('Leitungsschutzschalter (LS) B16, 3-polig', 'Stk.', 28),
+    artikel('Hager MBN116 LS-Schalter B16, 1-polig, 6kA', 'Stk.', 2.8),
+    artikel('Hager MBN316 LS-Schalter B16, 3-polig, 6kA', 'Stk.', 22),
+    artikel('Hager NBN116 LS-Schalter B16, 1-polig, 10kA', 'Stk.', 5.5),
+    artikel('ABB S201-B16 LS-Schalter B16, 1-polig, 6kA', 'Stk.', 3.8),
+    artikel('ABB S203-C32 LS-Schalter C32, 3-polig, 10kA (Motoren/induktive Lasten)', 'Stk.', 24),
+    artikel('FI/RCD-Schutzschalter 25A/30mA, 2-polig', 'Stk.', 32),
+    artikel('FI/RCD-Schutzschalter 40A/30mA, 4-polig', 'Stk.', 65),
+    artikel('ABB F202A-25/0,03 FI-Schalter Typ A, 2-polig, 25A/30mA', 'Stk.', 23),
+    artikel('ABB F204A-25/0,03 FI-Schalter Typ A, 4-polig, 25A/30mA', 'Stk.', 40),
+    artikel('FI/LS-Kombiautomat (RCBO) B16/30mA, 1+N-polig', 'Stk.', 45),
+    artikel('FI-Schutzschalter Typ B, 4-polig (für Wallbox/PV/Wärmepumpe)', 'Stk.', 220),
+    artikel('SLS-Schalter 3x63A (nach Vorgabe Netzbetreiber)', 'Stk.', 85),
+    artikel('Überspannungsschutz Kombi-Ableiter Typ 1/2, 3-polig', 'Stk.', 180),
+    artikel('Hauptschalter/Trennschalter 3-polig, 63A', 'Stk.', 35),
+  ]),
+
+  // --- Materialien: Zählerschränke & Unterverteilung ---
+  ...materialGruppe('Zählerschränke & Unterverteilung', [
+    artikel('Unterverteilung Aufputz (12 Module)', 'Stk.', 55),
+    artikel('Unterverteilung Aufputz (24 Module)', 'Stk.', 75),
+    artikel('Unterverteilung Unterputz (24 Module)', 'Stk.', 95),
+    artikel('Unterverteilung Unterputz (36 Module)', 'Stk.', 125),
+    artikel('Hager Volta VU48NC Kleinverteiler UP, 48 Module', 'Stk.', 58.8),
+    artikel('Hager Volta VA60CN Kleinverteiler AP, 60 Module', 'Stk.', 86.55),
+    artikel('Zählerschrank-Grundgerüst (1 Zähler)', 'Stk.', 180),
+    artikel('Zählerschrank-Grundgerüst (2 Zähler)', 'Stk.', 260),
+    artikel('Zählerschrank-Grundgerüst (3 Zähler)', 'Stk.', 340),
+    artikel('ABB Zählerverteilerfeld nach TAB (Erweiterungsfeld)', 'Stk.', 230),
+    artikel('Sammelschiene (Meterware)', 'm', 3),
+    artikel('Reihenklemmen-Set (Sortimentsbox)', 'Stk.', 12),
+    artikel('Hutschiene TS35 (1m)', 'Stk.', 3.5),
+    artikel('Aderendhülsen (Sortimentsbox)', 'Stk.', 15),
+    artikel('Klemmen/Verbinder (Wago-Typ, Packung)', 'Stk.', 6),
+  ]),
 
   // --- Materialien: Blitzschutz & Erdung ---
-  artikel('Fangstange/Fangleitung (Meterware)', 'm', 8),
-  artikel('Blitzableiter-Ableitung (Set je Fallrohr)', 'Stk.', 65),
-  artikel('Fundamenterder-Anschlussfahne', 'Stk.', 25),
-  artikel('Potentialausgleichsschiene (PAS)', 'Stk.', 35),
-  artikel('Erdungsleitung 16mm² (Meterware)', 'm', 2.5),
+  ...materialGruppe('Blitzschutz & Erdung', [
+    artikel('Fangstange/Fangleitung (Meterware)', 'm', 8),
+    artikel('Blitzableiter-Ableitung (Set je Fallrohr)', 'Stk.', 65),
+    artikel('Fundamenterder-Anschlussfahne', 'Stk.', 25),
+    artikel('Potentialausgleichsschiene (PAS)', 'Stk.', 35),
+    artikel('Erdungsleitung 16mm² (Meterware)', 'm', 2.5),
+  ]),
 
   // --- Materialien: Sicherheitsbeleuchtung ---
-  artikel('Sicherheitsleuchte LED, Einzelbatterie', 'Stk.', 65),
-  artikel('Rettungswegleuchte/Piktogramm, Einzelbatterie', 'Stk.', 55),
+  ...materialGruppe('Sicherheitsbeleuchtung', [
+    artikel('Sicherheitsleuchte LED, Einzelbatterie', 'Stk.', 65),
+    artikel('Rettungswegleuchte/Piktogramm, Einzelbatterie', 'Stk.', 55),
+  ]),
 
   // --- Materialien: Gebäudeautomation (KNX) ---
-  artikel('KNX-Busleitung (Meterware)', 'm', 1.1),
-  artikel('KNX-Schaltaktor, 4-fach', 'Stk.', 120),
-  artikel('KNX-Taster/Bedienelement', 'Stk.', 85),
+  ...materialGruppe('Gebäudeautomation (KNX)', [
+    artikel('KNX-Busleitung (Meterware)', 'm', 1.1),
+    artikel('KNX-Schaltaktor, 4-fach', 'Stk.', 120),
+    artikel('KNX-Taster/Bedienelement', 'Stk.', 85),
+  ]),
 
   // --- Materialien: Sicherheitstechnik (Alarm/Video) ---
-  artikel('Bewegungsmelder Einbruchmeldeanlage', 'Stk.', 45),
-  artikel('Überwachungskamera IP, Außenbereich', 'Stk.', 140),
-  artikel('Netzwerk-Videorekorder (NVR, 8-Kanal)', 'Stk.', 280),
+  ...materialGruppe('Sicherheitstechnik (Alarm/Video)', [
+    artikel('Bewegungsmelder Einbruchmeldeanlage', 'Stk.', 45),
+    artikel('Überwachungskamera IP, Außenbereich', 'Stk.', 140),
+    artikel('Netzwerk-Videorekorder (NVR, 8-Kanal)', 'Stk.', 280),
+  ]),
 
   // --- Materialien: Beleuchtung ---
-  artikel('LED-Deckenleuchte einfach (rund, 24W)', 'Stk.', 22),
-  artikel('LED-Panel 62x62cm', 'Stk.', 35),
-  artikel('Außenwandleuchte IP44', 'Stk.', 28),
-  artikel('Bewegungsmelder Aufputz 180°', 'Stk.', 18),
+  ...materialGruppe('Beleuchtung', [
+    artikel('LED-Deckenleuchte einfach (rund, 24W)', 'Stk.', 22),
+    artikel('LED-Panel 62x62cm', 'Stk.', 35),
+    artikel('Außenwandleuchte IP44', 'Stk.', 28),
+    artikel('Bewegungsmelder Aufputz 180°', 'Stk.', 18),
+  ]),
 
-  // --- Materialien: Sicherheit, Netzwerk, Smart Home, E-Mobility ---
-  artikel('Rauchmelder (DIN 14676, 10 Jahre Batterie)', 'Stk.', 14),
-  artikel('Netzwerkdose Cat6 UP', 'Stk.', 8),
-  artikel('Antennendose UP (Kombi Sat/TV)', 'Stk.', 9),
-  artikel('Wallbox 11kW (Basisgerät)', 'Stk.', 550, 20),
-  artikel('Wallbox 22kW (Basisgerät, dreiphasig)', 'Stk.', 750, 20),
-  artikel('Erdkabel NYY-J 5x6mm² (Wallbox-/Außenzuleitung)', 'm', 4.5),
-  artikel('Klingeltrafo/Gegensprechanlage-Set (Basis)', 'Stk.', 90),
+  // --- Materialien: Rauchmelder & Brandschutz ---
+  ...materialGruppe('Rauchmelder & Brandschutz', [
+    artikel('Rauchmelder (DIN 14676, 10 Jahre Batterie)', 'Stk.', 14),
+  ]),
+
+  // --- Materialien: Kommunikation & Netzwerk ---
+  ...materialGruppe('Kommunikation & Netzwerk', [
+    artikel('Netzwerkdose Cat6 UP', 'Stk.', 8),
+    artikel('Antennendose UP (Kombi Sat/TV)', 'Stk.', 9),
+    artikel('Klingeltrafo/Gegensprechanlage-Set (Basis)', 'Stk.', 90),
+  ]),
+
+  // --- Materialien: Wallbox/E-Mobility ---
+  ...materialGruppe('Wallbox/E-Mobility', [
+    artikel('Wallbox 11kW (Basisgerät)', 'Stk.', 550, 20),
+    artikel('Wallbox 22kW (Basisgerät, dreiphasig)', 'Stk.', 750, 20),
+    artikel('Erdkabel NYY-J 5x6mm² (Wallbox-/Außenzuleitung)', 'm', 4.5),
+  ]),
 
   // --- Materialien: Photovoltaik ---
-  artikel('PV-Modul monokristallin, ca. 400Wp', 'Stk.', 140),
-  artikel('Wechselrichter Hybrid, bis 10kW', 'Stk.', 1400, 20),
-  artikel('Batteriespeicher 5kWh', 'Stk.', 2800, 20),
-  artikel('Solarkabel 6mm² (Meterware)', 'm', 1.2),
-  artikel('MC4-Steckverbinder-Set', 'Stk.', 8),
-  artikel('Unterkonstruktion Aufdach (je Modul)', 'Stk.', 25),
-  artikel('DC-Freischalter/Trennschalter PV', 'Stk.', 65),
-  artikel('Einspeise-/Zweirichtungszähler', 'Stk.', 140),
+  ...materialGruppe('Photovoltaik', [
+    artikel('PV-Modul monokristallin, ca. 400Wp', 'Stk.', 140),
+    artikel('Wechselrichter Hybrid, bis 10kW', 'Stk.', 1400, 20),
+    artikel('Batteriespeicher 5kWh', 'Stk.', 2800, 20),
+    artikel('Solarkabel 6mm² (Meterware)', 'm', 1.2),
+    artikel('MC4-Steckverbinder-Set', 'Stk.', 8),
+    artikel('Unterkonstruktion Aufdach (je Modul)', 'Stk.', 25),
+    artikel('DC-Freischalter/Trennschalter PV', 'Stk.', 65),
+    artikel('Einspeise-/Zweirichtungszähler', 'Stk.', 140),
+  ]),
 
   // --- Materialien: Wärmepumpe ---
-  artikel('Zuleitung Wärmepumpe NYY-J 5x6mm² (Erdkabel)', 'm', 4.5),
-  artikel('Sperrzeiten-/Wärmepumpenzähler', 'Stk.', 130),
+  ...materialGruppe('Wärmepumpe', [
+    artikel('Zuleitung Wärmepumpe NYY-J 5x6mm² (Erdkabel)', 'm', 4.5),
+    artikel('Sperrzeiten-/Wärmepumpenzähler', 'Stk.', 130),
+  ]),
 
   // --- Materialien: Hausgeräte-Anschluss ---
-  artikel('Herdanschlussdose (Starkstrom CEE)', 'Stk.', 14),
+  ...materialGruppe('Hausgeräte-Anschluss', [
+    artikel('Herdanschlussdose (Starkstrom CEE)', 'Stk.', 14),
+  ]),
 ];

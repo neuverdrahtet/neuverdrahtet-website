@@ -19,6 +19,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 25) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_KOMPLETTBAD = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Sanitär/Bad', 'Std.', 56),
@@ -49,21 +53,25 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
   leistung('Komplettbad-Sanierung Pauschalpaket (bis 8m², mittlere Preisklasse, schlüsselfertig)', 'pauschal', 14500),
 
   // --- Materialien: Sanitärobjekte ---
-  artikel('WC-Element/Vorwandtechnik', 'Stk.', 190),
-  artikel('WC-Keramik wandhängend', 'Stk.', 220),
-  artikel('WC-Sitz mit Absenkautomatik', 'Stk.', 65),
-  artikel('Waschtisch mit Unterschrank (Set)', 'Stk.', 340),
-  artikel('Dusch-Rinne/Bodenablauf', 'Stk.', 130),
-  artikel('Duschabtrennung (Set, 90x90)', 'Stk.', 320),
-  artikel('Badewanne Acryl Standard (170x75)', 'Stk.', 260),
+  ...materialGruppe('Sanitärobjekte', [
+    artikel('WC-Element/Vorwandtechnik', 'Stk.', 190),
+    artikel('WC-Keramik wandhängend', 'Stk.', 220),
+    artikel('WC-Sitz mit Absenkautomatik', 'Stk.', 65),
+    artikel('Waschtisch mit Unterschrank (Set)', 'Stk.', 340),
+    artikel('Dusch-Rinne/Bodenablauf', 'Stk.', 130),
+    artikel('Duschabtrennung (Set, 90x90)', 'Stk.', 320),
+    artikel('Badewanne Acryl Standard (170x75)', 'Stk.', 260),
+  ]),
 
   // --- Materialien: Armaturen & Zubehör ---
-  artikel('Armatur Waschtisch (Standard)', 'Stk.', 95),
-  artikel('Armatur Dusche/Wanne (Unterputz)', 'Stk.', 160),
-  artikel('Handtuchheizkörper (600x1200)', 'Stk.', 210),
-  artikel('Spiegelschrank mit Beleuchtung', 'Stk.', 220),
-  artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
-  artikel('Bad-Lüfter mit Nachlauf', 'Stk.', 65),
-  artikel('Dusch-WC (Basismodell)', 'Stk.', 650),
-  artikel('Haltegriff/Stützklappgriff barrierefrei', 'Stk.', 45),
+  ...materialGruppe('Armaturen & Zubehör', [
+    artikel('Armatur Waschtisch (Standard)', 'Stk.', 95),
+    artikel('Armatur Dusche/Wanne (Unterputz)', 'Stk.', 160),
+    artikel('Handtuchheizkörper (600x1200)', 'Stk.', 210),
+    artikel('Spiegelschrank mit Beleuchtung', 'Stk.', 220),
+    artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
+    artikel('Bad-Lüfter mit Nachlauf', 'Stk.', 65),
+    artikel('Dusch-WC (Basismodell)', 'Stk.', 650),
+    artikel('Haltegriff/Stützklappgriff barrierefrei', 'Stk.', 45),
+  ]),
 ];

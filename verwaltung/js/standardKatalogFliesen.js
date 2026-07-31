@@ -16,6 +16,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_FLIESEN = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Fliesenleger', 'Std.', 52),
@@ -47,23 +51,29 @@ export const STANDARD_KATALOG_FLIESEN = [
   leistung('Silikon-/Anschlussfugen ziehen', 'm', 6),
 
   // --- Materialien: Kleber & Untergrund ---
-  artikel('Flexkleber Fliesenkleber (25kg Sack)', 'Stk.', 17),
-  artikel('Dichtschlämme/Verbundabdichtung (Eimer 5kg)', 'Stk.', 42),
-  artikel('Dichtband/Dichtmanschetten-Set', 'Stk.', 26),
-  artikel('Randentkopplungsband (Rolle 10m)', 'Stk.', 22),
-  artikel('Grundierung Haftgrund Fliesen (5L Kanister)', 'Stk.', 30),
+  ...materialGruppe('Kleber & Untergrund', [
+    artikel('Flexkleber Fliesenkleber (25kg Sack)', 'Stk.', 17),
+    artikel('Fliesenkleber flexibel für Fliese-auf-Fliese (25kg Sack)', 'Stk.', 19),
+    artikel('Dichtschlämme/Verbundabdichtung (Eimer 5kg)', 'Stk.', 42),
+    artikel('Dichtband/Dichtmanschetten-Set', 'Stk.', 26),
+    artikel('Randentkopplungsband (Rolle 10m)', 'Stk.', 22),
+    artikel('Grundierung Haftgrund Fliesen (5L Kanister)', 'Stk.', 30),
+  ]),
 
   // --- Materialien: Fliesen ---
-  artikel('Bodenfliese Feinsteinzeug Standard 30x60', 'm²', 22),
-  artikel('Wandfliese Standard 25x40', 'm²', 18),
-  artikel('Feinsteinzeug Großformat 60x60', 'm²', 34),
-  artikel('Mosaikfliesen (Matte, ca. 30x30cm)', 'Stk.', 12),
-  artikel('Natursteinfliese (Marmor/Travertin, Standard)', 'm²', 70),
-  artikel('Fliesenkleber flexibel für Fliese-auf-Fliese (25kg Sack)', 'Stk.', 19),
-  artikel('Sockelfliese passend', 'm', 6),
+  ...materialGruppe('Fliesen', [
+    artikel('Bodenfliese Feinsteinzeug Standard 30x60', 'm²', 22),
+    artikel('Wandfliese Standard 25x40', 'm²', 18),
+    artikel('Feinsteinzeug Großformat 60x60', 'm²', 34),
+    artikel('Mosaikfliesen (Matte, ca. 30x30cm)', 'Stk.', 12),
+    artikel('Natursteinfliese (Marmor/Travertin, Standard)', 'm²', 70),
+    artikel('Sockelfliese passend', 'm', 6),
+  ]),
 
   // --- Materialien: Fugen & Sonstiges ---
-  artikel('Fugenmörtel (5kg Eimer)', 'Stk.', 14),
-  artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
-  artikel('Nivelliersystem/Kreuzfugenkeile (Set 100 Stk.)', 'Stk.', 15),
+  ...materialGruppe('Fugen & Sonstiges', [
+    artikel('Fugenmörtel (5kg Eimer)', 'Stk.', 14),
+    artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
+    artikel('Nivelliersystem/Kreuzfugenkeile (Set 100 Stk.)', 'Stk.', 15),
+  ]),
 ];

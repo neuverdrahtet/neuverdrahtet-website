@@ -16,6 +16,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_TROCKENBAU = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Trockenbau', 'Std.', 46),
@@ -44,23 +48,29 @@ export const STANDARD_KATALOG_TROCKENBAU = [
   leistung('Eckschutzschiene montieren', 'm', 6),
 
   // --- Materialien: Platten ---
-  artikel('Gipskartonplatte 12,5mm', 'm²', 3.5),
-  artikel('Feuerschutzplatte GKF 12,5mm', 'm²', 5.5),
-  artikel('Feuchtraumplatte GKBI 12,5mm', 'm²', 5.5),
-  artikel('Klebegips für Trockenputz (25kg Sack)', 'Stk.', 12),
-  artikel('Akustik-Deckenplatte', 'm²', 12),
-  artikel('Dampfsperrfolie (Rolle, je m²)', 'm²', 1.8),
+  ...materialGruppe('Platten', [
+    artikel('Gipskartonplatte 12,5mm', 'm²', 3.5),
+    artikel('Feuerschutzplatte GKF 12,5mm', 'm²', 5.5),
+    artikel('Feuchtraumplatte GKBI 12,5mm', 'm²', 5.5),
+    artikel('Klebegips für Trockenputz (25kg Sack)', 'Stk.', 12),
+    artikel('Akustik-Deckenplatte', 'm²', 12),
+    artikel('Dampfsperrfolie (Rolle, je m²)', 'm²', 1.8),
+  ]),
 
   // --- Materialien: Profile & Dämmung ---
-  artikel('CW-Profil 75mm (Stange 3m)', 'Stk.', 5),
-  artikel('UW-Profil 75mm (Stange 3m)', 'Stk.', 5),
-  artikel('CD-Profil Deckenschiene (Stange 3m)', 'Stk.', 4),
-  artikel('Mineralwolldämmung 100mm (je m²)', 'm²', 3.8),
+  ...materialGruppe('Profile & Dämmung', [
+    artikel('CW-Profil 75mm (Stange 3m)', 'Stk.', 5),
+    artikel('UW-Profil 75mm (Stange 3m)', 'Stk.', 5),
+    artikel('CD-Profil Deckenschiene (Stange 3m)', 'Stk.', 4),
+    artikel('Mineralwolldämmung 100mm (je m²)', 'm²', 3.8),
+  ]),
 
   // --- Materialien: Verarbeitung ---
-  artikel('Spachtelmasse (Sack 25kg)', 'Stk.', 14),
-  artikel('Bewehrungs-/Fugenband (Rolle 150m)', 'Stk.', 14),
-  artikel('Schnellbauschrauben (Packung 1000 Stk.)', 'Stk.', 18),
-  artikel('Revisionsklappe (Stk.)', 'Stk.', 22),
-  artikel('Eckschutzschiene Metall (Stange 2,5m)', 'Stk.', 6),
+  ...materialGruppe('Verarbeitung', [
+    artikel('Spachtelmasse (Sack 25kg)', 'Stk.', 14),
+    artikel('Bewehrungs-/Fugenband (Rolle 150m)', 'Stk.', 14),
+    artikel('Schnellbauschrauben (Packung 1000 Stk.)', 'Stk.', 18),
+    artikel('Revisionsklappe (Stk.)', 'Stk.', 22),
+    artikel('Eckschutzschiene Metall (Stange 2,5m)', 'Stk.', 6),
+  ]),
 ];

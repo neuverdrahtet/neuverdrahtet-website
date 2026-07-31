@@ -71,24 +71,38 @@ export function escapeHtml(str) {
 }
 
 // Baut <optgroup>-gruppierte <option>-Elemente für einen Katalog-<select>,
-// sortiert nach Gewerk (Reihenfolge wie GEWERKE) und innerhalb jeder Gruppe
-// alphabetisch nach Bezeichnung - für ein einheitliches, nach Gewerk
-// sortiertes Material-/Leistungs-Sortiment in Projekt-Akte, Angeboten und
-// Rechnungen.
+// sortiert nach Gewerk (Reihenfolge wie GEWERKE) und innerhalb jedes Gewerks
+// zusätzlich nach Unterkategorie (z.B. "Kabel & Leitungen", "Sicherungs-
+// automaten"), jeweils alphabetisch nach Bezeichnung - für ein einheitliches,
+// schnell durchsuchbares Material-/Leistungs-Sortiment in Projekt-Akte,
+// Angeboten und Rechnungen. Einträge ohne Unterkategorie werden weiterhin
+// nur nach Gewerk gruppiert (rückwärtskompatibel).
 export function katalogOptionsHtml(katalog, labelFn) {
-  const gruppen = new Map();
+  const gewerkGruppen = new Map();
   for (const k of katalog) {
     const gid = k.gewerk || '_ohne';
-    if (!gruppen.has(gid)) gruppen.set(gid, []);
-    gruppen.get(gid).push(k);
+    if (!gewerkGruppen.has(gid)) gewerkGruppen.set(gid, new Map());
+    const unterGruppen = gewerkGruppen.get(gid);
+    const uid = k.unterkategorie || '_ohne';
+    if (!unterGruppen.has(uid)) unterGruppen.set(uid, []);
+    unterGruppen.get(uid).push(k);
   }
   const reihenfolge = [...GEWERKE.map((g) => g.id), '_ohne'];
   return reihenfolge
-    .filter((gid) => gruppen.has(gid))
+    .filter((gid) => gewerkGruppen.has(gid))
     .map((gid) => {
-      const items = gruppen.get(gid).sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || '', 'de'));
-      const titel = gid === '_ohne' ? 'Ohne Gewerk' : (GEWERKE.find((g) => g.id === gid)?.titel || gid);
-      return `<optgroup label="${escapeHtml(titel)}">${items.map((k) => `<option value="${k.id}">${labelFn(k)}</option>`).join('')}</optgroup>`;
+      const gewerkTitel = gid === '_ohne' ? 'Ohne Gewerk' : (GEWERKE.find((g) => g.id === gid)?.titel || gid);
+      const unterGruppen = gewerkGruppen.get(gid);
+      const unterkategorien = [...unterGruppen.keys()].sort((a, b) => {
+        if (a === '_ohne') return 1;
+        if (b === '_ohne') return -1;
+        return a.localeCompare(b, 'de');
+      });
+      return unterkategorien.map((uid) => {
+        const items = unterGruppen.get(uid).sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || '', 'de'));
+        const label = uid === '_ohne' ? gewerkTitel : `${gewerkTitel} – ${uid}`;
+        return `<optgroup label="${escapeHtml(label)}">${items.map((k) => `<option value="${k.id}">${labelFn(k)}</option>`).join('')}</optgroup>`;
+      }).join('');
     })
     .join('');
 }
