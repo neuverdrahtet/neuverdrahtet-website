@@ -253,9 +253,16 @@ export async function render(container) {
   // vor Einführung des Gewerk-Felds importiert) automatisch nachträglich
   // zuordnen zu können.
   const standardGewerkByName = new Map();
+  // Bezeichnung -> Unterkategorie aus allen Standard-Katalogen, analog für
+  // Alt-Einträge, die importiert wurden bevor eine Bezeichnung im
+  // Standard-Katalog eine Unterkategorie bekommen hat. Der bezeichnungs-
+  // basierte Skip beim Import lässt solche Alt-Einträge sonst für immer ohne
+  // Unterkategorie, auch wenn "Standard-Kataloge importieren" erneut läuft.
+  const standardUnterkategorieByName = new Map();
   for (const { liste } of STANDARD_KATALOGE) {
     for (const v of liste) {
       standardGewerkByName.set(`${v.typ}|${normName(v.bezeichnung)}`, v.gewerk);
+      if (v.unterkategorie) standardUnterkategorieByName.set(`${v.typ}|${normName(v.bezeichnung)}`, v.unterkategorie);
     }
   }
 
@@ -269,6 +276,7 @@ export async function render(container) {
       }, new Map()).values()
     ).filter((g) => g.length > 1);
     const fehlendesGewerk = items.filter((i) => !i.gewerk && standardGewerkByName.has(`${i.typ}|${normName(i.bezeichnung)}`));
+    const fehlendeUnterkategorie = items.filter((i) => (i.typ === 'artikel' || i.typ === 'geraet') && !i.unterkategorie && standardUnterkategorieByName.has(`${i.typ}|${normName(i.bezeichnung)}`));
 
     const { body, close } = openModal({
       title: 'Katalog prüfen',
@@ -281,6 +289,15 @@ export async function render(container) {
             ${fehlendesGewerk.map((i) => `<li><span>${escapeHtml(i.bezeichnung)}</span><span class="text-mute">→ ${escapeHtml(GEWERKE.find((g) => g.id === standardGewerkByName.get(`${i.typ}|${normName(i.bezeichnung)}`))?.titel || '')}</span></li>`).join('')}
           </ul>
           <button type="button" class="btn btn-sm btn-primary" id="btn-fix-gewerk" style="margin-top:8px">Gewerk automatisch zuordnen (${fehlendesGewerk.length})</button>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Fehlende Unterkategorie (${fehlendeUnterkategorie.length})</h2>
+        ${fehlendeUnterkategorie.length === 0 ? '<p class="text-mute">Keine Material-/Geräte-Einträge ohne Unterkategorie gefunden, die sich eindeutig zuordnen lassen.</p>' : `
+          <p class="hint">Diese Einträge stammen erkennbar aus einem Standard-Katalog, wurden aber importiert bevor diese Bezeichnung dort eine Unterkategorie hatte – erneutes "Standard-Kataloge importieren" ändert daran nichts, da die Bezeichnung schon existiert.</p>
+          <ul class="cal-event-list">
+            ${fehlendeUnterkategorie.map((i) => `<li><span>${escapeHtml(i.bezeichnung)}</span><span class="text-mute">→ ${escapeHtml(standardUnterkategorieByName.get(`${i.typ}|${normName(i.bezeichnung)}`))}</span></li>`).join('')}
+          </ul>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-fix-unterkategorie" style="margin-top:8px">Unterkategorie automatisch zuordnen (${fehlendeUnterkategorie.length})</button>
         `}
         <div class="divider"></div>
         <h2 style="font-size:14px;margin:0 0 8px">Mögliche Duplikate (${dupGroups.length} Bezeichnung${dupGroups.length === 1 ? '' : 'en'})</h2>
@@ -317,6 +334,15 @@ export async function render(container) {
         await put('katalog', i);
       }
       toast(`${fehlendesGewerk.length} Einträge mit Gewerk versehen`, 'success');
+      close();
+      render(container);
+    });
+    body.querySelector('#btn-fix-unterkategorie')?.addEventListener('click', async () => {
+      for (const i of fehlendeUnterkategorie) {
+        i.unterkategorie = standardUnterkategorieByName.get(`${i.typ}|${normName(i.bezeichnung)}`);
+        await put('katalog', i);
+      }
+      toast(`${fehlendeUnterkategorie.length} Einträge mit Unterkategorie versehen`, 'success');
       close();
       render(container);
     });
