@@ -62,6 +62,11 @@ export const STANDARD_KATALOG_MALER = [
     artikel('Holzlasur/Holzlack (750ml)', 'Stk.', 20),
     artikel('Schimmelschutzfarbe (10L Eimer)', 'Stk.', 68),
     artikel('Bodenbeschichtung Garage (5L Gebinde)', 'Stk.', 55),
+    artikel('Caparol CapaDIN Innenfarbe, weiß (12,5L Eimer)', 'Stk.', 46),
+    artikel('Caparol AmphiSilan Fassadenfarbe (12,5L Eimer)', 'Stk.', 100),
+    artikel('Brillux Superlux ELF 3000 Innenfarbe (15L Gebinde)', 'Stk.', 100.7),
+    artikel('Brillux Lacryl-Fassadenfarbe 906 (12,5L Gebinde)', 'Stk.', 61),
+    artikel('Alpina Farbrezepte Wandfarbe, Trendfarbe (2,5L Dose)', 'Stk.', 12.55),
   ]),
 
   // --- Materialien: Tapeten & Zubehör ---
