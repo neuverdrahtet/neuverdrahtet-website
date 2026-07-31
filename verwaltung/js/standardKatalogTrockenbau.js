@@ -55,6 +55,9 @@ export const STANDARD_KATALOG_TROCKENBAU = [
     artikel('Klebegips für Trockenputz (25kg Sack)', 'Stk.', 12),
     artikel('Akustik-Deckenplatte', 'm²', 12),
     artikel('Dampfsperrfolie (Rolle, je m²)', 'm²', 1.8),
+    artikel('Knauf Gipskartonplatte GKB 12,5mm (je m²)', 'm²', 3.7),
+    artikel('Rigips Gipskartonplatte GKBI imprägniert 12,5mm (je m²)', 'm²', 4.2),
+    artikel('Fermacell Gipsfaserplatte 12,5mm (je m²)', 'm²', 8.35),
   ]),
 
   // --- Materialien: Profile & Dämmung ---
@@ -63,6 +66,8 @@ export const STANDARD_KATALOG_TROCKENBAU = [
     artikel('UW-Profil 75mm (Stange 3m)', 'Stk.', 5),
     artikel('CD-Profil Deckenschiene (Stange 3m)', 'Stk.', 4),
     artikel('Mineralwolldämmung 100mm (je m²)', 'm²', 3.8),
+    artikel('Knauf CW-Profil 50mm (Stange 2,6m)', 'Stk.', 8.3),
+    artikel('Knauf UW-Profil 50mm (Stange 2,6m)', 'Stk.', 10.35),
   ]),
 
   // --- Materialien: Verarbeitung ---
@@ -72,5 +77,6 @@ export const STANDARD_KATALOG_TROCKENBAU = [
     artikel('Schnellbauschrauben (Packung 1000 Stk.)', 'Stk.', 18),
     artikel('Revisionsklappe (Stk.)', 'Stk.', 22),
     artikel('Eckschutzschiene Metall (Stange 2,5m)', 'Stk.', 6),
+    artikel('Knauf Uniflott Fugenspachtel (25kg Sack)', 'Stk.', 34.45),
   ]),
 ];
