@@ -78,6 +78,16 @@ function requestToken(settings, prompt) {
   });
 }
 
+/** Lädt das Google-Anmeldeskript schon beim App-Start vor (ohne Popup), damit
+ * beim späteren Klick auf "Mit Google verbinden/synchronisieren" kein await
+ * auf den Skript-Download mehr zwischen Klick und Popup-Öffnung liegt - auf
+ * mobilen Browsern (v.a. Safari) verfällt das kurze Zeitfenster, in dem ein
+ * Klick noch window.open() erlaubt, sonst und das Popup wird stillschweigend
+ * blockiert ("Failed to open popup window"). */
+export function preloadGis() {
+  loadGis().catch(() => { /* schlägt das Vorladen fehl, versucht connect() es beim Klick erneut */ });
+}
+
 export async function connect() {
   const settings = await getSettings();
   if (!settings.googleClientId) {
@@ -89,6 +99,13 @@ export async function connect() {
   // nichts - Google kann den fehlenden Scope ohne Zustimmungsdialog nicht
   // stillschweigend nachreichen. Dann direkt den sichtbaren Dialog anzeigen.
   if (grantedScope && grantedScope !== SCOPES) {
+    return await requestToken(settings, 'consent');
+  }
+  if (!grantedScope) {
+    // Noch nie verbunden: ein stiller Versuch (prompt:'') würde ohnehin fehlschlagen,
+    // da es keine aktive Google-Zustimmung gibt - er würde aber das kurze Zeitfenster
+    // verbrauchen, in dem mobile Browser nach einem Klick noch ein Popup erlauben.
+    // Deshalb hier direkt und einzig den sichtbaren Dialog anzeigen.
     return await requestToken(settings, 'consent');
   }
   try {

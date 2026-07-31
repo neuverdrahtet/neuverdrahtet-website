@@ -6,6 +6,7 @@ import { isBrowserCapable, initForegroundListener } from './push.js';
 import { checkPushTriggers } from './pushTriggers.js';
 import { openGlobalSearch } from './globalSearch.js';
 import { trySyncPendingUploads } from './blobstore.js';
+import { preloadGis } from './google.js';
 
 // Views werden erst beim tatsächlichen Aufruf ihrer Route per dynamic
 // import() nachgeladen (statt alle 22 Module beim Start zu laden) - spart
@@ -177,6 +178,14 @@ async function boot() {
   await applyTheme();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
+  // Google-Anmeldeskript (GIS) schon jetzt im Hintergrund laden, statt erst
+  // beim ersten Klick auf "Mit Google verbinden/synchronisieren" - auf
+  // mobilen Browsern kann der Skript-Download sonst das kurze Zeitfenster
+  // aufbrauchen, in dem ein Klick noch ein Popup öffnen darf, und Google
+  // meldet dann "Failed to open popup window".
+  getSettings().then((settings) => {
+    if (settings.googleClientId) preloadGis();
+  }).catch(() => { /* Vorladen ist ein Komfort-Feature, darf den Start nicht stören */ });
   // Push-Nachrichten, die eintreffen während die App offen/im Vordergrund ist,
   // zeigt der Browser NICHT automatisch als System-Benachrichtigung an (das
   // übernimmt sonst der Service Worker im Hintergrund) - hier stattdessen als
