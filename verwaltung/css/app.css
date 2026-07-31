@@ -1236,14 +1236,18 @@ table.data-table th.col-select, table.data-table td.col-select {
 
 .print-root { display: none; }
 @media print {
+  @page { size: A4; margin: 10mm 10mm 16mm 10mm; }
   html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; background: #fff !important; }
-  .print-doc { padding: 10mm 10mm 30mm 10mm; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; }
+  .print-doc { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; }
   .print-doc * { color: #111; }
   .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
   .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; }
+  .print-doc tr { page-break-inside: avoid; }
+  .print-doc thead { display: table-header-group; }
+  .print-doc p { page-break-inside: avoid; }
 
   .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; position: relative; }
   .print-doc .print-header.pos-rechts { flex-direction: row-reverse; }
@@ -1261,24 +1265,22 @@ table.data-table th.col-select, table.data-table td.col-select {
   .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
   .print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #333; padding: 1px 0; }
 
+  .print-doc .print-header { page-break-inside: avoid; }
   .print-doc .print-absender { font-size: 10px; color: #666; border-bottom: 1px solid #bbb; display: inline-block; margin-bottom: 10px; padding-bottom: 1px; }
-  .print-doc .print-empfaenger { font-size: 13px; line-height: 1.5; margin-bottom: 18px; }
+  .print-doc .print-empfaenger { font-size: 13px; line-height: 1.5; margin-bottom: 18px; page-break-inside: avoid; }
 
-  .print-doc .print-totals { width: 260px; margin-left: auto; }
+  .print-doc .print-totals { width: 260px; margin-left: auto; page-break-inside: avoid; }
   .print-doc .print-totals .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
   .print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
 
   .print-doc .print-footer {
-    position: fixed;
-    left: 10mm;
-    right: 10mm;
-    bottom: 8mm;
+    margin-top: 16px;
     padding-top: 6px;
     border-top: 1px solid #ccc;
     font-size: 9.5px;
     color: #444;
     line-height: 1.5;
-    background: #fff;
+    page-break-inside: avoid;
   }
   .print-doc .print-footer-zusatz { margin-bottom: 6px; white-space: pre-wrap; }
   .print-doc .print-footer-spalten { display: flex; gap: 10px; }
