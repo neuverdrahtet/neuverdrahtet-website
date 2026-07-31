@@ -72,5 +72,8 @@ export const STANDARD_KATALOG_PUTZ = [
     artikel('Gerüst mieten (je m² Fassade/Woche)', 'm²', 4),
     artikel('Sto StoLevell Uni Klebe- und Armierungsmörtel (25kg Sack)', 'Stk.', 32),
     artikel('Baumit StarTherm EPS-Dämmplatte 100mm (je m²)', 'm²', 15.5),
+    artikel('WDVS-Sockelabschlussprofil, Alu (Stange 2,5m)', 'Stk.', 9),
+    artikel('Tellerdübel für WDVS-Dämmplatten (Packung 100 Stk.)', 'Stk.', 28),
+    artikel('Dehnfugenprofil PVC (Stange 2,5m)', 'Stk.', 6),
   ]),
 ];

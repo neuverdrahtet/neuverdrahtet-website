@@ -58,6 +58,8 @@ export const STANDARD_KATALOG_BODENLEGER = [
     artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
     artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
     artikel('Uzin NC 160 Selbstverlaufende Ausgleichsmasse (25kg Sack)', 'Stk.', 35),
+    artikel('PE-Dampfsperrfolie unter Laminat/Parkett (Rolle 4x25m)', 'Stk.', 22),
+    artikel('Randdämmstreifen für schwimmende Verlegung (Rolle 50m)', 'Stk.', 12),
   ]),
 
   // --- Materialien: Beläge ---
@@ -83,5 +85,7 @@ export const STANDARD_KATALOG_BODENLEGER = [
     artikel('Sockelleiste MDF/Kunststoff (Stange 2,5m)', 'Stk.', 4),
     artikel('Übergangsprofil Alu', 'Stk.', 8),
     artikel('Uzin KE 66 Ökoline Dispersionsklebstoff (14kg Eimer)', 'Stk.', 40),
+    artikel('Parkettöl/Parkettversiegelung (2,5L Gebinde)', 'Stk.', 45),
+    artikel('Dehnungsfugenprofil Alu, T-Profil (Stange 2,5m)', 'Stk.', 9),
   ]),
 ];

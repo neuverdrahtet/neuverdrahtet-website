@@ -78,4 +78,15 @@ export const STANDARD_KATALOG_MALER = [
     artikel('Malerkrepp (Rolle 50m)', 'Stk.', 4),
     artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
   ]),
+
+  // --- Materialien: Werkzeug & Verbrauchsmaterial ---
+  ...materialGruppe('Werkzeug & Verbrauchsmaterial', [
+    artikel('Malerrolle-Set (Fell + Bügel, div. Größen)', 'Stk.', 9),
+    artikel('Flächenstreicher/Pinsel-Set', 'Stk.', 12),
+    artikel('Farbwanne mit Gitter', 'Stk.', 6),
+    artikel('Schleifpapier-Sortiment (Körnung 80-240)', 'Stk.', 8),
+    artikel('Fertigspachtel für Wandausbesserung (5kg Eimer)', 'Stk.', 16),
+    artikel('Tapetenlöser-Konzentrat (1L)', 'Stk.', 9),
+    artikel('Abdeckfolie PE (Rolle 4x5m)', 'Stk.', 7),
+  ]),
 ];

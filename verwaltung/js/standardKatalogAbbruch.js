@@ -80,5 +80,13 @@ export const STANDARD_KATALOG_ABBRUCH = [
     artikel('Handschuhe Arbeitsschutz (Paar)', 'Stk.', 3),
     artikel('3M Aura FFP2 Atemschutzmaske ohne Ventil (Packung 10 Stk.)', 'Stk.', 8.4),
     artikel('DuPont Tyvek Classic Xpert Einweg-Schutzanzug', 'Stk.', 7.55),
+    artikel('Gehörschutz-Kapselgehörschutz', 'Stk.', 18),
+    artikel('Schutzbrille, klar, kratzfest', 'Stk.', 6),
+  ]),
+
+  // --- Materialien: Werkzeug & Verschleißmaterial ---
+  ...materialGruppe('Werkzeug & Verschleißmaterial', [
+    artikel('Diamant-Trennscheibe Beton (Ø230mm)', 'Stk.', 28),
+    artikel('Meißel-Set für Abbruchhammer, SDS-Max (Spitz-/Flachmeißel)', 'Stk.', 45),
   ]),
 ];
