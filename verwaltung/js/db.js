@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 17;
+const DB_VERSION = 18;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -60,6 +60,7 @@ const STORES = {
   marken: 'id',
   konten: 'id',
   buchungen: 'id',
+  bankbuchungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -463,6 +464,7 @@ const DEFAULT_SETTINGS = {
   kontoBankId: 'konto-1200',
   kontoKasseId: 'konto-1000',
   ustvaZeitraum: 'monatlich',
+  bankImportSpalten: {},
   aiWorkerUrl: '',
   aiAppSecret: '',
   lexofficeApiKey: '',
