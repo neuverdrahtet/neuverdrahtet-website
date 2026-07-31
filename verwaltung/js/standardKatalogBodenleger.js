@@ -57,6 +57,7 @@ export const STANDARD_KATALOG_BODENLEGER = [
     artikel('Ausgleichsmasse dickschichtig, bis 30mm (25kg Sack)', 'Stk.', 19),
     artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
     artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
+    artikel('Uzin NC 160 Selbstverlaufende Ausgleichsmasse (25kg Sack)', 'Stk.', 35),
   ]),
 
   // --- Materialien: Beläge ---
@@ -70,6 +71,9 @@ export const STANDARD_KATALOG_BODENLEGER = [
     artikel('Korkboden', 'm²', 20),
     artikel('Teppichboden Objektqualität', 'm²', 11),
     artikel('PVC-Bahnenware', 'm²', 14),
+    artikel('Parador Vinyl Basic 30 Eiche Memory (Klick-Vinyl, je m²)', 'm²', 43.1),
+    artikel('Parador SPC Vinyl Designboden Classic 2070 (je m²)', 'm²', 47.85),
+    artikel('Egger Laminat Bardolino Eiche, NK32 (je m²)', 'm²', 10),
   ]),
 
   // --- Materialien: Kleber & Abschluss ---
@@ -78,5 +82,6 @@ export const STANDARD_KATALOG_BODENLEGER = [
     artikel('Dispersionskleber Vinyl (Eimer 14kg)', 'Stk.', 38),
     artikel('Sockelleiste MDF/Kunststoff (Stange 2,5m)', 'Stk.', 4),
     artikel('Übergangsprofil Alu', 'Stk.', 8),
+    artikel('Uzin KE 66 Ökoline Dispersionsklebstoff (14kg Eimer)', 'Stk.', 40),
   ]),
 ];
