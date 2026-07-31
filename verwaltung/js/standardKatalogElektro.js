@@ -280,6 +280,9 @@ export const STANDARD_KATALOG_ELEKTRO = [
   ...materialGruppe('Wärmepumpe', [
     artikel('Zuleitung Wärmepumpe NYY-J 5x6mm² (Erdkabel)', 'm', 4.5),
     artikel('Sperrzeiten-/Wärmepumpenzähler', 'Stk.', 130),
+    artikel('Vaillant aroTHERM plus VWL 75/6 A Luft-Wasser-Wärmepumpe (Außeneinheit)', 'Stk.', 9700),
+    artikel('Stiebel Eltron WPL 10 A Kompakt-Wärmepumpe (Luft-Wasser)', 'Stk.', 7150),
+    artikel('Viessmann Vitocal 250-A Monoblock Luft-Wasser-Wärmepumpe', 'Stk.', 7560),
   ]),
 
   // --- Materialien: Hausgeräte-Anschluss ---

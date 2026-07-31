@@ -65,6 +65,7 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
     artikel('Villeroy & Boch Subway 2.0 Wand-WC, spülrandlos (DirectFlush)', 'Stk.', 213.4),
     artikel('Duravit D-Code Wand-WC, Tiefspüler', 'Stk.', 95.55),
     artikel('Kaldewei Cayono Duo Stahl-Email-Badewanne (170x75cm)', 'Stk.', 331.3),
+    artikel('Kermi Duschabtrennung Eckeinstieg (90x90cm)', 'Stk.', 235),
   ]),
 
   // --- Materialien: Armaturen & Zubehör ---
@@ -80,5 +81,7 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
     artikel('Geberit Sigma20 Betätigungsplatte (weiß/verchromt)', 'Stk.', 41.8),
     artikel('Grohe Eurosmart Waschtischarmatur', 'Stk.', 45.75),
     artikel('Hansgrohe Focus 100 Waschtischarmatur (mit Ablaufgarnitur)', 'Stk.', 77.8),
+    artikel('HEWI Stützklappgriff/Haltegriff barrierefrei (Serie 801, Edelstahl)', 'Stk.', 95),
+    artikel('Emco Spiegelschrank mit LED-Beleuchtung', 'Stk.', 300),
   ]),
 ];
