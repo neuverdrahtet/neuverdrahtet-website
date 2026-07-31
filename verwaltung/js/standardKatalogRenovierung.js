@@ -51,5 +51,8 @@ export const STANDARD_KATALOG_RENOVIERUNG = [
     artikel('Layher Rollgerüst/Fahrgerüst mieten (Arbeitshöhe bis 6m, je Woche)', 'Stk.', 125),
     artikel('Bagster Big Bag XL Bauschutt-Entsorgungssack (2m³)', 'Stk.', 16.8),
     artikel('Tesa Präzisionskrepp Outdoor-Klebeband, UV-beständig (Rolle 50m)', 'Stk.', 10.5),
+    artikel('Bautrockner/Kondenstrockner mieten (je Woche)', 'Stk.', 85),
+    artikel('Bauheizer mieten (je Woche)', 'Stk.', 65),
+    artikel('Baustrahler LED mit Stativ mieten (je Woche)', 'Stk.', 25),
   ]),
 ];

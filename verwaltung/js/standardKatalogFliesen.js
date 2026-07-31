@@ -60,6 +60,7 @@ export const STANDARD_KATALOG_FLIESEN = [
     artikel('Grundierung Haftgrund Fliesen (5L Kanister)', 'Stk.', 30),
     artikel('Mapei Keraflex Maxi S1 Flexkleber (25kg Sack)', 'Stk.', 18),
     artikel('Schlüter-DITRA Entkopplungs-/Trennmatte (je m²)', 'm²', 11.4),
+    artikel('Diamant-Trennscheibe für Fliesenschneider (Ø125mm)', 'Stk.', 9),
   ]),
 
   // --- Materialien: Fliesen ---
@@ -73,6 +74,7 @@ export const STANDARD_KATALOG_FLIESEN = [
     artikel('Villeroy & Boch Feinsteinzeug Bodenfliese Betonoptik (je m²)', 'm²', 20),
     artikel('Villeroy & Boch Wandfliese Metro Flair (je m²)', 'm²', 19),
     artikel('RAK Ceramics Feinsteinzeug Großformat (bis 120x180cm, je m²)', 'm²', 45),
+    artikel('Naturstein-Imprägnierung/Versiegelung (1L)', 'Stk.', 24),
   ]),
 
   // --- Materialien: Fugen & Sonstiges ---
@@ -82,6 +84,9 @@ export const STANDARD_KATALOG_FLIESEN = [
     artikel('Nivelliersystem/Kreuzfugenkeile (Set 100 Stk.)', 'Stk.', 15),
     artikel('Mapei Ultracolor Plus Fugenmörtel (25kg Sack)', 'Stk.', 17),
     artikel('Mapei Kerapoxy Design Reaktionsharzfuge (2kg Set)', 'Stk.', 38),
+    artikel('Silikon farbig, passend zur Fuge (Kartusche)', 'Stk.', 9),
+    artikel('Fugenauffrischer/Fugenlack (Flasche 100ml)', 'Stk.', 12),
+    artikel('Zementschleierentferner (Kanister 5L)', 'Stk.', 22),
   ]),
 
   // --- Materialien: Abdichtung & Profile (Schlüter-Systems) ---
@@ -90,5 +95,6 @@ export const STANDARD_KATALOG_FLIESEN = [
     artikel('Schlüter-KERDI-KEBA Dichtband (je m)', 'm', 1.7),
     artikel('Schlüter-JOLLY Fliesenabschlussprofil Alu (Stange 2,5m)', 'Stk.', 8),
     artikel('Schlüter-KERDI-LINE Duschrinne Edelstahl (900mm)', 'Stk.', 155),
+    artikel('Übergangsprofil Fliese-Boden, Alu (Stange 2,5m)', 'Stk.', 7),
   ]),
 ];
