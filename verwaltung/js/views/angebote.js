@@ -26,6 +26,13 @@ const GRUENDE_ABLEHNUNG = [
   { id: 'keine_rueckmeldung', titel: 'Keine Rückmeldung vom Kunden' },
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
+const GRUENDE_ANNAHME = [
+  { id: 'unterschrift', titel: 'Unterschrift (digital/vor Ort)' },
+  { id: 'email', titel: 'Per E-Mail bestätigt' },
+  { id: 'telefonisch', titel: 'Telefonisch bestätigt' },
+  { id: 'muendlich', titel: 'Mündlich vor Ort' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
 
 export async function render(container) {
   let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
@@ -84,7 +91,7 @@ export async function render(container) {
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${formatDate(a.datum)}</td>
               <td>${formatDate(a.gueltigBis)}</td>
-              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}" ${a.status === 'abgelehnt' && (a.ablehnungsgrund || a.ablehnungsgrundText) ? `title="${escapeHtml([GRUENDE_ABLEHNUNG.find((g) => g.id === a.ablehnungsgrund)?.titel, a.ablehnungsgrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[a.status] || a.status}</span></td>
+              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}" ${a.status === 'abgelehnt' && (a.ablehnungsgrund || a.ablehnungsgrundText) ? `title="${escapeHtml([GRUENDE_ABLEHNUNG.find((g) => g.id === a.ablehnungsgrund)?.titel, a.ablehnungsgrundText].filter(Boolean).join(' – '))}"` : ''} ${a.status === 'angenommen' && (a.annahmeGrund || a.annahmeGrundText) ? `title="${escapeHtml([GRUENDE_ANNAHME.find((g) => g.id === a.annahmeGrund)?.titel, a.annahmeGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[a.status] || a.status}</span></td>
               <td class="text-right">${formatCurrency(a.brutto)}</td>
             </tr>
           `).join('')}
@@ -148,7 +155,7 @@ export async function render(container) {
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
       status: 'entwurf', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
-      unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '',
+      unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
     };
 
     const suggestedNummer = !isEdit
@@ -182,6 +189,13 @@ export async function render(container) {
                 <label>Grund der Ablehnung</label>
                 <select name="ablehnungsgrund">${GRUENDE_ABLEHNUNG.map((g) => `<option value="${g.id}" ${g.id === data.ablehnungsgrund ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
                 <input type="text" name="ablehnungsgrundText" value="${escapeHtml(data.ablehnungsgrundText || '')}" placeholder="Notiz (optional)" style="margin-top:6px">
+              </div>
+            </div>
+            <div class="col-span-2" id="annahme-grund-section" ${data.status === 'angenommen' ? '' : 'hidden'}>
+              <div class="field">
+                <label>Art der Annahme</label>
+                <select name="annahmeGrund">${GRUENDE_ANNAHME.map((g) => `<option value="${g.id}" ${g.id === data.annahmeGrund ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
+                <input type="text" name="annahmeGrundText" value="${escapeHtml(data.annahmeGrundText || '')}" placeholder="Notiz (optional)" style="margin-top:6px">
               </div>
             </div>` : ''}
           </div>
@@ -250,6 +264,7 @@ let editor = createPositionsEditor({
     if (isEdit) {
       body.querySelector('#f-status').addEventListener('change', (e) => {
         body.querySelector('#ablehnung-grund-section').hidden = e.target.value !== 'abgelehnt';
+        body.querySelector('#annahme-grund-section').hidden = e.target.value !== 'angenommen';
       });
     }
 
@@ -428,6 +443,13 @@ let editor = createPositionsEditor({
         } else {
           updated.ablehnungsgrund = '';
           updated.ablehnungsgrundText = '';
+        }
+        if (updated.status === 'angenommen') {
+          updated.annahmeGrund = fd.get('annahmeGrund') || '';
+          updated.annahmeGrundText = (fd.get('annahmeGrundText') || '').toString().trim();
+        } else {
+          updated.annahmeGrund = '';
+          updated.annahmeGrundText = '';
         }
       }
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
