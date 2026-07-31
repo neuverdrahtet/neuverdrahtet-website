@@ -124,6 +124,17 @@ export async function render(container) {
               <div class="field"><label>Bank</label><input name="bank" value="${escapeHtml(settings.bank)}"></div>
               <div class="field"><label>Inhaber</label><input name="inhaber" value="${escapeHtml(settings.inhaber || '')}"></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="kleinunternehmer" id="ku" ${settings.kleinunternehmer ? 'checked' : ''}><label for="ku">Kleinunternehmer nach §19 UStG (keine USt. ausweisen)</label></div>
+              <div class="field"><label>Rechtsform</label>
+                <select name="rechtsform">
+                  <option value="kapitalgesellschaft" ${settings.rechtsform === 'kapitalgesellschaft' ? 'selected' : ''}>Kapitalgesellschaft (GmbH/UG/AG)</option>
+                  <option value="einzelunternehmen" ${settings.rechtsform === 'einzelunternehmen' ? 'selected' : ''}>Einzelunternehmen</option>
+                  <option value="personengesellschaft" ${settings.rechtsform === 'personengesellschaft' ? 'selected' : ''}>Personengesellschaft (GbR/OHG/KG)</option>
+                </select>
+                <span class="hint mb-0">Bestimmt, welche Steuerschätzung in der Buchhaltung angezeigt wird (Körperschaftsteuer nur bei Kapitalgesellschaften).</span>
+              </div>
+              <div class="field"><label>Gewerbesteuer-Hebesatz (%)</label><input type="number" step="1" min="0" name="gewerbesteuerHebesatz" value="${settings.gewerbesteuerHebesatz}">
+                <span class="hint mb-0">Von deiner Gemeinde festgelegt, steht z.B. auf dem letzten Gewerbesteuerbescheid.</span>
+              </div>
             </div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
@@ -678,6 +689,8 @@ export async function render(container) {
       update[key] = (fd.get(key) || '').toString().trim();
     }
     update.kleinunternehmer = fd.get('kleinunternehmer') === 'on';
+    update.rechtsform = fd.get('rechtsform') || 'kapitalgesellschaft';
+    update.gewerbesteuerHebesatz = Number(fd.get('gewerbesteuerHebesatz')) || 0;
     await setSettings(update);
     toast('Firmendaten gespeichert', 'success');
   });

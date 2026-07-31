@@ -85,6 +85,24 @@ export async function render(container) {
       return { monat: MONTHS[i], ein, aus, saldo: ein - aus };
     });
 
+    // --- Steuerschätzung (grob, auf Basis des vereinfachten Überschusses) ---
+    const istKapitalgesellschaft = settings.rechtsform !== 'einzelunternehmen' && settings.rechtsform !== 'personengesellschaft';
+    const gewerbeertragRoh = Math.max(0, ueberschuss);
+    // §11 Abs.1 GewStG: Gewerbeertrag wird auf volle 100 € abgerundet.
+    const gewerbeertragAbgerundet = Math.floor(gewerbeertragRoh / 100) * 100;
+    // Freibetrag von 24.500 € gilt nur für Einzelunternehmen/Personengesellschaften, nicht für Kapitalgesellschaften.
+    const gewerbesteuerFreibetrag = istKapitalgesellschaft ? 0 : 24500;
+    const steuermessbetrag = Math.max(0, gewerbeertragAbgerundet - gewerbesteuerFreibetrag) * 0.035;
+    const hebesatz = Number(settings.gewerbesteuerHebesatz) || 0;
+    const gewerbesteuer = steuermessbetrag * (hebesatz / 100);
+    // Körperschaftsteuer (15%) + Solidaritätszuschlag (5,5% der KSt) gelten nur für Kapitalgesellschaften;
+    // bei Einzelunternehmen/Personengesellschaften wird der Gewinn stattdessen individuell über die
+    // progressive Einkommensteuer der Inhaber besteuert - das lässt sich hier mangels weiterer
+    // Einkommensdaten nicht seriös schätzen.
+    const koerperschaftsteuer = istKapitalgesellschaft ? gewerbeertragRoh * 0.15 : 0;
+    const soli = koerperschaftsteuer * 0.055;
+    const steuerlastGesamt = gewerbesteuer + koerperschaftsteuer + soli;
+
     host.innerHTML = `
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-value">${formatCurrency(einnahmenBrutto)}</div><div class="kpi-label">Einnahmen (brutto, bezahlt)</div></div>
@@ -108,6 +126,22 @@ export async function render(container) {
             `).join('')}
           </tbody>
         </table>
+      </div>
+
+      <div class="card">
+        <h2>Steuerschätzung ${jahr}</h2>
+        <p class="hint">Grobe Schätzung auf Basis des vereinfachten Überschusses oben - ohne Rückstellungen, Sonderabschreibungen, Verlustvorträge o.ä. Ersetzt nicht die Steuererklärung deines Steuerberaters.</p>
+        <p class="hint">Gewerbeertrag (abgerundet auf volle 100 €): ${formatCurrency(gewerbeertragAbgerundet)}${gewerbesteuerFreibetrag ? ` · Freibetrag: ${formatCurrency(gewerbesteuerFreibetrag)}` : ''} · Steuermessbetrag (3,5%): ${formatCurrency(steuermessbetrag)}</p>
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-value">${formatCurrency(gewerbesteuer)}</div><div class="kpi-label">Gewerbesteuer (Hebesatz ${hebesatz}%)</div></div>
+          ${istKapitalgesellschaft ? `
+            <div class="kpi-card"><div class="kpi-value">${formatCurrency(koerperschaftsteuer)}</div><div class="kpi-label">Körperschaftsteuer (15%)</div></div>
+            <div class="kpi-card"><div class="kpi-value">${formatCurrency(soli)}</div><div class="kpi-label">Solidaritätszuschlag (5,5%)</div></div>
+          ` : `
+            <div class="kpi-card"><div class="kpi-value">–</div><div class="kpi-label">Einkommensteuer (individuell, hier nicht berechenbar)</div></div>
+          `}
+          <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(steuerlastGesamt)}</div><div class="kpi-label">Steuerlast gesamt (geschätzt)</div></div>
+        </div>
       </div>
 
       <div class="card">
