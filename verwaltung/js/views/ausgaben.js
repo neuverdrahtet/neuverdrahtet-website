@@ -5,6 +5,7 @@ import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
+import * as journal from '../journal.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -24,7 +25,13 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
-  const bulk = createBulkSelect('ausgaben', { label: 'Ausgaben' });
+  const bulk = createBulkSelect('ausgaben', {
+    label: 'Ausgaben',
+    deleteFn: async (id) => {
+      await remove('ausgaben', id);
+      try { await journal.entferneBuchungFuerAusgabe(id); } catch { /* Verbuchung ist ein Komfort-Feature */ }
+    },
+  });
 
   container.innerHTML = `
     <div class="view-header">
@@ -253,6 +260,7 @@ export async function render(container) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete('Ausgabe in den Papierkorb verschieben?')) return;
         await remove('ausgaben', data.id);
+        try { await journal.entferneBuchungFuerAusgabe(data.id); } catch { /* Verbuchung ist ein Komfort-Feature */ }
         toast('Ausgabe in den Papierkorb verschoben');
         close();
         render(container);
@@ -279,6 +287,7 @@ export async function render(container) {
       updated.kundeId = fd.get('kundeId') || '';
       updated.kalkKategorie = updated.projektId ? (fd.get('kalkKategorie') || '') : '';
       await put('ausgaben', updated);
+      try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
       toast(isEdit ? 'Ausgabe aktualisiert' : 'Ausgabe erfasst', 'success');
       close();
       render(container);
