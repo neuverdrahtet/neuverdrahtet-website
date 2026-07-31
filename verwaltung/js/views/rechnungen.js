@@ -481,7 +481,7 @@ let editor = createPositionsEditor({
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
             text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
-            pdfBlob: buildDocPdfBlob(docOpts()),
+            pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Rechnung-${data.nummer}.pdf`,
           });
           if (!locked) await markVersendetUndSperren();

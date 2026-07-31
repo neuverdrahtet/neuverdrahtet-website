@@ -512,7 +512,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     body.querySelector('#btn-save-pdf').addEventListener('click', async () => {
       let blob;
       try {
-        blob = buildPdf();
+        blob = await buildPdf();
       } catch (err) {
         toast(err.message, 'danger');
         return;
@@ -538,10 +538,10 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
 
     const whatsappBtn = body.querySelector('#btn-send-whatsapp');
     if (whatsappBtn) {
-      whatsappBtn.addEventListener('click', () => {
+      whatsappBtn.addEventListener('click', async () => {
         let blob;
         try {
-          blob = buildPdf();
+          blob = await buildPdf();
         } catch (err) {
           toast(err.message, 'danger');
           return;

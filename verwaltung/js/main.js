@@ -6,33 +6,36 @@ import { isBrowserCapable, initForegroundListener } from './push.js';
 import { checkPushTriggers } from './pushTriggers.js';
 import { openGlobalSearch } from './globalSearch.js';
 import { trySyncPendingUploads } from './blobstore.js';
-import * as dashboard from './views/dashboard.js';
-import * as kunden from './views/kunden.js';
-import * as kanban from './views/kanban.js';
-import * as projekte from './views/projekte.js';
-import * as auftraege from './views/auftraege.js';
-import * as plantafel from './views/plantafel.js';
-import * as mitarbeiter from './views/mitarbeiter.js';
-import * as katalog from './views/katalog.js';
-import * as angebote from './views/angebote.js';
-import * as auftragsbestaetigung from './views/auftragsbestaetigung.js';
-import * as rechnungen from './views/rechnungen.js';
-import * as mahnungen from './views/mahnungen.js';
-import * as einstellungen from './views/einstellungen.js';
-import * as zeiterfassung from './views/zeiterfassung.js';
-import * as vorlagen from './views/vorlagen.js';
-import * as ausgaben from './views/ausgaben.js';
-import * as postfach from './views/postfach.js';
-import * as buchhaltung from './views/buchhaltung.js';
-import * as auswertungen from './views/auswertungen.js';
-import * as aufgaben from './views/aufgaben.js';
-import * as geraete from './views/geraete.js';
-import * as papierkorb from './views/papierkorb.js';
 
-const routes = {
-  dashboard, kunden, kanban, projekte, auftraege, plantafel, mitarbeiter,
-  katalog, angebote, auftragsbestaetigung, rechnungen, mahnungen, einstellungen, zeiterfassung, vorlagen,
-  ausgaben, postfach, buchhaltung, auswertungen, aufgaben, geraete, papierkorb,
+// Views werden erst beim tatsächlichen Aufruf ihrer Route per dynamic
+// import() nachgeladen (statt alle 22 Module beim Start zu laden) - spart
+// beim ersten Seitenaufruf spürbar Ladezeit, da z.B. Buchhaltung/Auswertungen
+// bei den meisten Sitzungen nie geöffnet werden. Nach dem ersten Laden bleibt
+// das Modul im Browser-Modul-Cache, ein erneuter Aufruf derselben Route ist
+// also genauso schnell wie vorher.
+const routeLoaders = {
+  dashboard: () => import('./views/dashboard.js'),
+  kunden: () => import('./views/kunden.js'),
+  kanban: () => import('./views/kanban.js'),
+  projekte: () => import('./views/projekte.js'),
+  auftraege: () => import('./views/auftraege.js'),
+  plantafel: () => import('./views/plantafel.js'),
+  mitarbeiter: () => import('./views/mitarbeiter.js'),
+  katalog: () => import('./views/katalog.js'),
+  angebote: () => import('./views/angebote.js'),
+  auftragsbestaetigung: () => import('./views/auftragsbestaetigung.js'),
+  rechnungen: () => import('./views/rechnungen.js'),
+  mahnungen: () => import('./views/mahnungen.js'),
+  einstellungen: () => import('./views/einstellungen.js'),
+  zeiterfassung: () => import('./views/zeiterfassung.js'),
+  vorlagen: () => import('./views/vorlagen.js'),
+  ausgaben: () => import('./views/ausgaben.js'),
+  postfach: () => import('./views/postfach.js'),
+  buchhaltung: () => import('./views/buchhaltung.js'),
+  auswertungen: () => import('./views/auswertungen.js'),
+  aufgaben: () => import('./views/aufgaben.js'),
+  geraete: () => import('./views/geraete.js'),
+  papierkorb: () => import('./views/papierkorb.js'),
 };
 
 const viewEl = document.getElementById('view');
@@ -94,11 +97,12 @@ if (fullscreenBtn) {
   }
 }
 
+let routerToken = 0;
+
 async function router() {
   const hash = window.location.hash.replace(/^#\/?/, '') || 'dashboard';
   const [routeName, ...rest] = hash.split('/');
-  const routeKey = routes[routeName] ? routeName : 'dashboard';
-  const mod = routes[routeKey];
+  const routeKey = routeLoaders[routeName] ? routeName : 'dashboard';
 
   document.querySelectorAll('.sidebar-nav a').forEach((a) => {
     a.classList.toggle('active', a.dataset.route === routeKey);
@@ -108,16 +112,23 @@ async function router() {
     try { currentCleanup(); } catch (e) { /* ignore cleanup errors */ }
     currentCleanup = null;
   }
-  viewEl.innerHTML = '';
 
   if (!hasRouteAccess(session.role, routeKey)) {
     viewEl.innerHTML = `<div class="empty-state">Kein Zugriff für deine Rolle auf diesen Bereich.</div>`;
     return;
   }
 
+  // routerToken schützt vor Race Conditions, wenn der Nutzer während des
+  // Nachladens eines Moduls bereits zur nächsten Route weiterklickt - dann
+  // rendert nur noch die zuletzt angeforderte Route ihr Ergebnis.
+  const token = ++routerToken;
+  viewEl.innerHTML = '';
   try {
+    const mod = await routeLoaders[routeKey]();
+    if (token !== routerToken) return;
     currentCleanup = await mod.render(viewEl, rest.join('/'));
   } catch (err) {
+    if (token !== routerToken) return;
     console.error(err);
     viewEl.innerHTML = `<div class="empty-state">Fehler beim Laden der Ansicht.<br><small>${err.message || err}</small></div>`;
   }
