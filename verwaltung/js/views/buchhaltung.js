@@ -1,7 +1,14 @@
-import { getAll, getSettings } from '../db.js';
-import { escapeHtml, formatCurrency, formatDate } from '../utils.js';
+import { getAll, put, remove, getSettings, KONTEN_KLASSEN } from '../db.js';
+import { uid, escapeHtml, formatCurrency, formatDate, toast } from '../utils.js';
+import { openModal, confirmDelete } from '../ui.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel]));
+
+const BUCH_NAV = [
+  { id: 'uebersicht', icon: '📊', label: 'Übersicht' },
+  { id: 'kontenplan', icon: '📒', label: 'Kontenplan' },
+];
 
 function deNum(n) {
   return (Math.round(Number(n) * 100) / 100).toFixed(2).replace('.', ',');
@@ -48,15 +55,48 @@ export async function render(container) {
   container.innerHTML = `
     <div class="view-header">
       <h1>Buchhaltung</h1>
-      <div class="actions">
-        <select id="jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+    </div>
+    <div class="settings-layout">
+      <nav class="settings-nav" id="buch-nav">
+        <div class="settings-nav-group">
+          <h3>Buchhaltung</h3>
+          ${BUCH_NAV.map((it) => `<button type="button" class="settings-nav-item" data-panel="${it.id}">${it.icon} ${escapeHtml(it.label)}</button>`).join('')}
+        </div>
+      </nav>
+      <div class="settings-content" id="buch-content">
+        <div class="settings-panel" data-panel="uebersicht" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Übersicht</h2>
+            <div class="actions">
+              <select id="jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+            </div>
+          </div>
+          <div class="card" style="background:#fff6e0;border-color:#f0d78c">
+            <p class="mb-0">⚠️ <strong>Kein Ersatz für professionelle Buchhaltung/Steuerberatung.</strong> Diese Übersicht ist eine vereinfachte Zusammenstellung nach Zufluss/Abfluss (bezahlte Rechnungen, erfasste Ausgaben) auf Basis deiner Eingaben. USt.-Voranmeldung, ELSTER-Übermittlung und die endgültige Kontenzuordnung übernimmt weiterhin dein Steuerberater / deine Steuerberaterin.</p>
+          </div>
+          <div id="content-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="kontenplan" hidden>
+          <h2>Kontenplan</h2>
+          <p class="hint">Kern-Kontenplan nach SKR03 - frei erweiterbar. Ersetzt keine steuerliche Beratung; die endgültige Kontenzuordnung bleibt Aufgabe deines Steuerberaters.</p>
+          <div id="kontenplan-host"></div>
+        </div>
       </div>
     </div>
-    <div class="card" style="background:#fff6e0;border-color:#f0d78c">
-      <p class="mb-0">⚠️ <strong>Kein Ersatz für professionelle Buchhaltung/Steuerberatung.</strong> Diese Übersicht ist eine vereinfachte Zusammenstellung nach Zufluss/Abfluss (bezahlte Rechnungen, erfasste Ausgaben) auf Basis deiner Eingaben. USt.-Voranmeldung, ELSTER-Übermittlung und die endgültige Kontenzuordnung übernimmt weiterhin dein Steuerberater / deine Steuerberaterin.</p>
-    </div>
-    <div id="content-host"></div>
   `;
+
+  const nav = container.querySelector('#buch-nav');
+  function showPanel(id) {
+    container.querySelectorAll('.settings-panel').forEach((p) => { p.hidden = p.dataset.panel !== id; });
+    nav.querySelectorAll('.settings-nav-item').forEach((b) => b.classList.toggle('active', b.dataset.panel === id));
+    try { sessionStorage.setItem('nv-buchhaltung-panel', id); } catch { /* ignore */ }
+  }
+  nav.querySelectorAll('.settings-nav-item').forEach((btn) => {
+    btn.addEventListener('click', () => showPanel(btn.dataset.panel));
+  });
+  const lastPanel = (() => { try { return sessionStorage.getItem('nv-buchhaltung-panel'); } catch { return null; } })();
+  const allPanelIds = BUCH_NAV.map((it) => it.id);
+  showPanel(allPanelIds.includes(lastPanel) ? lastPanel : BUCH_NAV[0].id);
 
   container.querySelector('#jahr-select').addEventListener('change', (e) => {
     jahr = e.target.value;
@@ -208,5 +248,88 @@ export async function render(container) {
     return [header1, header2, ...rows].join('\r\n');
   }
 
+  async function renderKontenplan() {
+    const kontenHost = container.querySelector('#kontenplan-host');
+    const konten = await getAll('konten');
+    konten.sort((a, b) => a.nummer.localeCompare(b.nummer));
+    const buchungen = await getAll('buchungen');
+
+    kontenHost.innerHTML = `
+      <div class="actions mb-2"><button class="btn btn-primary" id="btn-konto-neu">+ Neues Konto</button></div>
+      <table class="data-table">
+        <thead><tr><th>Nummer</th><th>Name</th><th>Klasse</th><th></th></tr></thead>
+        <tbody>
+          ${konten.map((k) => `
+            <tr>
+              <td>${escapeHtml(k.nummer)}</td>
+              <td>${escapeHtml(k.name)}</td>
+              <td>${escapeHtml(KLASSE_LABEL[k.klasse] || k.klasse)}</td>
+              <td class="text-right">
+                <button class="btn btn-sm" data-edit="${k.id}">Bearbeiten</button>
+                <button class="btn btn-sm btn-danger" data-delete="${k.id}">Löschen</button>
+              </td>
+            </tr>
+          `).join('') || '<tr><td colspan="4">Keine Konten vorhanden.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+
+    kontenHost.querySelector('#btn-konto-neu').addEventListener('click', () => openKontoForm(null));
+    kontenHost.querySelectorAll('[data-edit]').forEach((btn) => {
+      btn.addEventListener('click', () => openKontoForm(konten.find((k) => k.id === btn.dataset.edit)));
+    });
+    kontenHost.querySelectorAll('[data-delete]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.delete;
+        const inUse = buchungen.some((b) => b.sollKontoId === id || b.habenKontoId === id);
+        if (inUse) {
+          toast('Dieses Konto wird bereits in Buchungssätzen verwendet und kann nicht gelöscht werden.', 'danger');
+          return;
+        }
+        if (!confirmDelete('Konto wirklich löschen?')) return;
+        await remove('konten', id);
+        toast('Konto gelöscht', 'success');
+        renderKontenplan();
+      });
+    });
+
+    function openKontoForm(existing) {
+      const isEdit = !!existing;
+      const data = existing || { id: uid(), nummer: '', name: '', klasse: 'aufwand' };
+      const { body, close } = openModal({
+        title: isEdit ? 'Konto bearbeiten' : 'Neues Konto',
+        bodyHtml: `
+          <form id="konto-form">
+            <div class="form-grid">
+              <div class="field"><label>Nummer *</label><input name="nummer" required value="${escapeHtml(data.nummer)}"></div>
+              <div class="field"><label>Name *</label><input name="name" required value="${escapeHtml(data.name)}"></div>
+              <div class="field col-span-2"><label>Klasse</label>
+                <select name="klasse">${KONTEN_KLASSEN.map((k) => `<option value="${k.id}" ${k.id === data.klasse ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+              <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+          </form>
+        `,
+      });
+      body.querySelector('#btn-cancel').addEventListener('click', close);
+      body.querySelector('#konto-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const nummer = (fd.get('nummer') || '').toString().trim();
+        const name = (fd.get('name') || '').toString().trim();
+        if (!nummer || !name) return;
+        await put('konten', { ...data, nummer, name, klasse: fd.get('klasse') || 'aufwand' });
+        toast('Gespeichert', 'success');
+        close();
+        renderKontenplan();
+      });
+    }
+  }
+
   renderContent();
+  renderKontenplan();
 }
