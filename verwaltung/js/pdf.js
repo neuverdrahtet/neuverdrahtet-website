@@ -47,6 +47,8 @@ export function buildDocHtml({
   abschlaege,
   leistungsdatum,
   aufbewahrungsHinweis,
+  zeigeUnterschriftsfeld,
+  unterschriftKunde,
 }) {
   const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
 
@@ -145,6 +147,15 @@ export function buildDocHtml({
     ${(steuerHinweis || (settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '')) ? `<p style="font-size:11px;margin-top:10px">${escapeHtml(steuerHinweis || 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.')}</p>` : ''}
     ${aufbewahrungsHinweis ? `<p style="font-size:11px;margin-top:4px">${escapeHtml(aufbewahrungsHinweis)}</p>` : ''}
     ${closingText ? `<p style="white-space:pre-wrap;margin-top:16px">${escapeHtml(closingText)}</p>` : ''}
+    ${zeigeUnterschriftsfeld ? `
+    <div class="print-unterschrift">
+      <div class="print-unterschrift-ort">Ort, Datum: ____________________________</div>
+      <div class="print-unterschrift-feld">
+        ${unterschriftKunde ? `<img src="${unterschriftKunde}" class="print-unterschrift-bild" alt="Unterschrift Kunde">` : ''}
+        <div class="print-unterschrift-linie"></div>
+        <div class="print-unterschrift-label">Unterschrift Kunde</div>
+      </div>
+    </div>` : ''}
     <div class="print-footer">
       ${settings.dokFooterZusatztext ? `<div class="print-footer-zusatz">${escapeHtml(settings.dokFooterZusatztext)}</div>` : ''}
       <div class="print-footer-spalten">${footerBloecke.join('')}</div>
