@@ -6,6 +6,16 @@ import { loadZXing } from '../vendorLoader.js';
 
 const FARBEN = ['#14b8a6', '#4d8bf0', '#a463f2', '#f0a020', '#ef4444', '#16a085', '#d35400', '#2c3e50'];
 
+// Vorschlagslisten für das Hersteller-Feld (Autovervollständigung) - deckt die
+// im Handwerk gängigsten Marken ab, ersetzt aber keine freie Eingabe.
+const HERSTELLER_PRESETS_GERAETE = [
+  'Hilti', 'Bosch Professional', 'Makita', 'Milwaukee', 'DeWalt', 'Metabo', 'Festool',
+  'Würth', 'Knipex', 'Wacker Neuson', 'Stihl', 'Fluke', 'Gossen Metrawatt', 'Testo',
+];
+const HERSTELLER_PRESETS_FLOTTEN = [
+  'Mercedes-Benz', 'Volkswagen', 'Ford', 'MAN', 'Renault', 'Opel', 'Fiat', 'Iveco', 'Citroën',
+];
+
 export const STATUS = [
   { id: 'verfuegbar', titel: 'Verfügbar', badge: 'badge-success' },
   { id: 'im-einsatz', titel: 'Im Einsatz', badge: 'badge-accent' },
@@ -179,6 +189,11 @@ export async function render(container) {
     return ma ? escapeHtml(ma.name) : '<span class="text-mute">–</span>';
   }
 
+  function herstellerLabel(item) {
+    const teile = [item.hersteller, item.modell].filter(Boolean);
+    return teile.length ? escapeHtml(teile.join(' – ')) : '<span class="text-mute">–</span>';
+  }
+
   function renderTable() {
     const list = tab === 'geraete' ? geraete : flotten;
     if (list.length === 0) {
@@ -190,7 +205,7 @@ export async function render(container) {
       tableHost.innerHTML = `
         ${bulk.barHtml()}
         <table class="data-table">
-          <thead><tr>${bulk.headerCell()}<th></th><th>Name</th><th>Kategorie</th><th>Status</th><th>Zugewiesen an</th><th>Nächste Prüfung</th></tr></thead>
+          <thead><tr>${bulk.headerCell()}<th></th><th>Name</th><th>Kategorie</th><th>Hersteller/Modell</th><th>Status</th><th>Zugewiesen an</th><th>Nächste Prüfung</th></tr></thead>
           <tbody>
             ${geraete.map((g) => {
               const s = statusInfo(g.status);
@@ -200,6 +215,7 @@ export async function render(container) {
                 <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${g.farbe || FARBEN[0]}"></span></td>
                 <td>${escapeHtml(g.name)}</td>
                 <td>${escapeHtml(g.kategorie || '')}</td>
+                <td>${herstellerLabel(g)}</td>
                 <td><span class="badge ${s.badge}">${s.titel}</span></td>
                 <td>${zugewiesenLabel(g)}</td>
                 <td>${formatDate(g.naechstePruefung)}</td>
@@ -212,7 +228,7 @@ export async function render(container) {
       tableHost.innerHTML = `
         ${bulk.barHtml()}
         <table class="data-table">
-          <thead><tr>${bulk.headerCell()}<th></th><th>Bezeichnung</th><th>Kennzeichen</th><th>Status</th><th>Zugewiesen an</th><th>TÜV/HU</th></tr></thead>
+          <thead><tr>${bulk.headerCell()}<th></th><th>Bezeichnung</th><th>Kennzeichen</th><th>Hersteller/Modell</th><th>Status</th><th>Zugewiesen an</th><th>TÜV/HU</th></tr></thead>
           <tbody>
             ${flotten.map((f) => {
               const s = statusInfo(f.status);
@@ -222,6 +238,7 @@ export async function render(container) {
                 <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${f.farbe || FARBEN[1]}"></span></td>
                 <td>${escapeHtml(f.bezeichnung)}</td>
                 <td>${escapeHtml(f.kennzeichen || '')}</td>
+                <td>${herstellerLabel(f)}</td>
                 <td><span class="badge ${s.badge}">${s.titel}</span></td>
                 <td>${zugewiesenLabel(f)}</td>
                 <td>${formatDate(f.tuvDatum)}</td>
@@ -429,8 +446,9 @@ export async function render(container) {
     const isGeraet = tab === 'geraete';
     const neueId = uid();
     const data = item || (isGeraet
-      ? { id: neueId, name: '', kategorie: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' }
-      : { id: neueId, bezeichnung: '', kennzeichen: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' });
+      ? { id: neueId, name: '', kategorie: '', hersteller: '', modell: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' }
+      : { id: neueId, bezeichnung: '', kennzeichen: '', hersteller: '', modell: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' });
+    const herstellerPresets = isGeraet ? HERSTELLER_PRESETS_GERAETE : HERSTELLER_PRESETS_FLOTTEN;
 
     const { body, close } = openModal({
       title: isEdit ? 'Bearbeiten' : (isGeraet ? 'Neues Gerät' : 'Neues Fahrzeug'),
@@ -441,11 +459,21 @@ export async function render(container) {
               <div class="field col-span-2"><label>Name *</label><input name="name" required value="${escapeHtml(data.name)}"></div>
               <div class="field"><label>Kategorie</label><input name="kategorie" placeholder="z.B. Messgerät, Maschine" value="${escapeHtml(data.kategorie || '')}"></div>
               <div class="field"><label>Standort</label><input name="standort" value="${escapeHtml(data.standort || '')}"></div>
+              <div class="field"><label>Hersteller</label>
+                <input name="hersteller" list="hersteller-presets" placeholder="z.B. Hilti" value="${escapeHtml(data.hersteller || '')}">
+                <datalist id="hersteller-presets">${herstellerPresets.map((h) => `<option value="${escapeHtml(h)}"></option>`).join('')}</datalist>
+              </div>
+              <div class="field"><label>Modell</label><input name="modell" placeholder="z.B. TE 30-C" value="${escapeHtml(data.modell || '')}"></div>
               <div class="field"><label>Nächste Prüfung</label><input type="date" name="naechstePruefung" value="${data.naechstePruefung || ''}"></div>
             ` : `
               <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
               <div class="field"><label>Kennzeichen</label><input name="kennzeichen" value="${escapeHtml(data.kennzeichen || '')}"></div>
               <div class="field"><label>Typ</label><input name="typ" placeholder="Transporter, PKW, Anhänger ..." value="${escapeHtml(data.typ || '')}"></div>
+              <div class="field"><label>Hersteller</label>
+                <input name="hersteller" list="hersteller-presets" placeholder="z.B. Mercedes-Benz" value="${escapeHtml(data.hersteller || '')}">
+                <datalist id="hersteller-presets">${herstellerPresets.map((h) => `<option value="${escapeHtml(h)}"></option>`).join('')}</datalist>
+              </div>
+              <div class="field"><label>Modell</label><input name="modell" placeholder="z.B. Sprinter 316 CDI" value="${escapeHtml(data.modell || '')}"></div>
               <div class="field"><label>TÜV/HU</label><input type="date" name="tuvDatum" value="${data.tuvDatum || ''}"></div>
               <div class="field"><label>Kilometerstand</label><input type="number" min="0" name="kilometerstand" value="${data.kilometerstand || ''}"></div>
             `}
