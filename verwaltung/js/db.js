@@ -417,6 +417,8 @@ const DEFAULT_SETTINGS = {
   inhaber: '',
   kleinunternehmer: false,
   standardSteuersatz: 19,
+  rechtsform: 'kapitalgesellschaft',
+  gewerbesteuerHebesatz: 480,
   standardAufschlagProzent: 20,
   angebotPrefix: 'AN-',
   auftragsbestaetigungPrefix: 'AB-',
