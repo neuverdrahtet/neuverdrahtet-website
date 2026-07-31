@@ -1,7 +1,7 @@
 {
-  "name": "neuverdrahtet Verwaltung",
-  "short_name": "Verwaltung",
-  "description": "Interne Verwaltung für Kunden, Projekte, Angebote, Rechnungen und mehr.",
+  "name": "Werkora",
+  "short_name": "Werkora",
+  "description": "Werkora – Smarte Handwerker-Software für Kunden, Projekte, Angebote, Rechnungen und mehr.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",
