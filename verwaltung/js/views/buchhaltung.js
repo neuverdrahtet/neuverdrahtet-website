@@ -1,6 +1,7 @@
-import { getAll, put, remove, getSettings, KONTEN_KLASSEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast } from '../utils.js';
+import { getAll, put, remove, getSettings, setSettings, KONTEN_KLASSEN } from '../db.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast, readTextAutoEncoding } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } from '../bankimport.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel]));
@@ -12,6 +13,7 @@ const BUCH_NAV = [
   { id: 'bilanz', icon: '⚖️', label: 'Bilanz & GuV' },
   { id: 'offeneposten', icon: '📬', label: 'Offene Posten' },
   { id: 'ustva', icon: '🧾', label: 'USt.-Voranmeldung' },
+  { id: 'kontoabgleich', icon: '🏦', label: 'Kontoabgleich' },
 ];
 const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 
@@ -148,6 +150,14 @@ export async function render(container) {
           </div>
           <p class="hint">Voranmeldungszeitraum (monatlich/vierteljährlich) wird in Einstellungen → Finanzen &amp; Kalkulation festgelegt. Werte aus dem Journal, keine offizielle ELSTER-Kennziffern-Zuordnung - Übermittlung bleibt Aufgabe deines Steuerberaters.</p>
           <div id="ustva-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="kontoabgleich" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Kontoabgleich</h2>
+            <div class="actions"><button class="btn btn-primary" id="btn-kontoauszug-import">⇪ Kontoauszug importieren (CSV)</button></div>
+          </div>
+          <p class="hint">Kein Live-Bankzugang - lade den CSV-Export deines Online-Bankings hoch. Automatischer Zahlungsabgleich gegen offene Rechnungen/Lieferantenrechnungen folgt in einer späteren Ausbaustufe; hier siehst du zunächst alle importierten Buchungen.</p>
+          <div id="kontoabgleich-host"></div>
         </div>
       </div>
     </div>
@@ -747,10 +757,112 @@ export async function render(container) {
   container.querySelector('#ustva-jahr-select').addEventListener('change', renderUstva);
   container.querySelector('#ustva-periode-select').addEventListener('change', renderUstva);
 
+  async function renderKontoabgleich() {
+    const host = container.querySelector('#kontoabgleich-host');
+    const alle = (await getAll('bankbuchungen')).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    host.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Datum</th><th>Verwendungszweck</th><th>Empfänger/Auftraggeber</th><th class="text-right">Betrag</th></tr></thead>
+        <tbody>
+          ${alle.map((b) => `
+            <tr>
+              <td>${formatDate(b.datum)}</td>
+              <td>${escapeHtml(b.verwendungszweck || '')}</td>
+              <td>${escapeHtml(b.empfaenger || '')}</td>
+              <td class="text-right">${formatCurrency(b.betrag)}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="4">Noch keine Buchungen importiert.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+  }
+
+  container.querySelector('#btn-kontoauszug-import').addEventListener('click', () => {
+    const { body, close } = openModal({
+      title: 'Kontoauszug importieren',
+      wide: true,
+      bodyHtml: `
+        <div class="field"><label>CSV-Datei</label><input type="file" accept=".csv,text/csv" id="bank-csv-input"></div>
+        <div id="bank-mapping-host"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-bank-importieren" disabled>Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+
+    let geparst = null;
+    body.querySelector('#bank-csv-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await readTextAutoEncoding(file);
+      const delimiter = erkenneDelimiter((text.split('\n')[0] || ''));
+      const alleZeilen = parseCsv(text, delimiter);
+      if (alleZeilen.length < 2) {
+        toast('Konnte keine Datenzeilen in der Datei finden.', 'danger');
+        return;
+      }
+      const header = alleZeilen[0];
+      const rows = alleZeilen.slice(1);
+      geparst = { header, rows };
+
+      const gespeichert = settings.bankImportSpalten || {};
+      const spaltenOptionen = (ausgewaehlt) => `<option value="">–</option>${header.map((h) => `<option value="${escapeHtml(h)}" ${h === ausgewaehlt ? 'selected' : ''}>${escapeHtml(h)}</option>`).join('')}`;
+      body.querySelector('#bank-mapping-host').innerHTML = `
+        <p class="hint">${rows.length} Datenzeilen erkannt. Bitte die passenden Spalten zuordnen:</p>
+        <div class="form-grid">
+          <div class="field"><label>Datum-Spalte *</label><select id="map-datum">${spaltenOptionen(gespeichert.datum)}</select></div>
+          <div class="field"><label>Betrag-Spalte *</label><select id="map-betrag">${spaltenOptionen(gespeichert.betrag)}</select></div>
+          <div class="field"><label>Verwendungszweck-Spalte</label><select id="map-verwendungszweck">${spaltenOptionen(gespeichert.verwendungszweck)}</select></div>
+          <div class="field"><label>Empfänger/Auftraggeber-Spalte</label><select id="map-empfaenger">${spaltenOptionen(gespeichert.empfaenger)}</select></div>
+        </div>
+        <table class="data-table">
+          <thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0, 3).map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      `;
+      body.querySelector('#btn-bank-importieren').disabled = false;
+    });
+
+    body.querySelector('#btn-bank-importieren').addEventListener('click', async () => {
+      if (!geparst) return;
+      const mapping = {
+        datum: body.querySelector('#map-datum').value,
+        betrag: body.querySelector('#map-betrag').value,
+        verwendungszweck: body.querySelector('#map-verwendungszweck').value,
+        empfaenger: body.querySelector('#map-empfaenger').value,
+      };
+      if (!mapping.datum || !mapping.betrag) {
+        toast('Bitte mindestens Datum- und Betrag-Spalte zuordnen', 'danger');
+        return;
+      }
+      await setSettings({ bankImportSpalten: mapping });
+      settings.bankImportSpalten = mapping;
+      const neueBuchungen = zeilenZuBuchungen(geparst.rows, geparst.header, mapping);
+      const bestehende = await getAll('bankbuchungen');
+      const bestehendeSchluessel = new Set(bestehende.map((b) => bankbuchungSchluessel(b)));
+      let neu = 0;
+      let doppelt = 0;
+      for (const b of neueBuchungen) {
+        const schluessel = bankbuchungSchluessel(b);
+        if (bestehendeSchluessel.has(schluessel)) { doppelt++; continue; }
+        bestehendeSchluessel.add(schluessel);
+        await put('bankbuchungen', { id: uid(), ...b, matched: false, matchTyp: null, matchId: null, ignoriert: false, createdAt: new Date().toISOString() });
+        neu++;
+      }
+      toast(`${neu} Buchungen importiert${doppelt ? `, ${doppelt} bereits vorhanden (übersprungen)` : ''}`, 'success');
+      close();
+      renderKontoabgleich();
+    });
+  });
+
   renderContent();
   renderKontenplan();
   renderJournal();
   renderBilanz();
   renderOffenePosten();
   renderUstva();
+  renderKontoabgleich();
 }
