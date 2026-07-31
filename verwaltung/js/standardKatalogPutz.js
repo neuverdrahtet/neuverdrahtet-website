@@ -59,6 +59,8 @@ export const STANDARD_KATALOG_PUTZ = [
     artikel('Außenputz mineralisch (Sack 30kg)', 'Stk.', 16),
     artikel('Edelputz/Dekorputz (Sack 25kg)', 'Stk.', 24),
     artikel('Stuckleiste/Zierprofil (Meterware)', 'm', 8),
+    artikel('Knauf Rotband Haftputzgips (30kg Sack)', 'Stk.', 9.65),
+    artikel('Weber.pas Edelputz/Reibeputz (25kg Sack)', 'Stk.', 29),
   ]),
 
   // --- Materialien: Zubehör ---
@@ -68,5 +70,7 @@ export const STANDARD_KATALOG_PUTZ = [
     artikel('Eckschutzschiene mit Gewebe (Stange 2,5m)', 'Stk.', 7),
     artikel('WDVS-Dämmplatte 100mm (m²)', 'm²', 14),
     artikel('Gerüst mieten (je m² Fassade/Woche)', 'm²', 4),
+    artikel('Sto StoLevell Uni Klebe- und Armierungsmörtel (25kg Sack)', 'Stk.', 32),
+    artikel('Baumit StarTherm EPS-Dämmplatte 100mm (je m²)', 'm²', 15.5),
   ]),
 ];
