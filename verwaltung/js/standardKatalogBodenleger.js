@@ -16,6 +16,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_BODENLEGER = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Bodenleger', 'Std.', 48),
@@ -48,25 +52,31 @@ export const STANDARD_KATALOG_BODENLEGER = [
   leistung('Treppenrenovierung mit Stufenbelag (je Stufe)', 'Stk.', 45),
 
   // --- Materialien: Untergrund ---
-  artikel('Ausgleichs-/Spachtelmasse (25kg Sack)', 'Stk.', 16),
-  artikel('Ausgleichsmasse dickschichtig, bis 30mm (25kg Sack)', 'Stk.', 19),
-  artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
-  artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
+  ...materialGruppe('Untergrund', [
+    artikel('Ausgleichs-/Spachtelmasse (25kg Sack)', 'Stk.', 16),
+    artikel('Ausgleichsmasse dickschichtig, bis 30mm (25kg Sack)', 'Stk.', 19),
+    artikel('Grundierung Fußboden (5L Kanister)', 'Stk.', 28),
+    artikel('Trittschalldämmung (Rolle, je m²)', 'm²', 2.5),
+  ]),
 
   // --- Materialien: Beläge ---
-  artikel('Fertigparkett Eiche, gebürstet', 'm²', 32),
-  artikel('Laminat Klasse 32', 'm²', 11),
-  artikel('Vinyl-/Designboden (Klick)', 'm²', 18),
-  artikel('Vinyl-/Designboden (Bahnenware, verklebt)', 'm²', 20),
-  artikel('SPC-Vinylboden (rigide)', 'm²', 24),
-  artikel('Massivparkett Eiche', 'm²', 55),
-  artikel('Korkboden', 'm²', 20),
-  artikel('Teppichboden Objektqualität', 'm²', 11),
-  artikel('PVC-Bahnenware', 'm²', 14),
+  ...materialGruppe('Beläge', [
+    artikel('Fertigparkett Eiche, gebürstet', 'm²', 32),
+    artikel('Laminat Klasse 32', 'm²', 11),
+    artikel('Vinyl-/Designboden (Klick)', 'm²', 18),
+    artikel('Vinyl-/Designboden (Bahnenware, verklebt)', 'm²', 20),
+    artikel('SPC-Vinylboden (rigide)', 'm²', 24),
+    artikel('Massivparkett Eiche', 'm²', 55),
+    artikel('Korkboden', 'm²', 20),
+    artikel('Teppichboden Objektqualität', 'm²', 11),
+    artikel('PVC-Bahnenware', 'm²', 14),
+  ]),
 
   // --- Materialien: Kleber & Abschluss ---
-  artikel('Fußbodenkleber (Eimer 15kg)', 'Stk.', 42),
-  artikel('Dispersionskleber Vinyl (Eimer 14kg)', 'Stk.', 38),
-  artikel('Sockelleiste MDF/Kunststoff (Stange 2,5m)', 'Stk.', 4),
-  artikel('Übergangsprofil Alu', 'Stk.', 8),
+  ...materialGruppe('Kleber & Abschluss', [
+    artikel('Fußbodenkleber (Eimer 15kg)', 'Stk.', 42),
+    artikel('Dispersionskleber Vinyl (Eimer 14kg)', 'Stk.', 38),
+    artikel('Sockelleiste MDF/Kunststoff (Stange 2,5m)', 'Stk.', 4),
+    artikel('Übergangsprofil Alu', 'Stk.', 8),
+  ]),
 ];

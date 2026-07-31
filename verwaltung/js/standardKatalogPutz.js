@@ -17,6 +17,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_PUTZ = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Stuckateur/Putzer', 'Std.', 54),
@@ -47,18 +51,22 @@ export const STANDARD_KATALOG_PUTZ = [
   leistung('Altputz sanieren/Feuchtesanierung Fassade', 'm²', 48),
 
   // --- Materialien: Putze ---
-  artikel('Kalkzementputz Maschinenputz (Sack 30kg)', 'Stk.', 12),
-  artikel('Gipsputz Maschinenputz (Sack 30kg)', 'Stk.', 13),
-  artikel('Oberputz/Reibeputz (Sack 25kg)', 'Stk.', 22),
-  artikel('Sanierputz (Sack 30kg)', 'Stk.', 28),
-  artikel('Außenputz mineralisch (Sack 30kg)', 'Stk.', 16),
-  artikel('Edelputz/Dekorputz (Sack 25kg)', 'Stk.', 24),
-  artikel('Stuckleiste/Zierprofil (Meterware)', 'm', 8),
+  ...materialGruppe('Putze', [
+    artikel('Kalkzementputz Maschinenputz (Sack 30kg)', 'Stk.', 12),
+    artikel('Gipsputz Maschinenputz (Sack 30kg)', 'Stk.', 13),
+    artikel('Oberputz/Reibeputz (Sack 25kg)', 'Stk.', 22),
+    artikel('Sanierputz (Sack 30kg)', 'Stk.', 28),
+    artikel('Außenputz mineralisch (Sack 30kg)', 'Stk.', 16),
+    artikel('Edelputz/Dekorputz (Sack 25kg)', 'Stk.', 24),
+    artikel('Stuckleiste/Zierprofil (Meterware)', 'm', 8),
+  ]),
 
   // --- Materialien: Zubehör ---
-  artikel('Haftgrund/Tiefgrund (Kanister 5L)', 'Stk.', 26),
-  artikel('Armierungsgewebe (Rolle 50m²)', 'Stk.', 45),
-  artikel('Eckschutzschiene mit Gewebe (Stange 2,5m)', 'Stk.', 7),
-  artikel('WDVS-Dämmplatte 100mm (m²)', 'm²', 14),
-  artikel('Gerüst mieten (je m² Fassade/Woche)', 'm²', 4),
+  ...materialGruppe('Zubehör', [
+    artikel('Haftgrund/Tiefgrund (Kanister 5L)', 'Stk.', 26),
+    artikel('Armierungsgewebe (Rolle 50m²)', 'Stk.', 45),
+    artikel('Eckschutzschiene mit Gewebe (Stange 2,5m)', 'Stk.', 7),
+    artikel('WDVS-Dämmplatte 100mm (m²)', 'm²', 14),
+    artikel('Gerüst mieten (je m² Fassade/Woche)', 'm²', 4),
+  ]),
 ];

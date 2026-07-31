@@ -16,6 +16,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 20) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_ABBRUCH = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Abbruch', 'Std.', 46),
@@ -57,13 +61,19 @@ export const STANDARD_KATALOG_ABBRUCH = [
   leistung('Gebäudeabriss komplett (Richtwert je m³ umbauter Raum)', 'm³', 85),
   leistung('Bauendreinigung nach Abbruch', 'm²', 6),
 
-  // --- Materialien ---
-  artikel('Bauschutt-Container/Big Bag (1m³) mieten', 'Stk.', 22),
-  artikel('Bauschutt-Container 10m³ mieten', 'Stk.', 45),
-  artikel('Absperr-/Schutzfolie (Rolle 4x5m)', 'Stk.', 8),
-  artikel('Malerkrepp/Klebeband für Abtrennung (Rolle)', 'Stk.', 4),
-  artikel('Bauabsperrband (Rolle 500m)', 'Stk.', 12),
-  artikel('Staubschutzmaske FFP2 (Packung 10 Stk.)', 'Stk.', 15),
-  artikel('Einweg-Schutzanzug', 'Stk.', 6),
-  artikel('Handschuhe Arbeitsschutz (Paar)', 'Stk.', 3),
+  // --- Materialien: Container & Entsorgung ---
+  ...materialGruppe('Container & Entsorgung', [
+    artikel('Bauschutt-Container/Big Bag (1m³) mieten', 'Stk.', 22),
+    artikel('Bauschutt-Container 10m³ mieten', 'Stk.', 45),
+    artikel('Absperr-/Schutzfolie (Rolle 4x5m)', 'Stk.', 8),
+    artikel('Malerkrepp/Klebeband für Abtrennung (Rolle)', 'Stk.', 4),
+    artikel('Bauabsperrband (Rolle 500m)', 'Stk.', 12),
+  ]),
+
+  // --- Materialien: Schutzausrüstung ---
+  ...materialGruppe('Schutzausrüstung', [
+    artikel('Staubschutzmaske FFP2 (Packung 10 Stk.)', 'Stk.', 15),
+    artikel('Einweg-Schutzanzug', 'Stk.', 6),
+    artikel('Handschuhe Arbeitsschutz (Paar)', 'Stk.', 3),
+  ]),
 ];

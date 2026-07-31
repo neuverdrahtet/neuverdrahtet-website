@@ -16,6 +16,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 30) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_MALER = [
   // --- Leistungen: Arbeitszeit ---
   leistung('Facharbeiterstunde Maler', 'Std.', 42),
@@ -49,20 +53,24 @@ export const STANDARD_KATALOG_MALER = [
   leistung('Tapezieren/Streichen Treppenhaus (Pauschal je Geschoss)', 'pauschal', 350),
 
   // --- Materialien: Farben ---
-  artikel('Wandfarbe innen, weiß (10L Eimer)', 'Stk.', 42),
-  artikel('Wandfarbe innen, Volltonfarbe (10L Eimer)', 'Stk.', 58),
-  artikel('Tiefgrund/Grundierung Wand (10L Kanister)', 'Stk.', 32),
-  artikel('Fassadenfarbe (12,5L Eimer)', 'Stk.', 82),
-  artikel('Abtönfarbe/Pigment (Flasche)', 'Stk.', 6),
-  artikel('Holzlasur/Holzlack (750ml)', 'Stk.', 20),
-  artikel('Schimmelschutzfarbe (10L Eimer)', 'Stk.', 68),
-  artikel('Bodenbeschichtung Garage (5L Gebinde)', 'Stk.', 55),
+  ...materialGruppe('Farben', [
+    artikel('Wandfarbe innen, weiß (10L Eimer)', 'Stk.', 42),
+    artikel('Wandfarbe innen, Volltonfarbe (10L Eimer)', 'Stk.', 58),
+    artikel('Tiefgrund/Grundierung Wand (10L Kanister)', 'Stk.', 32),
+    artikel('Fassadenfarbe (12,5L Eimer)', 'Stk.', 82),
+    artikel('Abtönfarbe/Pigment (Flasche)', 'Stk.', 6),
+    artikel('Holzlasur/Holzlack (750ml)', 'Stk.', 20),
+    artikel('Schimmelschutzfarbe (10L Eimer)', 'Stk.', 68),
+    artikel('Bodenbeschichtung Garage (5L Gebinde)', 'Stk.', 55),
+  ]),
 
   // --- Materialien: Tapeten & Zubehör ---
-  artikel('Raufasertapete (Rolle)', 'Stk.', 11),
-  artikel('Vliestapete (Rolle)', 'Stk.', 24),
-  artikel('Tapetenkleister (Packung)', 'Stk.', 7),
-  artikel('Malervlies/Abdeckvlies (Rolle)', 'Stk.', 14),
-  artikel('Malerkrepp (Rolle 50m)', 'Stk.', 4),
-  artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
+  ...materialGruppe('Tapeten & Zubehör', [
+    artikel('Raufasertapete (Rolle)', 'Stk.', 11),
+    artikel('Vliestapete (Rolle)', 'Stk.', 24),
+    artikel('Tapetenkleister (Packung)', 'Stk.', 7),
+    artikel('Malervlies/Abdeckvlies (Rolle)', 'Stk.', 14),
+    artikel('Malerkrepp (Rolle 50m)', 'Stk.', 4),
+    artikel('Silikon Sanitär (Kartusche)', 'Stk.', 8),
+  ]),
 ];

@@ -19,6 +19,10 @@ function artikel(bezeichnung, einheit, einkaufspreis, aufschlagProzent = 25) {
   return { typ: 'artikel', bezeichnung, beschreibung: '', einheit, einkaufspreis, aufschlagProzent, preis, steuersatz: STEUERSATZ, gewerk: GEWERK };
 }
 
+function materialGruppe(unterkategorie, items) {
+  return items.map((item) => ({ ...item, unterkategorie }));
+}
+
 export const STANDARD_KATALOG_RENOVIERUNG = [
   // --- Leistungen: Pauschalpakete ---
   leistung('Vollsanierung Wohnung, Basis-Ausstattung (je m² Wohnfläche)', 'm²', 380),
@@ -37,10 +41,12 @@ export const STANDARD_KATALOG_RENOVIERUNG = [
   leistung('Baufeinreinigung/Endreinigung nach Sanierung', 'm²', 6),
   leistung('Entsorgung Sperrmüll/Altmöbel', 'pauschal', 220),
 
-  // --- Materialien ---
-  artikel('Abdeckvlies/Bodenschutz (Rolle)', 'Stk.', 20),
-  artikel('Bauschutt-Container 5m³ (Miete inkl. Entsorgung)', 'Stk.', 320),
-  artikel('Kantenschutzprofile (Set)', 'Stk.', 12),
-  artikel('Absperr-/Warnband (Rolle 500m)', 'Stk.', 12),
-  artikel('Bauzaun mieten (je m/Woche)', 'm', 2.5),
+  // --- Materialien: Baustellenausstattung ---
+  ...materialGruppe('Baustellenausstattung', [
+    artikel('Abdeckvlies/Bodenschutz (Rolle)', 'Stk.', 20),
+    artikel('Bauschutt-Container 5m³ (Miete inkl. Entsorgung)', 'Stk.', 320),
+    artikel('Kantenschutzprofile (Set)', 'Stk.', 12),
+    artikel('Absperr-/Warnband (Rolle 500m)', 'Stk.', 12),
+    artikel('Bauzaun mieten (je m/Woche)', 'm', 2.5),
+  ]),
 ];

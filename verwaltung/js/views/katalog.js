@@ -92,17 +92,32 @@ export async function render(container) {
         <option value="">Alle Gewerke</option>
         ${GEWERKE.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}
       </select>
+      <select id="unterkategorie-filter">
+        <option value="">Alle Unterkategorien</option>
+      </select>
     </div>
     <div id="table-host"></div>
   `;
   const tableHost = container.querySelector('#table-host');
+  let unterkategorieFilter = '';
+
+  function refreshUnterkategorieOptions() {
+    const gewerkFilter = container.querySelector('#gewerk-filter').value;
+    const quelle = gewerkFilter ? items.filter((i) => i.gewerk === gewerkFilter) : items;
+    const kategorien = [...new Set(quelle.map((i) => i.unterkategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    const select = container.querySelector('#unterkategorie-filter');
+    if (!kategorien.includes(unterkategorieFilter)) unterkategorieFilter = '';
+    select.innerHTML = `<option value="">Alle Unterkategorien</option>${kategorien.map((k) => `<option value="${escapeHtml(k)}" ${k === unterkategorieFilter ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('')}`;
+  }
 
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const gewerkFilter = container.querySelector('#gewerk-filter').value;
+    refreshUnterkategorieOptions();
     filtered = items.filter((i) => {
       if (typeFilter && i.typ !== typeFilter) return false;
       if (gewerkFilter && i.gewerk !== gewerkFilter) return false;
+      if (unterkategorieFilter && i.unterkategorie !== unterkategorieFilter) return false;
       if (!q) return true;
       return [i.bezeichnung, i.beschreibung].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -117,7 +132,7 @@ export async function render(container) {
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Gewerk</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th><th>Bestand</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Typ</th><th>Gewerk</th><th>Unterkategorie</th><th>Bezeichnung</th><th>Einheit</th><th class="text-right">EK</th><th class="text-right">Zuschlag</th><th class="text-right">VK (netto)</th><th>USt.</th><th>Bestand</th></tr></thead>
         <tbody>
           ${filtered.map((i) => {
             const tracked = i.typ === 'artikel' && i.bestandTracking;
@@ -128,6 +143,7 @@ export async function render(container) {
               ${bulk.rowCell(i.id)}
               <td><span class="badge ${TYP_BADGE[i.typ] || 'badge-accent'}">${TYP_LABEL[i.typ] || 'Material'}</span></td>
               <td>${gewerk ? `<span class="badge" style="background:${escapeHtml(gewerk.farbe)}22;color:${escapeHtml(gewerk.farbe)}">${escapeHtml(gewerk.titel)}</span>` : ''}</td>
+              <td>${i.unterkategorie ? escapeHtml(i.unterkategorie) : '<span class="text-mute">–</span>'}</td>
               <td>${escapeHtml(i.bezeichnung)}${i.lexofficeArtikelId ? ' <span title="Verknüpft mit lexoffice">🔗</span>' : ''}</td>
               <td>${escapeHtml(i.einheit || '')}</td>
               <td class="text-right">${i.einkaufspreis ? formatCurrency(i.einkaufspreis) : '–'}</td>
@@ -211,6 +227,10 @@ export async function render(container) {
     applyFilter();
   });
   container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
+  container.querySelector('#unterkategorie-filter').addEventListener('change', (e) => {
+    unterkategorieFilter = e.target.value;
+    applyFilter();
+  });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
   container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());
@@ -501,6 +521,10 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
                 ${GEWERKE.map((g) => `<option value="${g.id}" ${g.id === data.gewerk ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}
               </select>
             </div>
+            <div class="field"><label>Unterkategorie (optional)</label>
+              <input name="unterkategorie" list="unterkategorie-presets" placeholder="z.B. Kabel &amp; Leitungen" value="${escapeHtml(data.unterkategorie || '')}">
+              <datalist id="unterkategorie-presets">${[...new Set(items.map((i) => i.unterkategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de')).map((k) => `<option value="${escapeHtml(k)}"></option>`).join('')}</datalist>
+            </div>
             <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
           </div>
@@ -667,5 +691,6 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     });
   }
 
+  refreshUnterkategorieOptions();
   renderTable();
 }
