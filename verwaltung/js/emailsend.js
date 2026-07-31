@@ -32,7 +32,7 @@ export function openEmailComposer({ to, subject, bodyText, filename, buildPdfBlo
     sendBtn.disabled = true;
     sendBtn.textContent = 'Wird gesendet ...';
     try {
-      const blob = buildPdfBlob();
+      const blob = await buildPdfBlob();
       await google.sendEmailWithAttachment({ to, subject, bodyText, attachmentName: filename, attachmentBlob: blob });
       toast('E-Mail gesendet', 'success');
       close();

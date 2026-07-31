@@ -213,14 +213,14 @@ export async function render(container) {
     });
   }
 
-  function whatsappMahnung(m) {
+  async function whatsappMahnung(m) {
     if (!m) return;
     const rech = rechnungenById[m.rechnungId];
     const kunde = kundenById[rech?.kundeId];
     sendDocumentViaWhatsApp({
       phone: kunde?.telefon,
       text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettingsForMahnung(m).firmenname}`,
-      pdfBlob: buildDocPdfBlob(mahnungDocOpts(m)),
+      pdfBlob: await buildDocPdfBlob(mahnungDocOpts(m)),
       filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
     });
   }

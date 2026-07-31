@@ -87,13 +87,9 @@
 
 <script type="module" src="js/main.js"></script>
 <!--
-  jsPDF wird auf fast jeder Dokumentenseite gebraucht, daher hier mit defer
-  geladen (parallel zu main.js, blockiert das Parsen aber nicht mehr).
-  xlsx/Leaflet/ZXing werden dagegen jeweils nur in einem einzelnen, seltenen
-  Feature gebraucht und deshalb erst bei Bedarf über vendorLoader.js
-  nachgeladen (siehe utils.js, karte.js, views/geraete.js).
+  jsPDF/xlsx/Leaflet/ZXing werden jeweils nur bei tatsächlichem Bedarf über
+  vendorLoader.js nachgeladen (siehe docpdf.js, utils.js, karte.js,
+  views/geraete.js), statt bei jedem Seitenaufruf mitgeladen zu werden.
 -->
-<script src="js/vendor/jspdf.umd.min.js" defer></script>
-<script src="js/vendor/jspdf.plugin.autotable.min.js" defer></script>
 </body>
 </html>

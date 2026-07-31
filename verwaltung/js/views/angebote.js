@@ -258,12 +258,12 @@ let editor = createPositionsEditor({
       }
       const whatsappBtn = body.querySelector('#btn-whatsapp');
       if (whatsappBtn) {
-        whatsappBtn.addEventListener('click', () => {
+        whatsappBtn.addEventListener('click', async () => {
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
             text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
-            pdfBlob: buildDocPdfBlob(docOpts()),
+            pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Angebot-${data.nummer}.pdf`,
           });
         });

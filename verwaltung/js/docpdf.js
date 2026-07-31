@@ -1,4 +1,5 @@
 import { formatCurrency, formatDate, formatDateTime, hexToRgb } from './utils.js';
+import { loadJsPdf } from './vendorLoader.js';
 
 function logoFormat(dataUrl) {
   const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
@@ -99,7 +100,8 @@ function addFooter(doc, settings, marginX, rightX) {
   }
 }
 
-export function buildDocPdfBlob(opts) {
+export async function buildDocPdfBlob(opts) {
+  await loadJsPdf();
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }
@@ -394,11 +396,12 @@ function drawFotoGrid(doc, fotos, marginX, rightX, y, maxY) {
   return y + 2;
 }
 
-export function buildBerichtPdfBlob({
+export async function buildBerichtPdfBlob({
   settings, titel, untertitel, text, datum, raeume, fotos,
   unterschriftKunde, unterschriftMitarbeiter, unterschriften,
   kopfdaten, jaNeinAntworten, checklisteAntworten, tabellenAbschnitte,
 }) {
+  await loadJsPdf();
   if (!window.jspdf) {
     throw new Error('PDF-Bibliothek konnte nicht geladen werden.');
   }

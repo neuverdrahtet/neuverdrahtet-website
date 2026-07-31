@@ -51,3 +51,11 @@ export function loadZXing() {
   }
   return cache.get('zxing');
 }
+
+export function loadJsPdf() {
+  if (!cache.has('jspdf')) {
+    cache.set('jspdf', window.jspdf ? Promise.resolve() : loadScript('js/vendor/jspdf.umd.min.js')
+      .then(() => loadScript('js/vendor/jspdf.plugin.autotable.min.js')));
+  }
+  return cache.get('jspdf');
+}
