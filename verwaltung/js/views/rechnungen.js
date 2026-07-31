@@ -22,6 +22,41 @@ const ZAHLUNGSARTEN = [
   { id: 'ec', titel: 'EC-/Kartenzahlung' },
   { id: 'sonstige', titel: 'Sonstige' },
 ];
+const GRUENDE_STORNO = [
+  { id: 'fehler', titel: 'Fehler in der Rechnung' },
+  { id: 'auftrag_storniert', titel: 'Auftrag durch Kunden storniert' },
+  { id: 'doppelt', titel: 'Doppelt erstellt' },
+  { id: 'korrektur', titel: 'Preis-/Positionskorrektur nötig' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+
+function openStornoGrundDialog(nummer, onConfirm) {
+  const { body: dBody, close: dClose } = openModal({
+    title: `Rechnung ${nummer} stornieren`,
+    bodyHtml: `
+      <form id="storno-grund-form">
+        <p class="hint">Die Positionen werden mit negativem Betrag als neue, eigenständige Stornorechnung angelegt.</p>
+        <div class="field"><label>Grund der Stornierung</label>
+          <select name="stornoGrund">${GRUENDE_STORNO.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Notiz (optional)</label><input type="text" name="stornoGrundText"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="btn-storno-abbrechen">Abbrechen</button>
+          <button type="submit" class="btn btn-danger">Stornorechnung erstellen</button>
+        </div>
+      </form>
+    `,
+  });
+  dBody.querySelector('#btn-storno-abbrechen').addEventListener('click', dClose);
+  dBody.querySelector('#storno-grund-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const grund = fd.get('stornoGrund') || '';
+    const grundText = (fd.get('stornoGrundText') || '').toString().trim();
+    dClose();
+    onConfirm(grund, grundText);
+  });
+}
 
 export async function render(container) {
   let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken] = await Promise.all([
@@ -83,7 +118,7 @@ export async function render(container) {
               <td>${formatDate(r.datum)}</td>
               <td>${formatDate(r.faelligAm)}</td>
               <td>
-                <span class="badge ${STATUS_BADGE[r.status] || 'badge'}">${STATUS_LABEL[r.status] || r.status}</span>
+                <span class="badge ${STATUS_BADGE[r.status] || 'badge'}" ${r.stornoVonNummer && (r.stornoGrund || r.stornoGrundText) ? `title="${escapeHtml([GRUENDE_STORNO.find((g) => g.id === r.stornoGrund)?.titel, r.stornoGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[r.status] || r.status}</span>
                 ${overdue ? '<span class="badge badge-danger">überfällig</span>' : ''}
               </td>
               <td class="text-right">${formatCurrency(r.brutto)}${abschlagsSumme ? `<div class="text-mute" style="font-size:11px">Rest: ${formatCurrency(r.brutto - abschlagsSumme)}</div>` : ''}</td>
@@ -225,7 +260,7 @@ export async function render(container) {
       wide: true,
       bodyHtml: `
         <form id="re-form">
-          ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}
+          ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.stornoVonNummer && (data.stornoGrund || data.stornoGrundText) ? `Grund: ${escapeHtml([GRUENDE_STORNO.find((g) => g.id === data.stornoGrund)?.titel, data.stornoGrundText].filter(Boolean).join(' – '))}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}
           <div class="form-grid">
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Kunde *</label>
@@ -452,27 +487,29 @@ let editor = createPositionsEditor({
       }
       const stornoBtn = body.querySelector('#btn-storno');
       if (stornoBtn) {
-        stornoBtn.addEventListener('click', async () => {
-          if (!confirmDelete(`Stornorechnung zu ${data.nummer} erstellen? Die Positionen werden mit negativem Betrag als neue, eigenständige Rechnung angelegt.`)) return;
-          const currentSettings = await getSettings();
-          const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-            currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
-          );
-          await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
-          const stornoPositionen = data.positionen.map((p) => ({ ...p, id: uid(), menge: -(Number(p.menge) || 0) }));
-          const stornoTotals = calcTotals(stornoPositionen);
-          const storno = {
-            id: uid(), nummer: stornoNummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: null,
-            datum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${data.nummer}`,
-            notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
-            versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: data.nummer, storniertDurchNummer: '',
-            netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
-          };
-          await put('rechnungen', storno);
-          await put('rechnungen', { ...data, status: 'storniert', storniertDurchNummer: stornoNummer });
-          toast(`Stornorechnung ${stornoNummer} angelegt`, 'success');
-          close();
-          render(container);
+        stornoBtn.addEventListener('click', () => {
+          openStornoGrundDialog(data.nummer, async (stornoGrund, stornoGrundText) => {
+            const currentSettings = await getSettings();
+            const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+              currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
+            );
+            await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
+            const stornoPositionen = data.positionen.map((p) => ({ ...p, id: uid(), menge: -(Number(p.menge) || 0) }));
+            const stornoTotals = calcTotals(stornoPositionen);
+            const storno = {
+              id: uid(), nummer: stornoNummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: null,
+              datum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${data.nummer}`,
+              notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
+              versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: data.nummer, storniertDurchNummer: '',
+              netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
+              stornoGrund, stornoGrundText,
+            };
+            await put('rechnungen', storno);
+            await put('rechnungen', { ...data, status: 'storniert', storniertDurchNummer: stornoNummer });
+            toast(`Stornorechnung ${stornoNummer} angelegt`, 'success');
+            close();
+            render(container);
+          });
         });
       }
       function getEffectiveSettings() {

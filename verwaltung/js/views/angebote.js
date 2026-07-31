@@ -18,6 +18,14 @@ const STATUS_LABEL = {
 const STATUS_BADGE = {
   entwurf: 'badge', versendet: 'badge-accent', angenommen: 'badge-success', abgelehnt: 'badge-danger',
 };
+const GRUENDE_ABLEHNUNG = [
+  { id: 'preis', titel: 'Preis zu hoch' },
+  { id: 'konkurrenz', titel: 'Anderer Anbieter beauftragt' },
+  { id: 'verschoben', titel: 'Projekt verschoben / auf Eis gelegt' },
+  { id: 'entfaellt', titel: 'Projekt entfällt' },
+  { id: 'keine_rueckmeldung', titel: 'Keine Rückmeldung vom Kunden' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
 
 export async function render(container) {
   let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
@@ -76,7 +84,7 @@ export async function render(container) {
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${formatDate(a.datum)}</td>
               <td>${formatDate(a.gueltigBis)}</td>
-              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}">${STATUS_LABEL[a.status] || a.status}</span></td>
+              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}" ${a.status === 'abgelehnt' && (a.ablehnungsgrund || a.ablehnungsgrundText) ? `title="${escapeHtml([GRUENDE_ABLEHNUNG.find((g) => g.id === a.ablehnungsgrund)?.titel, a.ablehnungsgrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[a.status] || a.status}</span></td>
               <td class="text-right">${formatCurrency(a.brutto)}</td>
             </tr>
           `).join('')}
@@ -140,7 +148,7 @@ export async function render(container) {
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
       status: 'entwurf', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
-      unterschriftKunde: '',
+      unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '',
     };
 
     const suggestedNummer = !isEdit
@@ -167,7 +175,14 @@ export async function render(container) {
               <select name="steuerart" id="f-steuerart">${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
             ${isEdit ? `<div class="field"><label>Status</label>
-              <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+              <select name="status" id="f-status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+            </div>
+            <div class="col-span-2" id="ablehnung-grund-section" ${data.status === 'abgelehnt' ? '' : 'hidden'}>
+              <div class="field">
+                <label>Grund der Ablehnung</label>
+                <select name="ablehnungsgrund">${GRUENDE_ABLEHNUNG.map((g) => `<option value="${g.id}" ${g.id === data.ablehnungsgrund ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
+                <input type="text" name="ablehnungsgrundText" value="${escapeHtml(data.ablehnungsgrundText || '')}" placeholder="Notiz (optional)" style="margin-top:6px">
+              </div>
             </div>` : ''}
           </div>
           <div class="divider"></div>
@@ -231,6 +246,12 @@ let editor = createPositionsEditor({
       }
     }
     renderSig();
+
+    if (isEdit) {
+      body.querySelector('#f-status').addEventListener('change', (e) => {
+        body.querySelector('#ablehnung-grund-section').hidden = e.target.value !== 'abgelehnt';
+      });
+    }
 
     body.querySelector('#f-steuerart').addEventListener('change', (e) => {
       if (e.target.value !== 'regel') {
@@ -399,7 +420,16 @@ let editor = createPositionsEditor({
       updated.betreff = (fd.get('betreff') || '').toString().trim();
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.steuerart = fd.get('steuerart') || 'regel';
-      if (isEdit) updated.status = fd.get('status') || data.status;
+      if (isEdit) {
+        updated.status = fd.get('status') || data.status;
+        if (updated.status === 'abgelehnt') {
+          updated.ablehnungsgrund = fd.get('ablehnungsgrund') || '';
+          updated.ablehnungsgrundText = (fd.get('ablehnungsgrundText') || '').toString().trim();
+        } else {
+          updated.ablehnungsgrund = '';
+          updated.ablehnungsgrundText = '';
+        }
+      }
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
       updated.unterschriftKunde = sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : '');
 
