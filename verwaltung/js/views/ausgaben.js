@@ -164,8 +164,10 @@ export async function render(container) {
       id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
       projektId: '', kundeId: '', kalkKategorie: '',
+      bezahlstatus: '', faelligAm: '', bezahltAm: '',
       ...prefill,
     };
+    const istOffeneKreditorenRechnung = isEdit && data.bezahlstatus === 'offen';
     const { body, close } = openModal({
       title: isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe',
       bodyHtml: `
@@ -207,16 +209,46 @@ export async function render(container) {
               <input type="file" accept="image/*,application/pdf" id="beleg-input">
               <div id="beleg-preview">${data.beleg ? '<a href="#" class="btn btn-sm" id="beleg-view-link">📎 Beleg ansehen</a>' : ''}</div>
             </div>
+            ${istOffeneKreditorenRechnung ? `
+              <div class="card col-span-2" style="background:#fff6e0;border-color:#f0d78c">
+                <p class="mb-0">⚠️ Diese Ausgabe ist als offene Lieferantenrechnung erfasst${data.faelligAm ? ` - fällig am ${escapeHtml(data.faelligAm)}` : ''}. Sie wird erst als Betriebsausgabe verbucht, wenn sie als bezahlt markiert wird.</p>
+              </div>
+              <div class="field"><label>Bezahlt am</label><input type="date" id="ausgabe-bezahlt-am" value="${todayISO()}"></div>
+              <div class="field"><button type="button" class="btn btn-primary" id="btn-jetzt-bezahlt" style="margin-top:22px">Jetzt als bezahlt markieren</button></div>
+            ` : `
+              <div class="field col-span-2">
+                <label><input type="checkbox" name="nochNichtBezahlt" id="ausgabe-offen-checkbox" ${data.bezahlstatus === 'offen' ? 'checked' : ''}> Diese Ausgabe ist noch nicht bezahlt (Lieferantenrechnung)</label>
+              </div>
+              <div class="col-span-2" id="ausgabe-faellig-section" ${data.bezahlstatus === 'offen' ? '' : 'hidden'}>
+                <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm || ''}"></div>
+              </div>
+            `}
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
-            <button type="submit" class="btn btn-primary">Speichern</button>
+            ${istOffeneKreditorenRechnung ? '' : '<button type="submit" class="btn btn-primary">Speichern</button>'}
           </div>
         </form>
       `,
     });
+
+    if (!istOffeneKreditorenRechnung) {
+      body.querySelector('#ausgabe-offen-checkbox').addEventListener('change', (e) => {
+        body.querySelector('#ausgabe-faellig-section').hidden = !e.target.checked;
+      });
+    } else {
+      body.querySelector('#btn-jetzt-bezahlt').addEventListener('click', async () => {
+        const bezahltAm = body.querySelector('#ausgabe-bezahlt-am').value || todayISO();
+        const updated = { ...data, bezahlstatus: 'bezahlt', bezahltAm };
+        await put('ausgaben', updated);
+        try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
+        toast('Ausgabe als bezahlt markiert', 'success');
+        close();
+        render(container);
+      });
+    }
 
     body.querySelector('#ausgabe-projekt').addEventListener('change', (e) => {
       body.querySelector('#ausgabe-kalkkategorie').disabled = !e.target.value;
@@ -286,6 +318,10 @@ export async function render(container) {
       updated.projektId = fd.get('projektId') || '';
       updated.kundeId = fd.get('kundeId') || '';
       updated.kalkKategorie = updated.projektId ? (fd.get('kalkKategorie') || '') : '';
+      const nochNichtBezahlt = body.querySelector('#ausgabe-offen-checkbox')?.checked || false;
+      updated.bezahlstatus = nochNichtBezahlt ? 'offen' : '';
+      updated.faelligAm = nochNichtBezahlt ? (fd.get('faelligAm') || '') : '';
+      updated.bezahltAm = nochNichtBezahlt ? '' : updated.bezahltAm || '';
       await put('ausgaben', updated);
       try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
       toast(isEdit ? 'Ausgabe aktualisiert' : 'Ausgabe erfasst', 'success');

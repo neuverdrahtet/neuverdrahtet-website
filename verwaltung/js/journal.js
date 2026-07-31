@@ -57,34 +57,61 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
   return buchungen;
 }
 
-/** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine erfasste Ausgabe. */
+/** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine erfasste Ausgabe.
+ * Drei Fälle je nach `bezahlstatus`:
+ * - kein `bezahlstatus` (Standard/Altbestand): sofort bezahlter Beleg, wie bisher
+ *   direkt gegen Bank/Kasse gebucht.
+ * - `'offen'` (noch nicht bezahlte Lieferantenrechnung): Aufwand + Vorsteuer
+ *   gegen Verbindlichkeiten (Konto 1600), kein Bank-/Kasse-Kontakt.
+ * - `'bezahlt'` (aus 'offen' heraus beglichen): die Verbindlichkeiten-Buchungen
+ *   bleiben (datiert auf `datum`) und eine dritte Buchung gleicht die
+ *   Verbindlichkeit gegen Bank/Kasse aus (datiert auf `bezahltAm`). */
 export function erzeugeBuchungenFuerAusgabe(a, { konten, settings }) {
-  const geldKonto = bankOderKasse(konten, settings, a.bezahltMit);
-  if (!geldKonto) return [];
   const aufwandKonto = findKonto(konten, 'konto-4900', settings.datevAufwandKonto || '4900');
   if (!aufwandKonto) return [];
-  const belegtext = `${a.kategorie || 'Ausgabe'}${a.beschreibung ? `: ${a.beschreibung}` : ''}`;
+  const belegtext = `${a.kategorie || 'Ausgabe'}${a.beschreibung ? `: ${a.beschreibung}` : ''}${a.lieferant ? ` (${a.lieferant})` : ''}`;
   const quelle = { typ: 'ausgabe', id: a.id };
   const buchungen = [];
   const netto = a.betragNetto || 0;
   const vorsteuer = (a.betragBrutto || 0) - netto;
+  const vorsteuerSatz = netto ? Math.round((vorsteuer / netto) * 100) : Number(a.steuersatz) || 19;
+  const vorsteuerKonto = findKonto(konten, vorsteuerSatz === 7 ? 'konto-1571' : 'konto-1576', vorsteuerSatz === 7 ? '1571' : '1576');
+
+  const istOffenOderKreditor = a.bezahlstatus === 'offen' || a.bezahlstatus === 'bezahlt';
+  let gegenkonto;
+  if (istOffenOderKreditor) {
+    gegenkonto = findKonto(konten, 'konto-1600', '1600');
+  } else {
+    gegenkonto = bankOderKasse(konten, settings, a.bezahltMit);
+  }
+  if (!gegenkonto) return [];
 
   if (netto) {
     buchungen.push({
-      id: uid(), datum: a.datum, text: belegtext, sollKontoId: aufwandKonto.id, habenKontoId: geldKonto.id,
+      id: uid(), datum: a.datum, text: belegtext, sollKontoId: aufwandKonto.id, habenKontoId: gegenkonto.id,
       betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
     });
   }
-  if (vorsteuer) {
-    const satz = netto ? Math.round((vorsteuer / netto) * 100) : Number(a.steuersatz) || 19;
-    const vorsteuerKonto = findKonto(konten, satz === 7 ? 'konto-1571' : 'konto-1576', satz === 7 ? '1571' : '1576');
-    if (vorsteuerKonto) {
+  if (vorsteuer && vorsteuerKonto) {
+    buchungen.push({
+      id: uid(), datum: a.datum, text: `${belegtext} (Vorsteuer)`, sollKontoId: vorsteuerKonto.id, habenKontoId: gegenkonto.id,
+      betrag: Math.round(vorsteuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+    });
+  }
+
+  // Kreditorenrechnung inzwischen beglichen: Verbindlichkeit gegen Bank/Kasse ausgleichen.
+  if (a.bezahlstatus === 'bezahlt') {
+    const geldKonto = bankOderKasse(konten, settings, a.bezahltMit);
+    const verbindlichkeitenKonto = gegenkonto;
+    if (geldKonto && (a.betragBrutto || 0)) {
       buchungen.push({
-        id: uid(), datum: a.datum, text: `${belegtext} (Vorsteuer)`, sollKontoId: vorsteuerKonto.id, habenKontoId: geldKonto.id,
-        betrag: Math.round(vorsteuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+        id: uid(), datum: a.bezahltAm || a.datum, text: `${belegtext} (Zahlungsausgleich)`,
+        sollKontoId: verbindlichkeitenKonto.id, habenKontoId: geldKonto.id,
+        betrag: Math.round((a.betragBrutto || 0) * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
       });
     }
   }
+
   return buchungen;
 }
 

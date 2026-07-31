@@ -602,22 +602,33 @@ export async function render(container) {
   container.querySelector('#bilanz-jahr-select').addEventListener('change', renderBilanz);
   container.querySelector('#bilanz-stichtag').addEventListener('change', renderBilanz);
 
-  function renderOffenePosten() {
+  async function renderOffenePosten() {
     const host = container.querySelector('#offeneposten-host');
     const today = todayISO();
-    const offene = rechnungen
+    const offeneRechnungen = rechnungen
       .filter((r) => r.status === 'offen' || r.status === 'teilbezahlt')
       .sort((a, b) => (a.faelligAm || '').localeCompare(b.faelligAm || ''));
-    const summe = offene.reduce((s, r) => s + (r.brutto || 0), 0);
+    const summeDebitoren = offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0);
+
+    const offeneAusgaben = ausgaben
+      .filter((a) => a.bezahlstatus === 'offen')
+      .sort((a, b) => (a.faelligAm || '').localeCompare(b.faelligAm || ''));
+    const summeKreditoren = offeneAusgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+
+    const konten = await getAll('konten');
+    const alleBuchungen = await getAll('buchungen');
+    const verbindlichkeitenSaldo = kontoSumme(summeJeKonto(alleBuchungen, konten, ['passiv'], false), '1600');
+
     host.innerHTML = `
+      <h3>Debitoren</h3>
       <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-value">${offene.length}</div><div class="kpi-label">Offene Rechnungen</div></div>
-        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summe)}</div><div class="kpi-label">Summe offen (brutto)</div></div>
+        <div class="kpi-card"><div class="kpi-value">${offeneRechnungen.length}</div><div class="kpi-label">Offene Rechnungen</div></div>
+        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summeDebitoren)}</div><div class="kpi-label">Summe offen (brutto)</div></div>
       </div>
       <table class="data-table">
         <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Status</th><th class="text-right">Betrag (brutto)</th></tr></thead>
         <tbody>
-          ${offene.map((r) => {
+          ${offeneRechnungen.map((r) => {
             const overdue = r.faelligAm && r.faelligAm < today;
             return `
               <tr${overdue ? ' style="color:var(--danger,#c0392b)"' : ''}>
@@ -629,6 +640,29 @@ export async function render(container) {
               </tr>
             `;
           }).join('') || '<tr><td colspan="5">Keine offenen Rechnungen.</td></tr>'}
+        </tbody>
+      </table>
+
+      <h3 style="margin-top:24px">Kreditoren</h3>
+      <p class="hint">Noch nicht bezahlte Lieferantenrechnungen. Konto 1600 (Verbindlichkeiten) Saldo laut Journal: ${formatCurrency(verbindlichkeitenSaldo)}.</p>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${offeneAusgaben.length}</div><div class="kpi-label">Offene Lieferantenrechnungen</div></div>
+        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summeKreditoren)}</div><div class="kpi-label">Summe offen (brutto)</div></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Lieferant</th><th>Beschreibung</th><th>Fällig am</th><th class="text-right">Betrag (brutto)</th></tr></thead>
+        <tbody>
+          ${offeneAusgaben.map((a) => {
+            const overdue = a.faelligAm && a.faelligAm < today;
+            return `
+              <tr${overdue ? ' style="color:var(--danger,#c0392b)"' : ''}>
+                <td>${escapeHtml(a.lieferant || '–')}</td>
+                <td>${escapeHtml(a.beschreibung || a.kategorie || '')}</td>
+                <td>${formatDate(a.faelligAm)}${overdue ? ' ⚠️' : ''}</td>
+                <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
+              </tr>
+            `;
+          }).join('') || '<tr><td colspan="4">Keine offenen Lieferantenrechnungen.</td></tr>'}
         </tbody>
       </table>
     `;
