@@ -47,7 +47,7 @@ export async function render(container) {
             return `
               <tr>
                 <td>${meta.icon} ${escapeHtml(meta.label)}</td>
-                <td>${escapeHtml(meta.title(e))}</td>
+                <td ${e.loeschGrundLabel || e.loeschGrundText ? `title="${escapeHtml([e.loeschGrundLabel, e.loeschGrundText].filter(Boolean).join(' – '))}"` : ''}>${escapeHtml(meta.title(e))}</td>
                 <td>${formatDateTime(e._geloeschtAm)}</td>
                 <td class="text-right">
                   <button type="button" class="btn btn-sm" data-restore data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">↩️ Wiederherstellen</button>
