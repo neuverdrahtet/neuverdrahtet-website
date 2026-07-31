@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
+import { buildXRechnungBlob, xRechnungFilename } from '../xrechnung.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
@@ -262,6 +263,7 @@ export async function render(container) {
             ${isEdit && !locked ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit && locked && data.status !== 'storniert' ? '<button type="button" class="btn btn-danger" id="btn-storno">Stornieren</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-xrechnung" title="E-Rechnung im XRechnung-Format (UBL-XML)">XRechnung (XML)</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
             ${isEdit ? `<button type="button" class="btn" id="btn-lexoffice-transfer">🧾 ${data.lexofficeId ? 'In lexoffice öffnen' : 'An lexoffice übertragen'}</button>` : ''}
@@ -445,6 +447,7 @@ let editor = createPositionsEditor({
               : '') +
             `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
           abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
+          faelligAm: data.faelligAm, steuerart: data.steuerart || 'regel',
         };
       }
       async function markVersendetUndSperren() {
@@ -459,6 +462,15 @@ let editor = createPositionsEditor({
       body.querySelector('#btn-print').addEventListener('click', async () => {
         printHtml(buildDocHtml(docOpts()), settings);
         if (!locked) await markVersendetUndSperren();
+      });
+      body.querySelector('#btn-xrechnung').addEventListener('click', () => {
+        const blob = buildXRechnungBlob(docOpts());
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = xRechnungFilename(data.nummer);
+        a.click();
+        URL.revokeObjectURL(url);
       });
       const emailBtn = body.querySelector('#btn-email');
       if (emailBtn) {
