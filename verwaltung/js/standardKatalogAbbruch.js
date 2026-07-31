@@ -68,6 +68,9 @@ export const STANDARD_KATALOG_ABBRUCH = [
     artikel('Absperr-/Schutzfolie (Rolle 4x5m)', 'Stk.', 8),
     artikel('Malerkrepp/Klebeband für Abtrennung (Rolle)', 'Stk.', 4),
     artikel('Bauabsperrband (Rolle 500m)', 'Stk.', 12),
+    artikel('Bagster Big Bag Bauschutt-Entsorgungssack (1m³)', 'Stk.', 10),
+    artikel('Layher Gerüst mieten (Fassadengerüst, je m²/Woche)', 'm²', 7),
+    artikel('Tesa Präzisionskrepp Malerkrepp (Rolle 50m)', 'Stk.', 8),
   ]),
 
   // --- Materialien: Schutzausrüstung ---
@@ -75,5 +78,7 @@ export const STANDARD_KATALOG_ABBRUCH = [
     artikel('Staubschutzmaske FFP2 (Packung 10 Stk.)', 'Stk.', 15),
     artikel('Einweg-Schutzanzug', 'Stk.', 6),
     artikel('Handschuhe Arbeitsschutz (Paar)', 'Stk.', 3),
+    artikel('3M Aura FFP2 Atemschutzmaske ohne Ventil (Packung 10 Stk.)', 'Stk.', 8.4),
+    artikel('DuPont Tyvek Classic Xpert Einweg-Schutzanzug', 'Stk.', 7.55),
   ]),
 ];
