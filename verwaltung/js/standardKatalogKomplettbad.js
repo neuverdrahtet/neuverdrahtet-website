@@ -61,6 +61,10 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
     artikel('Dusch-Rinne/Bodenablauf', 'Stk.', 130),
     artikel('Duschabtrennung (Set, 90x90)', 'Stk.', 320),
     artikel('Badewanne Acryl Standard (170x75)', 'Stk.', 260),
+    artikel('Geberit Duofix Vorwandelement für Wand-WC (112cm, mit Sigma UP-Spülkasten 12cm)', 'Stk.', 176.3),
+    artikel('Villeroy & Boch Subway 2.0 Wand-WC, spülrandlos (DirectFlush)', 'Stk.', 213.4),
+    artikel('Duravit D-Code Wand-WC, Tiefspüler', 'Stk.', 95.55),
+    artikel('Kaldewei Cayono Duo Stahl-Email-Badewanne (170x75cm)', 'Stk.', 331.3),
   ]),
 
   // --- Materialien: Armaturen & Zubehör ---
@@ -73,5 +77,8 @@ export const STANDARD_KATALOG_KOMPLETTBAD = [
     artikel('Bad-Lüfter mit Nachlauf', 'Stk.', 65),
     artikel('Dusch-WC (Basismodell)', 'Stk.', 650),
     artikel('Haltegriff/Stützklappgriff barrierefrei', 'Stk.', 45),
+    artikel('Geberit Sigma20 Betätigungsplatte (weiß/verchromt)', 'Stk.', 41.8),
+    artikel('Grohe Eurosmart Waschtischarmatur', 'Stk.', 45.75),
+    artikel('Hansgrohe Focus 100 Waschtischarmatur (mit Ablaufgarnitur)', 'Stk.', 77.8),
   ]),
 ];
