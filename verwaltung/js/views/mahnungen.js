@@ -13,6 +13,43 @@ const STUFE_TEXT = {
   3: (settings, frist) => `trotz mehrfacher Zahlungsaufforderung ist der offene Betrag weiterhin nicht bei uns eingegangen. Wir fordern Sie hiermit letztmalig auf, den Gesamtbetrag zzgl. Mahngebühr innerhalb von ${frist} Tagen zu begleichen. Andernfalls sehen wir uns gezwungen, weitere Schritte zur Beitreibung der Forderung einzuleiten.`,
 };
 
+const GRUENDE_MAHNUNG_LOESCHEN = [
+  { id: 'rechnung_bezahlt', titel: 'Rechnung wurde bezahlt' },
+  { id: 'rechnung_storniert', titel: 'Rechnung wurde storniert' },
+  { id: 'irrtuemlich', titel: 'Mahnung irrtümlich erstellt' },
+  { id: 'ratenzahlung', titel: 'Ratenzahlung/Sondervereinbarung mit Kunde' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+
+function openMahnungGrundDialog(titel, onConfirm) {
+  const { body: dBody, close: dClose } = openModal({
+    title: titel,
+    bodyHtml: `
+      <form id="mahnung-grund-form">
+        <p class="hint">Die Mahnung wird in den Papierkorb verschoben.</p>
+        <div class="field"><label>Grund</label>
+          <select name="loeschGrund">${GRUENDE_MAHNUNG_LOESCHEN.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Notiz (optional)</label><input type="text" name="loeschGrundText"></div>
+        <div class="modal-actions">
+          <button type="button" class="btn" id="btn-mahnung-grund-abbrechen">Abbrechen</button>
+          <button type="submit" class="btn btn-danger">In den Papierkorb verschieben</button>
+        </div>
+      </form>
+    `,
+  });
+  dBody.querySelector('#btn-mahnung-grund-abbrechen').addEventListener('click', dClose);
+  dBody.querySelector('#mahnung-grund-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const grund = fd.get('loeschGrund') || '';
+    const grundText = (fd.get('loeschGrundText') || '').toString().trim();
+    const grundLabel = GRUENDE_MAHNUNG_LOESCHEN.find((g) => g.id === grund)?.titel || '';
+    dClose();
+    onConfirm(grund, grundText, grundLabel);
+  });
+}
+
 export async function render(container) {
   let [rechnungen, kunden, mahnungen, settings, projekte, marken] = await Promise.all([
     getAll('rechnungen'), getAll('kunden'), getAll('mahnungen'), getSettings(), getAll('projekte'), getAll('marken'),
@@ -159,13 +196,16 @@ export async function render(container) {
       btn.addEventListener('click', (e) => { e.stopPropagation(); whatsappMahnung(mahnungen.find((m) => m.id === btn.dataset.id)); });
     });
     mahnungenTableHost.querySelectorAll('.btn-del-mahnung').forEach((btn) => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        if (!confirmDelete('Mahnung in den Papierkorb verschieben?')) return;
-        await remove('mahnungen', btn.dataset.id);
-        toast('Mahnung in den Papierkorb verschoben');
-        mahnungen = mahnungen.filter((m) => m.id !== btn.dataset.id);
-        renderMahnungenTable();
+        const m = mahnungen.find((mm) => mm.id === btn.dataset.id);
+        openMahnungGrundDialog(`Mahnung${m ? ' Stufe ' + m.stufe : ''} löschen`, async (grund, grundText, grundLabel) => {
+          if (m) await put('mahnungen', { ...m, loeschGrund: grund, loeschGrundText: grundText, loeschGrundLabel: grundLabel });
+          await remove('mahnungen', btn.dataset.id);
+          toast('Mahnung in den Papierkorb verschoben');
+          mahnungen = mahnungen.filter((mm) => mm.id !== btn.dataset.id);
+          renderMahnungenTable();
+        });
       });
     });
     bulk.wire(mahnungenTableHost, {
@@ -289,12 +329,14 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#btn-delete-mahn').addEventListener('click', async () => {
-      if (!confirmDelete('Mahnung in den Papierkorb verschieben?')) return;
-      await remove('mahnungen', m.id);
-      toast('Mahnung in den Papierkorb verschoben');
-      close();
-      render(container);
+    body.querySelector('#btn-delete-mahn').addEventListener('click', () => {
+      openMahnungGrundDialog(`Mahnung Stufe ${m.stufe} löschen`, async (grund, grundText, grundLabel) => {
+        await put('mahnungen', { ...m, loeschGrund: grund, loeschGrundText: grundText, loeschGrundLabel: grundLabel });
+        await remove('mahnungen', m.id);
+        toast('Mahnung in den Papierkorb verschoben');
+        close();
+        render(container);
+      });
     });
     body.querySelector('#mahn-edit-form').addEventListener('submit', async (e) => {
       e.preventDefault();
