@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, KONTEN_KLASSEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, toast } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
@@ -8,6 +8,7 @@ const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel
 const BUCH_NAV = [
   { id: 'uebersicht', icon: '📊', label: 'Übersicht' },
   { id: 'kontenplan', icon: '📒', label: 'Kontenplan' },
+  { id: 'journal', icon: '📓', label: 'Journal' },
 ];
 
 function deNum(n) {
@@ -80,6 +81,18 @@ export async function render(container) {
           <h2>Kontenplan</h2>
           <p class="hint">Kern-Kontenplan nach SKR03 - frei erweiterbar. Ersetzt keine steuerliche Beratung; die endgültige Kontenzuordnung bleibt Aufgabe deines Steuerberaters.</p>
           <div id="kontenplan-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="journal" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Journal</h2>
+            <div class="actions">
+              <select id="journal-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+              <select id="journal-konto-select"><option value="">Alle Konten</option></select>
+              <button type="button" class="btn btn-primary" id="btn-buchung-neu">+ Manuelle Buchung</button>
+            </div>
+          </div>
+          <p class="hint">Automatisch aus bezahlten Rechnungen und erfassten Ausgaben erzeugte Buchungssätze sind nicht direkt editierbar (nur über die Quelle korrigierbar) - nur manuell erfasste Buchungen lassen sich hier löschen.</p>
+          <div id="journal-host"></div>
         </div>
       </div>
     </div>
@@ -330,6 +343,137 @@ export async function render(container) {
     }
   }
 
+  async function renderJournal() {
+    const journalHost = container.querySelector('#journal-host');
+    const jahrSelect = container.querySelector('#journal-jahr-select');
+    const kontoSelect = container.querySelector('#journal-konto-select');
+    const konten = await getAll('konten');
+    konten.sort((a, b) => a.nummer.localeCompare(b.nummer));
+    const kontenById = Object.fromEntries(konten.map((k) => [k.id, k]));
+
+    if (!kontoSelect.dataset.filled) {
+      kontoSelect.insertAdjacentHTML('beforeend', konten.map((k) => `<option value="${k.id}">${escapeHtml(k.nummer)} – ${escapeHtml(k.name)}</option>`).join(''));
+      kontoSelect.dataset.filled = '1';
+    }
+
+    const alleBuchungen = await getAll('buchungen');
+    const jJahr = jahrSelect.value || String(new Date().getFullYear());
+    const jKontoId = kontoSelect.value;
+    let jBuchungen = alleBuchungen.filter((b) => (b.datum || '').slice(0, 4) === jJahr);
+    jBuchungen.sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+
+    function kontoLabel(id) {
+      const k = kontenById[id];
+      return k ? `${k.nummer} ${k.name}` : '(unbekanntes Konto)';
+    }
+
+    if (jKontoId) {
+      // Kontenblatt: nur Buchungen, die dieses Konto auf Soll- oder Haben-Seite betreffen, mit laufendem Saldo.
+      const konto = kontenById[jKontoId];
+      const kontenblatt = jBuchungen.filter((b) => b.sollKontoId === jKontoId || b.habenKontoId === jKontoId);
+      const normalsaldoSoll = konto?.klasse === 'aktiv' || konto?.klasse === 'aufwand';
+      let saldo = 0;
+      const zeilen = kontenblatt.map((b) => {
+        const istSoll = b.sollKontoId === jKontoId;
+        saldo += (istSoll === normalsaldoSoll ? 1 : -1) * b.betrag;
+        return { b, istSoll, saldo };
+      });
+      journalHost.innerHTML = `
+        <h3>Kontenblatt ${escapeHtml(konto?.nummer || '')} ${escapeHtml(konto?.name || '')}</h3>
+        <table class="data-table">
+          <thead><tr><th>Datum</th><th>Text</th><th>Gegenkonto</th><th class="text-right">Soll</th><th class="text-right">Haben</th><th class="text-right">Saldo</th></tr></thead>
+          <tbody>
+            ${zeilen.map(({ b, istSoll, saldo: s }) => `
+              <tr>
+                <td>${formatDate(b.datum)}</td>
+                <td>${escapeHtml(b.text)}</td>
+                <td>${escapeHtml(kontoLabel(istSoll ? b.habenKontoId : b.sollKontoId))}</td>
+                <td class="text-right">${istSoll ? formatCurrency(b.betrag) : ''}</td>
+                <td class="text-right">${!istSoll ? formatCurrency(b.betrag) : ''}</td>
+                <td class="text-right">${formatCurrency(s)}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="6">Keine Buchungen im gewählten Jahr.</td></tr>'}
+          </tbody>
+        </table>
+      `;
+      return;
+    }
+
+    journalHost.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Datum</th><th>Text</th><th>Soll</th><th>Haben</th><th class="text-right">Betrag</th><th></th></tr></thead>
+        <tbody>
+          ${jBuchungen.map((b) => `
+            <tr>
+              <td>${formatDate(b.datum)}</td>
+              <td>${escapeHtml(b.text)}</td>
+              <td>${escapeHtml(kontoLabel(b.sollKontoId))}</td>
+              <td>${escapeHtml(kontoLabel(b.habenKontoId))}</td>
+              <td class="text-right">${formatCurrency(b.betrag)}</td>
+              <td class="text-right">${b.manuell ? `<button class="btn btn-sm btn-danger" data-delete-buchung="${b.id}">Löschen</button>` : ''}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="6">Keine Buchungen im gewählten Jahr.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+    journalHost.querySelectorAll('[data-delete-buchung]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirmDelete('Buchung wirklich löschen?')) return;
+        await remove('buchungen', btn.dataset.deleteBuchung);
+        toast('Buchung gelöscht', 'success');
+        renderJournal();
+      });
+    });
+  }
+
+  container.querySelector('#journal-jahr-select').addEventListener('change', renderJournal);
+  container.querySelector('#journal-konto-select').addEventListener('change', renderJournal);
+  container.querySelector('#btn-buchung-neu').addEventListener('click', async () => {
+    const konten = await getAll('konten');
+    konten.sort((a, b) => a.nummer.localeCompare(b.nummer));
+    const kontoOptions = konten.map((k) => `<option value="${k.id}">${escapeHtml(k.nummer)} – ${escapeHtml(k.name)}</option>`).join('');
+    const { body, close } = openModal({
+      title: 'Manuelle Buchung',
+      bodyHtml: `
+        <form id="buchung-form">
+          <div class="form-grid">
+            <div class="field"><label>Datum *</label><input type="date" name="datum" required value="${new Date().toISOString().slice(0, 10)}"></div>
+            <div class="field"><label>Betrag (€) *</label><input type="number" step="0.01" min="0.01" name="betrag" required></div>
+            <div class="field"><label>Soll-Konto *</label><select name="sollKontoId" required>${kontoOptions}</select></div>
+            <div class="field"><label>Haben-Konto *</label><select name="habenKontoId" required>${kontoOptions}</select></div>
+            <div class="field col-span-2"><label>Text *</label><input name="text" required placeholder="z.B. Privatentnahme"></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Buchen</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#buchung-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const sollKontoId = fd.get('sollKontoId');
+      const habenKontoId = fd.get('habenKontoId');
+      const betrag = Number(fd.get('betrag')) || 0;
+      const text = (fd.get('text') || '').toString().trim();
+      if (!sollKontoId || !habenKontoId || sollKontoId === habenKontoId || betrag <= 0 || !text) {
+        toast('Bitte Soll-/Haben-Konto (unterschiedlich), Betrag und Text angeben', 'danger');
+        return;
+      }
+      await put('buchungen', {
+        id: uid(), datum: fd.get('datum') || todayISO(), text, sollKontoId, habenKontoId, betrag,
+        quelle: null, manuell: true, createdAt: new Date().toISOString(),
+      });
+      toast('Buchung gespeichert', 'success');
+      close();
+      renderJournal();
+    });
+  });
+
   renderContent();
   renderKontenplan();
+  renderJournal();
 }

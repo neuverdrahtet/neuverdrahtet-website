@@ -13,6 +13,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import * as lexoffice from '../lexoffice.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
+import * as journal from '../journal.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -69,6 +70,13 @@ export async function render(container) {
   let filtered = rechnungen;
   const today = todayISO();
 
+  // Buchungssatz-Sync ist ein Komfort-Feature (doppelte Buchführung in der
+  // Buchhaltung-Seite) - ein Fehler dabei darf das eigentliche Speichern der
+  // Rechnung nie verhindern.
+  async function syncBuchung(r) {
+    try { await journal.syncBuchungFuerRechnung(r, settings); } catch { /* siehe oben */ }
+  }
+
   function exportOptsFor(r) {
     const istAbschlag = r.rechnungstyp === 'abschlag';
     const kunde = kundenById[r.kundeId];
@@ -119,6 +127,11 @@ export async function render(container) {
 
   const bulk = createBulkSelect('rechnungen', {
     label: 'Rechnungen',
+    deleteFn: async (id) => {
+      await remove('rechnungen', id);
+      const r = rechnungen.find((x) => x.id === id);
+      if (r) await syncBuchung({ ...r, status: 'geloescht' });
+    },
     extraActions: [
       { id: 'bulk-export-pdf', label: '📄 Als PDF', onClick: (ids) => exportPdf(rechnungen.filter((r) => ids.includes(r.id)), 'Rechnungen-Auswahl.zip') },
       { id: 'bulk-export-csv', label: '📊 Als CSV', onClick: (ids) => exportCsv(rechnungen.filter((r) => ids.includes(r.id))) },
@@ -280,6 +293,7 @@ export async function render(container) {
       });
       const persisted = { ...rechnung, lexofficeId: result.id, lexofficeExportedAt: new Date().toISOString() };
       await put('rechnungen', persisted);
+      await syncBuchung(persisted);
       Object.assign(rechnung, persisted);
       toast('Rechnungsentwurf in lexoffice erstellt.', 'success');
       if (result?.id) window.open(`https://app.lexoffice.io/rechnungen/edit/${result.id}`, '_blank', 'noopener');
@@ -542,6 +556,7 @@ let editor = createPositionsEditor({
         deleteBtn.addEventListener('click', async () => {
           if (!confirmDelete(`Rechnung ${data.nummer} in den Papierkorb verschieben?`)) return;
           await remove('rechnungen', data.id);
+          await syncBuchung({ ...data, status: 'geloescht' });
           toast('Rechnung in den Papierkorb verschoben');
           close();
           render(container);
@@ -567,7 +582,10 @@ let editor = createPositionsEditor({
               stornoGrund, stornoGrundText,
             };
             await put('rechnungen', storno);
-            await put('rechnungen', { ...data, status: 'storniert', storniertDurchNummer: stornoNummer });
+            await syncBuchung(storno);
+            const stornierteOriginal = { ...data, status: 'storniert', storniertDurchNummer: stornoNummer };
+            await put('rechnungen', stornierteOriginal);
+            await syncBuchung(stornierteOriginal);
             toast(`Stornorechnung ${stornoNummer} angelegt`, 'success');
             close();
             render(container);
@@ -614,6 +632,7 @@ let editor = createPositionsEditor({
         if (data.versendet) return;
         const persisted = { ...data, versendet: true, versendetAm: new Date().toISOString() };
         await put('rechnungen', persisted);
+        await syncBuchung(persisted);
         Object.assign(data, persisted);
         toast('Rechnung wurde versendet und ist nun GoBD-gesperrt (nur noch per Storno korrigierbar).', 'info');
         close();
@@ -747,6 +766,7 @@ let editor = createPositionsEditor({
       }
 
       await put('rechnungen', updated);
+      await syncBuchung(updated);
       for (const zid of uebernommeneZeitIds) {
         const z = zeiterfassung.find((e) => e.id === zid);
         if (z) await put('zeiterfassung', { ...z, abgerechnet: true });
