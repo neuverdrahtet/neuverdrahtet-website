@@ -463,8 +463,8 @@ let editor = createPositionsEditor({
           const stornoTotals = calcTotals(stornoPositionen);
           const storno = {
             id: uid(), nummer: stornoNummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: null,
-            datum: todayISO(), faelligAm: todayISO(), status: 'bezahlt', betreff: `Stornorechnung zu ${data.nummer}`,
-            notizen: '', positionen: stornoPositionen, bezahltAm: todayISO(), createdAt: new Date().toISOString(),
+            datum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${data.nummer}`,
+            notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
             versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: data.nummer, storniertDurchNummer: '',
             netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
           };
