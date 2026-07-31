@@ -101,13 +101,19 @@ export async function render(container) {
   const tableHost = container.querySelector('#table-host');
   let unterkategorieFilter = '';
 
+  // Sentinel-Wert für den Filter "ohne Unterkategorie" - unterscheidet sich von
+  // '' (= kein Filter/alle anzeigen), damit man gezielt genau die Material-/
+  // Gerät-Einträge finden kann, denen noch keine Unterkategorie zugeordnet wurde.
+  const OHNE_UNTERKATEGORIE = '__ohne__';
+
   function refreshUnterkategorieOptions() {
     const gewerkFilter = container.querySelector('#gewerk-filter').value;
     const quelle = gewerkFilter ? items.filter((i) => i.gewerk === gewerkFilter) : items;
     const kategorien = [...new Set(quelle.map((i) => i.unterkategorie).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+    const ohneAnzahl = quelle.filter((i) => (i.typ === 'artikel' || i.typ === 'geraet') && !i.unterkategorie).length;
     const select = container.querySelector('#unterkategorie-filter');
-    if (!kategorien.includes(unterkategorieFilter)) unterkategorieFilter = '';
-    select.innerHTML = `<option value="">Alle Unterkategorien</option>${kategorien.map((k) => `<option value="${escapeHtml(k)}" ${k === unterkategorieFilter ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('')}`;
+    if (unterkategorieFilter !== OHNE_UNTERKATEGORIE && !kategorien.includes(unterkategorieFilter)) unterkategorieFilter = '';
+    select.innerHTML = `<option value="">Alle Unterkategorien</option>${ohneAnzahl ? `<option value="${OHNE_UNTERKATEGORIE}" ${unterkategorieFilter === OHNE_UNTERKATEGORIE ? 'selected' : ''}>– Ohne Unterkategorie (${ohneAnzahl}) –</option>` : ''}${kategorien.map((k) => `<option value="${escapeHtml(k)}" ${k === unterkategorieFilter ? 'selected' : ''}>${escapeHtml(k)}</option>`).join('')}`;
   }
 
   function applyFilter() {
@@ -117,7 +123,9 @@ export async function render(container) {
     filtered = items.filter((i) => {
       if (typeFilter && i.typ !== typeFilter) return false;
       if (gewerkFilter && i.gewerk !== gewerkFilter) return false;
-      if (unterkategorieFilter && i.unterkategorie !== unterkategorieFilter) return false;
+      if (unterkategorieFilter === OHNE_UNTERKATEGORIE) {
+        if (i.unterkategorie || !(i.typ === 'artikel' || i.typ === 'geraet')) return false;
+      } else if (unterkategorieFilter && i.unterkategorie !== unterkategorieFilter) return false;
       if (!q) return true;
       return [i.bezeichnung, i.beschreibung].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
