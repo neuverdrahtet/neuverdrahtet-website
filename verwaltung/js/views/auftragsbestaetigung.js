@@ -10,8 +10,15 @@ import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 
-const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt' };
-const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success' };
+const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt', storniert: 'Storniert' };
+const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success', storniert: 'badge-danger' };
+const GRUENDE_STORNO = [
+  { id: 'kunde_storniert', titel: 'Kunde hat storniert' },
+  { id: 'projekt_entfaellt', titel: 'Projekt entfällt' },
+  { id: 'terminverschiebung', titel: 'Terminverschiebung führte zu Stornierung' },
+  { id: 'fehler', titel: 'Fehlerhaft erstellt' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
 
 export async function render(container) {
   let [dokumente, kunden, projekte, katalog, settings, vorlagen, textbausteine, angebote, marken] = await Promise.all([
@@ -66,7 +73,7 @@ export async function render(container) {
               <td>${escapeHtml(a.nummer)}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${formatDate(a.datum)}</td>
-              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}">${STATUS_LABEL[a.status] || a.status}</span></td>
+              <td><span class="badge ${STATUS_BADGE[a.status] || 'badge'}" ${a.status === 'storniert' && (a.stornoGrund || a.stornoGrundText) ? `title="${escapeHtml([GRUENDE_STORNO.find((g) => g.id === a.stornoGrund)?.titel, a.stornoGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[a.status] || a.status}</span></td>
               <td class="text-right">${formatCurrency(a.brutto)}</td>
             </tr>
           `).join('')}
@@ -104,7 +111,7 @@ export async function render(container) {
       positionen: ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : [],
       angebotId: ausAngebot?.id || '', createdAt: new Date().toISOString(),
       steuerart: ausAngebot?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
-      unterschriftKunde: '',
+      unterschriftKunde: '', stornoGrund: '', stornoGrundText: '',
     };
 
     const suggestedNummer = !isEdit
@@ -130,7 +137,14 @@ export async function render(container) {
               <select name="steuerart" id="f-steuerart">${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
             ${isEdit ? `<div class="field"><label>Status</label>
-              <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+              <select name="status" id="f-status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+            </div>
+            <div class="col-span-2" id="storno-grund-section" ${data.status === 'storniert' ? '' : 'hidden'}>
+              <div class="field">
+                <label>Grund der Stornierung</label>
+                <select name="stornoGrund">${GRUENDE_STORNO.map((g) => `<option value="${g.id}" ${g.id === data.stornoGrund ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
+                <input type="text" name="stornoGrundText" value="${escapeHtml(data.stornoGrundText || '')}" placeholder="Notiz (optional)" style="margin-top:6px">
+              </div>
             </div>` : ''}
           </div>
           <div class="divider"></div>
@@ -189,6 +203,12 @@ export async function render(container) {
       }
     }
     renderSig();
+
+    if (isEdit) {
+      body.querySelector('#f-status').addEventListener('change', (e) => {
+        body.querySelector('#storno-grund-section').hidden = e.target.value !== 'storniert';
+      });
+    }
 
     body.querySelector('#f-steuerart').addEventListener('change', (e) => {
       if (e.target.value !== 'regel') {
@@ -287,7 +307,16 @@ export async function render(container) {
       updated.betreff = (fd.get('betreff') || '').toString().trim();
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.steuerart = fd.get('steuerart') || 'regel';
-      if (isEdit) updated.status = fd.get('status') || data.status;
+      if (isEdit) {
+        updated.status = fd.get('status') || data.status;
+        if (updated.status === 'storniert') {
+          updated.stornoGrund = fd.get('stornoGrund') || '';
+          updated.stornoGrundText = (fd.get('stornoGrundText') || '').toString().trim();
+        } else {
+          updated.stornoGrund = '';
+          updated.stornoGrundText = '';
+        }
+      }
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
       updated.unterschriftKunde = sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : '');
 
