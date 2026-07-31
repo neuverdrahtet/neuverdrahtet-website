@@ -134,12 +134,18 @@ export async function buildDocPdfBlob(opts) {
   doc.setTextColor(60);
   metaRows.forEach((row, i) => {
     const my = y + 6 + i * 4.6;
+    const valueText = String(row[1] ?? '');
+    // Label-Position hängt von der tatsächlichen Textbreite von Label bzw.
+    // Wert ab (nicht von einem festen Abstand) - sonst überlappen sich bei
+    // langen Dokumentarten wie "Auftragsbestätigung-Nr.:" Label und Wert.
     if (titleAlign === 'right') {
-      doc.text(row[0], titleX - 32, my, { align: 'left' });
-      doc.text(String(row[1] ?? ''), titleX, my, { align: 'right' });
+      const valueW = doc.getTextWidth(valueText);
+      doc.text(row[0], titleX - valueW - 3, my, { align: 'right' });
+      doc.text(valueText, titleX, my, { align: 'right' });
     } else {
+      const labelW = doc.getTextWidth(row[0]);
       doc.text(row[0], titleX, my, { align: 'left' });
-      doc.text(String(row[1] ?? ''), titleX + 32, my, { align: 'right' });
+      doc.text(valueText, titleX + labelW + 3, my, { align: 'left' });
     }
   });
 
@@ -253,6 +259,27 @@ export async function buildDocPdfBlob(opts) {
     doc.setFontSize(baseFont);
     const lines = doc.splitTextToSize(opts.closingText, 174);
     doc.text(lines, marginX, y);
+    y += lines.length * 5 + 4;
+  }
+
+  if (opts.zeigeUnterschriftsfeld) {
+    const maxY = 270;
+    if (y > maxY - 34) { doc.addPage(); y = 20; }
+    y += 8;
+    doc.setFontSize(9);
+    doc.setTextColor(60);
+    doc.text('Ort, Datum: ______________________________', marginX, y);
+    y += 12;
+    const sigW = 70, sigH = 22;
+    if (opts.unterschriftKunde) {
+      try { doc.addImage(opts.unterschriftKunde, 'PNG', marginX, y - sigH + 4, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+    }
+    doc.setDrawColor(160);
+    doc.line(marginX, y, marginX + sigW, y);
+    y += 4;
+    doc.setFontSize(8);
+    doc.setTextColor(110);
+    doc.text('Unterschrift Kunde', marginX, y);
   }
 
   addFooter(doc, opts.settings, marginX, rightX);

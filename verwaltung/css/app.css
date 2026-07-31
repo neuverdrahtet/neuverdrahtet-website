@@ -1273,6 +1273,14 @@ table.data-table th.col-select, table.data-table td.col-select {
   .print-doc .print-totals .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
   .print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
 
+  .print-doc .print-unterschrift { margin-top: 22px; page-break-inside: avoid; }
+  .print-doc .print-unterschrift-ort { font-size: 12px; margin-bottom: 20px; }
+  .print-doc .print-unterschrift-feld { width: 70mm; }
+  .print-doc .print-unterschrift-bild { display: block; max-width: 70mm; max-height: 22mm; margin-bottom: -4px; }
+  .print-doc .print-unterschrift-linie { border-top: 1px solid #333; margin-top: 22mm; }
+  .print-doc .print-unterschrift-feld:has(.print-unterschrift-bild) .print-unterschrift-linie { margin-top: 0; }
+  .print-doc .print-unterschrift-label { font-size: 11px; color: #666; margin-top: 4px; }
+
   .print-doc .print-footer {
     margin-top: 16px;
     padding-top: 6px;

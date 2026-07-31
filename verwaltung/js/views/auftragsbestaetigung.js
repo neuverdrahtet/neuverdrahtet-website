@@ -8,6 +8,7 @@ import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { mountSignaturePad } from '../signature.js';
 
 const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt' };
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success' };
@@ -103,6 +104,7 @@ export async function render(container) {
       positionen: ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : [],
       angebotId: ausAngebot?.id || '', createdAt: new Date().toISOString(),
       steuerart: ausAngebot?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
+      unterschriftKunde: '',
     };
 
     const suggestedNummer = !isEdit
@@ -135,6 +137,10 @@ export async function render(container) {
           <div id="pos-host"></div>
           <div id="tb-picker-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
+          <div class="divider"></div>
+          <h2 style="font-size:14px;margin:0 0 8px">Unterschrift Kunde</h2>
+          <p class="hint">Der Kunde kann direkt hier auf dem Bildschirm/Tablet unterschreiben. Beim Ausdrucken erscheint zusätzlich immer eine leere Unterschriftslinie zum handschriftlichen Unterschreiben.</p>
+          <div id="sig-host"></div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
@@ -164,6 +170,25 @@ export async function render(container) {
         field.value = field.value ? field.value + '\n\n' + text : text;
       },
     });
+
+    const sigHost = body.querySelector('#sig-host');
+    let sigPad = null;
+    let sigDataUrl = data.unterschriftKunde || '';
+    function renderSig() {
+      if (sigDataUrl) {
+        sigPad = null;
+        sigHost.innerHTML = `
+          <div class="field">
+            <img src="${sigDataUrl}" alt="Unterschrift Kunde" style="max-width:260px;max-height:110px;border:1px solid var(--border);border-radius:6px;background:#fff;display:block">
+            <button type="button" class="btn btn-sm" id="btn-sig-neu" style="margin-top:6px;align-self:flex-start">Neu unterschreiben</button>
+          </div>
+        `;
+        sigHost.querySelector('#btn-sig-neu').addEventListener('click', () => { sigDataUrl = ''; renderSig(); });
+      } else {
+        sigPad = mountSignaturePad(sigHost, {});
+      }
+    }
+    renderSig();
 
     body.querySelector('#f-steuerart').addEventListener('change', (e) => {
       if (e.target.value !== 'regel') {
@@ -195,6 +220,8 @@ export async function render(container) {
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
           closingText: (data.notizen || '') + '\n\nWir freuen uns auf die Zusammenarbeit.',
+          zeigeUnterschriftsfeld: true,
+          unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
         };
       }
       body.querySelector('#btn-print').addEventListener('click', () => {
@@ -262,6 +289,7 @@ export async function render(container) {
       updated.steuerart = fd.get('steuerart') || 'regel';
       if (isEdit) updated.status = fd.get('status') || data.status;
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
+      updated.unterschriftKunde = sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : '');
 
       if (updated.steuerart !== 'regel') {
         for (const p of editor.getPositionen()) p.steuersatz = 0;
