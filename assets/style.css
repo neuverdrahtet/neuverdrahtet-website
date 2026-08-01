@@ -178,6 +178,9 @@ h1,h2,h3,h4{
   white-space:nowrap;
 }
 .brand-name em{ font-style:normal; color:var(--orange-2); }
+.e-glyph{ display:inline-block; width:0.6em; height:0.72em; vertical-align:baseline; }
+.e-glyph rect{ fill:currentColor; }
+.sr-only{ position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .brand-tagline{ font-family:var(--font-body); font-size:10.5px; line-height:1.3; color:var(--ink-faint); white-space:nowrap; }
 @media (max-width:640px){ .brand-tagline{ display:none; } }
 @media (max-width:480px){
