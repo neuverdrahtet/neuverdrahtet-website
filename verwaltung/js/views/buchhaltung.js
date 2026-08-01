@@ -2,6 +2,7 @@ import { getAll, put, remove, getSettings, setSettings, KONTEN_KLASSEN } from '.
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast, readTextAutoEncoding } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } from '../bankimport.js';
+import * as bankabgleich from '../bankabgleich.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel]));
@@ -61,7 +62,7 @@ function letzterTagDesMonats(jahr, monat) {
 }
 
 export async function render(container) {
-  const [rechnungen, ausgaben, kunden, projekte, settings] = await Promise.all([
+  let [rechnungen, ausgaben, kunden, projekte, settings] = await Promise.all([
     getAll('rechnungen'), getAll('ausgaben'), getAll('kunden'), getAll('projekte'), getSettings(),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
@@ -154,9 +155,13 @@ export async function render(container) {
         <div class="card settings-panel" data-panel="kontoabgleich" hidden>
           <div class="view-header">
             <h2 class="mb-0">Kontoabgleich</h2>
-            <div class="actions"><button class="btn btn-primary" id="btn-kontoauszug-import">⇪ Kontoauszug importieren (CSV)</button></div>
+            <div class="actions">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px"><input type="checkbox" id="kontoabgleich-nur-offene"> Nur unzugeordnete anzeigen</label>
+              <button class="btn" id="btn-kontoabgleich-jetzt">🔄 Abgleich prüfen</button>
+              <button class="btn btn-primary" id="btn-kontoauszug-import">⇪ Kontoauszug importieren (CSV)</button>
+            </div>
           </div>
-          <p class="hint">Kein Live-Bankzugang - lade den CSV-Export deines Online-Bankings hoch. Automatischer Zahlungsabgleich gegen offene Rechnungen/Lieferantenrechnungen folgt in einer späteren Ausbaustufe; hier siehst du zunächst alle importierten Buchungen.</p>
+          <p class="hint">Kein Live-Bankzugang - lade den CSV-Export deines Online-Bankings hoch. Zahlungseingänge/-ausgänge werden automatisch gegen offene Rechnungen/Lieferantenrechnungen abgeglichen: eindeutige Treffer (Rechnungsnummer/Lieferant + passender Betrag) werden direkt übernommen, mehrdeutige Betragstreffer erscheinen als Vorschlag zur Bestätigung.</p>
           <div id="kontoabgleich-host"></div>
         </div>
       </div>
@@ -757,12 +762,41 @@ export async function render(container) {
   container.querySelector('#ustva-jahr-select').addEventListener('change', renderUstva);
   container.querySelector('#ustva-periode-select').addEventListener('change', renderUstva);
 
+  function kontoabgleichZielLabel(b) {
+    if (!b.matchTyp || !b.matchId) return '';
+    if (b.matchTyp === 'rechnung') {
+      const r = rechnungen.find((x) => x.id === b.matchId);
+      return r ? `Rechnung ${r.nummer}${kundenById[r.kundeId]?.firma ? ` (${kundenById[r.kundeId].firma})` : ''}` : '';
+    }
+    const a = ausgaben.find((x) => x.id === b.matchId);
+    return a ? `${a.lieferant || a.kategorie || 'Ausgabe'}` : '';
+  }
+
+  function kontoabgleichStatusBadge(b) {
+    if (b.ignoriert) return '<span class="badge">🚫 Ignoriert</span>';
+    if (b.matched) return `<span class="badge badge-success">✅ ${escapeHtml(kontoabgleichZielLabel(b))}</span>`;
+    if (b.matchTyp && b.matchId) return `<span class="badge badge-warn">⚠️ Vorschlag: ${escapeHtml(kontoabgleichZielLabel(b))}</span>`;
+    return '<span class="badge badge-danger">❌ nicht zugeordnet</span>';
+  }
+
+  function kontoabgleichManuelleAuswahl(b) {
+    const optionen = b.betrag > 0
+      ? rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt')
+        .map((r) => `<option value="rechnung:${r.id}">${escapeHtml(r.nummer)} (${formatCurrency(r.brutto)})</option>`).join('')
+      : ausgaben.filter((a) => a.bezahlstatus === 'offen')
+        .map((a) => `<option value="ausgabe:${a.id}">${escapeHtml(a.lieferant || a.kategorie || 'Ausgabe')} (${formatCurrency(a.betragBrutto)})</option>`).join('');
+    return `<select class="kontoabgleich-manuell-select" data-id="${b.id}"><option value="">– manuell zuordnen –</option>${optionen}</select>`;
+  }
+
   async function renderKontoabgleich() {
     const host = container.querySelector('#kontoabgleich-host');
-    const alle = (await getAll('bankbuchungen')).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const nurOffene = container.querySelector('#kontoabgleich-nur-offene')?.checked;
+    let alle = (await getAll('bankbuchungen')).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    if (nurOffene) alle = alle.filter((b) => !b.matched && !b.ignoriert);
+
     host.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Datum</th><th>Verwendungszweck</th><th>Empfänger/Auftraggeber</th><th class="text-right">Betrag</th></tr></thead>
+        <thead><tr><th>Datum</th><th>Verwendungszweck</th><th>Empfänger/Auftraggeber</th><th class="text-right">Betrag</th><th>Status</th><th>Aktionen</th></tr></thead>
         <tbody>
           ${alle.map((b) => `
             <tr>
@@ -770,12 +804,63 @@ export async function render(container) {
               <td>${escapeHtml(b.verwendungszweck || '')}</td>
               <td>${escapeHtml(b.empfaenger || '')}</td>
               <td class="text-right">${formatCurrency(b.betrag)}</td>
+              <td>${kontoabgleichStatusBadge(b)}</td>
+              <td>
+                ${b.matched || b.ignoriert ? '' : `
+                  ${b.matchTyp && b.matchId
+                    ? `<button type="button" class="btn btn-sm" data-action="bestaetigen" data-id="${b.id}">Bestätigen</button>
+                       <button type="button" class="btn btn-sm" data-action="verwerfen" data-id="${b.id}">Verwerfen</button>`
+                    : `${kontoabgleichManuelleAuswahl(b)}
+                       <button type="button" class="btn btn-sm" data-action="manuell-zuordnen" data-id="${b.id}">Zuordnen</button>`}
+                  <button type="button" class="btn btn-sm" data-action="ignorieren" data-id="${b.id}">Ignorieren</button>
+                `}
+              </td>
             </tr>
-          `).join('') || '<tr><td colspan="4">Noch keine Buchungen importiert.</td></tr>'}
+          `).join('') || `<tr><td colspan="6">${nurOffene ? 'Keine unzugeordneten Buchungen.' : 'Noch keine Buchungen importiert.'}</td></tr>`}
         </tbody>
       </table>
     `;
+
+    host.querySelectorAll('[data-action]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.id;
+        const b = (await getAll('bankbuchungen')).find((x) => x.id === id);
+        if (!b) return;
+        if (btn.dataset.action === 'bestaetigen') {
+          if (!b.matchTyp || !b.matchId) return;
+          await bankabgleich.uebernehmeZuordnung(b, { typ: b.matchTyp, id: b.matchId }, settings);
+          toast('Zuordnung übernommen', 'success');
+        } else if (btn.dataset.action === 'verwerfen') {
+          await put('bankbuchungen', { ...b, matchTyp: null, matchId: null });
+        } else if (btn.dataset.action === 'ignorieren') {
+          await put('bankbuchungen', { ...b, ignoriert: true });
+        } else if (btn.dataset.action === 'manuell-zuordnen') {
+          const select = host.querySelector(`.kontoabgleich-manuell-select[data-id="${id}"]`);
+          const val = select?.value;
+          if (!val) { toast('Bitte zuerst eine Zuordnung auswählen', 'danger'); return; }
+          const [typ, zielId] = val.split(':');
+          await bankabgleich.uebernehmeZuordnung(b, { typ, id: zielId }, settings);
+          toast('Zuordnung übernommen', 'success');
+        }
+        rechnungen = await getAll('rechnungen');
+        ausgaben = await getAll('ausgaben');
+        renderKontoabgleich();
+        renderOffenePosten();
+        renderJournal();
+      });
+    });
   }
+
+  container.querySelector('#kontoabgleich-nur-offene').addEventListener('change', renderKontoabgleich);
+  container.querySelector('#btn-kontoabgleich-jetzt').addEventListener('click', async () => {
+    const { automatisch, vorschlaege } = await bankabgleich.laufeAbgleich(settings);
+    rechnungen = await getAll('rechnungen');
+    ausgaben = await getAll('ausgaben');
+    toast(`${automatisch} automatisch zugeordnet, ${vorschlaege} Vorschläge zur Prüfung`, 'success');
+    renderKontoabgleich();
+    renderOffenePosten();
+    renderJournal();
+  });
 
   container.querySelector('#btn-kontoauszug-import').addEventListener('click', () => {
     const { body, close } = openModal({
@@ -852,9 +937,14 @@ export async function render(container) {
         await put('bankbuchungen', { id: uid(), ...b, matched: false, matchTyp: null, matchId: null, ignoriert: false, createdAt: new Date().toISOString() });
         neu++;
       }
-      toast(`${neu} Buchungen importiert${doppelt ? `, ${doppelt} bereits vorhanden (übersprungen)` : ''}`, 'success');
+      const { automatisch, vorschlaege } = await bankabgleich.laufeAbgleich(settings);
+      rechnungen = await getAll('rechnungen');
+      ausgaben = await getAll('ausgaben');
+      toast(`${neu} Buchungen importiert${doppelt ? `, ${doppelt} bereits vorhanden (übersprungen)` : ''} · ${automatisch} automatisch zugeordnet, ${vorschlaege} Vorschläge`, 'success');
       close();
       renderKontoabgleich();
+      renderOffenePosten();
+      renderJournal();
     });
   });
 
