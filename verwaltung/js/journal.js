@@ -7,6 +7,7 @@
 // den korrekten Saldo. Ersetzt keine Steuerberatung.
 import { getAll, put, remove } from './db.js';
 import { uid } from './utils.js';
+import { berechneAbschreibungsplan } from './abschreibung.js';
 
 function findKonto(konten, id, nummer) {
   return konten.find((k) => k.id === id) || (nummer ? konten.find((k) => k.nummer === nummer) : null) || null;
@@ -65,8 +66,12 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
  *   gegen Verbindlichkeiten (Konto 1600), kein Bank-/Kasse-Kontakt.
  * - `'bezahlt'` (aus 'offen' heraus beglichen): die Verbindlichkeiten-Buchungen
  *   bleiben (datiert auf `datum`) und eine dritte Buchung gleicht die
- *   Verbindlichkeit gegen Bank/Kasse aus (datiert auf `bezahltAm`). */
+ *   Verbindlichkeit gegen Bank/Kasse aus (datiert auf `bezahltAm`).
+ * Als Anlagevermögen markierte Ausgaben (`istInvestition`) bekommen hier
+ * keine eigene Buchung - die Kapitalisierung übernimmt stattdessen die
+ * zugehörige Anlage im Anlagenverzeichnis (siehe erzeugeBuchungenFuerAnlage). */
 export function erzeugeBuchungenFuerAusgabe(a, { konten, settings }) {
+  if (a.istInvestition) return [];
   const aufwandKonto = findKonto(konten, 'konto-4900', settings.datevAufwandKonto || '4900');
   if (!aufwandKonto) return [];
   const belegtext = `${a.kategorie || 'Ausgabe'}${a.beschreibung ? `: ${a.beschreibung}` : ''}${a.lieferant ? ` (${a.lieferant})` : ''}`;
@@ -153,6 +158,32 @@ export function erzeugeBuchungenFuerAnlage(anlage, { konten, settings }) {
   return buchungen;
 }
 
+/** Erzeugt (ohne zu speichern) die jährlichen Abschreibungsbuchungen einer
+ * Anlage bis einschließlich dem Jahr von `bisDatum` (siehe `abschreibung.js`
+ * `berechneAbschreibungsplan`) - je ein Buchungssatz pro Kalenderjahr: Soll
+ * Abschreibungen (Aufwand), Haben dasselbe Anlagevermögen-/GWG-Konto wie bei
+ * der Kapitalisierung (direkte Zuschreibung, kein separates
+ * "kumulierte Abschreibungen"-Gegenkonto). Datiert auf den 31.12. des
+ * jeweiligen Jahres (übliche Jahresabschluss-Buchung). */
+export function erzeugeAbschreibungsbuchungenFuerAnlage(anlage, { konten, settings, bisDatum }) {
+  const abschreibungsKonto = findKonto(konten, settings.kontoAbschreibungenId, '6220');
+  if (!abschreibungsKonto) return [];
+  const kontoId = anlage.gwg ? settings.kontoGwgId : settings.kontoAnlagevermoegenId;
+  const fallbackNummer = anlage.gwg ? '0480' : '0400';
+  const anlageKonto = findKonto(konten, kontoId, fallbackNummer);
+  if (!anlageKonto) return [];
+
+  const belegtext = `Abschreibung: ${anlage.bezeichnung || 'Anlagegut'}`;
+  const quelle = { typ: 'anlagegut-afa', id: anlage.id };
+  return berechneAbschreibungsplan(anlage, bisDatum)
+    .filter((jahr) => jahr.betrag)
+    .map((jahr) => ({
+      id: uid(), datum: `${jahr.jahr}-12-31`, text: `${belegtext} ${jahr.jahr}`,
+      sollKontoId: abschreibungsKonto.id, habenKontoId: anlageKonto.id,
+      betrag: jahr.betrag, quelle, manuell: false, createdAt: new Date().toISOString(),
+    }));
+}
+
 async function ersetzeAutomatischeBuchungen(quelleTyp, quelleId, neueBuchungen) {
   const alle = await getAll('buchungen');
   const bestehende = alle.filter((b) => !b.manuell && b.quelle?.typ === quelleTyp && b.quelle?.id === quelleId);
@@ -194,4 +225,14 @@ export async function syncBuchungFuerAnlage(anlage, settings) {
 export async function entferneBuchungenFuerAnlage(anlageId) {
   await ersetzeAutomatischeBuchungen('anlagegut', anlageId, []);
   await ersetzeAutomatischeBuchungen('anlagegut-afa', anlageId, []);
+}
+
+/** Hält die jährlichen Abschreibungsbuchungen einer Anlage bis einschließlich
+ * `bisDatum` synchron - erneuter Aufruf ersetzt den kompletten Plan, ist also
+ * gefahrlos wiederholbar (idempotent), z.B. durch erneuten Klick auf
+ * "Abschreibungen jetzt buchen". */
+export async function syncAbschreibungenFuerAnlage(anlage, settings, bisDatum) {
+  const konten = await getAll('konten');
+  const neueBuchungen = erzeugeAbschreibungsbuchungenFuerAnlage(anlage, { konten, settings, bisDatum });
+  await ersetzeAutomatischeBuchungen('anlagegut-afa', anlage.id, neueBuchungen);
 }

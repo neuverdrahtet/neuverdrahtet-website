@@ -164,7 +164,7 @@ export async function render(container) {
       id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
       projektId: '', kundeId: '', kalkKategorie: '',
-      bezahlstatus: '', faelligAm: '', bezahltAm: '',
+      bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false,
       ...prefill,
     };
     const istOffeneKreditorenRechnung = isEdit && data.bezahlstatus === 'offen';
@@ -221,6 +221,9 @@ export async function render(container) {
               </div>
               <div class="col-span-2" id="ausgabe-faellig-section" ${data.bezahlstatus === 'offen' ? '' : 'hidden'}>
                 <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm || ''}"></div>
+              </div>
+              <div class="field col-span-2">
+                <label><input type="checkbox" id="ausgabe-investition-checkbox" ${data.istInvestition ? 'checked' : ''}> Diese Ausgabe ist eine Anschaffung für das Anlagevermögen (Abschreibung über mehrere Jahre statt Sofortaufwand)</label>
               </div>
             `}
           </div>
@@ -322,8 +325,31 @@ export async function render(container) {
       updated.bezahlstatus = nochNichtBezahlt ? 'offen' : '';
       updated.faelligAm = nochNichtBezahlt ? (fd.get('faelligAm') || '') : '';
       updated.bezahltAm = nochNichtBezahlt ? '' : updated.bezahltAm || '';
+      updated.istInvestition = body.querySelector('#ausgabe-investition-checkbox')?.checked || false;
       await put('ausgaben', updated);
       try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
+
+      if (updated.istInvestition && !isEdit) {
+        // Als Anlagevermögen markiert: keine eigene Aufwandsbuchung (siehe
+        // Guard in journal.js erzeugeBuchungenFuerAusgabe) - stattdessen
+        // Übergabe an ein vorausgefülltes Neue-Anlage-Formular in der
+        // Buchhaltung, wo Nutzungsdauer/GWG ergänzt werden.
+        try {
+          sessionStorage.setItem('nv-anlage-prefill', JSON.stringify({
+            bezeichnung: updated.beschreibung || updated.lieferant || '',
+            lieferant: updated.lieferant || '',
+            anschaffungsdatum: updated.datum,
+            anschaffungswertNetto: updated.betragNetto,
+            steuersatz: updated.steuersatz,
+            bezahltMit: updated.bezahltMit === 'bar' ? 'bar' : 'überweisung',
+            ausgabeId: updated.id,
+          }));
+        } catch { /* sessionStorage evtl. nicht verfügbar */ }
+        toast('Ausgabe erfasst - bitte im Anlagenverzeichnis mit Nutzungsdauer ergänzen', 'success');
+        close();
+        window.location.hash = '#/buchhaltung';
+        return;
+      }
       toast(isEdit ? 'Ausgabe aktualisiert' : 'Ausgabe erfasst', 'success');
       close();
       render(container);
