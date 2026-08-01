@@ -446,8 +446,8 @@ export async function render(container) {
     const isGeraet = tab === 'geraete';
     const neueId = uid();
     const data = item || (isGeraet
-      ? { id: neueId, name: '', kategorie: '', hersteller: '', modell: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' }
-      : { id: neueId, bezeichnung: '', kennzeichen: '', hersteller: '', modell: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '' });
+      ? { id: neueId, name: '', kategorie: '', hersteller: '', modell: '', status: 'verfuegbar', standort: '', naechstePruefung: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '', anschaffungswert: '', anschaffungsdatum: '' }
+      : { id: neueId, bezeichnung: '', kennzeichen: '', hersteller: '', modell: '', status: 'verfuegbar', typ: 'Transporter', tuvDatum: '', kilometerstand: '', farbe: farbeAusText(neueId, FARBEN), notizen: '', zugewiesenAn: '', anschaffungswert: '', anschaffungsdatum: '' });
     const herstellerPresets = isGeraet ? HERSTELLER_PRESETS_GERAETE : HERSTELLER_PRESETS_FLOTTEN;
 
     const { body, close } = openModal({
@@ -465,6 +465,8 @@ export async function render(container) {
               </div>
               <div class="field"><label>Modell</label><input name="modell" placeholder="z.B. TE 30-C" value="${escapeHtml(data.modell || '')}"></div>
               <div class="field"><label>Nächste Prüfung</label><input type="date" name="naechstePruefung" value="${data.naechstePruefung || ''}"></div>
+              <div class="field"><label>Anschaffungswert (€, optional)</label><input type="number" step="0.01" min="0" name="anschaffungswert" value="${data.anschaffungswert || ''}"></div>
+              <div class="field"><label>Anschaffungsdatum (optional)</label><input type="date" name="anschaffungsdatum" value="${data.anschaffungsdatum || ''}"></div>
             ` : `
               <div class="field col-span-2"><label>Bezeichnung *</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
               <div class="field"><label>Kennzeichen</label><input name="kennzeichen" value="${escapeHtml(data.kennzeichen || '')}"></div>
@@ -476,6 +478,8 @@ export async function render(container) {
               <div class="field"><label>Modell</label><input name="modell" placeholder="z.B. Sprinter 316 CDI" value="${escapeHtml(data.modell || '')}"></div>
               <div class="field"><label>TÜV/HU</label><input type="date" name="tuvDatum" value="${data.tuvDatum || ''}"></div>
               <div class="field"><label>Kilometerstand</label><input type="number" min="0" name="kilometerstand" value="${data.kilometerstand || ''}"></div>
+              <div class="field"><label>Anschaffungswert (€, optional)</label><input type="number" step="0.01" min="0" name="anschaffungswert" value="${data.anschaffungswert || ''}"></div>
+              <div class="field"><label>Anschaffungsdatum (optional)</label><input type="date" name="anschaffungsdatum" value="${data.anschaffungsdatum || ''}"></div>
             `}
             <div class="field"><label>Status</label>
               <select name="status">${STATUS.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${s.titel}</option>`).join('')}</select>

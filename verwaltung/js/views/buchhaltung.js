@@ -170,7 +170,11 @@ export async function render(container) {
         <div class="card settings-panel" data-panel="anlagenverzeichnis" hidden>
           <div class="view-header">
             <h2 class="mb-0">Anlagenverzeichnis</h2>
-            <div class="actions"><button class="btn btn-primary" id="btn-anlage-neu">+ Neue Anlage</button></div>
+            <div class="actions">
+              <select id="anlage-afa-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+              <button class="btn" id="btn-afa-jetzt-buchen">📉 Abschreibungen jetzt buchen</button>
+              <button class="btn btn-primary" id="btn-anlage-neu">+ Neue Anlage</button>
+            </div>
           </div>
           <p class="hint">Größere Anschaffungen (Werkzeug, Maschinen, Fahrzeuge, Ausstattung) werden hier aktiviert und über die Nutzungsdauer linear abgeschrieben (AfA), statt sofort in voller Höhe als Aufwand gebucht zu werden. Geringwertige Wirtschaftsgüter (GWG, ≤ ${deNum(settings.gwgGrenzeNetto)} € netto) werden automatisch im Anschaffungsjahr sofort abgeschrieben. Ersetzt keine Steuerberatung.</p>
           <div id="anlagenverzeichnis-host"></div>
@@ -191,6 +195,18 @@ export async function render(container) {
   const lastPanel = (() => { try { return sessionStorage.getItem('nv-buchhaltung-panel'); } catch { return null; } })();
   const allPanelIds = BUCH_NAV.map((it) => it.id);
   showPanel(allPanelIds.includes(lastPanel) ? lastPanel : BUCH_NAV[0].id);
+
+  // Übergabe aus ausgaben.js: eine als "Investition" markierte Ausgabe landet
+  // hier als vorausgefülltes Neue-Anlage-Formular (einmaliger Prefill-Schlüssel).
+  try {
+    const prefillRaw = sessionStorage.getItem('nv-anlage-prefill');
+    if (prefillRaw) {
+      sessionStorage.removeItem('nv-anlage-prefill');
+      const prefill = JSON.parse(prefillRaw);
+      showPanel('anlagenverzeichnis');
+      openAnlageForm(null, { prefill });
+    }
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
 
   container.querySelector('#jahr-select').addEventListener('change', (e) => {
     jahr = e.target.value;
@@ -996,7 +1012,7 @@ export async function render(container) {
     });
   }
 
-  async function openAnlageForm(a) {
+  async function openAnlageForm(a, { prefill } = {}) {
     const isEdit = !!a;
     const [geraete, flotten] = await Promise.all([getAll('geraete'), getAll('flotten')]);
     const data = a || {
@@ -1005,6 +1021,7 @@ export async function render(container) {
       nutzungsdauerJahre: 8, gwg: false, bezahltMit: 'überweisung',
       geraetId: '', flotteId: '', ausgabeId: '', lieferant: '', notizen: '',
       status: 'aktiv', ausgeschiedenAm: '', createdAt: new Date().toISOString(),
+      ...prefill,
     };
     const { body, close } = openModal({
       title: isEdit ? 'Anlage bearbeiten' : 'Neue Anlage',
@@ -1038,13 +1055,23 @@ export async function render(container) {
               </select>
             </div>
             <div class="field"><label>Gerät/Fahrzeug verknüpfen (optional)</label>
-              <select name="geraetFlotte">
+              <select name="geraetFlotte" id="anlage-geraetflotte">
                 <option value="">– keine Verknüpfung –</option>
-                <optgroup label="Geräte">${geraete.map((g) => `<option value="geraet:${g.id}" ${data.geraetId === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</optgroup>
-                <optgroup label="Fahrzeuge">${flotten.map((f) => `<option value="flotte:${f.id}" ${data.flotteId === f.id ? 'selected' : ''}>${escapeHtml(f.bezeichnung)}</option>`).join('')}</optgroup>
+                <optgroup label="Geräte">${geraete.map((g) => `<option value="geraet:${g.id}" data-anschaffungswert="${g.anschaffungswert || ''}" data-anschaffungsdatum="${g.anschaffungsdatum || ''}" ${data.geraetId === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</optgroup>
+                <optgroup label="Fahrzeuge">${flotten.map((f) => `<option value="flotte:${f.id}" data-anschaffungswert="${f.anschaffungswert || ''}" data-anschaffungsdatum="${f.anschaffungsdatum || ''}" ${data.flotteId === f.id ? 'selected' : ''}>${escapeHtml(f.bezeichnung)}</option>`).join('')}</optgroup>
               </select>
             </div>
             <div class="field col-span-2"><label>Notizen</label><input name="notizen" value="${escapeHtml(data.notizen || '')}"></div>
+            ${isEdit && data.status === 'ausgeschieden' ? `
+              <div class="card col-span-2" style="background:#fff6e0;border-color:#f0d78c">
+                <p class="mb-0">⚠️ Diese Anlage ist ausgeschieden am ${escapeHtml(formatDate(data.ausgeschiedenAm))}. Der Restbuchwert wurde vollständig abgeschrieben.</p>
+              </div>
+            ` : isEdit ? `
+              <div class="col-span-2" id="anlage-ausscheiden-section">
+                <div class="field"><label>Anlage ausscheiden (Verkauf/Verschrottung/Diebstahl) am</label><input type="date" id="anlage-ausscheiden-am" value="${todayISO()}"></div>
+                <button type="button" class="btn" id="btn-anlage-ausscheiden">Anlage ausscheiden - Restbuchwert vollständig abschreiben</button>
+              </div>
+            ` : ''}
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -1057,6 +1084,21 @@ export async function render(container) {
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
 
+    if (isEdit && data.status !== 'ausgeschieden') {
+      body.querySelector('#btn-anlage-ausscheiden').addEventListener('click', async () => {
+        const ausgeschiedenAm = body.querySelector('#anlage-ausscheiden-am').value || todayISO();
+        if (!confirmDelete(`Anlage "${data.bezeichnung}" zum ${ausgeschiedenAm} ausscheiden? Der verbleibende Restbuchwert wird vollständig abgeschrieben.`)) return;
+        const updated = { ...data, status: 'ausgeschieden', ausgeschiedenAm };
+        await put('anlagegueter', updated);
+        try { await journal.syncAbschreibungenFuerAnlage(updated, settings, todayISO()); } catch { /* Buchung ist Komfort, darf Speichern nicht blockieren */ }
+        toast('Anlage ausgeschieden', 'success');
+        close();
+        renderAnlagenverzeichnis();
+        renderJournal();
+        renderBilanz();
+      });
+    }
+
     function aktualisiereGwgVorschlag() {
       const netto = Number(body.querySelector('#anlage-netto').value) || 0;
       const checkbox = body.querySelector('#anlage-gwg-checkbox');
@@ -1065,6 +1107,23 @@ export async function render(container) {
     }
     body.querySelector('#anlage-netto').addEventListener('input', aktualisiereGwgVorschlag);
     body.querySelector('#anlage-gwg-checkbox').addEventListener('change', aktualisiereGwgVorschlag);
+    if (prefill) aktualisiereGwgVorschlag();
+
+    // Verknüpftes Gerät/Fahrzeug hat einen Anschaffungswert/-datum hinterlegt:
+    // nur zur Bequemlichkeit übernehmen, wenn im Anlage-Formular noch nichts
+    // eingetragen ist (nicht destruktiv gegenüber bereits erfassten Werten).
+    body.querySelector('#anlage-geraetflotte').addEventListener('change', (e) => {
+      const opt = e.target.selectedOptions[0];
+      const nettoFeld = body.querySelector('#anlage-netto');
+      const datumFeld = body.querySelector('input[name="anschaffungsdatum"]');
+      if (opt?.dataset.anschaffungswert && !Number(nettoFeld.value)) {
+        nettoFeld.value = opt.dataset.anschaffungswert;
+        aktualisiereGwgVorschlag();
+      }
+      if (opt?.dataset.anschaffungsdatum && datumFeld.value === todayISO()) {
+        datumFeld.value = opt.dataset.anschaffungsdatum;
+      }
+    });
 
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
@@ -1116,6 +1175,20 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-anlage-neu').addEventListener('click', () => openAnlageForm());
+  container.querySelector('#btn-afa-jetzt-buchen').addEventListener('click', async () => {
+    const jahr = container.querySelector('#anlage-afa-jahr-select').value;
+    const bisDatum = `${jahr}-12-31`;
+    const anlagen = await getAll('anlagegueter');
+    let gebucht = 0;
+    for (const a of anlagen.filter((x) => x.status !== 'ausgeschieden')) {
+      await journal.syncAbschreibungenFuerAnlage(a, settings, bisDatum);
+      gebucht++;
+    }
+    toast(`Abschreibungen für ${jahr} für ${gebucht} Anlage(n) gebucht/aktualisiert`, 'success');
+    renderAnlagenverzeichnis();
+    renderJournal();
+    renderBilanz();
+  });
 
   renderContent();
   renderKontenplan();
