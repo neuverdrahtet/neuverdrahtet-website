@@ -1,8 +1,10 @@
-import { getAll, put, remove, getSettings, setSettings, KONTEN_KLASSEN } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, KONTEN_KLASSEN, ANLAGE_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast, readTextAutoEncoding } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } from '../bankimport.js';
 import * as bankabgleich from '../bankabgleich.js';
+import * as journal from '../journal.js';
+import { berechneJahresAfa, aktuellerRestbuchwert } from '../abschreibung.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel]));
@@ -15,6 +17,7 @@ const BUCH_NAV = [
   { id: 'offeneposten', icon: '📬', label: 'Offene Posten' },
   { id: 'ustva', icon: '🧾', label: 'USt.-Voranmeldung' },
   { id: 'kontoabgleich', icon: '🏦', label: 'Kontoabgleich' },
+  { id: 'anlagenverzeichnis', icon: '🏗️', label: 'Anlagenverzeichnis' },
 ];
 const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 
@@ -163,6 +166,14 @@ export async function render(container) {
           </div>
           <p class="hint">Kein Live-Bankzugang - lade den CSV-Export deines Online-Bankings hoch. Zahlungseingänge/-ausgänge werden automatisch gegen offene Rechnungen/Lieferantenrechnungen abgeglichen: eindeutige Treffer (Rechnungsnummer/Lieferant + passender Betrag) werden direkt übernommen, mehrdeutige Betragstreffer erscheinen als Vorschlag zur Bestätigung.</p>
           <div id="kontoabgleich-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="anlagenverzeichnis" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Anlagenverzeichnis</h2>
+            <div class="actions"><button class="btn btn-primary" id="btn-anlage-neu">+ Neue Anlage</button></div>
+          </div>
+          <p class="hint">Größere Anschaffungen (Werkzeug, Maschinen, Fahrzeuge, Ausstattung) werden hier aktiviert und über die Nutzungsdauer linear abgeschrieben (AfA), statt sofort in voller Höhe als Aufwand gebucht zu werden. Geringwertige Wirtschaftsgüter (GWG, ≤ ${deNum(settings.gwgGrenzeNetto)} € netto) werden automatisch im Anschaffungsjahr sofort abgeschrieben. Ersetzt keine Steuerberatung.</p>
+          <div id="anlagenverzeichnis-host"></div>
         </div>
       </div>
     </div>
@@ -948,6 +959,164 @@ export async function render(container) {
     });
   });
 
+  async function renderAnlagenverzeichnis() {
+    const host = container.querySelector('#anlagenverzeichnis-host');
+    const heute = todayISO();
+    const anlagen = (await getAll('anlagegueter')).sort((a, b) => (b.anschaffungsdatum || '').localeCompare(a.anschaffungsdatum || ''));
+    const aktive = anlagen.filter((a) => a.status !== 'ausgeschieden');
+    const summeAnschaffung = aktive.reduce((s, a) => s + (a.anschaffungswertNetto || 0), 0);
+    const summeRestbuchwert = aktive.reduce((s, a) => s + aktuellerRestbuchwert(a, heute), 0);
+
+    host.innerHTML = `
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-value">${aktive.length}</div><div class="kpi-label">Aktive Anlagegüter</div></div>
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(summeAnschaffung)}</div><div class="kpi-label">Anschaffungswert (Summe)</div></div>
+        <div class="kpi-card"><div class="kpi-value">${formatCurrency(summeRestbuchwert)}</div><div class="kpi-label">Restbuchwert (Summe)</div></div>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Bezeichnung</th><th>Kategorie</th><th>Anschaffungsdatum</th><th class="text-right">Anschaffungswert</th><th>Nutzungsdauer</th><th class="text-right">Jährl. AfA</th><th class="text-right">Restbuchwert</th><th>Status</th></tr></thead>
+        <tbody>
+          ${anlagen.map((a) => `
+            <tr data-id="${a.id}" style="cursor:pointer">
+              <td>${escapeHtml(a.bezeichnung)}</td>
+              <td>${escapeHtml(a.kategorie || '')}${a.gwg ? ' <span class="badge">GWG</span>' : ''}</td>
+              <td>${formatDate(a.anschaffungsdatum)}</td>
+              <td class="text-right">${formatCurrency(a.anschaffungswertNetto)}</td>
+              <td>${a.gwg ? 'Sofort' : `${a.nutzungsdauerJahre} Jahre`}</td>
+              <td class="text-right">${formatCurrency(berechneJahresAfa(a))}</td>
+              <td class="text-right">${formatCurrency(aktuellerRestbuchwert(a, heute))}</td>
+              <td>${a.status === 'ausgeschieden' ? `<span class="badge">Ausgeschieden${a.ausgeschiedenAm ? ' ' + formatDate(a.ausgeschiedenAm) : ''}</span>` : '<span class="badge badge-success">Aktiv</span>'}</td>
+            </tr>
+          `).join('') || '<tr><td colspan="8">Noch keine Anlagegüter erfasst.</td></tr>'}
+        </tbody>
+      </table>
+    `;
+    host.querySelectorAll('tbody tr[data-id]').forEach((row) => {
+      row.addEventListener('click', () => openAnlageForm(anlagen.find((a) => a.id === row.dataset.id)));
+    });
+  }
+
+  async function openAnlageForm(a) {
+    const isEdit = !!a;
+    const [geraete, flotten] = await Promise.all([getAll('geraete'), getAll('flotten')]);
+    const data = a || {
+      id: uid(), bezeichnung: '', kategorie: ANLAGE_KATEGORIEN[0], anschaffungsdatum: todayISO(),
+      anschaffungswertNetto: 0, steuersatz: settings.standardSteuersatz, restwert: 0,
+      nutzungsdauerJahre: 8, gwg: false, bezahltMit: 'überweisung',
+      geraetId: '', flotteId: '', ausgabeId: '', lieferant: '', notizen: '',
+      status: 'aktiv', ausgeschiedenAm: '', createdAt: new Date().toISOString(),
+    };
+    const { body, close } = openModal({
+      title: isEdit ? 'Anlage bearbeiten' : 'Neue Anlage',
+      bodyHtml: `
+        <form id="anlage-form">
+          <div class="form-grid">
+            <div class="field col-span-2"><label>Bezeichnung</label><input name="bezeichnung" required value="${escapeHtml(data.bezeichnung)}"></div>
+            <div class="field"><label>Kategorie</label>
+              <select name="kategorie">${ANLAGE_KATEGORIEN.map((k) => `<option value="${k}" ${k === data.kategorie ? 'selected' : ''}>${k}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Lieferant</label><input name="lieferant" value="${escapeHtml(data.lieferant || '')}"></div>
+            <div class="field"><label>Anschaffungsdatum</label><input type="date" name="anschaffungsdatum" value="${data.anschaffungsdatum}"></div>
+            <div class="field"><label>Anschaffungswert netto (€)</label><input type="number" step="0.01" min="0" name="anschaffungswertNetto" id="anlage-netto" value="${data.anschaffungswertNetto}"></div>
+            <div class="field"><label>USt.-Satz (%)</label>
+              <select name="steuersatz">
+                <option value="19" ${Number(data.steuersatz) === 19 ? 'selected' : ''}>19 %</option>
+                <option value="7" ${Number(data.steuersatz) === 7 ? 'selected' : ''}>7 %</option>
+                <option value="0" ${Number(data.steuersatz) === 0 ? 'selected' : ''}>0 %</option>
+              </select>
+            </div>
+            <div class="field"><label>Nutzungsdauer (Jahre)</label><input type="number" step="1" min="1" name="nutzungsdauerJahre" id="anlage-nutzungsdauer" value="${data.nutzungsdauerJahre}" ${data.gwg ? 'disabled' : ''}></div>
+            <div class="field"><label>Restwert (€, optional)</label><input type="number" step="0.01" min="0" name="restwert" value="${data.restwert || 0}"></div>
+            <div class="field col-span-2"><p class="hint mb-0">Richtwerte AfA-Tabelle: Werkzeug/Maschinen ca. 8 Jahre, Pkw ca. 6 Jahre, EDV ca. 3 Jahre, Büroausstattung ca. 13 Jahre.</p></div>
+            <div class="field col-span-2">
+              <label><input type="checkbox" id="anlage-gwg-checkbox" ${data.gwg ? 'checked' : ''}> Geringwertiges Wirtschaftsgut (GWG) - sofort in voller Höhe abschreiben</label>
+            </div>
+            <div class="field"><label>Bezahlt mit</label>
+              <select name="bezahltMit">
+                <option value="überweisung" ${data.bezahltMit === 'überweisung' ? 'selected' : ''}>Überweisung</option>
+                <option value="bar" ${data.bezahltMit === 'bar' ? 'selected' : ''}>Bar</option>
+              </select>
+            </div>
+            <div class="field"><label>Gerät/Fahrzeug verknüpfen (optional)</label>
+              <select name="geraetFlotte">
+                <option value="">– keine Verknüpfung –</option>
+                <optgroup label="Geräte">${geraete.map((g) => `<option value="geraet:${g.id}" ${data.geraetId === g.id ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('')}</optgroup>
+                <optgroup label="Fahrzeuge">${flotten.map((f) => `<option value="flotte:${f.id}" ${data.flotteId === f.id ? 'selected' : ''}>${escapeHtml(f.bezeichnung)}</option>`).join('')}</optgroup>
+              </select>
+            </div>
+            <div class="field col-span-2"><label>Notizen</label><input name="notizen" value="${escapeHtml(data.notizen || '')}"></div>
+          </div>
+          <div class="modal-actions">
+            ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+
+    function aktualisiereGwgVorschlag() {
+      const netto = Number(body.querySelector('#anlage-netto').value) || 0;
+      const checkbox = body.querySelector('#anlage-gwg-checkbox');
+      if (!isEdit && netto > 0 && netto <= (settings.gwgGrenzeNetto || 800)) checkbox.checked = true;
+      body.querySelector('#anlage-nutzungsdauer').disabled = checkbox.checked;
+    }
+    body.querySelector('#anlage-netto').addEventListener('input', aktualisiereGwgVorschlag);
+    body.querySelector('#anlage-gwg-checkbox').addEventListener('change', aktualisiereGwgVorschlag);
+
+    if (isEdit) {
+      body.querySelector('#btn-delete').addEventListener('click', async () => {
+        if (!confirmDelete(`Anlage "${data.bezeichnung}" wirklich löschen? Die zugehörigen Buchungen werden ebenfalls entfernt.`)) return;
+        await remove('anlagegueter', data.id);
+        await journal.entferneBuchungenFuerAnlage(data.id);
+        toast('Anlage gelöscht');
+        close();
+        renderAnlagenverzeichnis();
+        renderJournal();
+        renderBilanz();
+      });
+    }
+
+    body.querySelector('#anlage-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const [gfTyp, gfId] = (fd.get('geraetFlotte') || '').toString().split(':');
+      const netto = Number(fd.get('anschaffungswertNetto')) || 0;
+      const steuersatz = Number(fd.get('steuersatz')) || 0;
+      const updated = {
+        ...data,
+        bezeichnung: (fd.get('bezeichnung') || '').toString().trim(),
+        kategorie: fd.get('kategorie') || ANLAGE_KATEGORIEN[0],
+        lieferant: (fd.get('lieferant') || '').toString().trim(),
+        anschaffungsdatum: fd.get('anschaffungsdatum') || todayISO(),
+        anschaffungswertNetto: netto,
+        steuersatz,
+        anschaffungswertBrutto: Math.round(netto * (1 + steuersatz / 100) * 100) / 100,
+        nutzungsdauerJahre: Number(fd.get('nutzungsdauerJahre')) || 1,
+        restwert: Number(fd.get('restwert')) || 0,
+        gwg: body.querySelector('#anlage-gwg-checkbox').checked,
+        bezahltMit: fd.get('bezahltMit') || 'überweisung',
+        geraetId: gfTyp === 'geraet' ? gfId : '',
+        flotteId: gfTyp === 'flotte' ? gfId : '',
+        notizen: (fd.get('notizen') || '').toString().trim(),
+      };
+      if (!updated.bezeichnung) { toast('Bitte eine Bezeichnung angeben', 'danger'); return; }
+      if (!updated.anschaffungswertNetto) { toast('Bitte einen Anschaffungswert angeben', 'danger'); return; }
+
+      await put('anlagegueter', updated);
+      try { await journal.syncBuchungFuerAnlage(updated, settings); } catch { /* Buchung ist Komfort, darf Speichern nicht blockieren */ }
+      toast(isEdit ? 'Anlage aktualisiert' : 'Anlage angelegt', 'success');
+      close();
+      renderAnlagenverzeichnis();
+      renderJournal();
+      renderBilanz();
+    });
+  }
+
+  container.querySelector('#btn-anlage-neu').addEventListener('click', () => openAnlageForm());
+
   renderContent();
   renderKontenplan();
   renderJournal();
@@ -955,4 +1124,5 @@ export async function render(container) {
   renderOffenePosten();
   renderUstva();
   renderKontoabgleich();
+  renderAnlagenverzeichnis();
 }

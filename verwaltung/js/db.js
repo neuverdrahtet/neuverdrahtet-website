@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 18;
+const DB_VERSION = 19;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -61,6 +61,7 @@ const STORES = {
   konten: 'id',
   buchungen: 'id',
   bankbuchungen: 'id',
+  anlagegueter: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -463,6 +464,10 @@ const DEFAULT_SETTINGS = {
   datevAufwandKonto: '4900',
   kontoBankId: 'konto-1200',
   kontoKasseId: 'konto-1000',
+  gwgGrenzeNetto: 800,
+  kontoAnlagevermoegenId: 'konto-0400',
+  kontoGwgId: 'konto-0480',
+  kontoAbschreibungenId: 'konto-6220',
   ustvaZeitraum: 'monatlich',
   bankImportSpalten: {},
   aiWorkerUrl: '',
@@ -2202,7 +2207,12 @@ export const DEFAULT_KONTEN = [
   { id: 'konto-8400', nummer: '8400', name: 'Erlöse 19 % USt.', klasse: 'ertrag' },
   { id: 'konto-8125', nummer: '8125', name: 'Steuerfreie Umsätze (Export/IG-Lieferung/§13b)', klasse: 'ertrag' },
   { id: 'konto-4900', nummer: '4900', name: 'Sonstige betriebliche Aufwendungen', klasse: 'aufwand' },
+  { id: 'konto-0400', nummer: '0400', name: 'Sachanlagen (Maschinen, Geräte, Fuhrpark, Ausstattung)', klasse: 'aktiv' },
+  { id: 'konto-0480', nummer: '0480', name: 'Geringwertige Wirtschaftsgüter (GWG)', klasse: 'aktiv' },
+  { id: 'konto-6220', nummer: '6220', name: 'Abschreibungen auf Sachanlagen', klasse: 'aufwand' },
 ];
+
+export const ANLAGE_KATEGORIEN = ['Werkzeug/Maschine', 'Fahrzeug', 'Betriebs- und Geschäftsausstattung', 'Sonstiges'];
 
 export const DEFAULT_TERMIN_STATUS = [
   { id: 'geplant', titel: 'Geplant', farbe: '#2b7fd6', reihenfolge: 0 },
