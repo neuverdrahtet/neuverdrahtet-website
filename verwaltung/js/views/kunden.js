@@ -439,6 +439,7 @@ export async function render(container) {
       mountAnlagenSection(body.querySelector('#anlagen-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'kunde', data.id, {
         kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente (Rechnungen, Angebote, Verträge, ...)',
+        berichtContext: { settings, kunde: data, projekt: '' },
       });
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Kunde "${data.firma}" in den Papierkorb verschieben?`)) return;
