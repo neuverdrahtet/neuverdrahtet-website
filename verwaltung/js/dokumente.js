@@ -283,7 +283,7 @@ export const DOKUMENT_KATEGORIEN = [
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
 
-export const KUNDE_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['rechnung', 'angebot', 'vertrag', 'sonstiges'].includes(k.id));
+export const KUNDE_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['rechnung', 'angebot', 'vertrag', 'bericht', 'sonstiges'].includes(k.id));
 
 function katLabel(id) {
   return DOKUMENT_KATEGORIEN.find((k) => k.id === id)?.titel || 'Sonstiges';

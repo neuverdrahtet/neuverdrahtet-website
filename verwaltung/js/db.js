@@ -2080,6 +2080,91 @@ Ort, Datum: {{datum}}`,
       { typ: 'unterschriften', labels: ['Unterschrift Arbeitnehmer', 'Unterschrift Arbeitgeber'] },
     ],
   },
+  {
+    id: 'vorlage-kurzrapport', typ: 'dokumentation', name: 'Kurzrapport (Service-Einsatz)',
+    textVorlage: `KURZRAPPORT
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Kurzbeschreibung des Einsatzes:
+
+
+Ergebnis: ☐ Erledigt  ☐ Folgetermin nötig
+
+Unterschrift Kunde:`,
+    abschnitte: [
+      { typ: 'kopfdaten', titel: 'Einsatzdaten', felder: [{ label: 'Rapport-Nr.', typ: 'text' }, { label: 'Anfahrt von', typ: 'text' }, { label: 'Anfahrt bis', typ: 'text' }] },
+      { typ: 'checkliste', titel: 'Art des Einsatzes', punkte: ['Störung', 'Wartung', 'Installation', 'Beratung vor Ort', 'Sonstiges'] },
+      { typ: 'janein', titel: 'Abschluss', fragen: ['Auftrag vollständig erledigt', 'Folgetermin erforderlich'] },
+      { typ: 'unterschriften', labels: ['Unterschrift Kunde'] },
+    ],
+  },
+  {
+    id: 'vorlage-ki-pruefung-elektrischer-anlagen', typ: 'dokumentation', name: 'KI-unterstützte Prüfung elektrischer Anlagen',
+    textVorlage: `KI-UNTERSTÜTZTE PRÜFUNG ELEKTRISCHER ANLAGEN
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+Datum: {{datum}}
+
+Objekt-Bezeichnung / weitere Informationen:
+
+
+Von der KI-Analyse hervorgehobene Auffälligkeiten:
+
+
+Beurteilung der Elektrofachkraft (Ergebnis, ggf. nächster Prüftermin):
+
+
+Hinweis: Die Prüfung erfolgte nach den geltenden Bestimmungen der DIN VDE 0100-600 / 0105-100 und umfasst nur
+zugängliche und überprüfbare Anlagenteile. KI-gestützte Auswertungen (z.B. Foto-/Bildanalyse) dienen als
+Hilfestellung zur Auffälligkeitserkennung und ersetzen nicht die fachliche Beurteilung durch die Elektrofachkraft;
+verantwortlich für das Prüfergebnis bleibt allein die unterzeichnende Fachkraft.
+
+Ort, Datum: {{datum}}`,
+    abschnitte: [
+      {
+        typ: 'kopfdaten', titel: 'Auftragsdaten',
+        felder: [
+          { label: 'Auftragsnummer', typ: 'text' },
+          { label: 'Auftragsdatum', typ: 'datum' },
+          { label: 'Beginn der Prüfung', typ: 'text' },
+        ],
+      },
+      { typ: 'checkliste', titel: 'Art der Prüfung – DIN VDE 0100-600 / 0105-100', punkte: ['Neuanlage', 'Änderung', 'Erweiterung', 'Wiederholung', 'Instandsetzung'] },
+      {
+        typ: 'checkliste', titel: 'Sichtprüfung / Zustand der Anlage',
+        punkte: [
+          'Allgemeiner Zustand / Sauberkeit i.O.', 'Auswahl der Betriebsmittel geeignet', 'Berührungsschutz / Abdeckungen vorhanden',
+          'Leiterkennzeichnung normgerecht', 'Leitungsführung ordentlich', 'Leiterverbindungen fest', 'Schutzpotentialausgleich vollständig',
+        ],
+      },
+      {
+        typ: 'tabelle', titel: 'KI-Analyse: erkannte Auffälligkeiten', spalten: ['Bereich/Bauteil', 'Auffälligkeit laut KI-Analyse', 'Bewertung Elektrofachkraft'],
+      },
+      {
+        typ: 'kopfdaten', titel: 'Messwerte',
+        felder: [
+          { label: 'Spannungsfall nachgewiesen (%)', typ: 'zahl' },
+          { label: 'Erdungswiderstand (Ω)', typ: 'zahl' },
+          { label: 'Verwendete Messgeräte', typ: 'text' },
+        ],
+      },
+      { typ: 'janein', titel: 'Prüfplakette', fragen: ['Prüfplakette angebracht'] },
+      {
+        typ: 'kopfdaten', titel: 'Abschluss',
+        felder: [
+          { label: 'Ende Prüfung', typ: 'text' },
+          { label: 'Name vom Prüfer', typ: 'text' },
+        ],
+      },
+      { typ: 'unterschriften', labels: ['Unterschrift Prüfer'] },
+    ],
+  },
 ];
 
 export const TERMIN_TYPEN = [

@@ -85,7 +85,7 @@ function renderAbschnitteEditor(host, abschnitteState) {
         ${configFieldsFor(a)}
       </div>
     `).join('') || '<p class="text-mute" style="font-size:12px">Noch keine zusätzlichen Abschnitte – der freie Text unten reicht bei einfachen Vorlagen völlig aus.</p>';
-    listHost.querySelectorAll('[data-i]').forEach((card) => {
+    listHost.querySelectorAll('.card[data-i]').forEach((card) => {
       const i = Number(card.dataset.i);
       card.querySelectorAll('.absch-input').forEach((input) => {
         input.addEventListener('input', (e) => {
