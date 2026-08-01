@@ -115,6 +115,44 @@ export function erzeugeBuchungenFuerAusgabe(a, { konten, settings }) {
   return buchungen;
 }
 
+/** Erzeugt (ohne zu speichern) die Kapitalisierungsbuchung für eine neu
+ * angelegte Anlage (Anlagenverzeichnis): Soll Anlagevermögen-/GWG-Konto
+ * (aktiv, je nach `anlage.gwg`), Haben Bank/Kasse, plus eigene Zeile für die
+ * Vorsteuer - analog zur Ausgaben-Buchung, nur gegen ein Aktivkonto statt
+ * direkt gegen Aufwand. Die jährlichen Abschreibungsbuchungen selbst kommen
+ * separat aus `abschreibung.js` + `erzeugeAbschreibungsbuchungenFuerAnlage`. */
+export function erzeugeBuchungenFuerAnlage(anlage, { konten, settings }) {
+  const kontoId = anlage.gwg ? settings.kontoGwgId : settings.kontoAnlagevermoegenId;
+  const fallbackNummer = anlage.gwg ? '0480' : '0400';
+  const anlageKonto = findKonto(konten, kontoId, fallbackNummer);
+  if (!anlageKonto) return [];
+  const geldKonto = bankOderKasse(konten, settings, anlage.bezahltMit);
+  if (!geldKonto) return [];
+
+  const belegtext = `Anschaffung: ${anlage.bezeichnung || 'Anlagegut'}${anlage.lieferant ? ` (${anlage.lieferant})` : ''}`;
+  const quelle = { typ: 'anlagegut', id: anlage.id };
+  const buchungen = [];
+  const netto = anlage.anschaffungswertNetto || 0;
+  const brutto = anlage.anschaffungswertBrutto || netto;
+  const vorsteuer = brutto - netto;
+  const vorsteuerSatz = netto ? Math.round((vorsteuer / netto) * 100) : Number(anlage.steuersatz) || 19;
+  const vorsteuerKonto = findKonto(konten, vorsteuerSatz === 7 ? 'konto-1571' : 'konto-1576', vorsteuerSatz === 7 ? '1571' : '1576');
+
+  if (netto) {
+    buchungen.push({
+      id: uid(), datum: anlage.anschaffungsdatum, text: belegtext, sollKontoId: anlageKonto.id, habenKontoId: geldKonto.id,
+      betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+    });
+  }
+  if (vorsteuer && vorsteuerKonto) {
+    buchungen.push({
+      id: uid(), datum: anlage.anschaffungsdatum, text: `${belegtext} (Vorsteuer)`, sollKontoId: vorsteuerKonto.id, habenKontoId: geldKonto.id,
+      betrag: Math.round(vorsteuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+    });
+  }
+  return buchungen;
+}
+
 async function ersetzeAutomatischeBuchungen(quelleTyp, quelleId, neueBuchungen) {
   const alle = await getAll('buchungen');
   const bestehende = alle.filter((b) => !b.manuell && b.quelle?.typ === quelleTyp && b.quelle?.id === quelleId);
@@ -141,4 +179,19 @@ export async function syncBuchungFuerAusgabe(a, settings) {
 /** Entfernt alle automatisch erzeugten Buchungssätze einer gelöschten Ausgabe. */
 export async function entferneBuchungFuerAusgabe(ausgabeId) {
   await ersetzeAutomatischeBuchungen('ausgabe', ausgabeId, []);
+}
+
+/** Hält die Kapitalisierungsbuchung einer Anlage mit ihrem aktuellen Inhalt
+ * synchron (Betrag/Kategorie/Zahlart geändert → Buchung wird neu erzeugt). */
+export async function syncBuchungFuerAnlage(anlage, settings) {
+  const konten = await getAll('konten');
+  const neueBuchungen = erzeugeBuchungenFuerAnlage(anlage, { konten, settings });
+  await ersetzeAutomatischeBuchungen('anlagegut', anlage.id, neueBuchungen);
+}
+
+/** Entfernt alle automatisch erzeugten Buchungssätze (Kapitalisierung +
+ * Abschreibungen) einer gelöschten Anlage. */
+export async function entferneBuchungenFuerAnlage(anlageId) {
+  await ersetzeAutomatischeBuchungen('anlagegut', anlageId, []);
+  await ersetzeAutomatischeBuchungen('anlagegut-afa', anlageId, []);
 }
