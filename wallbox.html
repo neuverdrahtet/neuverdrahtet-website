@@ -180,7 +180,7 @@
 <header class="site-header">
   <div class="wrap">
     <a href="index.html" class="brand">
-      <img class="brand-logo" src="assets/logo/logo-full.png" width="779" height="220" alt="neuverdrahtet – Elektro Fachbetrieb Essen">
+      <img class="brand-logo" src="assets/logo/logo-full.png" width="240" height="68" alt="neuverdrahtet – Elektro Fachbetrieb Essen">
     </a>
 
     <nav class="main-nav" aria-label="Hauptnavigation">
@@ -253,7 +253,7 @@
       <div class="hero-slider" data-autoplay="6000">
         <div class="hero-slider-track">
           <div class="hero-slide is-active has-photo">
-            <img class="hero-slide-photo" src="assets/photos/wallbox-fassade.webp" width="675" height="900" alt="Wallbox-Montage an der Hausfassade" fetchpriority="high">
+            <img class="hero-slide-photo" src="assets/photos/wallbox-fassade.webp" width="620" height="826" alt="Wallbox-Montage an der Hausfassade" fetchpriority="high">
             <div class="hero-slide-code">Installation</div>
             <p class="hero-slide-title">Ladepunkt vor Ort</p>
             <p>Wallbox-Montage an der Hausfassade, betriebsbereit angeschlossen.</p>
@@ -295,18 +295,18 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label>Ladepunkte</label>
+          <label for="calc-area-slider">Ladepunkte</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" min="1" max="5" step="1" value="1">
+            <input type="range" class="calc-area" id="calc-area-slider" min="1" max="5" step="1" value="1">
             <span class="val calc-area-val">1 Stück</span>
           </div>
         </div>
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-            <button type="button" data-value="einzel" data-low="1200" data-high="2200" class="is-active">Einzelladepunkt <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">ohne Zusatz</span></button>
-            <button type="button" data-value="last" data-low="1800" data-high="2800" class="">Mit Lastmanagement <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">bei mehreren Punkten</span></button>
-            <button type="button" data-value="pv" data-low="2500" data-high="4000" class="">Mit PV-Kopplung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Energiemanagement</span></button>
+            <button type="button" data-value="einzel" data-low="1200" data-high="2200" class="is-active">Einzelladepunkt <span class="calc-toggle-sub">ohne Zusatz</span></button>
+            <button type="button" data-value="last" data-low="1800" data-high="2800" class="">Mit Lastmanagement <span class="calc-toggle-sub">bei mehreren Punkten</span></button>
+            <button type="button" data-value="pv" data-low="2500" data-high="4000" class="">Mit PV-Kopplung <span class="calc-toggle-sub">Energiemanagement</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert inkl. Wallbox-Gerät, Material und Anschluss.</p>

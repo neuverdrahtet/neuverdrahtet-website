@@ -180,7 +180,7 @@
 <header class="site-header">
   <div class="wrap">
     <a href="index.html" class="brand">
-      <img class="brand-logo" src="assets/logo/logo-full.png" width="779" height="220" alt="neuverdrahtet – Elektro Fachbetrieb Essen">
+      <img class="brand-logo" src="assets/logo/logo-full.png" width="240" height="68" alt="neuverdrahtet – Elektro Fachbetrieb Essen">
     </a>
 
     <nav class="main-nav" aria-label="Hauptnavigation">
@@ -295,18 +295,18 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label>Anzahl Räume</label>
+          <label for="calc-area-slider">Anzahl Räume</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" min="1" max="15" step="1" value="4">
+            <input type="range" class="calc-area" id="calc-area-slider" min="1" max="15" step="1" value="4">
             <span class="val calc-area-val">4 Räume</span>
           </div>
         </div>
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-            <button type="button" data-value="basis" data-low="300" data-high="600" class="is-active">Basis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Lichtsteuerung</span></button>
-            <button type="button" data-value="erweitert" data-low="600" data-high="1000" class="">Erweitert <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">+ Heizung</span></button>
-            <button type="button" data-value="premium" data-low="1000" data-high="1800" class="">Premium <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">+ Sicherheit</span></button>
+            <button type="button" data-value="basis" data-low="300" data-high="600" class="is-active">Basis <span class="calc-toggle-sub">Lichtsteuerung</span></button>
+            <button type="button" data-value="erweitert" data-low="600" data-high="1000" class="">Erweitert <span class="calc-toggle-sub">+ Heizung</span></button>
+            <button type="button" data-value="premium" data-low="1000" data-high="1800" class="">Premium <span class="calc-toggle-sub">+ Sicherheit</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert inkl. Aktoren, Sensoren und Programmierung.</p>
