@@ -37,6 +37,7 @@ const routeLoaders = {
   aufgaben: () => import('./views/aufgaben.js'),
   geraete: () => import('./views/geraete.js'),
   papierkorb: () => import('./views/papierkorb.js'),
+  social: () => import('./views/social.js'),
 };
 
 const viewEl = document.getElementById('view');
