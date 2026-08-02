@@ -329,7 +329,7 @@ h1,h2,h3,h4{
 }
 .hero-slide.has-photo > *:not(.hero-slide-photo){ position:relative; z-index:2; }
 .hero-slide-icon{ color:var(--orange-2); margin-bottom:auto; }
-.hero-slide-code{ font-family:var(--font-mono); font-size:11.5px; color:rgba(255,255,255,0.45); letter-spacing:0.08em; text-transform:uppercase; }
+.hero-slide-code{ font-family:var(--font-mono); font-size:11.5px; color:rgba(255,255,255,0.6); letter-spacing:0.08em; text-transform:uppercase; }
 .hero-slide-title{ font-family:var(--font-display); font-weight:700; line-height:1.1; letter-spacing:-0.01em; margin:0; font-size:22px; color:#fff; }
 .hero-slide p{ font-size:14.5px; color:rgba(255,255,255,0.68); margin:0; max-width:38ch; }
 
@@ -572,7 +572,7 @@ section{ padding:88px 0; }
 .timeline-step .marker{
   position:absolute; top:-11px; left:20px;
   font-family:var(--font-mono); font-size:10px; letter-spacing:0.06em; text-transform:uppercase;
-  background:var(--orange); color:var(--navy-3); padding:3px 9px; border-radius:100px;
+  background:var(--orange); color:#fff; padding:3px 9px; border-radius:100px;
 }
 
 /* =========================================================
@@ -728,10 +728,10 @@ section{ padding:88px 0; }
 }
 .footer-social a:hover{ background:var(--orange); color:#fff; transform:translateY(-2px); }
 .footer-cols{ display:flex; gap:56px; flex-wrap:wrap; }
-.footer-col h3{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:16px; }
+.footer-col h3{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(255,255,255,0.65); margin-bottom:16px; }
 .footer-col a{ display:block; font-size:14px; color:rgba(255,255,255,0.7); text-decoration:none; margin-bottom:10px; }
 .footer-col a:hover{ color:var(--orange-2); }
-.footer-bottom{ border-top:1px solid rgba(255,255,255,0.1); padding-top:24px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:12.5px; font-family:var(--font-mono); color:rgba(255,255,255,0.4); }
+.footer-bottom{ border-top:1px solid rgba(255,255,255,0.1); padding-top:24px; display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; font-size:12.5px; font-family:var(--font-mono); color:rgba(255,255,255,0.6); }
 .footer-bottom a{ color:rgba(255,255,255,0.55); text-decoration:none; }
 .footer-bottom a:hover{ color:#fff; }
 
