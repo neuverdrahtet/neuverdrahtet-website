@@ -303,18 +303,18 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label>Stromkreise</label>
+          <label for="calc-area-slider">Stromkreise</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" min="5" max="50" step="5" value="15">
+            <input type="range" class="calc-area" id="calc-area-slider" min="5" max="50" step="5" value="15">
             <span class="val calc-area-val">15 Stromkreise</span>
           </div>
         </div>
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-            <button type="button" data-value="basis" data-low="8" data-high="14" class="is-active">Basis-Wartungsvertrag <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">jährliche Sichtprüfung</span></button>
-            <button type="button" data-value="erweitert" data-low="14" data-high="22" class="">Erweitert <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">+ Funktionsprüfung</span></button>
-            <button type="button" data-value="premium" data-low="20" data-high="32" class="">Premium <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">+ Prioritäts-Notdienst</span></button>
+            <button type="button" data-value="basis" data-low="8" data-high="14" class="is-active">Basis-Wartungsvertrag <span class="calc-toggle-sub">jährliche Sichtprüfung</span></button>
+            <button type="button" data-value="erweitert" data-low="14" data-high="22" class="">Erweitert <span class="calc-toggle-sub">+ Funktionsprüfung</span></button>
+            <button type="button" data-value="premium" data-low="20" data-high="32" class="">Premium <span class="calc-toggle-sub">+ Prioritäts-Notdienst</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert je Stromkreis und Jahr (Wartungsvertrag, kein Einzelauftrag).</p>

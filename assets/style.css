@@ -449,8 +449,9 @@ section{ padding:88px 0; }
   font-family:var(--font-body); font-size:14px; font-weight:500; cursor:pointer;
   transition:border-color .2s ease, color .2s ease, background .2s ease;
 }
-.calc-toggle button.is-active{ border-color:var(--orange); color:var(--orange); background:rgba(0,176,230,0.14); font-weight:600; }
+.calc-toggle button.is-active{ border-color:var(--orange); color:#005C74; background:rgba(0,176,230,0.14); font-weight:600; }
 .calc-toggle button:focus-visible{ outline:2px solid var(--orange); outline-offset:2px; }
+.calc-toggle-sub{ display:block; font-size:11px; font-weight:400; }
 
 .calc-basis-note{
   background:var(--orange-soft); border:1px solid var(--orange); border-radius:var(--radius-sm);

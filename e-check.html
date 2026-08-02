@@ -281,18 +281,18 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label>Anzahl Geräte</label>
+          <label for="calc-area-slider">Anzahl Geräte</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" min="5" max="100" step="5" value="20">
+            <input type="range" class="calc-area" id="calc-area-slider" min="5" max="100" step="5" value="20">
             <span class="val calc-area-val">20 Geräte</span>
           </div>
         </div>
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-            <button type="button" data-value="wohnung" data-low="10" data-high="15" class="">Wohnung <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">wenige Stromkreise</span></button>
-            <button type="button" data-value="haus" data-low="8" data-high="12" class="is-active">Haus <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">komplette Anlage</span></button>
-            <button type="button" data-value="gewerbe" data-low="12" data-high="18" class="">Gewerbe <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">größerer Umfang</span></button>
+            <button type="button" data-value="wohnung" data-low="10" data-high="15" class="">Wohnung <span class="calc-toggle-sub">wenige Stromkreise</span></button>
+            <button type="button" data-value="haus" data-low="8" data-high="12" class="is-active">Haus <span class="calc-toggle-sub">komplette Anlage</span></button>
+            <button type="button" data-value="gewerbe" data-low="12" data-high="18" class="">Gewerbe <span class="calc-toggle-sub">größerer Umfang</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert je geprüftem Gerät/Stromkreis (Prüfleistung, kein Material).</p>

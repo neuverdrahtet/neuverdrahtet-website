@@ -295,18 +295,18 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label>Anschlussleistung</label>
+          <label for="calc-area-slider">Anschlussleistung</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" min="3" max="15" step="1" value="9">
+            <input type="range" class="calc-area" id="calc-area-slider" min="3" max="15" step="1" value="9">
             <span class="val calc-area-val">9 kW</span>
           </div>
         </div>
           <div class="calc-field">
             <label>Ausführung</label>
             <div class="calc-toggle calc-tier">
-            <button type="button" data-value="direkt" data-low="80" data-high="140" class="is-active">Direktanschluss <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">vorhandener Kreis</span></button>
-            <button type="button" data-value="zaehler" data-low="140" data-high="220" class="">Eigener Zählerkreis <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">separater Zähler</span></button>
-            <button type="button" data-value="last" data-low="200" data-high="320" class="">Mit Lastmanagement <span style="display:block;font-size:11px;font-weight:400;opacity:.7;">Netzbetreiber-Steuerung</span></button>
+            <button type="button" data-value="direkt" data-low="80" data-high="140" class="is-active">Direktanschluss <span class="calc-toggle-sub">vorhandener Kreis</span></button>
+            <button type="button" data-value="zaehler" data-low="140" data-high="220" class="">Eigener Zählerkreis <span class="calc-toggle-sub">separater Zähler</span></button>
+            <button type="button" data-value="last" data-low="200" data-high="320" class="">Mit Lastmanagement <span class="calc-toggle-sub">Netzbetreiber-Steuerung</span></button>
             </div>
           </div>
           <p class="calc-service-note">Grober Richtwert je kW Anschlussleistung — reiner Elektroanschluss, nicht die Wärmepumpe selbst.</p>
