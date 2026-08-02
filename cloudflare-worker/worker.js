@@ -1,11 +1,13 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche + Social-Media-Post (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
  * Angebotspositionen erzeugen, analysiert ein fotografiertes Beleg-Bild und
  * liefert Händler/Datum/Betrag/Kategorie zurück, recherchiert für
- * unbepreiste GAEB-Positionen per Web-Search-Tool marktübliche Preise, oder
- * löst eine Firebase-Cloud-Messaging-Push-Benachrichtigung an einzelne
+ * unbepreiste GAEB-Positionen per Web-Search-Tool marktübliche Preise,
+ * erzeugt aus einem Baustellen-/Projektfoto passende Social-Media-Texte je
+ * Kanal (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), oder löst
+ * eine Firebase-Cloud-Messaging-Push-Benachrichtigung an einzelne
  * Geräte-Tokens aus. Die Geheimnisse (Anthropic-API-Key, Firebase-Service-
  * Account) bleiben ausschließlich hier im Worker (als Secrets) – sie werden
  * NIE an den Browser geschickt.
@@ -437,6 +439,86 @@ async function callClaudeGaebPreise({ apiKey, model, positionen }) {
   }
 }
 
+const SOCIAL_POST_SCHEMA = {
+  type: 'object',
+  properties: {
+    altText: { type: 'string' },
+    hashtags: { type: 'array', items: { type: 'string' } },
+    instagram: { type: 'string' },
+    facebook: { type: 'string' },
+    linkedin: { type: 'string' },
+    googleBusiness: { type: 'string' },
+  },
+  required: ['altText', 'hashtags', 'instagram', 'facebook', 'linkedin', 'googleBusiness'],
+  additionalProperties: false,
+};
+
+function buildSocialPostSystemPrompt({ firmenname, ort, leistung, kontext }) {
+  return `Du bist Social-Media-/Local-SEO-Texter für den deutschen Handwerksbetrieb "${firmenname || 'den Betrieb'}". Du bekommst ein Foto (z.B. von einer fertiggestellten Baustelle, einem Einsatz oder Produkt) und schreibst dazu Beitragstexte für vier Kanäle, in deutscher Sprache.
+
+Kontext, den du nutzen darfst (nur was hier steht bzw. auf dem Foto wirklich zu sehen ist - nichts erfinden):
+${ort ? `- Einsatzort/Region: ${ort}` : '- Kein Ort angegeben - keinen erfinden, dann allgemein bleiben.'}
+${leistung ? `- Leistung/Anlass: ${leistung}` : ''}
+${kontext ? `- Zusätzliche Stichpunkte vom Mitarbeiter: ${kontext}` : ''}
+
+Regeln je Feld:
+- "altText": sachliche, kurze Bildbeschreibung (max. ca. 120 Zeichen) für Barrierefreiheit und Bild-SEO - beschreibt, was auf dem Foto zu sehen ist.
+- "hashtags": 6-10 relevante deutsche Hashtags ohne Leerzeichen (inkl. #), Mischung aus Branche (z.B. #Elektriker, #Elektroinstallation), Leistung und - falls ein Ort angegeben ist - Orts-/Regions-Hashtags (z.B. #ElektrikerEssen) für lokale Auffindbarkeit. Keine doppelten, keine generischen Massen-Hashtags wie #love #instagood.
+- "instagram": lebendiger, bildbezogener Text (ca. 2-5 Sätze), gerne 1-3 passende Emojis, endet mit dezentem Call-to-Action (z.B. "Anfrage über den Link in der Bio"). KEINE Hashtags im Text selbst einbauen (die kommen separat in "hashtags").
+- "facebook": ähnlich wie Instagram, etwas ausführlicher/informativer (3-6 Sätze), sprich die Zielgruppe direkt an ("Ihr", "Sie" - einheitlich eine Anredeform wählen, Standard: "Sie"), max. 1-2 Emojis, Call-to-Action mit Kontaktmöglichkeit.
+- "linkedin": sachlich-professioneller Ton, keine Emojis (oder höchstens 1 dezentes), betont fachliche Kompetenz/Qualität, 2-4 Sätze, ohne Hashtags im Text.
+- "googleBusiness": kurzer, informativer "Neuigkeiten"-Beitrag fürs Google Unternehmensprofil (max. ca. 300 Zeichen), lokal-SEO-optimiert: nennt natürlich die Leistung UND - falls angegeben - den Ort/die Region, klingt wie eine sachliche Ankündigung/News, endet mit klarer Handlungsaufforderung (z.B. anrufen, Angebot anfordern). Keine Hashtags, keine Emojis.
+- Erfinde keine konkreten Fakten (keine Preise, Fristen, Kundennamen, Adressen), die nicht im Kontext oder erkennbar auf dem Foto stehen.
+- Wenn das Bild kein erkennbares Handwerks-/Baustellenmotiv zeigt, trotzdem plausible, generische Texte zur angegebenen Leistung liefern (nicht verweigern).`;
+}
+
+async function callClaudeSocialPost({ apiKey, model, imageDataUrl, firmenname, ort, leistung, kontext }) {
+  const match = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(imageDataUrl || '');
+  if (!match) {
+    throw new Error('Ungültiges Bildformat.');
+  }
+  const [, mediaType, base64Data] = match;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system: buildSocialPostSystemPrompt({ firmenname, ort, leistung, kontext }),
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+          { type: 'text', text: 'Erstelle für dieses Foto die Social-Media-Texte gemäß Vorgaben.' },
+        ],
+      }],
+      output_config: {
+        format: { type: 'json_schema', schema: SOCIAL_POST_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
 // --- Push-Versand (Firebase Cloud Messaging HTTP v1, Server-Auth per Service Account) ---
 
 function base64UrlEncode(data) {
@@ -596,6 +678,32 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           imageDataUrl: body.imageDataUrl,
           kategorien: body.kategorien,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'social-post') {
+      if (!body.imageDataUrl || typeof body.imageDataUrl !== 'string') {
+        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeSocialPost({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          imageDataUrl: body.imageDataUrl,
+          firmenname: body.firmenname,
+          ort: body.ort,
+          leistung: body.leistung,
+          kontext: body.kontext,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },

@@ -977,6 +977,22 @@ table.data-table th.col-select, table.data-table td.col-select {
   cursor: pointer;
 }
 
+/* Social-Media-Post */
+.social-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.social-channel-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--card-2);
+}
+.social-channel-card h3 { font-size: 13.5px; margin: 0 0 8px; }
+.social-canvas-host { margin-bottom: 8px; line-height: 0; }
+.social-channel-card textarea { width: 100%; resize: vertical; }
+
 /* Einsätze (mobile Zeiterfassung) */
 .es-daystrip { display: flex; gap: 6px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 2px; }
 .es-day {
