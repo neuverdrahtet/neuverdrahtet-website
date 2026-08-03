@@ -1207,6 +1207,7 @@ export async function render(container) {
     const host = container.querySelector('#stundensatz-host');
     const jahrSelect = container.querySelector('#stundensatz-jahr-select');
     const jahr = jahrSelect.value || String(new Date().getFullYear());
+    const modus = settings.stundensatzModus === 'schaetzung' ? 'schaetzung' : 'ist';
     const [mitarbeiterListe, anlagen] = await Promise.all([getAll('mitarbeiter'), getAll('anlagegueter')]);
 
     const betriebskostenAlle = berechneBetriebskosten(ausgaben, jahr, []);
@@ -1215,42 +1216,65 @@ export async function render(container) {
     const afaGesamt = berechneAbschreibungenGesamt(anlagen, jahr);
 
     host.innerHTML = `
+      <div class="card">
+        <div class="field">
+          <label>Datenquelle</label>
+          <div class="flex-row flex-wrap" style="gap:16px">
+            <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+              <input type="radio" name="ss-modus" value="ist" ${modus === 'ist' ? 'checked' : ''}> Tatsächliche Werte (aus Buchhaltung)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-weight:normal">
+              <input type="radio" name="ss-modus" value="schaetzung" ${modus === 'schaetzung' ? 'checked' : ''}> Geschätzte Werte (z.B. bei Gründung, noch keine Buchhaltungsdaten)
+            </label>
+          </div>
+        </div>
+      </div>
       <div class="form-grid">
         <div class="card">
           <h3>Personalkosten</h3>
-          <div class="field"><label>Lohnnebenkosten (%, Arbeitgeberanteil Sozialversicherung u.ä.)</label><input type="number" id="ss-lohnnebenkosten" step="0.1" min="0" value="${settings.lohnnebenkostenProzent}"></div>
-          <p class="hint" id="ss-personalkosten-hint">–</p>
+          ${modus === 'schaetzung' ? `
+            <div class="field"><label>Personalkosten gesamt, geschätzt (€/Jahr, inkl. Lohnnebenkosten)</label><input type="number" id="ss-personalkosten-schaetzung" step="100" min="0" value="${settings.stundensatzSchaetzPersonalkosten || 0}"></div>
+            <p class="hint">Grobe Schätzung für die Gründungsphase - z.B. inkl. eigenem geplanten Unternehmerlohn.</p>
+          ` : `
+            <div class="field"><label>Lohnnebenkosten (%, Arbeitgeberanteil Sozialversicherung u.ä.)</label><input type="number" id="ss-lohnnebenkosten" step="0.1" min="0" value="${settings.lohnnebenkostenProzent}"></div>
+            <p class="hint" id="ss-personalkosten-hint">–</p>
+          `}
           <div class="kpi-grid">
             <div class="kpi-card"><div class="kpi-value" id="ss-personalkosten-wert">–</div><div class="kpi-label">Personalkosten gesamt (Jahr)</div></div>
           </div>
         </div>
         <div class="card">
-          <h3>Betriebskosten ${jahr}</h3>
-          <p class="hint">Material ist standardmäßig ausgeschlossen (durchlaufender Posten, 1:1 an Kunden weiterberechnet).</p>
-          <table class="data-table">
-            <thead><tr><th></th><th>Kategorie</th><th class="text-right">Betrag</th></tr></thead>
-            <tbody>
-              ${kategorieZeilen.map((z) => `
+          <h3>Betriebskosten${modus === 'ist' ? ` ${jahr}` : ''}</h3>
+          ${modus === 'schaetzung' ? `
+            <div class="field"><label>Betriebskosten gesamt, geschätzt (€/Jahr, inkl. Miete/Versicherung/Abschreibungen usw.)</label><input type="number" id="ss-betriebskosten-schaetzung" step="100" min="0" value="${settings.stundensatzSchaetzBetriebskosten || 0}"></div>
+            <p class="hint">Material/Fremdleistung nicht einrechnen - wird 1:1 an Kunden weiterberechnet.</p>
+          ` : `
+            <p class="hint">Material ist standardmäßig ausgeschlossen (durchlaufender Posten, 1:1 an Kunden weiterberechnet).</p>
+            <table class="data-table">
+              <thead><tr><th></th><th>Kategorie</th><th class="text-right">Betrag</th></tr></thead>
+              <tbody>
+                ${kategorieZeilen.map((z) => `
+                  <tr>
+                    <td><input type="checkbox" class="ss-kategorie-checkbox" data-kategorie="${escapeHtml(z.kategorie)}" ${z.kategorie === 'Material' ? '' : 'checked'}></td>
+                    <td>${escapeHtml(z.kategorie)}</td>
+                    <td class="text-right">${formatCurrency(z.betrag)}</td>
+                  </tr>
+                `).join('')}
                 <tr>
-                  <td><input type="checkbox" class="ss-kategorie-checkbox" data-kategorie="${escapeHtml(z.kategorie)}" ${z.kategorie === 'Material' ? '' : 'checked'}></td>
-                  <td>${escapeHtml(z.kategorie)}</td>
-                  <td class="text-right">${formatCurrency(z.betrag)}</td>
+                  <td><input type="checkbox" checked disabled></td>
+                  <td>Abschreibungen (AfA, aus Anlagenverzeichnis)</td>
+                  <td class="text-right">${formatCurrency(afaGesamt)}</td>
                 </tr>
-              `).join('')}
-              <tr>
-                <td><input type="checkbox" checked disabled></td>
-                <td>Abschreibungen (AfA, aus Anlagenverzeichnis)</td>
-                <td class="text-right">${formatCurrency(afaGesamt)}</td>
-              </tr>
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          `}
           <div class="kpi-grid">
-            <div class="kpi-card"><div class="kpi-value" id="ss-betriebskosten-wert">–</div><div class="kpi-label">Betriebskosten gesamt (inkl. AfA)</div></div>
+            <div class="kpi-card"><div class="kpi-value" id="ss-betriebskosten-wert">–</div><div class="kpi-label">Betriebskosten gesamt${modus === 'ist' ? ' (inkl. AfA)' : ''}</div></div>
           </div>
         </div>
         <div class="card">
           <h3>Produktive Stunden</h3>
-          <div class="field"><label>Anzahl produktiver Mitarbeiter</label><input type="number" id="ss-anzahl-mitarbeiter" step="1" min="0" value="${mitarbeiterListe.length}"></div>
+          <div class="field"><label>Anzahl produktiver Mitarbeiter</label><input type="number" id="ss-anzahl-mitarbeiter" step="1" min="0" value="${modus === 'schaetzung' ? (mitarbeiterListe.length || 1) : mitarbeiterListe.length}"></div>
           <div class="field"><label>Jahresarbeitsstunden je Mitarbeiter</label><input type="number" id="ss-jahresstunden" step="1" min="1" value="${settings.jahresarbeitsstundenProMitarbeiter}"></div>
           <div class="field"><label>Produktivitätsgrad (%, verrechenbarer Anteil der Anwesenheitszeit)</label><input type="number" id="ss-produktivitaet" step="1" min="1" max="100" value="${settings.produktivitaetsgradProzent}"></div>
           <div class="kpi-grid">
@@ -1272,25 +1296,38 @@ export async function render(container) {
     `;
 
     function recompute() {
-      const lohnnebenkostenProzent = Number(host.querySelector('#ss-lohnnebenkosten').value) || 0;
-      const jahresarbeitsstunden = Number(host.querySelector('#ss-jahresstunden').value) || 0;
-      const personal = berechnePersonalkosten(mitarbeiterListe, { jahresarbeitsstunden, lohnnebenkostenProzent });
-      host.querySelector('#ss-personalkosten-wert').textContent = formatCurrency(personal.gesamt);
-      host.querySelector('#ss-personalkosten-hint').textContent = `Bruttolohnsumme ${formatCurrency(personal.bruttolohnsumme)} + Lohnnebenkosten ${formatCurrency(personal.lohnnebenkosten)}.`
-        + (personal.anzahlOhneZahlen ? ` ${personal.anzahlOhneZahlen} Mitarbeiter ohne hinterlegten Lohn wurden nicht berücksichtigt.` : '');
+      let personalkostenGesamt;
+      if (modus === 'schaetzung') {
+        personalkostenGesamt = Number(host.querySelector('#ss-personalkosten-schaetzung').value) || 0;
+        host.querySelector('#ss-personalkosten-wert').textContent = formatCurrency(personalkostenGesamt);
+      } else {
+        const lohnnebenkostenProzent = Number(host.querySelector('#ss-lohnnebenkosten').value) || 0;
+        const jahresarbeitsstunden = Number(host.querySelector('#ss-jahresstunden').value) || 0;
+        const personal = berechnePersonalkosten(mitarbeiterListe, { jahresarbeitsstunden, lohnnebenkostenProzent });
+        personalkostenGesamt = personal.gesamt;
+        host.querySelector('#ss-personalkosten-wert').textContent = formatCurrency(personal.gesamt);
+        host.querySelector('#ss-personalkosten-hint').textContent = `Bruttolohnsumme ${formatCurrency(personal.bruttolohnsumme)} + Lohnnebenkosten ${formatCurrency(personal.lohnnebenkosten)}.`
+          + (personal.anzahlOhneZahlen ? ` ${personal.anzahlOhneZahlen} Mitarbeiter ohne hinterlegten Lohn wurden nicht berücksichtigt.` : '');
+      }
 
-      const ausgeschlossen = Array.from(host.querySelectorAll('.ss-kategorie-checkbox')).filter((cb) => !cb.checked).map((cb) => cb.dataset.kategorie);
-      const betriebskosten = berechneBetriebskosten(ausgaben, jahr, ausgeschlossen);
-      const betriebskostenGesamt = betriebskosten.gesamt + afaGesamt;
+      let betriebskostenGesamt;
+      if (modus === 'schaetzung') {
+        betriebskostenGesamt = Number(host.querySelector('#ss-betriebskosten-schaetzung').value) || 0;
+      } else {
+        const ausgeschlossen = Array.from(host.querySelectorAll('.ss-kategorie-checkbox')).filter((cb) => !cb.checked).map((cb) => cb.dataset.kategorie);
+        const betriebskosten = berechneBetriebskosten(ausgaben, jahr, ausgeschlossen);
+        betriebskostenGesamt = betriebskosten.gesamt + afaGesamt;
+      }
       host.querySelector('#ss-betriebskosten-wert').textContent = formatCurrency(betriebskostenGesamt);
 
+      const jahresarbeitsstunden = Number(host.querySelector('#ss-jahresstunden').value) || 0;
       const anzahlMitarbeiter = Number(host.querySelector('#ss-anzahl-mitarbeiter').value) || 0;
       const produktivitaetsgradProzent = Number(host.querySelector('#ss-produktivitaet').value) || 0;
       const produktiveStunden = berechneProduktiveStunden({ anzahlMitarbeiter, jahresarbeitsstunden, produktivitaetsgradProzent });
       host.querySelector('#ss-stunden-wert').textContent = `${produktiveStunden.toLocaleString('de-DE')} Std.`;
 
       const gewinnaufschlagProzent = Number(host.querySelector('#ss-gewinnaufschlag').value) || 0;
-      const { breakEven, empfohlen } = berechneStundensatz({ personalkosten: personal.gesamt, betriebskosten: betriebskostenGesamt, produktiveStunden, gewinnaufschlagProzent });
+      const { breakEven, empfohlen } = berechneStundensatz({ personalkosten: personalkostenGesamt, betriebskosten: betriebskostenGesamt, produktiveStunden, gewinnaufschlagProzent });
       host.querySelector('#ss-breakeven-wert').textContent = formatCurrency(breakEven);
       host.querySelector('#ss-empfohlen-wert').textContent = formatCurrency(empfohlen);
       host.dataset.empfohlen = empfohlen;
@@ -1298,11 +1335,21 @@ export async function render(container) {
 
     host.querySelectorAll('input[type="number"]').forEach((el) => el.addEventListener('input', recompute));
     host.querySelectorAll('.ss-kategorie-checkbox').forEach((el) => el.addEventListener('change', recompute));
+    host.querySelectorAll('input[name="ss-modus"]').forEach((el) => el.addEventListener('change', async (e) => {
+      await setSettings({ stundensatzModus: e.target.value });
+      settings.stundensatzModus = e.target.value;
+      renderStundensatzRechner();
+    }));
     host.querySelector('#btn-stundensatz-uebernehmen').addEventListener('click', async () => {
       const wert = Number(host.dataset.empfohlen) || 0;
       if (!wert) { toast('Bitte zunächst gültige Werte eingeben', 'danger'); return; }
-      await setSettings({ stundensatz: wert });
-      settings.stundensatz = wert;
+      const patch = { stundensatz: wert };
+      if (modus === 'schaetzung') {
+        patch.stundensatzSchaetzPersonalkosten = Number(host.querySelector('#ss-personalkosten-schaetzung').value) || 0;
+        patch.stundensatzSchaetzBetriebskosten = Number(host.querySelector('#ss-betriebskosten-schaetzung').value) || 0;
+      }
+      await setSettings(patch);
+      Object.assign(settings, patch);
       host.querySelector('#ss-aktuell-wert').textContent = formatCurrency(wert);
       toast('Stundensatz übernommen', 'success');
     });
