@@ -5,6 +5,8 @@ import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } 
 import * as bankabgleich from '../bankabgleich.js';
 import * as journal from '../journal.js';
 import { berechneJahresAfa, aktuellerRestbuchwert } from '../abschreibung.js';
+import { berechnePersonalkosten, berechneBetriebskosten, berechneAbschreibungenGesamt, berechneProduktiveStunden, berechneStundensatz } from '../stundensatz.js';
+import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 const KLASSE_LABEL = Object.fromEntries(KONTEN_KLASSEN.map((k) => [k.id, k.titel]));
@@ -18,6 +20,7 @@ const BUCH_NAV = [
   { id: 'ustva', icon: '🧾', label: 'USt.-Voranmeldung' },
   { id: 'kontoabgleich', icon: '🏦', label: 'Kontoabgleich' },
   { id: 'anlagenverzeichnis', icon: '🏗️', label: 'Anlagenverzeichnis' },
+  { id: 'stundensatz', icon: '🧮', label: 'Stundenverrechnungssatz' },
 ];
 const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 
@@ -178,6 +181,16 @@ export async function render(container) {
           </div>
           <p class="hint">Größere Anschaffungen (Werkzeug, Maschinen, Fahrzeuge, Ausstattung) werden hier aktiviert und über die Nutzungsdauer linear abgeschrieben (AfA), statt sofort in voller Höhe als Aufwand gebucht zu werden. Geringwertige Wirtschaftsgüter (GWG, ≤ ${deNum(settings.gwgGrenzeNetto)} € netto) werden automatisch im Anschaffungsjahr sofort abgeschrieben. Ersetzt keine Steuerberatung.</p>
           <div id="anlagenverzeichnis-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="stundensatz" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Stundenverrechnungssatz</h2>
+            <div class="actions">
+              <select id="stundensatz-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+            </div>
+          </div>
+          <p class="hint">Ermittelt den kostendeckenden Mindeststundensatz aus echten Betriebsdaten - die klassische Handwerkskammer-Kalkulation: (Personalkosten + Betriebskosten) / produktive Gesamtstunden. Ersetzt keine betriebswirtschaftliche Beratung.</p>
+          <div id="stundensatz-host"></div>
         </div>
       </div>
     </div>
@@ -1190,6 +1203,114 @@ export async function render(container) {
     renderBilanz();
   });
 
+  async function renderStundensatzRechner() {
+    const host = container.querySelector('#stundensatz-host');
+    const jahrSelect = container.querySelector('#stundensatz-jahr-select');
+    const jahr = jahrSelect.value || String(new Date().getFullYear());
+    const [mitarbeiterListe, anlagen] = await Promise.all([getAll('mitarbeiter'), getAll('anlagegueter')]);
+
+    const betriebskostenAlle = berechneBetriebskosten(ausgaben, jahr, []);
+    const betragByKategorie = Object.fromEntries(betriebskostenAlle.zeilen.map((z) => [z.kategorie, z.betrag]));
+    const kategorieZeilen = AUSGABEN_KATEGORIEN.map((kategorie) => ({ kategorie, betrag: betragByKategorie[kategorie] || 0 }));
+    const afaGesamt = berechneAbschreibungenGesamt(anlagen, jahr);
+
+    host.innerHTML = `
+      <div class="form-grid">
+        <div class="card">
+          <h3>Personalkosten</h3>
+          <div class="field"><label>Lohnnebenkosten (%, Arbeitgeberanteil Sozialversicherung u.ä.)</label><input type="number" id="ss-lohnnebenkosten" step="0.1" min="0" value="${settings.lohnnebenkostenProzent}"></div>
+          <p class="hint" id="ss-personalkosten-hint">–</p>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-value" id="ss-personalkosten-wert">–</div><div class="kpi-label">Personalkosten gesamt (Jahr)</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Betriebskosten ${jahr}</h3>
+          <p class="hint">Material ist standardmäßig ausgeschlossen (durchlaufender Posten, 1:1 an Kunden weiterberechnet).</p>
+          <table class="data-table">
+            <thead><tr><th></th><th>Kategorie</th><th class="text-right">Betrag</th></tr></thead>
+            <tbody>
+              ${kategorieZeilen.map((z) => `
+                <tr>
+                  <td><input type="checkbox" class="ss-kategorie-checkbox" data-kategorie="${escapeHtml(z.kategorie)}" ${z.kategorie === 'Material' ? '' : 'checked'}></td>
+                  <td>${escapeHtml(z.kategorie)}</td>
+                  <td class="text-right">${formatCurrency(z.betrag)}</td>
+                </tr>
+              `).join('')}
+              <tr>
+                <td><input type="checkbox" checked disabled></td>
+                <td>Abschreibungen (AfA, aus Anlagenverzeichnis)</td>
+                <td class="text-right">${formatCurrency(afaGesamt)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-value" id="ss-betriebskosten-wert">–</div><div class="kpi-label">Betriebskosten gesamt (inkl. AfA)</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Produktive Stunden</h3>
+          <div class="field"><label>Anzahl produktiver Mitarbeiter</label><input type="number" id="ss-anzahl-mitarbeiter" step="1" min="0" value="${mitarbeiterListe.length}"></div>
+          <div class="field"><label>Jahresarbeitsstunden je Mitarbeiter</label><input type="number" id="ss-jahresstunden" step="1" min="1" value="${settings.jahresarbeitsstundenProMitarbeiter}"></div>
+          <div class="field"><label>Produktivitätsgrad (%, verrechenbarer Anteil der Anwesenheitszeit)</label><input type="number" id="ss-produktivitaet" step="1" min="1" max="100" value="${settings.produktivitaetsgradProzent}"></div>
+          <div class="kpi-grid">
+            <div class="kpi-card"><div class="kpi-value" id="ss-stunden-wert">–</div><div class="kpi-label">Produktive Gesamtstunden</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="field"><label>Gewinnaufschlag (%)</label><input type="number" id="ss-gewinnaufschlag" step="0.5" min="0" value="${settings.stundensatzGewinnaufschlagProzent}"></div>
+        <div class="kpi-grid">
+          <div class="kpi-card kpi-warn"><div class="kpi-value" id="ss-breakeven-wert">–</div><div class="kpi-label">Kostendeckender Mindeststundensatz</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="ss-empfohlen-wert">–</div><div class="kpi-label">Empfohlener Verkaufsstundensatz (inkl. Aufschlag)</div></div>
+          <div class="kpi-card"><div class="kpi-value" id="ss-aktuell-wert">${formatCurrency(settings.stundensatz)}</div><div class="kpi-label">Aktuell hinterlegt (Einstellungen)</div></div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn btn-primary" id="btn-stundensatz-uebernehmen">Als Stundensatz übernehmen</button>
+        </div>
+      </div>
+    `;
+
+    function recompute() {
+      const lohnnebenkostenProzent = Number(host.querySelector('#ss-lohnnebenkosten').value) || 0;
+      const jahresarbeitsstunden = Number(host.querySelector('#ss-jahresstunden').value) || 0;
+      const personal = berechnePersonalkosten(mitarbeiterListe, { jahresarbeitsstunden, lohnnebenkostenProzent });
+      host.querySelector('#ss-personalkosten-wert').textContent = formatCurrency(personal.gesamt);
+      host.querySelector('#ss-personalkosten-hint').textContent = `Bruttolohnsumme ${formatCurrency(personal.bruttolohnsumme)} + Lohnnebenkosten ${formatCurrency(personal.lohnnebenkosten)}.`
+        + (personal.anzahlOhneZahlen ? ` ${personal.anzahlOhneZahlen} Mitarbeiter ohne hinterlegten Lohn wurden nicht berücksichtigt.` : '');
+
+      const ausgeschlossen = Array.from(host.querySelectorAll('.ss-kategorie-checkbox')).filter((cb) => !cb.checked).map((cb) => cb.dataset.kategorie);
+      const betriebskosten = berechneBetriebskosten(ausgaben, jahr, ausgeschlossen);
+      const betriebskostenGesamt = betriebskosten.gesamt + afaGesamt;
+      host.querySelector('#ss-betriebskosten-wert').textContent = formatCurrency(betriebskostenGesamt);
+
+      const anzahlMitarbeiter = Number(host.querySelector('#ss-anzahl-mitarbeiter').value) || 0;
+      const produktivitaetsgradProzent = Number(host.querySelector('#ss-produktivitaet').value) || 0;
+      const produktiveStunden = berechneProduktiveStunden({ anzahlMitarbeiter, jahresarbeitsstunden, produktivitaetsgradProzent });
+      host.querySelector('#ss-stunden-wert').textContent = `${produktiveStunden.toLocaleString('de-DE')} Std.`;
+
+      const gewinnaufschlagProzent = Number(host.querySelector('#ss-gewinnaufschlag').value) || 0;
+      const { breakEven, empfohlen } = berechneStundensatz({ personalkosten: personal.gesamt, betriebskosten: betriebskostenGesamt, produktiveStunden, gewinnaufschlagProzent });
+      host.querySelector('#ss-breakeven-wert').textContent = formatCurrency(breakEven);
+      host.querySelector('#ss-empfohlen-wert').textContent = formatCurrency(empfohlen);
+      host.dataset.empfohlen = empfohlen;
+    }
+
+    host.querySelectorAll('input[type="number"]').forEach((el) => el.addEventListener('input', recompute));
+    host.querySelectorAll('.ss-kategorie-checkbox').forEach((el) => el.addEventListener('change', recompute));
+    host.querySelector('#btn-stundensatz-uebernehmen').addEventListener('click', async () => {
+      const wert = Number(host.dataset.empfohlen) || 0;
+      if (!wert) { toast('Bitte zunächst gültige Werte eingeben', 'danger'); return; }
+      await setSettings({ stundensatz: wert });
+      settings.stundensatz = wert;
+      host.querySelector('#ss-aktuell-wert').textContent = formatCurrency(wert);
+      toast('Stundensatz übernommen', 'success');
+    });
+
+    recompute();
+  }
+  container.querySelector('#stundensatz-jahr-select').addEventListener('change', renderStundensatzRechner);
+
   renderContent();
   renderKontenplan();
   renderJournal();
@@ -1198,4 +1319,5 @@ export async function render(container) {
   renderUstva();
   renderKontoabgleich();
   renderAnlagenverzeichnis();
+  renderStundensatzRechner();
 }
