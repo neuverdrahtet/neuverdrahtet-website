@@ -62,6 +62,7 @@ const STORES = {
   buchungen: 'id',
   bankbuchungen: 'id',
   anlagegueter: 'id',
+  kundenStatus: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2236,6 +2237,13 @@ export const DEFAULT_AUFGABEN_STATUS = [
   { id: 'erledigt', titel: 'Erledigt', farbe: '#1f8a4c', reihenfolge: 3, geschlossen: true },
 ];
 
+export const DEFAULT_KUNDEN_STATUS = [
+  { id: 'lead', titel: 'Lead', farbe: '#2b7fd6', reihenfolge: 0 },
+  { id: 'interessent', titel: 'Interessent', farbe: '#f0a020', reihenfolge: 1 },
+  { id: 'kunde', titel: 'Kunde', farbe: '#1f8a4c', reihenfolge: 2 },
+  { id: 'verloren', titel: 'Verloren', farbe: '#95a5a6', reihenfolge: 3, geschlossen: true },
+];
+
 export const ZUGRIFFSROLLEN = [
   { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen und Buchhaltung.' },
   { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen und Buchhaltungs-Export.' },
@@ -2245,6 +2253,7 @@ export const ZUGRIFFSROLLEN = [
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
   kunden: ['admin', 'buero'],
+  leadpipeline: ['admin', 'buero'],
   kanban: ['admin', 'buero'],
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
@@ -2422,6 +2431,21 @@ export async function ensureSeeded() {
   const missingKonten = DEFAULT_KONTEN.filter((k) => !kontenIds.has(k.id));
   for (const k of missingKonten) {
     await put('konten', k);
+  }
+  const kundenStatus = await getAll('kundenStatus');
+  const kundenStatusIds = new Set(kundenStatus.map((s) => s.id));
+  const missingKundenStatus = DEFAULT_KUNDEN_STATUS.filter((s) => !kundenStatusIds.has(s.id));
+  for (const s of missingKundenStatus) {
+    await put('kundenStatus', s);
+  }
+  // Bestehende Kunden aus der Zeit vor der Lead-Pipeline haben noch kein
+  // status-Feld - sie haben i.d.R. bereits eine Historie und werden daher
+  // nicht rückwirkend zu "Lead" degradiert, sondern direkt als "Kunde" geführt.
+  const kunden = await getAll('kunden');
+  for (const k of kunden) {
+    if (!k.status) {
+      await put('kunden', { ...k, status: 'kunde' });
+    }
   }
 }
 

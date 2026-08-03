@@ -17,6 +17,7 @@ import { preloadGis } from './google.js';
 const routeLoaders = {
   dashboard: () => import('./views/dashboard.js'),
   kunden: () => import('./views/kunden.js'),
+  leadpipeline: () => import('./views/leadpipeline.js'),
   kanban: () => import('./views/kanban.js'),
   projekte: () => import('./views/projekte.js'),
   auftraege: () => import('./views/auftraege.js'),
