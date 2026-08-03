@@ -202,14 +202,16 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken] = await Promise.all([
-    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'),
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe] = await Promise.all([
+    getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
+  kundenStatusListe.sort((a, b) => a.reihenfolge - b.reihenfolge);
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
+  const kundenStatusById = Object.fromEntries(kundenStatusListe.map((s) => [s.id, s]));
   let filtered = kunden;
   const bulk = createBulkSelect('kunden', { label: 'Kunden' });
 
@@ -239,20 +241,24 @@ export async function render(container) {
       ${bulk.barHtml()}
       <table class="data-table">
         <thead><tr>
-          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
+          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Status</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
         </tr></thead>
         <tbody>
-          ${filtered.map((k) => `
+          ${filtered.map((k) => {
+            const status = kundenStatusById[k.status || 'kunde'];
+            return `
             <tr data-id="${k.id}">
               ${bulk.rowCell(k.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${k.farbe || '#6b7280'}"></span></td>
               <td>${escapeHtml(k.firma)}</td>
+              <td>${status ? `<span class="badge" style="background:${status.farbe}22;color:${status.farbe}">${escapeHtml(status.titel)}</span>` : ''}</td>
               <td>${escapeHtml(k.ansprechpartner || '')}</td>
               <td>${escapeHtml(k.ort || '')}</td>
               <td>${escapeHtml(k.telefon || '')}</td>
               <td>${escapeHtml(k.email || '')}</td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;
@@ -350,7 +356,7 @@ export async function render(container) {
   function openForm(kunde) {
     const isEdit = !!kunde;
     const neueId = uid();
-    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', istPrivatperson: false, farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
+    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', istPrivatperson: false, farbe: farbeAusText(neueId, KUNDEN_FARBEN), status: kundenStatusListe[0]?.id || 'lead' };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));
@@ -367,6 +373,9 @@ export async function render(container) {
             <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required value="${escapeHtml(data.firma)}"></div>
             <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(data.ansprechpartner || '')}"></div>
             <div class="field"><label>Kundennummer</label><input name="kundennummer" value="${escapeHtml(data.kundennummer || suggestedKundennummer)}"></div>
+            <div class="field"><label>Status</label>
+              <select name="status">${kundenStatusListe.map((s) => `<option value="${s.id}" ${s.id === (data.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
             <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
             <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
