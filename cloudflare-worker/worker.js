@@ -1,13 +1,14 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
  * Angebotspositionen erzeugen, analysiert ein fotografiertes Beleg-Bild und
- * liefert Händler/Datum/Betrag/Kategorie zurück, oder löst eine Firebase-
- * Cloud-Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Die
- * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
- * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
- * Browser geschickt.
+ * liefert Händler/Datum/Betrag/Kategorie zurück, recherchiert für
+ * unbepreiste GAEB-Positionen per Web-Search-Tool marktübliche Preise, oder
+ * löst eine Firebase-Cloud-Messaging-Push-Benachrichtigung an einzelne
+ * Geräte-Tokens aus. Die Geheimnisse (Anthropic-API-Key, Firebase-Service-
+ * Account) bleiben ausschließlich hier im Worker (als Secrets) – sie werden
+ * NIE an den Browser geschickt.
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -341,6 +342,97 @@ async function callClaudeEmailClassify({ apiKey, model, emails, heute }) {
   return JSON.parse(textBlock.text);
 }
 
+const GAEB_PREISVORSCHLAEGE_SCHEMA = {
+  type: 'object',
+  properties: {
+    ergebnisse: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'number' },
+          einzelpreis: { type: 'number' },
+          gefunden: { type: 'boolean' },
+          quelle: { type: 'string' },
+        },
+        required: ['index', 'einzelpreis', 'gefunden', 'quelle'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['ergebnisse'],
+  additionalProperties: false,
+};
+
+const GAEB_PREISE_SYSTEM_PROMPT = `Du recherchierst für einen deutschen Elektro-/Handwerksbetrieb aktuelle, marktübliche Netto-Verkaufspreise für Positionen aus einem Leistungsverzeichnis (GAEB-Import), indem du gezielt im Internet suchst - bei Herstellern (z.B. Hager, Gira, Busch-Jaeger, ABB, Siemens, OBO Bettermann, Jung), Elektro-Fachgroßhändlern (z.B. Sonepar, Rexel, Elektroshop24, Voltimum) und einschlägigen Baumärkten/Online-Händlern (z.B. Bauhaus, Hornbach, Amazon, Conrad).
+
+Regeln:
+- Antworte ausschließlich auf Deutsch.
+- Für jede Position (gekennzeichnet mit [index] Bezeichnung/Beschreibung/Menge/Einheit) suchst du im Internet nach dem passenden Artikel bzw. der passenden Leistung und lieferst einen realistischen Netto-Einzelpreis (EUR) je Einheit, wie ihn ein Handwerksbetrieb einem Kunden in Rechnung stellen würde (inkl. üblicher Handelsspanne, nicht nur der reine Einkaufspreis). Bei reinen Arbeitsleistungen ohne Materialbezug (z.B. "Montage", "Anschluss", "Std.") schätze einen branchenüblichen Stundensatz bzw. Pauschalpreis.
+- "index" muss exakt der Zahl in eckigen Klammern der jeweiligen Position entsprechen.
+- "gefunden": true nur, wenn du eine belastbare, tatsächlich recherchierte Preisgrundlage gefunden hast. false, wenn du keinen passenden Treffer findest oder nur raten würdest - in diesem Fall trotzdem "einzelpreis" mit einer vorsichtigen Schätzung befüllen, aber "gefunden" auf false setzen.
+- "quelle": kurze Angabe, worauf sich der Preis stützt (z.B. Hersteller-/Händlername oder "Schätzung, kein Treffer gefunden"), max. ca. 60 Zeichen.
+- Erfinde keine Quellen - wenn du nicht wirklich recherchiert hast, gib das ehrlich über "gefunden": false an.
+- Liefere für JEDE übergebene Position genau ein Ergebnis, keine zusätzlichen oder fehlenden Einträge.`;
+
+async function callClaudeGaebPreise({ apiKey, model, positionen }) {
+  const listText = positionen
+    .map((p, i) => `[${i}] ${p.bezeichnung || ''}${p.beschreibung ? ' - ' + p.beschreibung : ''} | Menge: ${p.menge ?? 1} ${p.einheit || ''}`)
+    .join('\n');
+
+  const initialContent = `Recherchiere für folgende Positionen eines Leistungsverzeichnisses marktübliche Netto-Einzelpreise:\n\n${listText}`;
+  let messages = [{ role: 'user', content: initialContent }];
+  let data;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        system: GAEB_PREISE_SYSTEM_PROMPT,
+        messages,
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: positionen.length * 2 + 5 }],
+        output_config: {
+          format: { type: 'json_schema', schema: GAEB_PREISVORSCHLAEGE_SCHEMA },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+
+    data = await res.json();
+    if (data.stop_reason === 'refusal') {
+      throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+    }
+    if (data.stop_reason === 'pause_turn') {
+      messages = [{ role: 'user', content: initialContent }, { role: 'assistant', content: data.content }];
+      continue;
+    }
+    break;
+  }
+
+  const textBlock = (data.content || []).filter((b) => b.type === 'text').pop();
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  try {
+    return JSON.parse(textBlock.text);
+  } catch {
+    const match = /\{[\s\S]*\}/.exec(textBlock.text);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Antwort der KI konnte nicht als JSON gelesen werden.');
+  }
+}
+
 // --- Push-Versand (Firebase Cloud Messaging HTTP v1, Server-Auth per Service Account) ---
 
 function base64UrlEncode(data) {
@@ -523,6 +615,28 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           emails: body.emails,
           heute: body.heute,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'gaeb-preise-recherchieren') {
+      if (!Array.isArray(body.positionen) || body.positionen.length === 0) {
+        return new Response(JSON.stringify({ error: 'Feld "positionen" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeGaebPreise({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          positionen: body.positionen,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
