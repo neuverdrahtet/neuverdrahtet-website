@@ -1,0 +1,9 @@
+name = "neuverdrahtet-kostenschaetzer"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secret (FIREBASE_SERVICE_ACCOUNT_JSON) wird NICHT hier eingetragen,
+# sondern per "wrangler secret put" bzw. im Cloudflare-Dashboard gesetzt.
+
+[vars]
+ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
