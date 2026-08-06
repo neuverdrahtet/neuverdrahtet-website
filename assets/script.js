@@ -151,7 +151,8 @@ document.querySelectorAll('.ajax-form').forEach(form => {
       // Formspree-Plan-Limits) — dann lieber die Anfrage ohne Fotos erneut
       // senden, statt den ganzen Lead zu verlieren.
       if (!res.ok && hasFiles) {
-        console.warn('neuverdrahtet: Übertragung mit Anhang fehlgeschlagen (Status ' + res.status + '), erneuter Versuch ohne Anhang.');
+        const bodyText = await res.text().catch(() => '(kein Antworttext)');
+        console.warn('neuverdrahtet: Übertragung mit Anhang fehlgeschlagen — Status ' + res.status + ', Antwort: ' + bodyText);
         const fdWithoutFile = new FormData(form);
         fdWithoutFile.delete(fileInput.name);
         res = await postFormData(fdWithoutFile);
@@ -174,7 +175,8 @@ document.querySelectorAll('.ajax-form').forEach(form => {
         trackEvent('generate_lead', { method: form.dataset.leadSource || 'contact_form' });
         form.reset();
       } else {
-        console.error('neuverdrahtet: Formspree-Übertragung fehlgeschlagen, Status ' + res.status);
+        const bodyText = await res.text().catch(() => '(kein Antworttext)');
+        console.error('neuverdrahtet: Formspree-Übertragung fehlgeschlagen — Status ' + res.status + ', Antwort: ' + bodyText);
         throw new Error('send-failed');
       }
     } catch (err) {
