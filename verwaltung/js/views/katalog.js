@@ -628,7 +628,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
             <div class="flex-row flex-wrap">
               <select id="komp-add-select">
                 <option value="">Komponente wählen ...</option>
-                ${komponentenAuswahl.map((k) => `<option value="${k.id}">${escapeHtml(TYP_LABEL[k.typ] || '')}: ${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)})</option>`).join('')}
+                ${komponentenAuswahl.map((k) => `<option value="${k.id}">${escapeHtml(TYP_LABEL[k.typ] || '')}: ${escapeHtml(k.bezeichnung)} (${formatCurrency(k.preis)} / ${escapeHtml(k.einheit || 'Stk.')})</option>`).join('')}
               </select>
               <button type="button" class="btn btn-sm" id="btn-komp-add">+ hinzufügen</button>
             </div>
@@ -755,7 +755,8 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
         return `
           <div class="flex-row" data-i="${i}" style="align-items:center;margin-bottom:6px">
             <span style="flex:1">${escapeHtml(komp?.bezeichnung || '(gelöscht)')}</span>
-            <input type="number" step="0.01" min="0" class="komp-menge" value="${k.menge ?? 1}" style="width:80px">
+            <input type="number" step="0.01" min="0" class="komp-menge" value="${k.menge ?? 1}" style="width:70px">
+            <span class="text-mute" style="width:40px">${escapeHtml(komp?.einheit || '')}</span>
             <span style="width:90px;text-align:right">${formatCurrency(zeilensumme)}</span>
             <button type="button" class="btn btn-sm btn-ghost komp-del" title="Entfernen">✕</button>
           </div>
