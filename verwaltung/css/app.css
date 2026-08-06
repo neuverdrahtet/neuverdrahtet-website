@@ -46,6 +46,11 @@ html, body {
   font-size: 14px;
 }
 
+/* Solange ein Modal offen ist (siehe ui.js openModal): Hintergrundseite
+   nicht mitscrollen lassen - sonst auf iOS Safari teils sichtbares
+   "Durchscheinen" der Listen-/Seiteninhalte durchs Modal. */
+body.modal-open { overflow: hidden; }
+
 a { color: inherit; }
 
 button {
