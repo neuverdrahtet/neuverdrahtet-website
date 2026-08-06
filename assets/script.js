@@ -123,6 +123,16 @@ document.querySelectorAll('.hero-slider').forEach(slider => {
    all share the .ajax-form/.form-status convention)
    ========================================================= */
 document.querySelectorAll('.ajax-form').forEach(form => {
+  const fileInput = form.querySelector('input[type="file"]');
+
+  function postFormData(fd) {
+    return fetch(form.action, {
+      method: 'POST',
+      body: fd,
+      headers: { 'Accept': 'application/json' }
+    });
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submitBtn = form.querySelector('button[type="submit"]');
@@ -132,12 +142,30 @@ document.querySelectorAll('.ajax-form').forEach(form => {
     submitBtn.textContent = 'Wird gesendet …';
     if (statusEl) { statusEl.textContent = ''; statusEl.className = 'form-status'; }
 
+    const hasFiles = !!(fileInput && fileInput.files && fileInput.files.length);
+
     try {
-      const res = await fetch(form.action, {
-        method: 'POST',
-        body: new FormData(form),
-        headers: { 'Accept': 'application/json' }
-      });
+      let res = await postFormData(new FormData(form));
+
+      // Ein Foto-Anhang kann die gesamte Übertragung blockieren (z.B. wegen
+      // Formspree-Plan-Limits) — dann lieber die Anfrage ohne Fotos erneut
+      // senden, statt den ganzen Lead zu verlieren.
+      if (!res.ok && hasFiles) {
+        console.warn('neuverdrahtet: Übertragung mit Anhang fehlgeschlagen (Status ' + res.status + '), erneuter Versuch ohne Anhang.');
+        const fdWithoutFile = new FormData(form);
+        fdWithoutFile.delete(fileInput.name);
+        res = await postFormData(fdWithoutFile);
+        if (res.ok) {
+          if (statusEl) {
+            statusEl.textContent = 'Danke — Ihre Anfrage ist angekommen. Die Fotos konnten leider nicht übertragen werden, bitte reichen Sie diese per E-Mail an neuverdrahtet@gmail.com nach.';
+            statusEl.classList.add('ok');
+          }
+          trackEvent('generate_lead', { method: form.dataset.leadSource || 'contact_form', attachment: 'failed' });
+          form.reset();
+          return;
+        }
+      }
+
       if (res.ok) {
         if (statusEl) {
           statusEl.textContent = 'Danke — Ihre Anfrage ist angekommen. Rückmeldung folgt in Kürze.';
@@ -146,6 +174,7 @@ document.querySelectorAll('.ajax-form').forEach(form => {
         trackEvent('generate_lead', { method: form.dataset.leadSource || 'contact_form' });
         form.reset();
       } else {
+        console.error('neuverdrahtet: Formspree-Übertragung fehlgeschlagen, Status ' + res.status);
         throw new Error('send-failed');
       }
     } catch (err) {
