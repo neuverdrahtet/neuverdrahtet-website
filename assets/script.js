@@ -187,9 +187,15 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
 
   // Risk factors widen the price range and drive the Grün/Gelb/Rot badge.
   // Weighted 0.05–0.10 per open/unknown answer, capped at ±35%.
+  // Risk fields inside a currently-hidden .calc-conditional block (e.g. a
+  // "Sanierung"-only question while "Neubau" is selected) don't count.
+  function isInsideHiddenConditional(el) {
+    const block = el.closest('.calc-conditional');
+    return block ? block.hidden : false;
+  }
   function activeRiskEls() {
-    const activeToggles = Array.from(riskToggleButtons).filter(b => b.classList.contains('is-active'));
-    const checkedBoxes = Array.from(riskCheckboxes).filter(c => c.checked);
+    const activeToggles = Array.from(riskToggleButtons).filter(b => b.classList.contains('is-active') && !isInsideHiddenConditional(b));
+    const checkedBoxes = Array.from(riskCheckboxes).filter(c => c.checked && !isInsideHiddenConditional(c));
     return activeToggles.concat(checkedBoxes);
   }
   function activeRiskScore() {
@@ -331,6 +337,20 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
     });
   });
   riskCheckboxes.forEach(chk => chk.addEventListener('change', recalcAll));
+
+  /* --- Bauart-Umschalter (z.B. Neubau/Sanierung): blendet passende
+     .calc-conditional-Blöcke ein/aus, deren Risikofelder dann mitzählen --- */
+  const modeToggleButtons = calc.querySelectorAll('.calc-mode-toggle button');
+  const conditionalBlocks = calc.querySelectorAll('.calc-conditional');
+  modeToggleButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeToggleButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      const reveal = btn.dataset.reveals;
+      conditionalBlocks.forEach(block => { block.hidden = block.dataset.showWhen !== reveal; });
+      recalcAll();
+    });
+  });
 
   /* --- Anfrage senden: inline Kontakt-Reveal mit Auto-Zusammenfassung --- */
   const contactToggleBtn = calc.querySelector('.calc-contact-toggle');
