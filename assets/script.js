@@ -352,6 +352,10 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
     });
     const floorBtn = Array.from(floorButtons).find(b => b.classList.contains('is-active'));
     if (floorBtn) lines.push(`- Etage: ${floorBtn.textContent.trim()}`);
+    calc.querySelectorAll('.calc-info-field').forEach(field => {
+      const val = (field.value || '').trim();
+      if (val) lines.push(`- ${field.dataset.summaryLabel || field.name}: ${val}`);
+    });
     lines.push(`- Geschätzte Kosten: ${grandMinEl.textContent} – ${grandMaxEl.textContent}`);
     const notes = activeRiskNotes();
     if (notes.length) lines.push(`- Offene Punkte: ${notes.join(', ')}`);

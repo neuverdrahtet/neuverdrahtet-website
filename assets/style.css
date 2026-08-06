@@ -541,6 +541,8 @@ section{ padding:88px 0; }
 }
 .calc-risk-notes li{ padding-left:14px; position:relative; margin-top:4px; }
 .calc-risk-notes li::before{ content:"–"; position:absolute; left:0; }
+.calc-risk-check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--ink); cursor:pointer; font-weight:600; }
+.calc-risk-check-row input{ width:18px; height:18px; accent-color:var(--orange); flex:none; cursor:pointer; }
 
 .calc-result-blocked{
   margin-top:8px; padding:26px; border-radius:var(--radius-sm);

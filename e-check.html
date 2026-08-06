@@ -281,9 +281,9 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label for="calc-area-slider">Anzahl Geräte</label>
+          <label for="calc-area-slider-echeck">Anzahl Geräte</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" id="calc-area-slider" min="5" max="100" step="5" value="20">
+            <input type="range" class="calc-area" id="calc-area-slider-echeck" min="5" max="100" step="5" value="20">
             <span class="val calc-area-val">20 Geräte</span>
           </div>
         </div>
@@ -308,10 +308,50 @@
             <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
           </div>
         </div>
+      <div class="calc-field calc-risk-field">
+        <label>Prüfbericht der letzten Prüfung vorhanden?</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0">Ja</button>
+          <button type="button" data-risk-weight="0.05" data-risk-note="Kein Prüfbericht vorhanden — Zustand der Anlage vorab unklar">Nein</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Nicht bekannt, ob ein Prüfbericht vorliegt" class="is-active">Weiß nicht</button>
+        </div>
+      </div>
+      <div class="calc-field">
+        <label for="echeck-verteilungen">Anzahl Verteilungen <span class="calc-floors-hint">(optional, hilft bei der Einschätzung)</span></label>
+        <input type="number" id="echeck-verteilungen" class="calc-info-field" min="1" placeholder="z. B. 2" data-summary-label="Anzahl Verteilungen">
+      </div>
       <div class="calc-result calc-grand-total">
         <div class="label">Geschätzte Gesamtkosten</div>
         <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="calc-risk-badge" hidden></div>
+        <ul class="calc-risk-notes"></ul>
         <div class="note">Grober Richtwert — kein verbindliches Angebot.</div>
+      </div>
+      <div class="calc-contact-cta">
+        <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
+      </div>
+      <div class="calc-contact-reveal" hidden>
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="echeck_calculator">
+          <input type="hidden" name="service" value="E-Check">
+          <div class="form-row">
+            <div class="field"><label for="echeck-lead-name">Name</label><input type="text" id="echeck-lead-name" name="name" required></div>
+            <div class="field"><label for="echeck-lead-email">E-Mail</label><input type="email" id="echeck-lead-email" name="email" required></div>
+          </div>
+          <div class="field"><label for="echeck-lead-phone">Telefon (optional)</label><input type="tel" id="echeck-lead-phone" name="phone"></div>
+          <div class="field"><label for="echeck-lead-message">Nachricht</label><textarea id="echeck-lead-message" name="message" class="calc-contact-message" required></textarea></div>
+          <div class="calc-field">
+            <label for="echeck-lead-photos">Fotos / Prüfbericht (optional)</label>
+            <label class="dropzone" for="echeck-lead-photos">
+              <input type="file" id="echeck-lead-photos" name="attachment" accept="image/*,.pdf" multiple>
+              <p><strong>Klicken oder per Drag &amp; Drop</strong><br>z. B. Verteilung, letzter Prüfbericht</p>
+            </label>
+            <p class="upload-hint" hidden>Bitte möglichst nicht mehr als ca. 5 Dateien anhängen — größere Mengen können die Übertragung verlangsamen.</p>
+            <div class="preview-wrap"><div class="preview-grid"></div></div>
+          </div>
+          <p class="form-note">Mit dem Absenden stimmen Sie der Verarbeitung Ihrer Daten (inkl. hochgeladener Dateien) gemäß <a href="datenschutz.html">Datenschutzerklärung</a> zu.</p>
+          <button type="submit" class="btn btn-primary btn-block">Anfrage jetzt senden</button>
+          <p class="form-status" role="status"></p>
+        </form>
       </div>
     </div>
     </div>

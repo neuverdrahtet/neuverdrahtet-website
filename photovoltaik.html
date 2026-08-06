@@ -281,9 +281,9 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label for="calc-area-slider">Anlagengröße</label>
+          <label for="calc-area-slider-pv">Anlagengröße</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" id="calc-area-slider" min="3" max="20" step="0.5" value="8">
+            <input type="range" class="calc-area" id="calc-area-slider-pv" min="3" max="20" step="0.5" value="8">
             <span class="val calc-area-val">8 kWp</span>
           </div>
         </div>
@@ -298,6 +298,31 @@
           <p class="calc-service-note">Grober Richtwert für den elektro-seitigen Anschluss je kWp — nicht die PV-Montage selbst.</p>
         </div>
       </div>
+      <div class="calc-service-item" data-service="kabelweg" data-mode="unit" data-unit-suffix="lfm" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Kabelweg Wechselrichter–Zählerschrank</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none">
+          <div class="calc-field">
+          <label for="calc-area-slider-kabelweg">Länge des Kabelwegs</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" id="calc-area-slider-kabelweg" min="0" max="20" step="1" value="5">
+            <span class="val calc-area-val">5 lfm</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Verlegeart</label>
+            <div class="calc-toggle calc-tier">
+            <button type="button" data-value="aufputz" data-low="15" data-high="25" class="">Aufputz / Kabelkanal <span class="calc-toggle-sub">sichtbar verlegt</span></button>
+            <button type="button" data-value="unterputz" data-low="25" data-high="45" class="is-active">Unterputz <span class="calc-toggle-sub">Wand aufstemmen</span></button>
+            <button type="button" data-value="erdverlegung" data-low="35" data-high="60" class="">Erdverlegung <span class="calc-toggle-sub">im Außenbereich</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Zusatzkosten für den Kabelweg vom Dach/Wechselrichter zum Zählerschrank, je laufendem Meter.</p>
+        </div>
+      </div>
       </div>
       <div class="calc-field calc-floors-field">
           <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
@@ -308,10 +333,66 @@
             <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
           </div>
         </div>
+      <div class="calc-field calc-risk-field">
+        <label>Alter des Zählerschranks</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0">&lt; 10 Jahre</button>
+          <button type="button" data-risk-weight="0.05">10–25 Jahre</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Zählerschrank vermutlich veraltet — ggf. Zusatzarbeiten nötig">&gt; 25 Jahre</button>
+          <button type="button" data-risk-weight="0.1" data-risk-note="Alter des Zählerschranks nicht bekannt" class="is-active">Weiß nicht</button>
+        </div>
+      </div>
+      <div class="calc-field calc-risk-field">
+        <label>Überspannungsschutz vorhanden?</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0">Ja</button>
+          <button type="button" data-risk-weight="0.05" data-risk-note="Kein Überspannungsschutz vorhanden — ggf. Nachrüstung nötig">Nein</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Überspannungsschutz-Status nicht bekannt" class="is-active">Weiß nicht</button>
+        </div>
+      </div>
+      <div class="calc-field calc-risk-field">
+        <label class="calc-risk-check-row">
+          <input type="checkbox" class="calc-risk-check" data-risk-blocker="true">
+          Dachstatik ungeklärt / Asbestverdacht
+        </label>
+        <p class="calc-floors-hint">Bei Verdacht ist vor jeder Kalkulation eine technische Prüfung vor Ort nötig.</p>
+      </div>
       <div class="calc-result calc-grand-total">
         <div class="label">Geschätzte Gesamtkosten</div>
         <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="calc-risk-badge" hidden></div>
+        <ul class="calc-risk-notes"></ul>
         <div class="note">Grober Richtwert — kein verbindliches Angebot.</div>
+      </div>
+      <div class="calc-result-blocked" hidden>
+        <div class="label">Technische Prüfung erforderlich</div>
+        <p>Bei ungeklärter Dachstatik oder Asbestverdacht können wir vorab keine seriöse Kosteneinschätzung berechnen. Bitte fordern Sie einen Vor-Ort-Termin an — wir prüfen die Voraussetzungen und liefern Ihnen danach eine verlässliche Kalkulation.</p>
+      </div>
+      <div class="calc-contact-cta">
+        <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
+      </div>
+      <div class="calc-contact-reveal" hidden>
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="photovoltaik_calculator">
+          <input type="hidden" name="service" value="Photovoltaik">
+          <div class="form-row">
+            <div class="field"><label for="pv-lead-name">Name</label><input type="text" id="pv-lead-name" name="name" required></div>
+            <div class="field"><label for="pv-lead-email">E-Mail</label><input type="email" id="pv-lead-email" name="email" required></div>
+          </div>
+          <div class="field"><label for="pv-lead-phone">Telefon (optional)</label><input type="tel" id="pv-lead-phone" name="phone"></div>
+          <div class="field"><label for="pv-lead-message">Nachricht</label><textarea id="pv-lead-message" name="message" class="calc-contact-message" required></textarea></div>
+          <div class="calc-field">
+            <label for="pv-lead-photos">Fotos / Dachaufnahmen (optional)</label>
+            <label class="dropzone" for="pv-lead-photos">
+              <input type="file" id="pv-lead-photos" name="attachment" accept="image/*,.pdf" multiple>
+              <p><strong>Klicken oder per Drag &amp; Drop</strong><br>z. B. Zählerschrank, Dach, Grundriss</p>
+            </label>
+            <p class="upload-hint" hidden>Bitte möglichst nicht mehr als ca. 5 Fotos anhängen — größere Mengen können die Übertragung verlangsamen.</p>
+            <div class="preview-wrap"><div class="preview-grid"></div></div>
+          </div>
+          <p class="form-note">Mit dem Absenden stimmen Sie der Verarbeitung Ihrer Daten (inkl. hochgeladener Fotos) gemäß <a href="datenschutz.html">Datenschutzerklärung</a> zu.</p>
+          <button type="submit" class="btn btn-primary btn-block">Anfrage jetzt senden</button>
+          <p class="form-status" role="status"></p>
+        </form>
       </div>
     </div>
     </div>
