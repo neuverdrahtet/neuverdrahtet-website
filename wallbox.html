@@ -295,9 +295,9 @@
         </label>
         <div class="calc-service-body">
           <div class="calc-field">
-          <label for="calc-area-slider">Ladepunkte</label>
+          <label for="calc-area-slider-wallbox">Ladepunkte</label>
           <div class="calc-slider">
-            <input type="range" class="calc-area" id="calc-area-slider" min="1" max="5" step="1" value="1">
+            <input type="range" class="calc-area" id="calc-area-slider-wallbox" min="1" max="5" step="1" value="1">
             <span class="val calc-area-val">1 Stück</span>
           </div>
         </div>
@@ -312,6 +312,31 @@
           <p class="calc-service-note">Grober Richtwert inkl. Wallbox-Gerät, Material und Anschluss.</p>
         </div>
       </div>
+      <div class="calc-service-item" data-service="zuleitung" data-mode="unit" data-unit-suffix="lfm" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Zuleitung / Kabelweg</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none">
+          <div class="calc-field">
+          <label for="calc-area-slider-zuleitung">Länge der Zuleitung</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" id="calc-area-slider-zuleitung" min="0" max="30" step="1" value="5">
+            <span class="val calc-area-val">5 lfm</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Verlegeart</label>
+            <div class="calc-toggle calc-tier">
+            <button type="button" data-value="aufputz" data-low="15" data-high="25" class="">Aufputz / Kabelkanal <span class="calc-toggle-sub">sichtbar verlegt</span></button>
+            <button type="button" data-value="unterputz" data-low="25" data-high="45" class="is-active">Unterputz <span class="calc-toggle-sub">Wand aufstemmen</span></button>
+            <button type="button" data-value="erdverlegung" data-low="35" data-high="60" class="">Erdverlegung <span class="calc-toggle-sub">im Außenbereich</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Zusatzkosten für den Kabelweg vom Zählerschrank zum Stellplatz, je laufendem Meter.</p>
+        </div>
+      </div>
       </div>
       <div class="calc-field calc-floors-field">
           <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
@@ -322,10 +347,55 @@
             <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
           </div>
         </div>
+      <div class="calc-field calc-risk-field">
+        <label>Stellplatz</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0" class="is-active">Garage</button>
+          <button type="button" data-risk-weight="0">Carport</button>
+          <button type="button" data-risk-weight="0">Außenstellplatz</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Stellplatz in der Tiefgarage — Zugang und Genehmigung ggf. aufwändiger">Tiefgarage</button>
+        </div>
+      </div>
+      <div class="calc-field calc-risk-field">
+        <label>Freier Platz im Zählerschrank vorhanden? <span class="calc-floors-hint">nötig für die Wallbox-Absicherung</span></label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0">Ja</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Kein freier Platz im Zählerschrank — ggf. Erweiterung nötig">Nein</button>
+          <button type="button" data-risk-weight="0.1" data-risk-note="Zustand des Zählerschranks nicht bekannt" class="is-active">Weiß nicht</button>
+        </div>
+      </div>
       <div class="calc-result calc-grand-total">
         <div class="label">Geschätzte Gesamtkosten</div>
         <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="calc-risk-badge" hidden></div>
+        <ul class="calc-risk-notes"></ul>
         <div class="note">Grober Richtwert — kein verbindliches Angebot.</div>
+      </div>
+      <div class="calc-contact-cta">
+        <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
+      </div>
+      <div class="calc-contact-reveal" hidden>
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="wallbox_calculator">
+          <input type="hidden" name="service" value="Wallbox">
+          <div class="form-row">
+            <div class="field"><label for="wallbox-lead-name">Name</label><input type="text" id="wallbox-lead-name" name="name" required></div>
+            <div class="field"><label for="wallbox-lead-email">E-Mail</label><input type="email" id="wallbox-lead-email" name="email" required></div>
+          </div>
+          <div class="field"><label for="wallbox-lead-phone">Telefon (optional)</label><input type="tel" id="wallbox-lead-phone" name="phone"></div>
+          <div class="field"><label for="wallbox-lead-message">Nachricht</label><textarea id="wallbox-lead-message" name="message" class="calc-contact-message" required></textarea></div>
+          <div class="calc-field">
+            <label for="wallbox-lead-photos">Fotos / Grundriss (optional)</label>
+            <label class="dropzone" for="wallbox-lead-photos">
+              <input type="file" id="wallbox-lead-photos" name="attachment" accept="image/*,.pdf" multiple>
+              <p><strong>Klicken oder per Drag &amp; Drop</strong><br>z. B. Zählerschrank, Stellplatz</p>
+            </label>
+            <p class="upload-hint" hidden>Bitte möglichst nicht mehr als ca. 5 Fotos anhängen — größere Mengen können die Übertragung verlangsamen.</p>
+            <div class="preview-wrap"><div class="preview-grid"></div></div>
+          </div>
+          <p class="form-note">Mit dem Absenden stimmen Sie der Verarbeitung Ihrer Daten (inkl. hochgeladener Fotos) gemäß <a href="datenschutz.html">Datenschutzerklärung</a> zu.</p>
+          <button type="submit" class="btn btn-primary btn-block">Anfrage jetzt senden</button>
+          <p class="form-status" role="status"></p>
+        </form>
       </div>
     </div>
     </div>
