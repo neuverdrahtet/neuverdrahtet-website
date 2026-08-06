@@ -658,6 +658,9 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           </div>
 
           <div class="divider"></div>
+          <div class="flex-row" style="margin-bottom:8px">
+            <button type="button" class="btn btn-sm" id="btn-kalkulator">🧮 Material + Zeit + Gewinn kalkulieren</button>
+          </div>
           <div class="form-grid">
             <div class="field"><label>Einkaufspreis EK (€, optional)</label><input type="number" step="0.01" min="0" name="einkaufspreis" id="f-ek" value="${data.einkaufspreis || ''}"></div>
             <div class="field"><label>Zuschlag (%)</label><input type="number" step="1" min="0" name="aufschlagProzent" id="f-zuschlag" value="${data.aufschlagProzent ?? 20}"></div>
@@ -685,6 +688,65 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
         body.querySelector('#f-vk').value = (Math.round(ek * (1 + zuschlag / 100) * 100) / 100).toFixed(2);
       }
     }
+    // Kalkulator: Material + Arbeitszeit×Stundensatz ergeben die Basiskosten
+    // (= EK-Feld), darauf kommt der bereits vorhandene Zuschlag% (= Gewinn)
+    // - übernimmt also nur in die bestehenden EK/Zuschlag-Felder, statt den
+    // VK direkt zu setzen, damit recalcVk() wie gewohnt der einzige Ort
+    // bleibt, der den VK berechnet.
+    function openKalkulator() {
+      const materialDefault = Number(body.querySelector('#f-ek').value) || 0;
+      const gewinnDefault = Number(body.querySelector('#f-zuschlag').value) || settings.standardAufschlagProzent || 20;
+      const stundensatzDefault = settings.stundensatz || 0;
+      const { body: kBody, close: kClose } = openModal({
+        title: 'Preis kalkulieren: Material + Zeit + Gewinn',
+        bodyHtml: `
+          <form id="kalk-form">
+            <div class="form-grid">
+              <div class="field"><label>Materialkosten (€)</label><input type="number" step="0.01" min="0" name="material" id="k-material" value="${materialDefault || ''}"></div>
+              <div class="field"><label>Arbeitszeit (Std.)</label><input type="number" step="0.25" min="0" name="zeit" id="k-zeit" value=""></div>
+              <div class="field"><label>Stundensatz (€/Std.)</label><input type="number" step="0.5" min="0" name="stundensatz" id="k-stundensatz" value="${stundensatzDefault || ''}"></div>
+              <div class="field"><label>Gewinn-Aufschlag (%)</label><input type="number" step="1" min="0" name="gewinn" id="k-gewinn" value="${gewinnDefault}"></div>
+            </div>
+            <div class="totals-box" id="k-preview" style="width:100%;margin-left:0"></div>
+            <p class="hint">Materialkosten + (Zeit × Stundensatz) = Basiskosten. Beim Übernehmen werden die Basiskosten als Einkaufspreis und der Gewinn als Zuschlag% in das Formular eingetragen - der Verkaufspreis wird daraus wie gewohnt automatisch berechnet.</p>
+            <div class="modal-actions">
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="k-btn-cancel">Abbrechen</button>
+              <button type="submit" class="btn btn-primary">Übernehmen</button>
+            </div>
+          </form>
+        `,
+      });
+      function updatePreview() {
+        const material = Number(kBody.querySelector('#k-material').value) || 0;
+        const zeit = Number(kBody.querySelector('#k-zeit').value) || 0;
+        const stundensatz = Number(kBody.querySelector('#k-stundensatz').value) || 0;
+        const gewinn = Number(kBody.querySelector('#k-gewinn').value) || 0;
+        const arbeitskosten = zeit * stundensatz;
+        const basis = material + arbeitskosten;
+        const vk = basis * (1 + gewinn / 100);
+        kBody.querySelector('#k-preview').innerHTML = `
+          <div class="row"><span>Material</span><span>${formatCurrency(material)}</span></div>
+          <div class="row"><span>Arbeitszeit (${zeit} Std. × ${formatCurrency(stundensatz)})</span><span>${formatCurrency(arbeitskosten)}</span></div>
+          <div class="row"><span>Basiskosten (EK)</span><span>${formatCurrency(basis)}</span></div>
+          <div class="row grand"><span>Verkaufspreis netto (+${gewinn}% Gewinn)</span><span>${formatCurrency(vk)}</span></div>
+        `;
+        return { basis, gewinn };
+      }
+      kBody.querySelectorAll('#kalk-form input').forEach((inp) => inp.addEventListener('input', updatePreview));
+      updatePreview();
+      kBody.querySelector('#k-btn-cancel').addEventListener('click', kClose);
+      kBody.querySelector('#kalk-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const { basis, gewinn } = updatePreview();
+        body.querySelector('#f-ek').value = basis.toFixed(2);
+        body.querySelector('#f-zuschlag').value = gewinn;
+        recalcVk();
+        toast('Kalkulation übernommen', 'success');
+        kClose();
+      });
+    }
+    body.querySelector('#btn-kalkulator').addEventListener('click', openKalkulator);
     function renderKomp() {
       const host = body.querySelector('#komp-list');
       host.innerHTML = kompState.map((k, i) => {
