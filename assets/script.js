@@ -118,44 +118,47 @@ document.querySelectorAll('.hero-slider').forEach(slider => {
 });
 
 /* =========================================================
-   Contact form — AJAX submit to Formspree with inline status
+   Contact forms — AJAX submit to Formspree with inline status
+   (index.html's main form + per-calculator inline lead forms
+   all share the .ajax-form/.form-status convention)
    ========================================================= */
-const contactForm = document.getElementById('contactForm');
-const formStatus = document.getElementById('formStatus');
-
-if (contactForm) {
-  contactForm.addEventListener('submit', async (e) => {
+document.querySelectorAll('.ajax-form').forEach(form => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const submitBtn = contactForm.querySelector('button[type="submit"]');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const statusEl = form.querySelector('.form-status');
     const originalLabel = submitBtn.textContent;
     submitBtn.disabled = true;
     submitBtn.textContent = 'Wird gesendet …';
-    formStatus.textContent = '';
-    formStatus.className = 'form-status';
+    if (statusEl) { statusEl.textContent = ''; statusEl.className = 'form-status'; }
 
     try {
-      const res = await fetch(contactForm.action, {
+      const res = await fetch(form.action, {
         method: 'POST',
-        body: new FormData(contactForm),
+        body: new FormData(form),
         headers: { 'Accept': 'application/json' }
       });
       if (res.ok) {
-        formStatus.textContent = 'Danke — Ihre Anfrage ist angekommen. Rückmeldung folgt in Kürze.';
-        formStatus.classList.add('ok');
-        trackEvent('generate_lead', { method: 'contact_form' });
-        contactForm.reset();
+        if (statusEl) {
+          statusEl.textContent = 'Danke — Ihre Anfrage ist angekommen. Rückmeldung folgt in Kürze.';
+          statusEl.classList.add('ok');
+        }
+        trackEvent('generate_lead', { method: form.dataset.leadSource || 'contact_form' });
+        form.reset();
       } else {
         throw new Error('send-failed');
       }
     } catch (err) {
-      formStatus.textContent = 'Senden hat nicht geklappt. Bitte per E-Mail an neuverdrahtet@gmail.com.';
-      formStatus.classList.add('err');
+      if (statusEl) {
+        statusEl.textContent = 'Senden hat nicht geklappt. Bitte per E-Mail an neuverdrahtet@gmail.com.';
+        statusEl.classList.add('err');
+      }
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = originalLabel;
     }
   });
-}
+});
 
 
 /* =========================================================
@@ -170,10 +173,40 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
   const floorButtons = calc.querySelectorAll('.calc-floors button');
   const grandMinEl = calc.querySelector('.calc-grand-min');
   const grandMaxEl = calc.querySelector('.calc-grand-max');
+  const riskToggleButtons = calc.querySelectorAll('.calc-risk-toggle button');
+  const riskCheckboxes = calc.querySelectorAll('.calc-risk-check');
+  const riskBadgeEl = calc.querySelector('.calc-risk-badge');
+  const riskNotesEl = calc.querySelector('.calc-risk-notes');
+  const resultNormalEl = calc.querySelector('.calc-result');
+  const resultBlockedEl = calc.querySelector('.calc-result-blocked');
 
   function activeFloorFactor() {
     const btn = Array.from(floorButtons).find(b => b.classList.contains('is-active'));
     return btn ? parseFloat(btn.dataset.factor) : 1;
+  }
+
+  // Risk factors widen the price range and drive the Grün/Gelb/Rot badge.
+  // Weighted 0.05–0.10 per open/unknown answer, capped at ±35%.
+  // Risk fields inside a currently-hidden .calc-conditional block (e.g. a
+  // "Sanierung"-only question while "Neubau" is selected) don't count.
+  function isInsideHiddenConditional(el) {
+    const block = el.closest('.calc-conditional');
+    return block ? block.hidden : false;
+  }
+  function activeRiskEls() {
+    const activeToggles = Array.from(riskToggleButtons).filter(b => b.classList.contains('is-active') && !isInsideHiddenConditional(b));
+    const checkedBoxes = Array.from(riskCheckboxes).filter(c => c.checked && !isInsideHiddenConditional(c));
+    return activeToggles.concat(checkedBoxes);
+  }
+  function activeRiskScore() {
+    const sum = activeRiskEls().reduce((s, el) => s + (parseFloat(el.dataset.riskWeight) || 0), 0);
+    return Math.min(sum, 0.35);
+  }
+  function activeRiskNotes() {
+    return activeRiskEls().map(el => el.dataset.riskNote).filter(Boolean);
+  }
+  function blockerActive() {
+    return !!calc.querySelector('[data-risk-blocker="true"]:checked');
   }
 
   function itemArea(item) {
@@ -226,8 +259,39 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
       }
     });
 
-    grandMinEl.textContent = grandLow > 0 ? fmtEUR(grandLow) : '–';
-    grandMaxEl.textContent = grandHigh > 0 ? fmtEUR(grandHigh) : '–';
+    if (blockerActive()) {
+      if (resultNormalEl) resultNormalEl.hidden = true;
+      if (resultBlockedEl) resultBlockedEl.hidden = false;
+      if (riskBadgeEl) riskBadgeEl.hidden = true;
+      if (riskNotesEl) riskNotesEl.innerHTML = '';
+      return;
+    }
+    if (resultNormalEl) resultNormalEl.hidden = false;
+    if (resultBlockedEl) resultBlockedEl.hidden = true;
+
+    const riskScore = activeRiskScore();
+    const finalLow = grandLow * (1 - riskScore);
+    const finalHigh = grandHigh * (1 + riskScore);
+    grandMinEl.textContent = grandLow > 0 ? fmtEUR(finalLow) : '–';
+    grandMaxEl.textContent = grandHigh > 0 ? fmtEUR(finalHigh) : '–';
+
+    const hasTotal = grandHigh > 0;
+    if (riskBadgeEl) {
+      riskBadgeEl.hidden = !hasTotal;
+      if (hasTotal) {
+        riskBadgeEl.classList.remove('is-green', 'is-yellow', 'is-red');
+        let level, label;
+        if (riskScore <= 0.10) { level = 'is-green'; label = 'Grün — gute Datenlage'; }
+        else if (riskScore <= 0.25) { level = 'is-yellow'; label = 'Gelb — Vor-Ort-Prüfung empfohlen'; }
+        else { level = 'is-red'; label = 'Rot — hohe Unsicherheit, Vor-Ort-Termin sinnvoll'; }
+        riskBadgeEl.classList.add(level);
+        riskBadgeEl.textContent = label;
+      }
+    }
+    if (riskNotesEl) {
+      const notes = hasTotal ? activeRiskNotes() : [];
+      riskNotesEl.innerHTML = notes.length ? '<li>' + notes.join('</li><li>') + '</li>' : '';
+    }
   }
 
   items.forEach(item => {
@@ -263,6 +327,126 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
       recalcAll();
     });
   });
+
+  riskToggleButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const group = btn.closest('.calc-risk-toggle');
+      group.querySelectorAll('button').forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      recalcAll();
+    });
+  });
+  riskCheckboxes.forEach(chk => chk.addEventListener('change', recalcAll));
+
+  /* --- Bauart-Umschalter (z.B. Neubau/Sanierung): blendet passende
+     .calc-conditional-Blöcke ein/aus, deren Risikofelder dann mitzählen --- */
+  const modeToggleButtons = calc.querySelectorAll('.calc-mode-toggle button');
+  const conditionalBlocks = calc.querySelectorAll('.calc-conditional');
+  modeToggleButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      modeToggleButtons.forEach(b => b.classList.remove('is-active'));
+      btn.classList.add('is-active');
+      const reveal = btn.dataset.reveals;
+      conditionalBlocks.forEach(block => { block.hidden = block.dataset.showWhen !== reveal; });
+      recalcAll();
+    });
+  });
+
+  /* --- Anfrage senden: inline Kontakt-Reveal mit Auto-Zusammenfassung --- */
+  const contactToggleBtn = calc.querySelector('.calc-contact-toggle');
+  const contactReveal = calc.querySelector('.calc-contact-reveal');
+  const contactMessage = calc.querySelector('.calc-contact-message');
+
+  function buildSummaryText() {
+    const pageTitle = document.querySelector('h1')?.textContent.trim() || 'Kosten-Konfigurator';
+    const lines = [`Kosten-Konfigurator (${pageTitle}):`];
+    items.forEach(item => {
+      const checkbox = item.querySelector('.calc-service-check');
+      if (!checkbox.checked) return;
+      const label = item.querySelector('.calc-service-label')?.textContent.trim() || '';
+      const tier = itemActiveTier(item);
+      const tierLabel = tier ? (tier.childNodes[0].textContent || '').trim() : '';
+      const areaEl = item.querySelector('.calc-area-val') || item.querySelector('.rooms-total-val');
+      const areaText = areaEl ? areaEl.textContent : '';
+      lines.push(`- ${label}: ${areaText}${tierLabel ? ', ' + tierLabel : ''}`);
+    });
+    const floorBtn = Array.from(floorButtons).find(b => b.classList.contains('is-active'));
+    if (floorBtn) lines.push(`- Etage: ${floorBtn.textContent.trim()}`);
+    calc.querySelectorAll('.calc-info-field').forEach(field => {
+      const val = (field.value || '').trim();
+      if (val) lines.push(`- ${field.dataset.summaryLabel || field.name}: ${val}`);
+    });
+    lines.push(`- Geschätzte Kosten: ${grandMinEl.textContent} – ${grandMaxEl.textContent}`);
+    const notes = activeRiskNotes();
+    if (notes.length) lines.push(`- Offene Punkte: ${notes.join(', ')}`);
+    return lines.join('\n');
+  }
+
+  if (contactToggleBtn && contactReveal) {
+    contactToggleBtn.addEventListener('click', () => {
+      const wasOpen = !contactReveal.hidden;
+      contactReveal.hidden = wasOpen;
+      contactToggleBtn.setAttribute('aria-expanded', String(!wasOpen));
+      if (!wasOpen) {
+        if (contactMessage && !contactMessage.value.trim()) {
+          contactMessage.value = buildSummaryText() + '\n\n';
+        }
+        contactReveal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const firstField = contactReveal.querySelector('input:not([type="hidden"]), textarea');
+        firstField?.focus();
+        if (contactMessage) {
+          const end = contactMessage.value.length;
+          contactMessage.setSelectionRange(end, end);
+        }
+      }
+    });
+  }
+
+  /* --- Foto-/Dokument-Upload: Drag&Drop-Vorschau, keine Pflicht --- */
+  const dropzone = calc.querySelector('.dropzone');
+  const fileInput = calc.querySelector('.dropzone input[type="file"]');
+  const previewGrid = calc.querySelector('.preview-grid');
+  const previewWrap = calc.querySelector('.preview-wrap');
+  const uploadHint = calc.querySelector('.upload-hint');
+
+  if (dropzone && fileInput) {
+    function renderPreviews() {
+      if (!previewGrid) return;
+      previewGrid.innerHTML = '';
+      const files = Array.from(fileInput.files || []);
+      if (uploadHint) {
+        uploadHint.hidden = files.length <= 5;
+      }
+      files.slice(0, 12).forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = document.createElement('img');
+          img.src = reader.result;
+          img.alt = file.name;
+          previewGrid.appendChild(img);
+        };
+        reader.readAsDataURL(file);
+      });
+      if (previewWrap) previewWrap.classList.toggle('is-visible', files.length > 0);
+    }
+
+    ['dragenter', 'dragover'].forEach(evt => dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.add('is-drag');
+    }));
+    ['dragleave', 'drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+      e.preventDefault();
+      dropzone.classList.remove('is-drag');
+    }));
+    dropzone.addEventListener('drop', e => {
+      if (e.dataTransfer?.files?.length) {
+        fileInput.files = e.dataTransfer.files;
+        renderPreviews();
+      }
+    });
+    fileInput.addEventListener('change', renderPreviews);
+  }
 
   recalcAll();
 });
