@@ -1,5 +1,5 @@
 import { getAll, put, remove } from './db.js';
-import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage } from './utils.js';
+import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage, openDokumentMitVorbelegung } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
@@ -376,6 +376,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
           ${kunde?.telefon ? '<button type="button" class="btn" id="btn-send-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+          <button type="button" class="btn" id="btn-zu-angebot" hidden>📐 Als Positionen ins Angebot übernehmen</button>
           <button type="button" class="btn" id="btn-send-email">✉️ Per E-Mail senden</button>
           <button type="button" class="btn btn-primary" id="btn-save-pdf">Als PDF speichern</button>
         </div>
@@ -459,9 +460,14 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           sigLabels = a.labels;
         }
       });
-      if (!abschnitte.some((a) => a.typ === 'raeume')) raeumeLabel.textContent = 'Räume / Zeilen (optional, erscheinen als Tabelle im PDF)';
+      const hatRaeumeAbschnitt = abschnitte.some((a) => a.typ === 'raeume');
+      if (!hatRaeumeAbschnitt) raeumeLabel.textContent = 'Räume / Zeilen (optional, erscheinen als Tabelle im PDF)';
       raeumeEditor = mountRaeumeEditor(raeumeHost, raeumeOptions);
       mountSigPads(sigLabels);
+      // "Ins Angebot übernehmen" ergibt nur Sinn bei Vorlagen mit Raum/Maß-Erfassung
+      // (z.B. Aufmaßprotokoll) - bei anderen Berichten (Wartungsprotokoll o.ä.) gibt
+      // es keine sinnvollen Positionen daraus abzuleiten.
+      body.querySelector('#btn-zu-angebot').hidden = !hatRaeumeAbschnitt;
     }
 
     function substitute(text) {
@@ -524,6 +530,33 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       toast('Bericht gespeichert', 'success');
       close();
       load();
+    });
+
+    body.querySelector('#btn-zu-angebot').addEventListener('click', () => {
+      const zeilen = raeumeEditor.getRaeume().filter((r) => (r.raum || '').trim() || (r.beschreibung || '').trim());
+      if (zeilen.length === 0) {
+        toast('Bitte zuerst mindestens eine Raum-/Aufmaß-Zeile erfassen.', 'danger');
+        return;
+      }
+      const positionen = zeilen.map((r) => {
+        const flaeche = Number(r.laenge) > 0 && Number(r.breite) > 0 ? Math.round(Number(r.laenge) * Number(r.breite) * 100) / 100 : 0;
+        return {
+          id: uid(),
+          bezeichnung: [r.raum, r.beschreibung].filter((s) => (s || '').trim()).join(' – ') || 'Position aus Aufmaß',
+          beschreibung: '',
+          einheit: flaeche ? 'm²' : 'Stk.',
+          menge: flaeche || 1,
+          einzelpreis: 0,
+          steuersatz: settings.standardSteuersatz ?? 19,
+        };
+      });
+      close();
+      openDokumentMitVorbelegung('angebote', {
+        kundeId: kunde?.id || '',
+        projektId: bezugTyp === 'projekt' ? bezugId : '',
+        betreff: titelInput.value || 'Angebot aus Aufmaß',
+        positionen,
+      });
     });
 
     body.querySelector('#btn-send-email').addEventListener('click', () => {
