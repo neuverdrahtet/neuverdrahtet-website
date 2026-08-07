@@ -372,8 +372,9 @@
         <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
       </div>
       <div class="calc-contact-reveal" hidden>
-        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="photovoltaik_calculator">
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="photovoltaik_calculator">
           <input type="hidden" name="service" value="Photovoltaik">
+          <input type="hidden" name="_next" value="">
           <div class="form-row">
             <div class="field"><label for="pv-lead-name">Name</label><input type="text" id="pv-lead-name" name="name" required></div>
             <div class="field"><label for="pv-lead-email">E-Mail</label><input type="email" id="pv-lead-email" name="email" required></div>

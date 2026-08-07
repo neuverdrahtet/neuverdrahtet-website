@@ -331,8 +331,9 @@
         <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
       </div>
       <div class="calc-contact-reveal" hidden>
-        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="echeck_calculator">
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="echeck_calculator">
           <input type="hidden" name="service" value="E-Check">
+          <input type="hidden" name="_next" value="">
           <div class="form-row">
             <div class="field"><label for="echeck-lead-name">Name</label><input type="text" id="echeck-lead-name" name="name" required></div>
             <div class="field"><label for="echeck-lead-email">E-Mail</label><input type="email" id="echeck-lead-email" name="email" required></div>
