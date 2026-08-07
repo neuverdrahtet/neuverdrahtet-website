@@ -411,6 +411,28 @@ function drawTabelleBlock(doc, block, marginX, rightX, y, baseFont, accentRgb, m
   return doc.lastAutoTable.finalY + 8;
 }
 
+/** Zeichnet die Tageseinträge eines Bautagebuchs als Tabelle (Datum/Wetter/Personen/Vorkommnisse). */
+function drawTagesprotokollBlock(doc, eintraege, marginX, rightX, y, baseFont, accentRgb, maxY) {
+  const rows = (eintraege || []).filter((r) => r.wetter || r.personen || r.vorkommnisse);
+  if (!rows.length) return y;
+  if (y > maxY - 20) { doc.addPage(); y = 20; }
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(20);
+  doc.text('Bautagebuch – Tageseinträge', marginX, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.autoTable({
+    startY: y,
+    margin: { left: marginX, right: marginX, bottom: 24 },
+    head: [['Datum', 'Wetter', 'Personen vor Ort', 'Vorkommnisse/Besonderheiten']],
+    body: rows.map((r) => [formatDate(r.datum) || '', r.wetter || '', r.personen ?? '', r.vorkommnisse || '']),
+    styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+    headStyles: { fillColor: accentRgb },
+  });
+  return doc.lastAutoTable.finalY + 8;
+}
+
 /** Zeichnet ein 2-spaltiges Fotoraster ab der aktuellen Y-Position, seitenumbruchsicher. */
 function drawFotoGrid(doc, fotos, marginX, rightX, y, maxY) {
   const fotoW = (rightX - marginX - 6) / 2;
@@ -432,7 +454,7 @@ function drawFotoGrid(doc, fotos, marginX, rightX, y, maxY) {
 export async function buildBerichtPdfBlob({
   settings, titel, untertitel, text, datum, raeume, fotos,
   unterschriftKunde, unterschriftMitarbeiter, unterschriften,
-  kopfdaten, jaNeinAntworten, checklisteAntworten, tabellenAbschnitte,
+  kopfdaten, jaNeinAntworten, checklisteAntworten, tabellenAbschnitte, tagesprotokoll,
 }) {
   await loadJsPdf();
   if (!window.jspdf) {
@@ -478,6 +500,7 @@ export async function buildBerichtPdfBlob({
   (kopfdaten || []).forEach((block) => { y = drawKopfdatenBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
   (jaNeinAntworten || []).forEach((block) => { y = drawJaNeinBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
   (tabellenAbschnitte || []).forEach((block) => { y = drawTabelleBlock(doc, block, marginX, rightX, y, baseFont, accentRgb, maxY); });
+  y = drawTagesprotokollBlock(doc, tagesprotokoll, marginX, rightX, y, baseFont, accentRgb, maxY);
 
   doc.setFontSize(baseFont);
   doc.setTextColor(20);

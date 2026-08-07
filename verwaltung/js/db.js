@@ -773,8 +773,24 @@ Bemerkungen:
 Ort, Datum: {{datum}}`,
     abschnitte: [
       { typ: 'tabelle', titel: 'Festgestellte Mängel', spalten: ['Beschreibung', 'Ort/Bauteil', 'Priorität'] },
+      { typ: 'raeume', titel: 'Mängel mit Foto (Markierung auf dem Foto möglich)', mitMassen: false, mitFotoProZeile: true, mitMarkierung: true },
       { typ: 'kopfdaten', titel: 'Frist', felder: [{ label: 'Vereinbarte Frist zur Beseitigung', typ: 'datum' }, { label: 'Zuständiger Mitarbeiter', typ: 'text' }] },
       { typ: 'unterschriften', labels: ['Unterschrift'] },
+    ],
+  },
+  {
+    id: 'vorlage-bautagebuch', typ: 'dokumentation', name: 'Bautagebuch',
+    textVorlage: `BAUTAGEBUCH
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+
+Allgemeine Bemerkungen:`,
+    abschnitte: [
+      { typ: 'tagesprotokoll', titel: 'Tageseinträge' },
+      { typ: 'raeume', titel: 'Fotos zum Bautagebuch', mitMassen: false, mitFotoProZeile: true, mitMarkierung: false },
+      { typ: 'unterschriften', labels: ['Unterschrift Bauleiter'] },
     ],
   },
   {
