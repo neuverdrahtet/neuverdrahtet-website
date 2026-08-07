@@ -3,10 +3,7 @@
    Plain JS, kein Modul/Build-Schritt (wie assets/script.js).
    ========================================================= */
 
-// TODO nach dem Deploy des Workers (siehe cloudflare-worker-kostenschaetzer/README.md)
-// anpassen - und die exakt gleiche URL auch im CSP-connect-src von
-// wallbox-kostenschaetzer.html eintragen.
-const KS_WORKER_URL = 'https://neuverdrahtet-kostenschaetzer.neuverdrahtet.workers.dev';
+const KS_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetworkersdev.workers.dev';
 
 (() => {
   const form = document.getElementById('ksForm');
