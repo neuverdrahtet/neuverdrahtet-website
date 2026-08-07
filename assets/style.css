@@ -57,6 +57,8 @@
   --ink-faint:   rgba(28,32,36,0.64);
   --ok:          #1E9A5A;
   --err:         #D6483A;
+  --warn:        #FACC15;
+  --alert:       #FF7A6B;
 
   --font-display: 'Poppins', 'Arial Narrow', sans-serif;
   --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -519,6 +521,48 @@ section{ padding:88px 0; }
 .calc-result .range{ font-family:var(--font-display); font-size:clamp(26px,4vw,36px); font-weight:700; }
 .calc-result .range .dash{ color:var(--orange-2); margin:0 10px; }
 .calc-result .note{ font-size:12.5px; color:rgba(255,255,255,0.5); margin-top:10px; }
+
+/* Risk-Ampel */
+.calc-risk-field{ margin-top:8px; padding-top:18px; border-top:1px solid var(--line); }
+.calc-risk-field + .calc-risk-field{ margin-top:18px; padding-top:18px; }
+.calc-risk-toggle button{ flex:none; min-width:auto; padding:9px 16px; font-size:13.5px; }
+.calc-risk-badge{
+  display:inline-flex; align-items:center; gap:8px;
+  margin-top:14px; font-family:var(--font-mono); font-size:12.5px; font-weight:600;
+  letter-spacing:0.02em;
+}
+.calc-risk-badge::before{ content:""; width:8px; height:8px; border-radius:50%; background:currentColor; flex:none; }
+.calc-risk-badge.is-green{ color:var(--ok); }
+.calc-risk-badge.is-yellow{ color:var(--warn); }
+.calc-risk-badge.is-red{ color:var(--alert); }
+.calc-risk-notes{
+  list-style:none; margin:10px 0 0; padding:0;
+  font-size:12px; color:rgba(255,255,255,0.55); text-align:left;
+}
+.calc-risk-notes li{ padding-left:14px; position:relative; margin-top:4px; }
+.calc-risk-notes li::before{ content:"–"; position:absolute; left:0; }
+.calc-risk-check-row{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--ink); cursor:pointer; font-weight:600; }
+.calc-risk-check-row input{ width:18px; height:18px; accent-color:var(--orange); flex:none; cursor:pointer; }
+
+.calc-result-blocked{
+  margin-top:8px; padding:26px; border-radius:var(--radius-sm);
+  background:var(--orange-soft); border:1px solid var(--orange); color:var(--ink);
+}
+.calc-result-blocked .label{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:var(--orange); margin-bottom:10px; font-weight:600; }
+.calc-result-blocked p{ margin:0; font-size:14.5px; line-height:1.6; }
+
+/* Anfrage senden: inline Kontakt-Reveal im Rechner */
+.calc-contact-cta{ margin-top:20px; text-align:center; }
+.calc-contact-reveal{
+  margin-top:22px; padding-top:22px; border-top:1px solid var(--line);
+}
+.calc-contact-reveal .form-note{ font-size:12px; color:var(--ink-faint); margin:10px 0 14px; }
+.calc-contact-reveal .form-status{ margin-top:10px; font-size:13.5px; }
+.calc-contact-reveal .form-status.ok{ color:var(--ok); }
+.calc-contact-reveal .form-status.err{ color:var(--err); }
+.upload-hint{ font-size:12px; color:var(--err); margin-top:8px; }
+.preview-grid{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+.preview-grid img{ width:84px; height:84px; border-radius:var(--radius-sm); border:1px solid var(--line); object-fit:cover; }
 
 /* =========================================================
    Kostenschätzer-Wizard (mehrstufiger Assistent)

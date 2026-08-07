@@ -354,6 +354,30 @@
           <p class="calc-service-note">Grober Richtwert für die Elektroinstallation (Marktdaten 2026).</p>
         </div>
       </div>
+      <div class="calc-service-item" data-service="zaehlerschrank" data-mode="unit" data-unit-suffix="Zählerplätze" data-period="">
+        <label class="calc-service-head">
+          <input type="checkbox" class="calc-service-check">
+          <span class="calc-service-label">Zählerschrank-Arbeiten</span>
+          <span class="calc-service-subtotal">–</span>
+        </label>
+        <div class="calc-service-body" style="display:none">
+          <div class="calc-field">
+          <label for="calc-area-slider-zaehlerschrank">Anzahl Zählerplätze</label>
+          <div class="calc-slider">
+            <input type="range" class="calc-area" id="calc-area-slider-zaehlerschrank" min="1" max="6" step="1" value="2">
+            <span class="val calc-area-val">2 Zählerplätze</span>
+          </div>
+        </div>
+          <div class="calc-field">
+            <label>Umfang</label>
+            <div class="calc-toggle calc-tier">
+            <button type="button" data-value="erweiterung" data-low="400" data-high="800" class="is-active">Erweiterung / Nachrüstung <span class="calc-toggle-sub">z. B. für Wallbox, PV</span></button>
+            <button type="button" data-value="komplett" data-low="1200" data-high="2200" class="">Kompletttausch <span class="calc-toggle-sub">neuer Zählerschrank</span></button>
+            </div>
+          </div>
+          <p class="calc-service-note">Zusatzkosten je Zählerplatz, unabhängig von der Elektroinstallation selbst.</p>
+        </div>
+      </div>
       </div>
       <div class="calc-field calc-floors-field">
           <label>Etage <span class="calc-floors-hint">(Zuschlag für Material-Transport ohne Aufzug)</span></label>
@@ -364,10 +388,88 @@
             <button type="button" data-floor="og3" data-factor="1.15" class="">3. OG+</button>
           </div>
         </div>
+      <div class="calc-field">
+        <label>Bauart</label>
+        <div class="calc-toggle calc-mode-toggle">
+          <button type="button" data-reveals="neubau" class="is-active">Neubau</button>
+          <button type="button" data-reveals="sanierung">Sanierung / Bestand</button>
+        </div>
+      </div>
+      <div class="calc-conditional" data-show-when="sanierung" hidden>
+        <div class="calc-field calc-risk-field">
+          <label>Baujahr</label>
+          <div class="calc-toggle calc-risk-toggle">
+            <button type="button" data-risk-weight="0.08" data-risk-note="Baujahr vor 1990 — Bestandsleitungen ggf. veraltet">vor 1990</button>
+            <button type="button" data-risk-weight="0.05">1990–2010</button>
+            <button type="button" data-risk-weight="0">nach 2010</button>
+            <button type="button" data-risk-weight="0.1" data-risk-note="Baujahr nicht bekannt" class="is-active">Weiß nicht</button>
+          </div>
+        </div>
+        <div class="calc-field calc-risk-field">
+          <label>FI-Schutzschalter vorhanden?</label>
+          <div class="calc-toggle calc-risk-toggle">
+            <button type="button" data-risk-weight="0">Ja</button>
+            <button type="button" data-risk-weight="0.08" data-risk-note="Kein FI-Schutzschalter vorhanden — Nachrüstung erforderlich">Nein</button>
+            <button type="button" data-risk-weight="0.1" data-risk-note="FI-Schutzschalter-Status nicht bekannt" class="is-active">Weiß nicht</button>
+          </div>
+        </div>
+        <div class="calc-field calc-risk-field">
+          <label>Wird während der Arbeiten gewohnt?</label>
+          <div class="calc-toggle calc-risk-toggle">
+            <button type="button" data-risk-weight="0.05" data-risk-note="Arbeiten im bewohnten Zustand — Möbelschutz und Terminabstimmung nötig" class="is-active">Ja</button>
+            <button type="button" data-risk-weight="0">Nein, Objekt ist leer</button>
+          </div>
+        </div>
+      </div>
+      <div class="calc-field calc-risk-field">
+        <label>Elektroplanung / Grundriss vorhanden?</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0">Ja</button>
+          <button type="button" data-risk-weight="0.05" data-risk-note="Kein Grundriss/Elektroplan vorhanden — Planung vor Ort nötig">Nein</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Nicht bekannt, ob ein Grundriss vorliegt" class="is-active">Weiß nicht</button>
+        </div>
+      </div>
+      <div class="calc-field calc-risk-field">
+        <label>Wandbauweise</label>
+        <div class="calc-toggle calc-risk-toggle">
+          <button type="button" data-risk-weight="0" class="is-active">Mauerwerk</button>
+          <button type="button" data-risk-weight="0.08" data-risk-note="Betonwände — Schlitzarbeiten aufwändiger">Beton</button>
+          <button type="button" data-risk-weight="0">Trockenbau</button>
+          <button type="button" data-risk-weight="0.05" data-risk-note="Holzbauweise — abweichende Verlegetechnik ggf. nötig">Holz</button>
+        </div>
+      </div>
       <div class="calc-result calc-grand-total">
         <div class="label">Geschätzte Gesamtkosten</div>
         <div class="range"><span class="calc-grand-min">–</span><span class="dash">bis</span><span class="calc-grand-max">–</span></div>
+        <div class="calc-risk-badge" hidden></div>
+        <ul class="calc-risk-notes"></ul>
         <div class="note">Grober Richtwert — kein verbindliches Angebot.</div>
+      </div>
+      <div class="calc-contact-cta">
+        <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
+      </div>
+      <div class="calc-contact-reveal" hidden>
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="elektroinstallation_calculator">
+          <input type="hidden" name="service" value="Elektroinstallation">
+          <div class="form-row">
+            <div class="field"><label for="ei-lead-name">Name</label><input type="text" id="ei-lead-name" name="name" required></div>
+            <div class="field"><label for="ei-lead-email">E-Mail</label><input type="email" id="ei-lead-email" name="email" required></div>
+          </div>
+          <div class="field"><label for="ei-lead-phone">Telefon (optional)</label><input type="tel" id="ei-lead-phone" name="phone"></div>
+          <div class="field"><label for="ei-lead-message">Nachricht</label><textarea id="ei-lead-message" name="message" class="calc-contact-message" required></textarea></div>
+          <div class="calc-field">
+            <label for="ei-lead-photos">Fotos / Grundriss (optional)</label>
+            <label class="dropzone" for="ei-lead-photos">
+              <input type="file" id="ei-lead-photos" name="attachment" accept="image/*,.pdf" multiple>
+              <p><strong>Klicken oder per Drag &amp; Drop</strong><br>z. B. Zählerschrank, Räume, Grundriss</p>
+            </label>
+            <p class="upload-hint" hidden>Bitte möglichst nicht mehr als ca. 5 Fotos anhängen — größere Mengen können die Übertragung verlangsamen.</p>
+            <div class="preview-wrap"><div class="preview-grid"></div></div>
+          </div>
+          <p class="form-note">Mit dem Absenden stimmen Sie der Verarbeitung Ihrer Daten (inkl. hochgeladener Fotos) gemäß <a href="datenschutz.html">Datenschutzerklärung</a> zu.</p>
+          <button type="submit" class="btn btn-primary btn-block">Anfrage jetzt senden</button>
+          <p class="form-status" role="status"></p>
+        </form>
       </div>
     </div>
     </div>
