@@ -449,8 +449,9 @@
         <button type="button" class="btn btn-primary calc-contact-toggle" aria-expanded="false">Anfrage senden</button>
       </div>
       <div class="calc-contact-reveal" hidden>
-        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="elektroinstallation_calculator">
+        <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="elektroinstallation_calculator">
           <input type="hidden" name="service" value="Elektroinstallation">
+          <input type="hidden" name="_next" value="">
           <div class="form-row">
             <div class="field"><label for="ei-lead-name">Name</label><input type="text" id="ei-lead-name" name="name" required></div>
             <div class="field"><label for="ei-lead-email">E-Mail</label><input type="email" id="ei-lead-email" name="email" required></div>
