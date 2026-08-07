@@ -1,0 +1,7 @@
+name = "neuverdrahtet-api"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets (API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON) werden NICHT hier
+# eingetragen, sondern per "wrangler secret put" bzw. im Cloudflare-
+# Dashboard gesetzt.
