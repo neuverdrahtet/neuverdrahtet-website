@@ -98,6 +98,64 @@ export async function analyzeBeleg({ imageDataUrl, kategorien }) {
 }
 
 /**
+ * Recherchiert per KI (Claude Web-Search) marktübliche Netto-Einzelpreise für
+ * unbepreiste Positionen, z.B. nach einem GAEB-Import. Batcht in Gruppen von
+ * 15 Positionen, um Tokens/Latenz pro Worker-Aufruf zu begrenzen. Gibt eine
+ * flache Liste `{ index, einzelpreis, gefunden, quelle }` zurück, wobei
+ * `index` sich auf die Position im übergebenen `positionen`-Array bezieht.
+ */
+export async function rechercherePreiseFuerPositionen(positionen) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const BATCH_SIZE = 15;
+  const ergebnisse = [];
+  for (let start = 0; start < positionen.length; start += BATCH_SIZE) {
+    const batch = positionen.slice(start, start + BATCH_SIZE);
+    // Web-Search-Recherche pro Batch dauert deutlich länger als ein normaler
+    // KI-Aufruf (z.B. beleg-scan) - 90s statt der sonst üblichen 45s Timeout.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90000);
+    let res;
+    try {
+      res = await fetch(settings.aiWorkerUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-Secret': settings.aiAppSecret || '',
+        },
+        body: JSON.stringify({
+          action: 'gaeb-preise-recherchieren',
+          positionen: batch.map((p) => ({ bezeichnung: p.bezeichnung, beschreibung: p.beschreibung, menge: p.menge, einheit: p.einheit })),
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        throw new Error('Zeitüberschreitung bei der KI-Preisrecherche (keine Antwort innerhalb von 90s).');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    if (!res.ok) {
+      let message = `Fehler (${res.status})`;
+      try {
+        const data = await res.json();
+        if (data.error) message = data.error;
+      } catch { /* ignore parse error */ }
+      throw new Error(message);
+    }
+    const data = await res.json();
+    for (const r of data.ergebnisse || []) {
+      ergebnisse.push({ ...r, index: start + r.index });
+    }
+  }
+  return ergebnisse;
+}
+
+/**
  * Löst über denselben Cloudflare Worker eine Push-Benachrichtigung an die
  * übergebenen FCM-Geräte-Tokens aus. Der Worker braucht dafür zusätzlich das
  * Secret FIREBASE_SERVICE_ACCOUNT_JSON (siehe worker.js-Kommentar). Läuft

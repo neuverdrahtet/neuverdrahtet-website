@@ -41,6 +41,8 @@ export function attachAddressSearch(inputEl, onSelect) {
   inputEl.addEventListener('blur', () => { setTimeout(() => { dropdown.hidden = true; }, 150); });
 }
 
+let openModalCount = 0;
+
 export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   const backdrop = el(`<div class="modal-backdrop"></div>`);
   const modal = el(`<div class="modal ${wide ? 'modal-wide' : ''}">
@@ -54,9 +56,23 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   backdrop.appendChild(modal);
   document.body.appendChild(backdrop);
 
+  // Ohne diese Sperre bleibt die Hintergrundseite hinter dem Modal weiter
+  // scrollbar - auf iOS Safari kann das dazu führen, dass beim Scrollen im
+  // Modal (oder mit dem Finger knapp daneben) die Hintergrundseite sichtbar
+  // "durchscheint" (gemeldeter Bug: Formular + darunterliegende Liste
+  // gleichzeitig lesbar). Zähler statt einfachem Flag, da Modals
+  // verschachtelt geöffnet werden (z.B. der Kalkulator im Katalog-Formular).
+  if (openModalCount === 0) document.body.classList.add('modal-open');
+  openModalCount++;
+
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
     backdrop.remove();
     document.removeEventListener('keydown', onKey);
+    openModalCount--;
+    if (openModalCount === 0) document.body.classList.remove('modal-open');
     if (onClose) onClose();
   }
   function onKey(e) {

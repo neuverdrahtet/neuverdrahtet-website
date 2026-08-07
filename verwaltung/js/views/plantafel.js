@@ -84,6 +84,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   let weekStart = startOfWeek(now);
   let viewYear = now.getFullYear();
   let viewMonth = now.getMonth();
+  let tagDate = localDateStr(now);
 
   container.innerHTML = `
     <div class="view-header">
@@ -105,6 +106,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     <div class="status-pill-bar" id="status-pill-bar"></div>
     <div class="tabs" id="pt-mode-tabs">
       <button type="button" class="tab-item active" data-mode="woche">🗓️ Woche</button>
+      <button type="button" class="tab-item" data-mode="tag">📆 Tag</button>
       <button type="button" class="tab-item" data-mode="monat">📅 Monat</button>
       <button type="button" class="tab-item" data-mode="karte">🗺️ Karte</button>
     </div>
@@ -118,6 +120,17 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </div>
         <p class="hint">Balken ziehen zum Verschieben (auch auf andere Zeilen), am rechten Rand ziehen zum Verlängern/Verkürzen.</p>
         <div id="plantafel-host"></div>
+      </div>
+    </div>
+    <div id="tag-view" hidden>
+      <div class="card">
+        <div class="cal-header">
+          <button class="btn btn-sm" id="btn-tag-prev">← Tag</button>
+          <div class="cal-title" id="tag-title"></div>
+          <button class="btn btn-sm" id="btn-tag-today">Heute</button>
+          <button class="btn btn-sm" id="btn-tag-next">Tag →</button>
+        </div>
+        <div id="tag-host"></div>
       </div>
     </div>
     <div id="monat-view" hidden>
@@ -142,6 +155,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   function setMode(mode) {
     container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
     container.querySelector('#woche-view').hidden = mode !== 'woche';
+    container.querySelector('#tag-view').hidden = mode !== 'tag';
     container.querySelector('#monat-view').hidden = mode !== 'monat';
     container.querySelector('#karte-view').hidden = mode !== 'karte';
     if (mode === 'karte') karte.refresh();
@@ -176,6 +190,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   container.querySelector('#bereich-filter').addEventListener('change', (e) => {
     bereichFilter = e.target.value;
     renderGrid();
+    renderTagView();
     renderMonatGrid();
   });
 
@@ -193,6 +208,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
         else activeStatusFilter.delete(label.dataset.id);
         label.classList.toggle('active', e.target.checked);
         renderGrid();
+        renderTagView();
         renderMonatGrid();
       });
     });
@@ -268,7 +284,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
               return `
                 <div class="plantafel-bar" data-id="${it.termin.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
                   style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
-                  <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((it.termin.start || '').slice(11, 16))} ${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
                 </div>
               `;
@@ -497,7 +513,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
             const farbe = e.farbe || typInfo(e.typ).farbe;
             const marke = markeFuerTermin(e);
             const titleAttr = [typInfo(e.typ).titel, marke ? `Marke: ${marke.name}` : ''].filter(Boolean).join(' · ');
-            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(titleAttr)}">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</div>`;
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(titleAttr)}">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((e.start || '').slice(11, 16))} ${escapeHtml(e.titel)}</div>`;
           }).join('')}
           ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
         </div>
@@ -531,6 +547,73 @@ export async function render(container, _route, { autoSync = true } = {}) {
     viewMonth++;
     if (viewMonth > 11) { viewMonth = 0; viewYear++; }
     renderMonatGrid();
+  });
+
+  // ---------- Tag ----------
+
+  const tagTitleEl = container.querySelector('#tag-title');
+  const tagHost = container.querySelector('#tag-host');
+
+  function tagTitleText(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const label = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+    return dateStr === todayStrFn() ? `Heute – ${label}` : label;
+  }
+
+  function renderTagView() {
+    tagTitleEl.textContent = tagTitleText(tagDate);
+    const events = terminsOnDay(tagDate);
+    if (events.length === 0) {
+      tagHost.innerHTML = '<div class="empty-state">Keine Termine an diesem Tag.</div>';
+      return;
+    }
+    tagHost.innerHTML = `
+      <ul class="cal-event-list">
+        ${events.map((e) => {
+          const farbe = e.farbe || typInfo(e.typ).farbe;
+          const marke = markeFuerTermin(e);
+          const zeit = (e.start || '').slice(11, 16) || '--:--';
+          const mitarbeiterNamen = (e.mitarbeiterIds || []).map((id) => mitarbeiterById[id]?.name).filter(Boolean).join(', ');
+          const meta = [
+            e.kundeId && kundenById[e.kundeId] ? kundenById[e.kundeId].firma : '',
+            e.ort || '',
+            mitarbeiterNamen,
+          ].filter(Boolean).join(' · ');
+          return `
+            <li data-id="${e.id}" style="cursor:pointer;border-left:3px solid ${farbe}">
+              <div>
+                <strong>${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</strong>
+                <div class="text-mute">${escapeHtml(zeit)} Uhr${meta ? ' · ' + escapeHtml(meta) : ''}${marke ? ' · ' + escapeHtml(marke.name) : ''}</div>
+              </div>
+              <span class="badge" style="background:${farbe}22;color:${farbe}">${escapeHtml(typInfo(e.typ).titel)}</span>
+            </li>
+          `;
+        }).join('')}
+      </ul>
+    `;
+    tagHost.querySelectorAll('li[data-id]').forEach((li) => {
+      li.addEventListener('click', async () => {
+        const t = termine.find((x) => x.id === li.dataset.id);
+        if (t?.autoErstellt) {
+          t.autoErstellt = false;
+          await put('termine', t);
+        }
+        openForm(t);
+      });
+    });
+  }
+
+  container.querySelector('#btn-tag-prev').addEventListener('click', () => {
+    tagDate = addDaysStr(tagDate, -1);
+    renderTagView();
+  });
+  container.querySelector('#btn-tag-next').addEventListener('click', () => {
+    tagDate = addDaysStr(tagDate, 1);
+    renderTagView();
+  });
+  container.querySelector('#btn-tag-today').addEventListener('click', () => {
+    tagDate = todayStrFn();
+    renderTagView();
   });
 
   // ---------- Gemeinsames Termin-Formular ----------
@@ -709,5 +792,6 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
   renderStatusPills();
   renderGrid();
+  renderTagView();
   renderMonatGrid();
 }

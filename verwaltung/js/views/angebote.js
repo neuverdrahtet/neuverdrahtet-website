@@ -6,7 +6,7 @@ import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
-import { generateAngebotFromStichpunkte } from '../ai.js';
+import { generateAngebotFromStichpunkte, rechercherePreiseFuerPositionen } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
@@ -245,7 +245,9 @@ export async function render(container) {
           <div class="divider"></div>
           <div class="flex-row" style="margin-bottom:10px">
             <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
+            <button type="button" class="btn btn-sm" id="btn-ki-preise">🔍 Preise per KI recherchieren</button>
           </div>
+          <p class="hint">KI-Preise sind Richtwerte aus einer Internetrecherche ohne Garantie - bei wichtigen Angeboten vor dem Versand prüfen.</p>
           <div id="pos-host"></div>
           <div id="tb-picker-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
@@ -349,6 +351,34 @@ let editor = createPositionsEditor({
       }
       btn.disabled = false;
       btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
+    });
+
+    body.querySelector('#btn-ki-preise').addEventListener('click', async () => {
+      const zuRecherchieren = editor.getPositionen().filter((p) => !p.einzelpreis);
+      if (zuRecherchieren.length === 0) {
+        toast('Alle Positionen haben bereits einen Preis.', 'info');
+        return;
+      }
+      const btn = body.querySelector('#btn-ki-preise');
+      btn.disabled = true;
+      btn.textContent = 'KI recherchiert Preise ...';
+      try {
+        const ergebnisse = await rechercherePreiseFuerPositionen(zuRecherchieren);
+        let anzahlBefuellt = 0;
+        for (const r of ergebnisse) {
+          const pos = zuRecherchieren[r.index];
+          if (pos && r.gefunden && Number(r.einzelpreis) > 0) {
+            pos.einzelpreis = Number(r.einzelpreis);
+            anzahlBefuellt++;
+          }
+        }
+        editor.refresh();
+        toast(`${anzahlBefuellt} von ${zuRecherchieren.length} Positionen mit KI-Marktpreisen befüllt`, anzahlBefuellt > 0 ? 'success' : 'info');
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+      btn.disabled = false;
+      btn.textContent = '🔍 Preise per KI recherchieren';
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
