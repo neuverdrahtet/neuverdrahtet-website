@@ -16,14 +16,15 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
-    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'),
+    getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'), getAll('subunternehmer'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
   marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  subunternehmer.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
@@ -379,7 +380,7 @@ export async function render(container, opts = {}) {
     const isEdit = !!p;
     const data = p || {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
+      start: '', ende: '', mitarbeiterIds: [], subunternehmerIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
     };
     const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
     const linkedAuftragsbestaetigungen = isEdit ? auftragsbestaetigungen.filter((a) => a.projektId === data.id) : [];
@@ -429,6 +430,17 @@ export async function render(container, opts = {}) {
               <div class="tag-list" id="mitarbeiter-checklist"></div>
               ${marken.length > 0 ? '<p class="hint mb-0">Mitarbeiter mit Marken-Freigabe für eine andere Marke werden hier ausgeblendet.</p>' : ''}
             </div>
+            ${subunternehmer.length > 0 ? `
+              <div class="field col-span-2"><label>Beauftragte Subunternehmer</label>
+                <div class="tag-list">
+                  ${subunternehmer.map((s) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="subunternehmerIds" value="${s.id}" ${(data.subunternehmerIds || []).includes(s.id) ? 'checked' : ''}> ${escapeHtml(s.firma)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
           </div>
           ${isEdit ? `
             <div class="divider"></div>
@@ -551,6 +563,7 @@ export async function render(container, opts = {}) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
+      updated.subunternehmerIds = fd.getAll('subunternehmerIds');
       for (const key of ['titel', 'kundeId', 'status', 'start', 'ende', 'beschreibung', 'bereich', 'kategorieId', 'gewerk', 'farbe', 'markeId']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }

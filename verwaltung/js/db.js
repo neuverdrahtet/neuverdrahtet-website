@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 19;
+const DB_VERSION = 20;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -63,6 +63,7 @@ const STORES = {
   bankbuchungen: 'id',
   anlagegueter: 'id',
   kundenStatus: 'id',
+  subunternehmer: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -269,6 +270,7 @@ export async function openDB() {
 export const TRASH_STORES = [
   'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
   'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen',
+  'subunternehmer',
 ];
 export function isTrashStore(storeName) {
   return TRASH_STORES.includes(storeName);
@@ -2261,6 +2263,7 @@ export const ROUTE_ROLLEN = {
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
   mitarbeiter: ['admin', 'buero'],
+  subunternehmer: ['admin', 'buero'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],

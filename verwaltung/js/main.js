@@ -23,6 +23,7 @@ const routeLoaders = {
   auftraege: () => import('./views/auftraege.js'),
   plantafel: () => import('./views/plantafel.js'),
   mitarbeiter: () => import('./views/mitarbeiter.js'),
+  subunternehmer: () => import('./views/subunternehmer.js'),
   katalog: () => import('./views/katalog.js'),
   angebote: () => import('./views/angebote.js'),
   auftragsbestaetigung: () => import('./views/auftragsbestaetigung.js'),
