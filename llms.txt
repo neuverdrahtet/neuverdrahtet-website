@@ -21,6 +21,10 @@
 - [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
 - [Wartung](https://neuverdrahtet.com/wartung.html): Wartung für Elektroinstallation, Wallbox, Photovoltaik-Anschluss, Wärmepumpe, Smart Home und Beleuchtung — Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
 
+## Weitere Gewerke
+- [Fliesen](https://neuverdrahtet.com/fliesen.html): Fliesenverlegung für Bad, Küche und Boden — Wand, Boden und Großformat, fachgerecht verlegt und abgedichtet. (inkl. Kosten-Konfigurator)
+- [Komplettbad](https://neuverdrahtet.com/komplettbad.html): Komplettbad-Sanierung — Badplanung, Abbruch und Umsetzung aller Gewerke aus einer Hand. (inkl. Kosten-Konfigurator)
+
 ## Stadtteile in Essen
 - [Alle Stadtteile im Überblick](https://neuverdrahtet.com/einsatzgebiet.html)
 - [Essen-Borbeck](https://neuverdrahtet.com/elektriker-essen-borbeck.html)
@@ -41,6 +45,24 @@
 - [Gelsenkirchen](https://neuverdrahtet.com/elektriker-gelsenkirchen.html)
 - [Bochum](https://neuverdrahtet.com/elektriker-bochum.html)
 - [Duisburg](https://neuverdrahtet.com/elektriker-duisburg.html)
+
+## Fliesen & Komplettbad nach Standort
+- [Essen-Borbeck](https://neuverdrahtet.com/fliesen-komplettbad-essen-borbeck.html)
+- [Essen-Frintrop](https://neuverdrahtet.com/fliesen-komplettbad-essen-frintrop.html)
+- [Essen-Altenessen](https://neuverdrahtet.com/fliesen-komplettbad-essen-altenessen.html)
+- [Essen-Steele](https://neuverdrahtet.com/fliesen-komplettbad-essen-steele.html)
+- [Essen-Kettwig](https://neuverdrahtet.com/fliesen-komplettbad-essen-kettwig.html)
+- [Essen-Werden](https://neuverdrahtet.com/fliesen-komplettbad-essen-werden.html)
+- [Essen-Rüttenscheid](https://neuverdrahtet.com/fliesen-komplettbad-essen-ruettenscheid.html)
+- [Essen-Kray](https://neuverdrahtet.com/fliesen-komplettbad-essen-kray.html)
+- [Essen-Frohnhausen](https://neuverdrahtet.com/fliesen-komplettbad-essen-frohnhausen.html)
+- [Essen-Schonnebeck](https://neuverdrahtet.com/fliesen-komplettbad-essen-schonnebeck.html)
+- [Oberhausen](https://neuverdrahtet.com/fliesen-komplettbad-oberhausen.html)
+- [Bottrop](https://neuverdrahtet.com/fliesen-komplettbad-bottrop.html)
+- [Mülheim an der Ruhr](https://neuverdrahtet.com/fliesen-komplettbad-muelheim-an-der-ruhr.html)
+- [Gelsenkirchen](https://neuverdrahtet.com/fliesen-komplettbad-gelsenkirchen.html)
+- [Bochum](https://neuverdrahtet.com/fliesen-komplettbad-bochum.html)
+- [Duisburg](https://neuverdrahtet.com/fliesen-komplettbad-duisburg.html)
 
 ## Weitere Seiten
 - [Alle Leistungen im Überblick](https://neuverdrahtet.com/leistungen.html)
