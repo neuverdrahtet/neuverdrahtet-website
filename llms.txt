@@ -2,7 +2,7 @@
 
 > Elektro Fachbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
 > Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
-> 9 Elektro-Leistungen unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
+> 12 Elektro-Leistungen unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
 - Adresse: Donnerstr. 131, 45357 Essen
@@ -20,6 +20,9 @@
 - [E-Check](https://neuverdrahtet.com/e-check.html): Prüfung ortsveränderlicher Geräte nach VDE 0701-0702. (inkl. Kosten-Konfigurator)
 - [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
 - [Wartung](https://neuverdrahtet.com/wartung.html): Wartung für Elektroinstallation, Wallbox, Photovoltaik-Anschluss, Wärmepumpe, Smart Home und Beleuchtung — Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
+- [Elektrosanierung](https://neuverdrahtet.com/elektrosanierung.html): Komplette Erneuerung veralteter Elektroinstallation im Altbau, auch im bewohnten Zustand. (inkl. Kosten-Konfigurator)
+- [Zählerschrank](https://neuverdrahtet.com/zaehlerschrank.html): Zählerschrank-Erweiterung und -Tausch nach VDE-AR-N 4100, z. B. für Wallbox oder PV. (inkl. Kosten-Konfigurator)
+- [Unterverteilung](https://neuverdrahtet.com/unterverteilung.html): Neue oder erweiterte Unterverteilung für Garage, Keller, Werkstatt oder Gewerbe. (inkl. Kosten-Konfigurator)
 
 ## Weitere Gewerke
 - [Fliesen](https://neuverdrahtet.com/fliesen.html): Fliesenverlegung für Bad, Küche und Boden — Wand, Boden und Großformat, fachgerecht verlegt und abgedichtet. (inkl. Kosten-Konfigurator)
