@@ -244,8 +244,8 @@ export async function render(container) {
           </div>
           <div class="divider"></div>
           <div class="flex-row" style="margin-bottom:10px">
-            <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
-            <button type="button" class="btn btn-sm" id="btn-ki-preise">🔍 Preise per KI recherchieren</button>
+            <button type="button" class="btn btn-sm" id="btn-ki-erstellen" title="Erstellt NEUE Positionen aus frei diktierten Stichpunkten">✨ Neue Positionen aus Stichpunkten (KI)</button>
+            <button type="button" class="btn btn-sm" id="btn-ki-preise" title="Füllt fehlende Preise bei bereits VORHANDENEN Positionen (z.B. aus GAEB-Import)">🔍 Fehlende Preise recherchieren (KI)</button>
           </div>
           <p class="hint">KI-Preise sind Richtwerte aus einer Internetrecherche ohne Garantie - bei wichtigen Angeboten vor dem Versand prüfen.</p>
           <div id="pos-host"></div>
