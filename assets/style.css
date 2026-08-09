@@ -817,6 +817,9 @@ section{ padding:88px 0; }
 .photo-single{ border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
 .photo-single img{ width:100%; max-height:460px; object-fit:cover; display:block; }
 
+.video-embed{ max-width:840px; margin:0 auto; border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); background:#000; }
+.video-embed video{ width:100%; max-height:520px; display:block; }
+
 .photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 @media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
 .photo-grid figure{ margin:0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--surface); }
