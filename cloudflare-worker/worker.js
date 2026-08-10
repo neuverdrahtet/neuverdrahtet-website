@@ -397,7 +397,11 @@ async function callClaudeGaebPreise({ apiKey, model, positionen }) {
         max_tokens: 8192,
         system: GAEB_PREISE_SYSTEM_PROMPT,
         messages,
-        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: positionen.length * 2 + 5 }],
+        // allowed_callers: ['direct'] ist nötig, damit auch günstigere Modelle
+        // ohne Unterstützung für "programmatic tool calling" (z.B. Haiku, siehe
+        // MODEL_ID-Hinweis oben) diesen Tool-Aufruf ausführen können - ohne das
+        // lehnt die Anthropic-API die Anfrage mit einem 400er ab.
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: positionen.length * 2 + 5, allowed_callers: ['direct'] }],
         output_config: {
           format: { type: 'json_schema', schema: GAEB_PREISVORSCHLAEGE_SCHEMA },
         },
