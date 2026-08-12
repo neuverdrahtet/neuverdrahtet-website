@@ -50,6 +50,7 @@ const NAV = [
   { group: 'Integrationen', items: [
     { id: 'google', icon: '📅', label: 'Google-Verbindung' },
     { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
+    { id: 'kibuerokraft', icon: '🤖', label: 'KI-Bürokraft-API' },
     { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
     { id: 'push', icon: '🔔', label: 'Benachrichtigungen' },
   ] },
@@ -325,6 +326,21 @@ export async function render(container) {
             <div class="field"><textarea name="emailSignature" rows="5" placeholder="Mit freundlichen Grüßen&#10;...">${escapeHtml(settings.emailSignature || '')}</textarea></div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
+        </div>
+
+        <div class="card settings-panel" data-panel="kibuerokraft" hidden>
+          <h2>KI-Bürokraft-API</h2>
+          <p class="hint">
+            Verbindungsdaten für eine KI-Bürokraft (z.B. Claude, ein eigenes Skript oder Zapier), die über den dedizierten Cloudflare Worker <code>cloudflare-worker-ki-buerokraft/</code> lesend und mit eingeschränkten Rechten schreibend auf Werkora zugreift. Der API-Schlüssel selbst wird NICHT hier gespeichert, sondern ausschließlich im Cloudflare Dashboard als Secret - hier trägst du nur die Worker-URL zur eigenen Übersicht ein und die Webhook-URL, an die der Worker Ereignisse meldet. Details/Einrichtung: Ordner <code>cloudflare-worker-ki-buerokraft/README.md</code>.
+          </p>
+          <form id="kibuerokraft-form">
+            <div class="form-grid">
+              <div class="field col-span-2"><label>Worker-URL (nur zur Übersicht, keine Funktion in Werkora selbst)</label><input name="kiBuerokraftApiUrl" placeholder="https://neuverdrahtet-ki-buerokraft.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.kiBuerokraftApiUrl || '')}"></div>
+              <div class="field col-span-2"><label>Webhook-URL (an die der Worker Ereignisse wie "neuer Lead" meldet)</label><input name="kiWebhookUrl" placeholder="https://..." value="${escapeHtml(settings.kiWebhookUrl || '')}"></div>
+            </div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
+          <p class="hint">Protokoll und Freigabe-Anfragen der KI-Bürokraft siehst du unter <a href="#/ki-aktivitaet">KI-Aktivität</a> und <a href="#/ki-freigaben">KI-Freigaben</a>.</p>
         </div>
 
         <div class="card settings-panel" data-panel="ki" hidden>
@@ -772,6 +788,16 @@ export async function render(container) {
       autoTerminAusAnfrage: fd.get('autoTerminAusAnfrage') === 'on',
     });
     toast('KI-Einstellungen gespeichert', 'success');
+  });
+
+  container.querySelector('#kibuerokraft-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      kiBuerokraftApiUrl: (fd.get('kiBuerokraftApiUrl') || '').toString().trim(),
+      kiWebhookUrl: (fd.get('kiWebhookUrl') || '').toString().trim(),
+    });
+    toast('KI-Bürokraft-Einstellungen gespeichert', 'success');
   });
 
   container.querySelector('#google-form').addEventListener('submit', async (e) => {

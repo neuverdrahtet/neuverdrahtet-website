@@ -283,10 +283,48 @@ async function logAction(ctx, { action, entityType, entityId, oldValue, newValue
   }
 }
 
-/** Antwortet mit 403 APPROVAL_REQUIRED und protokolliert den Versuch (Vorgabe Abschnitt 5+30+31). */
+/**
+ * Antwortet mit 403 APPROVAL_REQUIRED, protokolliert den Versuch (Vorgabe
+ * Abschnitt 5+31) UND legt einen Eintrag im "KI-Freigaben"-Bereich an
+ * (Vorgabe Abschnitt 30), damit Danny die angefragte Aktion in Werkora sieht.
+ * WICHTIG: "Freigeben" in Werkora führt die eigentliche Aktion NICHT
+ * automatisch aus (siehe README.md, Abschnitt "Freigabezentrum") - Danny
+ * macht Versand/Löschen weiterhin selbst in der jeweiligen Ansicht.
+ */
 async function blocked(ctx, action, message, entityType, entityId) {
   await logAction(ctx, { action, entityType, entityId, status: 'blocked', approvalRequired: true });
+  const freigabeId = crypto.randomUUID();
+  const freigabe = {
+    id: freigabeId, timestamp: new Date().toISOString(), action, entity_type: entityType || '', entity_id: entityId || '',
+    message, status: 'offen', bearbeitet_am: '', bearbeitet_von: '', kommentar: '',
+  };
+  try {
+    await firestoreCreate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: 'ki_freigaben', id: freigabeId, data: freigabe });
+  } catch {
+    // Freigabe-Eintrag ist ein Komfort-Feature (Sichtbarkeit in Werkora) - ein
+    // Fehler hier darf die eigentliche 403-Antwort an die KI nicht verhindern.
+  }
   return errorResponse('APPROVAL_REQUIRED', message, 403);
+}
+
+/**
+ * Sendet (best effort, ohne den Aufrufer zu blockieren) ein Webhook-Event an
+ * die in den Einstellungen hinterlegte URL (Vorgabe Abschnitt 32). Format:
+ * { event, data, timestamp }. Ohne konfigurierte URL passiert nichts.
+ */
+async function fireWebhook(ctx, event, data) {
+  try {
+    const url = await getSettingValue({ accessToken: ctx.accessToken, projectId: ctx.projectId, key: 'kiWebhookUrl', fallback: '' });
+    if (!url) return;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event, data, timestamp: new Date().toISOString() }),
+    });
+  } catch {
+    // Webhooks sind best effort - ein nicht erreichbarer Zielserver darf den
+    // eigentlichen API-Aufruf nicht zum Scheitern bringen.
+  }
 }
 
 // --- Ressourcen-Mapping: Werkora-Felder <-> API-Felder aus der Vorgabe ---
@@ -406,6 +444,74 @@ function invoiceToApi(r) {
   };
 }
 
+// "Auftragsbestätigungen" haben in Werkora exakt dieselbe Feldform wie
+// Angebote (nummer, kundeId, projektId, datum, status, betreff, positionen,
+// ...) - deshalb wird hier bewusst dieselbe quoteToApi()-Logik wiederverwendet.
+function orderToApi(a) {
+  const q = quoteToApi(a);
+  return { ...q, quote_id: a.angebotId || '' };
+}
+
+function workReportToApi(w) {
+  return {
+    id: w.id,
+    customer_id: w.kundeId || '',
+    project_id: w.projektId || '',
+    employee_id: w.mitarbeiterId || '',
+    date: w.datum || '',
+    start_time: w.startzeit || '',
+    end_time: w.endzeit || '',
+    work_minutes: w.arbeitszeitMinuten || 0,
+    travel_minutes: w.fahrtzeitMinuten || 0,
+    work_done: w.arbeiten || '',
+    material_used: w.material || '',
+    additional_work: w.zusatzarbeiten || '',
+    photos: w.fotos || [],
+    customer_signature: w.unterschriftKunde || null,
+    created_at: w.createdAt || '',
+  };
+}
+
+function apiToWorkReport(body) {
+  return {
+    kundeId: body.customer_id || '', projektId: body.project_id || '', mitarbeiterId: body.employee_id || '',
+    datum: body.date || todayISO(), startzeit: body.start_time || '', endzeit: body.end_time || '',
+    arbeitszeitMinuten: Number(body.work_minutes) || 0, fahrtzeitMinuten: Number(body.travel_minutes) || 0,
+    arbeiten: body.work_done || '', material: body.material_used || '', zusatzarbeiten: body.additional_work || '',
+    fotos: [], unterschriftKunde: null,
+  };
+}
+
+const DOKUMENT_TYPEN = ['photo', 'measurement_report', 'vde_report', 'dguv_report', 'acceptance', 'customer_signature', 'invoice_document', 'quote_document', 'plan', 'other'];
+
+function documentToApi(d) {
+  return { id: d.id, project_id: d.projektId || '', type: d.typ || 'other', title: d.titel || '', note: d.notiz || '', created_at: d.createdAt || '' };
+}
+
+function paymentToApi(b) {
+  return {
+    id: b.id, date: b.datum || '', amount: b.betrag || 0, purpose: b.verwendungszweck || '', payer: b.empfaenger || '',
+    matched: !!b.matched, match_type: b.matchTyp || '', match_id: b.matchId || '',
+  };
+}
+
+function reminderToApi(m) {
+  return { id: m.id, invoice_id: m.rechnungId || '', level: m.stufe || 1, date: m.datum || '', new_due_date: m.neueFrist || '', fee: m.gebuehr || 0, text: m.text || '' };
+}
+
+function articleToApi(k) {
+  return {
+    id: k.id, type: k.typ === 'artikel' ? 'article' : 'service', name: k.bezeichnung || '', description: k.beschreibung || '',
+    unit: k.einheit || '', purchase_price: k.einkaufspreis || 0, markup_percent: k.aufschlagProzent || 0,
+    sales_price: k.preis || 0, vat_rate: k.steuersatz || 0, trade: k.gewerk || '',
+    stock: k.bestandTracking ? (k.bestand ?? 0) : null, min_stock: k.bestandTracking ? (k.mindestbestand ?? 0) : null,
+  };
+}
+
+function employeeToApi(m, onLeaveToday) {
+  return { id: m.id, name: m.name || '', role: m.zugriffsrolle || '', trade: m.rolle || '', phone: m.telefon || '', email: m.email || '', on_leave_today: !!onLeaveToday };
+}
+
 /** Prüft, ob ein von der KI gesendeter Lead-/Kunden-Status einer echten Werkora-Status-Spalte entspricht. */
 function leadStatusHinweis(sentStatus, kundenStatusSpalten) {
   if (!sentStatus) return null;
@@ -419,6 +525,7 @@ export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
   customerToApi, apiToCustomer, taskToApi, appointmentToApi, projectToApi, quoteToApi, invoiceToApi,
   nextDailyNummer, calcTotals, leadStatusHinweis,
+  orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
 };
 
 export default {
@@ -516,6 +623,7 @@ export default {
           data.createdAt = new Date().toISOString();
           const created = await firestoreCreate({ accessToken, projectId, collection: 'kunden', id, data });
           await logAction(ctx, { action: 'customers.create', entityType: 'kunden', entityId: id, newValue: data, status: 'success' });
+          await fireWebhook(ctx, 'customer.created', customerToApi(created));
           return okResponse(customerToApi(created), 201);
         }
         if (request.method === 'PATCH' && teile[1]) {
@@ -564,6 +672,7 @@ export default {
             const changes = { status: gewuenschterStatus, notizen: [kunde.notizen, notizZusatz].filter(Boolean).join('\n\n') };
             const updated = await firestoreUpdate({ accessToken, projectId, collection: 'kunden', id: kunde.id, data: changes });
             await logAction(ctx, { action: 'leads.create', entityType: 'kunden', entityId: kunde.id, newValue: changes, status: 'success' });
+            await fireWebhook(ctx, 'lead.created', customerToApi(updated));
             return okResponse({ ...customerToApi(updated), lead_note: hinweis || undefined }, 201);
           }
           if (!body.title && !leadInfoZeilen) return errorResponse('VALIDATION_ERROR', 'Ohne customer_id wird mindestens "title" benötigt, um einen neuen Kunden für den Lead anzulegen.', 400);
@@ -574,6 +683,7 @@ export default {
           };
           const created = await firestoreCreate({ accessToken, projectId, collection: 'kunden', id, data });
           await logAction(ctx, { action: 'leads.create', entityType: 'kunden', entityId: id, newValue: data, status: 'success' });
+          await fireWebhook(ctx, 'lead.created', customerToApi(created));
           return okResponse({ ...customerToApi(created), lead_note: hinweis || undefined }, 201);
         }
         if (request.method === 'PATCH' && teile[1]) {
@@ -589,6 +699,7 @@ export default {
           if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
           const updated = await firestoreUpdate({ accessToken, projectId, collection: 'kunden', id: teile[1], data: changes });
           await logAction(ctx, { action: 'leads.update', entityType: 'kunden', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          if (changes.status && changes.status !== existing.status) await fireWebhook(ctx, 'lead.status_changed', { id: teile[1], old_status: existing.status || '', new_status: changes.status });
           return okResponse({ ...customerToApi(updated), lead_note: hinweis || undefined });
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
@@ -596,6 +707,24 @@ export default {
 
       // --- Projekte (Vorgabe Abschnitt 9 - nur Lesen in Phase 1) ---
       if (teile[0] === 'projects') {
+        // --- Projekt-Dokumente (Vorgabe Abschnitt 19-20) ---
+        if (teile[1] && teile[2] === 'documents') {
+          if (request.method === 'GET') {
+            const dokumente = (await firestoreList({ accessToken, projectId, collection: 'dokumente' })).filter((d) => d.projektId === teile[1]);
+            await logAction(ctx, { action: 'documents.search', entityType: 'projekte', entityId: teile[1], status: 'success' });
+            return okResponse(dokumente.map(documentToApi));
+          }
+          if (request.method === 'POST') {
+            let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+            if (!body.type || !DOKUMENT_TYPEN.includes(body.type)) return errorResponse('VALIDATION_ERROR', `Feld "type" muss einer von ${DOKUMENT_TYPEN.join(', ')} sein.`, 400);
+            const id = crypto.randomUUID();
+            const data = { id, projektId: teile[1], typ: body.type, titel: body.title || '', notiz: body.note || '', createdAt: new Date().toISOString() };
+            const created = await firestoreCreate({ accessToken, projectId, collection: 'dokumente', id, data });
+            await logAction(ctx, { action: 'documents.create', entityType: 'dokumente', entityId: id, newValue: data, status: 'success' });
+            return okResponse(documentToApi(created), 201);
+          }
+          return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+        }
         if (request.method === 'GET' && !teile[1]) {
           let projekte = await firestoreList({ accessToken, projectId, collection: 'projekte' });
           const customerId = q.get('customer_id'); const status = q.get('status');
@@ -694,6 +823,7 @@ export default {
           };
           const created = await firestoreCreate({ accessToken, projectId, collection: 'termine', id, data });
           await logAction(ctx, { action: 'appointments.create', entityType: 'termine', entityId: id, newValue: data, status: 'success' });
+          await fireWebhook(ctx, 'appointment.created', appointmentToApi(created));
           return okResponse(appointmentToApi(created), 201);
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
@@ -749,6 +879,7 @@ export default {
           };
           const created = await firestoreCreate({ accessToken, projectId, collection: 'angebote', id, data });
           await logAction(ctx, { action: 'quotes.create', entityType: 'angebote', entityId: id, newValue: data, status: 'success' });
+          await fireWebhook(ctx, 'quote.created', quoteToApi(created));
           return okResponse(quoteToApi(created), 201);
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
@@ -781,9 +912,168 @@ export default {
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
+      // --- Aufträge (Vorgabe Abschnitt 17 - nur Lesen, entstehen aus angenommenen Angeboten in Werkora selbst) ---
+      if (teile[0] === 'orders') {
+        if (request.method === 'GET' && !teile[1]) {
+          let auftraege = await firestoreList({ accessToken, projectId, collection: 'auftragsbestaetigungen' });
+          const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id'); const status = q.get('status');
+          if (customerId) auftraege = auftraege.filter((a) => a.kundeId === customerId);
+          if (projectIdFilter) auftraege = auftraege.filter((a) => a.projektId === projectIdFilter);
+          if (status) auftraege = auftraege.filter((a) => orderToApi(a).status === status);
+          await logAction(ctx, { action: 'orders.search', status: 'success' });
+          return okResponse(auftraege.map(orderToApi));
+        }
+        if (request.method === 'GET' && teile[1]) {
+          const a = await firestoreGet({ accessToken, projectId, collection: 'auftragsbestaetigungen', id: teile[1] });
+          if (!a) return errorResponse('ORDER_NOT_FOUND', 'Auftrag wurde nicht gefunden.', 404);
+          return okResponse(orderToApi(a));
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Aufträge entstehen in Werkora aus angenommenen Angeboten - Anlegen/Ändern über diese API ist noch nicht freigeschaltet.', 405);
+      }
+
+      // --- Arbeitsberichte (Vorgabe Abschnitt 18) ---
+      if (teile[0] === 'work-reports') {
+        if (request.method === 'GET' && !teile[1]) {
+          let berichte = await firestoreList({ accessToken, projectId, collection: 'arbeitsberichte' });
+          const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id'); const employeeId = q.get('employee_id');
+          if (customerId) berichte = berichte.filter((w) => w.kundeId === customerId);
+          if (projectIdFilter) berichte = berichte.filter((w) => w.projektId === projectIdFilter);
+          if (employeeId) berichte = berichte.filter((w) => w.mitarbeiterId === employeeId);
+          await logAction(ctx, { action: 'work-reports.search', status: 'success' });
+          return okResponse(berichte.map(workReportToApi));
+        }
+        if (request.method === 'GET' && teile[1]) {
+          const w = await firestoreGet({ accessToken, projectId, collection: 'arbeitsberichte', id: teile[1] });
+          if (!w) return errorResponse('WORK_REPORT_NOT_FOUND', 'Arbeitsbericht wurde nicht gefunden.', 404);
+          return okResponse(workReportToApi(w));
+        }
+        if (request.method === 'POST' && !teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          if (!body.customer_id && !body.project_id) return errorResponse('VALIDATION_ERROR', 'Mindestens "customer_id" oder "project_id" ist erforderlich.', 400);
+          const id = crypto.randomUUID();
+          const data = { id, ...apiToWorkReport(body), createdAt: new Date().toISOString() };
+          const created = await firestoreCreate({ accessToken, projectId, collection: 'arbeitsberichte', id, data });
+          await logAction(ctx, { action: 'work-reports.create', entityType: 'arbeitsberichte', entityId: id, newValue: data, status: 'success' });
+          return okResponse(workReportToApi(created), 201);
+        }
+        if (request.method === 'PATCH' && teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'arbeitsberichte', id: teile[1] });
+          if (!existing) return errorResponse('WORK_REPORT_NOT_FOUND', 'Arbeitsbericht wurde nicht gefunden.', 404);
+          const changes = apiToWorkReport({ ...workReportToApi(existing), ...body });
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'arbeitsberichte', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'work-reports.update', entityType: 'arbeitsberichte', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(workReportToApi(updated));
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Zahlungen (Vorgabe Abschnitt 23 - nur Lesen, Werkora bildet das über Kontoauszug-Abgleich ab) ---
+      if (teile[0] === 'payments') {
+        if (request.method === 'GET' && !teile[1]) {
+          const zahlungen = await firestoreList({ accessToken, projectId, collection: 'bankbuchungen' });
+          await logAction(ctx, { action: 'payments.search', status: 'success' });
+          return okResponse(zahlungen.map(paymentToApi));
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Zahlungen werden über den Kontoauszug-Abgleich in Werkora gepflegt und können über diese API nur gelesen werden.', 405);
+      }
+
+      // --- Mahnungen (Vorgabe Abschnitt 24) ---
+      if (teile[0] === 'reminders') {
+        if (request.method === 'GET' && !teile[1]) {
+          let mahnungen = await firestoreList({ accessToken, projectId, collection: 'mahnungen' });
+          const invoiceId = q.get('invoice_id');
+          if (invoiceId) mahnungen = mahnungen.filter((m) => m.rechnungId === invoiceId);
+          await logAction(ctx, { action: 'reminders.search', status: 'success' });
+          return okResponse(mahnungen.map(reminderToApi));
+        }
+        if (request.method === 'POST' && !teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          if (!body.invoice_id || !body.level) return errorResponse('VALIDATION_ERROR', 'Felder "invoice_id" und "level" sind erforderlich.', 400);
+          const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: body.invoice_id });
+          if (!rechnung) return errorResponse('INVOICE_NOT_FOUND', 'invoice_id verweist auf keine vorhandene Rechnung.', 404);
+          const id = crypto.randomUUID();
+          const data = { id, rechnungId: body.invoice_id, stufe: body.level, datum: todayISO(), neueFrist: body.new_due_date || '', gebuehr: body.fee || 0, text: body.text || '', createdAt: new Date().toISOString() };
+          const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id, data });
+          await logAction(ctx, { action: 'reminders.create', entityType: 'mahnungen', entityId: id, newValue: data, status: 'success' });
+          return okResponse(reminderToApi(created), 201);
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - nur Lesen) ---
+      if (teile[0] === 'articles' || teile[0] === 'services' || teile[0] === 'price-list') {
+        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Der Katalog wird nur in Werkora selbst gepflegt - diese API kann ihn nur lesen.', 405);
+        let katalog = await firestoreList({ accessToken, projectId, collection: 'katalog' });
+        if (teile[0] === 'articles') katalog = katalog.filter((k) => k.typ === 'artikel');
+        if (teile[0] === 'services') katalog = katalog.filter((k) => k.typ === 'leistung');
+        const gewerk = q.get('trade');
+        if (gewerk) katalog = katalog.filter((k) => k.gewerk === gewerk);
+        await logAction(ctx, { action: `${teile[0]}.search`, status: 'success' });
+        return okResponse(katalog.map(articleToApi));
+      }
+
+      // --- Mitarbeiter (Vorgabe Abschnitt 27 - eingeschränkte Felder, keine sensiblen Personaldaten) ---
+      if (teile[0] === 'employees') {
+        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Mitarbeiterdaten werden über diese API nur gelesen, nicht verändert.', 405);
+        const [mitarbeiter, termine] = await Promise.all([
+          firestoreList({ accessToken, projectId, collection: 'mitarbeiter' }),
+          firestoreList({ accessToken, projectId, collection: 'termine' }),
+        ]);
+        const heute = todayISO();
+        const onLeaveIds = new Set(termine.filter((t) => t.typ === 'urlaub' && (t.start || '').slice(0, 10) <= heute && (t.ende || t.start || '').slice(0, 10) >= heute).flatMap((t) => t.mitarbeiterIds || []));
+        let liste = mitarbeiter.map((m) => employeeToApi(m, onLeaveIds.has(m.id)));
+        if (teile[1]) {
+          const one = liste.find((m) => m.id === teile[1]);
+          if (!one) return errorResponse('EMPLOYEE_NOT_FOUND', 'Mitarbeiter wurde nicht gefunden.', 404);
+          await logAction(ctx, { action: 'employees.get', entityType: 'mitarbeiter', entityId: teile[1], status: 'success' });
+          return okResponse(one);
+        }
+        await logAction(ctx, { action: 'employees.search', status: 'success' });
+        return okResponse(liste);
+      }
+
       return errorResponse('NOT_FOUND', `Unbekannter Endpunkt: ${request.method} ${url.pathname}`, 404);
     } catch (err) {
       return errorResponse('SERVER_ERROR', err.message || 'Unbekannter Fehler', 500);
+    }
+  },
+
+  /**
+   * Cron-Job (siehe README.md für die Einrichtung im Cloudflare Dashboard):
+   * prüft täglich neu überfällige Rechnungen/Aufgaben und feuert die
+   * Webhooks invoice.overdue/task.overdue (Vorgabe Abschnitt 32) - jeweils
+   * nur EINMAL pro Rechnung/Aufgabe (Dedupe-Feld kiWebhookOverdueSentAt),
+   * damit nicht jeden Tag erneut derselbe Webhook eintrifft.
+   */
+  async scheduled(event, env) {
+    if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+    try {
+      const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+      const projectId = serviceAccount.project_id;
+      const ctx = { accessToken, projectId, ip: '' };
+      const heute = todayISO();
+
+      const rechnungen = await firestoreList({ accessToken, projectId, collection: 'rechnungen' });
+      for (const r of rechnungen) {
+        const ueberfaellig = RECHNUNG_OFFEN_STATUS.includes(r.status) && r.faelligAm && r.faelligAm < heute;
+        if (ueberfaellig && !r.kiWebhookOverdueSentAt) {
+          await fireWebhook(ctx, 'invoice.overdue', invoiceToApi(r));
+          await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: r.id, data: { kiWebhookOverdueSentAt: new Date().toISOString() } });
+        }
+      }
+
+      const aufgaben = await firestoreList({ accessToken, projectId, collection: 'aufgaben' });
+      for (const a of aufgaben) {
+        const ueberfaellig = !AUFGABEN_STATUS_GESCHLOSSEN.includes(a.status) && a.faelligAm && a.faelligAm < heute;
+        if (ueberfaellig && !a.kiWebhookOverdueSentAt) {
+          await fireWebhook(ctx, 'task.overdue', taskToApi(a));
+          await firestoreUpdate({ accessToken, projectId, collection: 'aufgaben', id: a.id, data: { kiWebhookOverdueSentAt: new Date().toISOString() } });
+        }
+      }
+    } catch {
+      // Cron darf nicht laut fehlschlagen - beim nächsten Lauf wird es erneut versucht.
     }
   },
 };

@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 20;
+const DB_VERSION = 21;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -64,6 +64,8 @@ const STORES = {
   anlagegueter: 'id',
   kundenStatus: 'id',
   subunternehmer: 'id',
+  ai_action_log: 'id',
+  ki_freigaben: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -482,6 +484,8 @@ const DEFAULT_SETTINGS = {
   bankImportSpalten: {},
   aiWorkerUrl: '',
   aiAppSecret: '',
+  kiBuerokraftApiUrl: '',
+  kiWebhookUrl: '',
   lexofficeApiKey: '',
   lexofficeArbeitsstundeArtikelId: '',
   lexofficeArbeitsstundeArtikelName: '',
@@ -2280,6 +2284,8 @@ export const ROUTE_ROLLEN = {
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
   mitarbeiter: ['admin', 'buero'],
   subunternehmer: ['admin', 'buero'],
+  'ki-freigaben': ['admin'],
+  'ki-aktivitaet': ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],

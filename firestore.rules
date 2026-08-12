@@ -22,7 +22,7 @@ service cloud.firestore {
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
-        'kundenStatus', 'subunternehmer', 'ai_action_log'
+        'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für

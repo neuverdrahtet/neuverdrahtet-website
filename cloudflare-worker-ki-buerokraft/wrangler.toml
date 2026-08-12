@@ -6,3 +6,10 @@ compatibility_date = "2026-01-01"
 # Worker -> Settings -> Variables and Secrets (siehe README.md):
 #   API_KEY
 #   FIREBASE_SERVICE_ACCOUNT_JSON
+
+# Täglicher Cron-Job (06:00 UTC = 07:00/08:00 deutsche Zeit je nach Sommerzeit)
+# für die invoice.overdue/task.overdue-Webhooks. Falls per Dashboard statt
+# CLI deployed wird: unter Worker -> Settings -> Trigger-Ereignisse -> Cron-
+# Trigger manuell "0 6 * * *" eintragen (siehe README.md).
+[triggers]
+crons = ["0 6 * * *"]
