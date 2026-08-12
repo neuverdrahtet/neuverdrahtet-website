@@ -1,0 +1,531 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Werkora KI-Bürokraft API",
+    "description": "Liest und schreibt Geschäftsdaten (Kunden, Leads, Projekte, Aufgaben, Termine, Angebote, Rechnungen u.a.) für die Firma neuverdrahtet. Sensible Aktionen (Versand, Löschen) sind serverseitig gesperrt und erscheinen nicht in dieser Schnittstelle.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "https://neuverdrahtet-ki-buerokraft.neuverdrahtetworkersdev.workers.dev" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {},
+          "message": { "type": ["string", "null"] },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/customers": {
+      "get": {
+        "operationId": "searchCustomers",
+        "summary": "Kunden suchen",
+        "description": "Vor dem Anlegen eines neuen Kunden IMMER zuerst hiermit prüfen, ob er schon existiert (per E-Mail oder Telefon).",
+        "parameters": [
+          { "name": "email", "in": "query", "schema": { "type": "string" } },
+          { "name": "phone", "in": "query", "schema": { "type": "string" } },
+          { "name": "name", "in": "query", "schema": { "type": "string" }, "description": "Sucht in Firma/Name und Ansprechpartner" },
+          { "name": "postal_code", "in": "query", "schema": { "type": "string" } },
+          { "name": "city", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste der gefundenen Kunden", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createCustomer",
+        "summary": "Neuen Kunden anlegen",
+        "description": "Neuer Kunde bekommt automatisch Status \"lead\". Gibt 409 zurück, wenn E-Mail/Telefon schon existiert.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string", "description": "Firma oder vollständiger Name (Pflicht, wenn 'company' fehlt)" },
+                  "company": { "type": "string" },
+                  "type": { "type": "string", "enum": ["private", "company"] },
+                  "contact_name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "phone": { "type": "string" },
+                  "street": { "type": "string" },
+                  "postal_code": { "type": "string" },
+                  "city": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegter Kunde", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/customers/{id}": {
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Einen Kunden abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Kunde", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "patch": {
+        "operationId": "updateCustomer",
+        "summary": "Kunde aktualisieren",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" }, "company": { "type": "string" }, "contact_name": { "type": "string" },
+                  "email": { "type": "string" }, "phone": { "type": "string" }, "street": { "type": "string" },
+                  "postal_code": { "type": "string" }, "city": { "type": "string" }, "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Aktualisierter Kunde", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/leads": {
+      "get": {
+        "operationId": "searchLeads",
+        "summary": "Leads abrufen (Kunden im Status 'lead' oder anderem Status)",
+        "parameters": [{ "name": "status", "in": "query", "schema": { "type": "string" }, "description": "Werkora-Status wie 'lead', 'interessent', 'kunde', 'verloren'. Ohne Angabe: nur 'lead'." }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createLead",
+        "summary": "Lead anlegen (neuer Kunde oder Notiz an bestehendem Kunden)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customer_id": { "type": "string", "description": "Falls der Kunde schon existiert (per searchCustomers gefunden)" },
+                  "title": { "type": "string", "description": "Pflicht, wenn kein customer_id angegeben ist" },
+                  "description": { "type": "string" },
+                  "trade": { "type": "string", "description": "Gewerk, z.B. elektro" },
+                  "source": { "type": "string" },
+                  "priority": { "type": "string" },
+                  "estimated_value": { "type": "number" },
+                  "next_action": { "type": "string" },
+                  "next_action_date": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegter/aktualisierter Lead", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/leads/{id}": {
+      "patch": {
+        "operationId": "updateLead",
+        "summary": "Lead aktualisieren (Status, nächster Schritt, Notiz)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "description": "Nur bekannte Werkora-Status-Werte ändern den Status wirklich, sonst wird nur eine Notiz vermerkt." },
+                  "next_action": { "type": "string" },
+                  "next_action_date": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Aktualisierter Lead", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/projects": {
+      "get": {
+        "operationId": "searchProjects",
+        "summary": "Projekte abrufen",
+        "parameters": [
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "operationId": "getProject",
+        "summary": "Ein Projekt abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Projekt", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/projects/{id}/documents": {
+      "get": {
+        "operationId": "getProjectDocuments",
+        "summary": "Dokumente eines Projekts abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "addProjectDocument",
+        "summary": "Dokument-Metadaten zu einem Projekt hinzufügen (kein Datei-Upload)",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["photo", "measurement_report", "vde_report", "dguv_report", "acceptance", "customer_signature", "invoice_document", "quote_document", "plan", "other"] },
+                  "title": { "type": "string" },
+                  "note": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegtes Dokument", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/tasks": {
+      "get": {
+        "operationId": "searchTasks",
+        "summary": "Aufgaben abrufen",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "offen, in-arbeit, klaerung, erledigt" },
+          { "name": "priority", "in": "query", "schema": { "type": "string" } },
+          { "name": "due_date", "in": "query", "schema": { "type": "string" } },
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "assigned_to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createTask",
+        "summary": "Aufgabe erstellen",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "priority": { "type": "string", "description": "niedrig, normal, hoch" },
+                  "due_date": { "type": "string", "description": "YYYY-MM-DD" },
+                  "customer_id": { "type": "string" },
+                  "project_id": { "type": "string" },
+                  "assigned_to": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegte Aufgabe", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/tasks/{id}": {
+      "get": {
+        "operationId": "getTask",
+        "summary": "Eine Aufgabe abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Aufgabe", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "patch": {
+        "operationId": "updateTask",
+        "summary": "Aufgabe aktualisieren oder abschließen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string", "description": "'completed' schließt die Aufgabe ab" },
+                  "title": { "type": "string" }, "description": { "type": "string" },
+                  "priority": { "type": "string" }, "due_date": { "type": "string" }, "assigned_to": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Aktualisierte Aufgabe", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/appointments": {
+      "get": {
+        "operationId": "searchAppointments",
+        "summary": "Termine abrufen",
+        "parameters": [
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "date_from", "in": "query", "schema": { "type": "string" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createAppointment",
+        "summary": "Termin erstellen",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "start"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "start": { "type": "string", "description": "z.B. 2026-08-14T09:00" },
+                  "end": { "type": "string" },
+                  "customer_id": { "type": "string" },
+                  "project_id": { "type": "string" },
+                  "address": { "type": "string" },
+                  "assigned_employee_ids": { "type": "array", "items": { "type": "string" } },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegter Termin", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/quotes": {
+      "get": {
+        "operationId": "searchQuotes",
+        "summary": "Angebote abrufen",
+        "parameters": [
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "draft, sent, accepted, rejected" },
+          { "name": "date_from", "in": "query", "schema": { "type": "string" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createQuoteDraft",
+        "summary": "Angebotsentwurf erstellen (immer Status 'draft', kein automatischer Versand möglich)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_id"],
+                "properties": {
+                  "customer_id": { "type": "string" },
+                  "project_id": { "type": "string" },
+                  "title": { "type": "string" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "title": { "type": "string" },
+                        "description": { "type": "string" },
+                        "quantity": { "type": "number" },
+                        "unit": { "type": "string" },
+                        "unit_price_net": { "type": "number" },
+                        "vat_rate": { "type": "number", "description": "z.B. 19" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegter Angebotsentwurf", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/quotes/{id}": {
+      "get": {
+        "operationId": "getQuote",
+        "summary": "Ein Angebot abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Angebot", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "searchInvoices",
+        "summary": "Rechnungen abrufen, inkl. überfällige (status=overdue)",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string" }, "description": "draft, sent, paid, overdue, cancelled" },
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "date_from", "in": "query", "schema": { "type": "string" } },
+          { "name": "date_to", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/invoices/{id}": {
+      "get": {
+        "operationId": "getInvoice",
+        "summary": "Eine Rechnung abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Rechnung", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "searchOrders",
+        "summary": "Aufträge (angenommene Angebote) abrufen",
+        "parameters": [
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/work-reports": {
+      "get": {
+        "operationId": "searchWorkReports",
+        "summary": "Arbeitsberichte abrufen",
+        "parameters": [
+          { "name": "customer_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "project_id", "in": "query", "schema": { "type": "string" } },
+          { "name": "employee_id", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createWorkReport",
+        "summary": "Arbeitsbericht anlegen",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customer_id": { "type": "string" }, "project_id": { "type": "string" }, "employee_id": { "type": "string" },
+                  "date": { "type": "string" }, "start_time": { "type": "string" }, "end_time": { "type": "string" },
+                  "work_minutes": { "type": "number" }, "travel_minutes": { "type": "number" },
+                  "work_done": { "type": "string" }, "material_used": { "type": "string" }, "additional_work": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegter Arbeitsbericht", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/payments": {
+      "get": {
+        "operationId": "searchPayments",
+        "summary": "Zahlungen/Bankbuchungen abrufen (nur lesen)",
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/reminders": {
+      "get": {
+        "operationId": "searchReminders",
+        "summary": "Mahnungen abrufen",
+        "parameters": [{ "name": "invoice_id", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createReminderDraft",
+        "summary": "Mahnung vorbereiten (kein automatischer Versand)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["invoice_id", "level"],
+                "properties": {
+                  "invoice_id": { "type": "string" },
+                  "level": { "type": "integer", "description": "Mahnstufe, z.B. 1" },
+                  "new_due_date": { "type": "string" },
+                  "fee": { "type": "number" },
+                  "text": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Angelegte Mahnung", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/articles": {
+      "get": {
+        "operationId": "searchArticles",
+        "summary": "Katalog-Artikel abrufen (nur lesen)",
+        "parameters": [{ "name": "trade", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/services": {
+      "get": {
+        "operationId": "searchServices",
+        "summary": "Katalog-Leistungen abrufen (nur lesen)",
+        "parameters": [{ "name": "trade", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/price-list": {
+      "get": {
+        "operationId": "getPriceList",
+        "summary": "Komplette Preisliste (Artikel+Leistungen) abrufen (nur lesen)",
+        "parameters": [{ "name": "trade", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/employees": {
+      "get": {
+        "operationId": "searchEmployees",
+        "summary": "Mitarbeiter abrufen (eingeschränkte Felder, nur lesen)",
+        "responses": { "200": { "description": "Liste", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/employees/{id}": {
+      "get": {
+        "operationId": "getEmployee",
+        "summary": "Einen Mitarbeiter abrufen",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Mitarbeiter", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/assistant/dashboard": {
+      "get": {
+        "operationId": "getDashboard",
+        "summary": "Kompakte Unternehmensübersicht (neue Leads, offene Aufgaben, überfällige Rechnungen usw.)",
+        "responses": { "200": { "description": "Dashboard-Daten", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    }
+  }
+}
