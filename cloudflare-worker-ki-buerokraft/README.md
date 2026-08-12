@@ -1,0 +1,217 @@
+# Werkora-API für die KI-Bürokraft
+
+Dieser Worker setzt deine Vorgabe "Technische Vorgabe: Werkora-API für KI-Bürokraft" um.
+
+**Phase 1** (die von dir selbst benannte "Priorität für erste funktionsfähige Version",
+Abschnitt 39 deiner Vorgabe): Kunde suchen/anlegen, Lead anlegen/aktualisieren, Projekte
+abrufen, Aufgabe erstellen/abrufen, Termine abrufen/erstellen, Angebote abrufen/Entwurf
+erstellen, Rechnungen abrufen inkl. überfällige erkennen, Dashboard, KI-Aktionsprotokoll.
+
+**Phase 2/3** (zusätzlich gebaut): Aufträge (lesen), Arbeitsberichte, Projekt-Dokumente,
+Zahlungen (lesen), Mahnungen, Artikel/Leistungen/Preisliste (lesen), Mitarbeiter (lesen,
+eingeschränkte Felder), Webhooks, ein täglicher Cron-Job für überfällige
+Rechnungen/Aufgaben, sowie ein "KI-Freigaben"-Bereich in Werkora (Ansicht `ki-freigaben.js`)
+und eine "KI-Aktivität"-Ansicht (`ki-aktivitaet.js`) für das Protokoll.
+
+**Noch nicht gebaut** (Phase 2/4 deiner Vorgabe): Google-Kalender-/Gmail-Anbindung (siehe
+eigener Abschnitt unten, warum das mehr als nur diesen Worker betrifft), MCP-Server (siehe
+unten). Sag Bescheid, wenn's damit weitergehen soll.
+
+## Wichtige Abweichungen von deiner Vorgabe (und warum)
+
+- **"Leads" sind in Werkora keine eigene Tabelle.** Ein Lead ist bei euch technisch ein
+  Kunde mit einem Status-Feld (die "Lead-Pipeline"-Ansicht in Werkora). Die
+  `/leads`-Endpunkte sind deshalb ein Filter über `/customers`, keine eigene Datenbank.
+  Die Status-Werte aus deiner Vorgabe (`new`, `contacted`, `qualification`, …) gibt es bei
+  euch nicht 1:1 – eure echten Status-Spalten heißen `lead`, `interessent`, `kunde`,
+  `verloren` (unter "Lead-Pipeline → ⚙️ Status verwalten" änderbar). Schickt die KI einen
+  unbekannten Status, wird er **nicht verworfen**, sondern als Notiz am Kunden vermerkt und
+  die Antwort enthält ein `lead_note`-Feld mit einem Hinweis.
+- **Rechnungen legt die KI (noch) nicht an.** Sobald in Werkora eine Rechnung angelegt
+  wird, bekommt sie eine fortlaufende Tagesnummer und wird GoBD-mäßig gesperrt (nur noch
+  Storno, kein Löschen/Bearbeiten). Ein KI-Versuch, der schiefgeht, würde eine echte Nummer
+  "verbrennen". Deshalb: `POST /invoices` ist blockiert (Antwort erklärt warum),
+  `GET /invoices` (inkl. `?status=overdue`) funktioniert normal. Angebote sind dagegen
+  unkritisch (Status "Entwurf", beliebig änderbar) – `POST /quotes` funktioniert.
+- **Versand/Freigabe ist immer blockiert** (Angebot versenden, Rechnung versenden/freigeben,
+  Auftrags-Umwandlung) – exakt wie in deiner Vorgabe unter "Standardmäßig nicht erlaubt"
+  gefordert. Diese Endpunkte antworten mit HTTP 403 und werden trotzdem protokolliert.
+- **Löschen ist komplett gesperrt** (jede `DELETE`-Anfrage, egal auf welchem Endpunkt) –
+  wie in deiner Vorgabe unter "Sicherheitsregeln" gefordert.
+- **Keine eigene Rollen-Verwaltungsoberfläche.** Statt eines UI zum Einstellen von
+  Rechten ist die Erlaubnisliste aus deiner Vorgabe (Abschnitt 5) fest im Code hinterlegt.
+- **"KI-Freigaben" informiert nur, führt nichts automatisch aus.** Wenn die KI eine
+  gesperrte Aktion versucht (z.B. Angebot versenden), landet zusätzlich zum 403-Fehler ein
+  Eintrag in der neuen Werkora-Ansicht "KI-Freigaben". "Freigeben" dort markiert den Eintrag
+  nur als erledigt/zur Kenntnis genommen – **es löst die eigentliche Aktion nicht aus**. Du
+  versendest das Angebot/die Rechnung weiterhin ganz normal selbst in der jeweiligen
+  Werkora-Ansicht. Eine echte "Freigeben löst aus"-Automatik wäre ein größerer, eigener
+  Schritt (müsste für jede Aktion einzeln sicher nachgebaut werden) - sag Bescheid, falls
+  gewünscht.
+- **Arbeitsberichte sind ein neues, einfaches Objekt**, nicht an das bestehende
+  Berichte-Baukasten-System (mit PDF-Vorlagen, Foto-Abschnitten usw.) angebunden. Die KI
+  legt schnelle Basis-Berichte an (Kunde/Projekt/Mitarbeiter/Zeiten/Text) - für die
+  ausführliche PDF-Dokumentation nutzt ihr weiterhin die bestehende Berichte-Funktion in
+  Werkora selbst.
+- **Projekt-Dokumente sind Metadaten-Einträge, keine Datei-Uploads.** `POST
+  /projects/{id}/documents` legt einen Eintrag mit Typ/Titel/Notiz an, aber ohne
+  Bilddatei/PDF - ein echter Datei-Upload über die API bräuchte eine Anbindung an Firebase
+  Storage (aufwändiger, separater Schritt).
+- **Google-Kalender-/Gmail-Anbindung wurde bewusst NICHT gebaut.** Werkora meldet sich bei
+  Google aktuell nur über einen Browser-Login an (kurzlebiges Zugriffstoken, keine
+  dauerhafte Berechtigung, die dieser Worker im Hintergrund mitbenutzen könnte). Damit die
+  KI eigenständig auf Kalender/Gmail zugreifen kann, bräuchte es eine eigene,
+  serverseitige Google-Anmeldung mit dauerhafter Berechtigung (Google-Cloud-Konsole,
+  eigener Consent-Bildschirm, sicher gespeichertes Berechtigungs-Token) - ein eigenständiges
+  Projekt, kein Nebenprodukt dieses Workers. Sag Bescheid, wenn das gewünscht ist.
+- **MCP-Server nicht gebaut** - deine Vorgabe nennt ihn selbst als späteren, optionalen
+  Zusatz ("kann Werkora später einen MCP-Server erhalten"), der laut Vorgabe ausschließlich
+  auf diese REST-API zugreifen soll. Kann jederzeit separat ergänzt werden, ohne diesen
+  Worker zu ändern.
+
+## Endpunkte
+
+Alle Antworten im Format `{ "success": true, "data": {...}, "message": null }` bzw.
+`{ "success": false, "error": { "code": "...", "message": "..." } }` – genau wie in
+deiner Vorgabe (Abschnitt 3).
+
+```
+GET   /customers?email=&phone=&name=&postal_code=&city=
+GET   /customers/{id}
+POST  /customers
+PATCH /customers/{id}
+
+GET   /leads?status=
+POST  /leads
+PATCH /leads/{id}
+
+GET   /projects?customer_id=&status=
+GET   /projects/{id}
+GET   /projects/{id}/documents
+POST  /projects/{id}/documents     ({ type, title, note } - type siehe Vorgabe Abschnitt 19)
+
+GET   /tasks?status=&priority=&due_date=&customer_id=&project_id=&assigned_to=
+GET   /tasks/{id}
+POST  /tasks
+PATCH /tasks/{id}                  (u.a. { "status": "completed" })
+
+GET   /appointments?customer_id=&project_id=&date_from=&date_to=
+GET   /appointments/{id}
+POST  /appointments
+
+GET   /quotes?customer_id=&project_id=&status=&date_from=&date_to=
+GET   /quotes/{id}
+POST  /quotes                      (immer status "draft")
+POST  /quotes/{id}/send            -> 403 (gesperrt)
+POST  /quotes/{id}/approve         -> 403 (gesperrt)
+POST  /quotes/{id}/convert-to-order -> 403 (noch nicht gebaut)
+
+GET   /invoices?status=&customer_id=&project_id=&date_from=&date_to=
+      (status "overdue" wird serverseitig aus offen/teilbezahlt + überschrittenem
+       Fälligkeitsdatum berechnet, ist kein echtes Feld in Werkora)
+GET   /invoices/{id}
+POST  /invoices                    -> 403 (gesperrt, GoBD - siehe oben)
+POST  /invoices/{id}/send          -> 403 (gesperrt)
+POST  /invoices/{id}/approve       -> 403 (gesperrt)
+
+GET   /orders?customer_id=&project_id=&status=     (Auftragsbestätigungen, nur lesen)
+GET   /orders/{id}
+
+GET   /work-reports?customer_id=&project_id=&employee_id=
+GET   /work-reports/{id}
+POST  /work-reports
+PATCH /work-reports/{id}
+
+GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lesen)
+
+GET   /reminders?invoice_id=
+POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? })
+
+GET   /articles?trade=             (Katalog-Artikel, nur lesen)
+GET   /services?trade=             (Katalog-Leistungen, nur lesen)
+GET   /price-list?trade=           (Artikel+Leistungen zusammen, nur lesen)
+
+GET   /employees                   (eingeschränkte Felder, keine Gehaltsdaten)
+GET   /employees/{id}
+
+GET   /assistant/dashboard
+
+DELETE (auf jedem Endpunkt)        -> 403 (gesperrt)
+```
+
+## KI-Aktionsprotokoll + KI-Freigaben (in Werkora sichtbar)
+
+Jeder Aufruf – egal ob erfolgreich, blockiert oder fehlerhaft – wird als Dokument in die
+Firestore-Collection `ai_action_log` geschrieben (Felder wie in deiner Vorgabe, Abschnitt
+29). In Werkora unter **KI-Aktivität** (Admin-Rolle) einsehbar.
+
+Jede blockierte/gesperrte Aktion (403) legt zusätzlich einen Eintrag in `ki_freigaben` an.
+In Werkora unter **KI-Freigaben** (Admin-Rolle) einsehbar, mit den Aktionen "Freigeben",
+"Bearbeiten" (Kommentar hinterlegen) und "Ablehnen" - wie in deiner Vorgabe (Abschnitt 30)
+beschrieben. **Wichtig:** siehe Abweichungs-Hinweis oben - diese Aktionen informieren nur,
+sie lösen die eigentliche Aktion (Versand usw.) nicht automatisch aus.
+
+## Webhooks (Vorgabe Abschnitt 32)
+
+Eine einzelne Webhook-URL kann in Werkora unter **Einstellungen → KI-Bürokraft** hinterlegt
+werden (Feld `kiWebhookUrl`). Sobald gesetzt, sendet der Worker bei folgenden Ereignissen
+einen `POST` mit `{ event, data, timestamp }` an diese URL:
+
+```
+customer.created
+lead.created
+lead.status_changed
+appointment.created
+quote.created
+invoice.overdue    (nur per täglichem Cron-Job, siehe unten)
+task.overdue        (nur per täglichem Cron-Job, siehe unten)
+```
+
+Die übrigen in deiner Vorgabe genannten Events (`quote.sent`, `quote.accepted`,
+`order.created`, `project.completed`, `invoice.created`, `invoice.sent`, `invoice.paid`)
+sind noch nicht verdrahtet, da die zugehörigen Aktionen (Versand, Auftrags-Anlage) aktuell
+nur in Werkora selbst passieren, nicht über diese API.
+
+### Täglicher Cron-Job für invoice.overdue/task.overdue
+
+`worker.js` hat einen `scheduled()`-Handler, der täglich prüft, welche Rechnungen/Aufgaben
+neu überfällig geworden sind, und dafür je einmal den passenden Webhook feuert (kein
+täglich wiederholter Spam für dieselbe überfällige Rechnung).
+
+- Bei Deploy über die Cloudflare-CLI (`wrangler deploy`) wird der Cron-Trigger automatisch
+  aus `wrangler.toml` übernommen (`0 6 * * *`, täglich 06:00 UTC).
+- Bei Deploy über das Dashboard (euer üblicher Weg, siehe unten): nach dem Bereitstellen
+  unter **Worker → Einstellungen → Trigger-Ereignisse → Cron-Trigger hinzufügen** manuell
+  `0 6 * * *` eintragen.
+
+## Deployment (Cloudflare Dashboard, wie bei den anderen Workern)
+
+1. Cloudflare Dashboard öffnen → **Workers & Pages** → **Anwendung erstellen** →
+   **Worker bereitstellen** (Hello World).
+2. Nach dem Erstellen: **Code bearbeiten** öffnen, kompletten Inhalt von `worker.js`
+   hineinkopieren (alles markieren, löschen, einfügen), **Bereitstellen**.
+3. Zurück zur Worker-Übersicht → **Einstellungen** → **Variablen und Geheimnisse**:
+   - `API_KEY` als **Secret** anlegen – ein langer, zufälliger Schlüssel (z.B. mit einem
+     Passwort-Generator erzeugen, mind. 32 Zeichen). Diesen Schlüssel bekommt später nur
+     die KI-Bürokraft zu sehen.
+   - `FIREBASE_SERVICE_ACCOUNT_JSON` als **Secret** anlegen – derselbe Wert, den ihr schon
+     beim Kostenschätzer-Worker und beim offenen-REST-API-Worker verwendet habt (einmal
+     erzeugte Firebase-Service-Account-JSON-Datei, kompletter Inhalt als ein Secret).
+4. Unter **Einstellungen → Trigger-Ereignisse → Cron-Trigger** den Trigger `0 6 * * *`
+   hinzufügen (für die überfällig-Webhooks, siehe oben - optional, falls keine Webhooks
+   genutzt werden, kann das übersprungen werden).
+5. Die im Dashboard angezeigte Worker-URL (endet auf `.workers.dev`) ist die Basis-URL für
+   die KI-Bürokraft, z.B. `https://neuverdrahtet-ki-buerokraft.<dein-konto>.workers.dev`.
+
+## Test von Hand (z.B. mit curl oder Postman)
+
+```bash
+curl -H "Authorization: Bearer <API_KEY>" "https://<worker-url>/customers?name=Müller"
+curl -H "Authorization: Bearer <API_KEY>" "https://<worker-url>/assistant/dashboard"
+```
+
+## API-Schlüssel widerrufen
+
+Im Cloudflare Dashboard bei den Variablen einfach `API_KEY` mit einem neuen Wert
+überschreiben und erneut bereitstellen – der alte Schlüssel funktioniert danach sofort
+nicht mehr.

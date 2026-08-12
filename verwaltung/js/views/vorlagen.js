@@ -10,6 +10,7 @@ const ABSCHNITT_LABEL = {
   checkliste: 'Checkliste',
   tabelle: 'Tabelle (mit Berechnung)',
   raeume: 'Räume/Zeilen anpassen',
+  tagesprotokoll: 'Bautagebuch (Tageseinträge)',
   unterschriften: 'Unterschriften anpassen',
 };
 
@@ -44,6 +45,13 @@ function configFieldsFor(a) {
       <div class="field"><label>Überschrift (überschreibt Standard-Label)</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
       <label class="field-checkbox"><input type="checkbox" class="absch-check" data-field="mitMassen" ${a.mitMassen ? 'checked' : ''}> Mit Länge/Breite/m²-Feldern</label>
       <label class="field-checkbox"><input type="checkbox" class="absch-check" data-field="mitFotoProZeile" ${a.mitFotoProZeile ? 'checked' : ''}> Mit Foto je Zeile</label>
+      <label class="field-checkbox"><input type="checkbox" class="absch-check" data-field="mitMarkierung" ${a.mitMarkierung ? 'checked' : ''}> Markierung auf dem Foto möglich (z.B. für Mängel)</label>
+    `;
+  }
+  if (a.typ === 'tagesprotokoll') {
+    return `
+      <div class="field"><label>Überschrift (überschreibt Standard-Label)</label><input type="text" class="absch-input" data-field="titel" value="${escapeHtml(a.titel || '')}"></div>
+      <p class="hint">Pro Tag ein Eintrag mit Datum, Wetter, Personenzahl vor Ort und Vorkommnissen - erscheint als eigene Tabelle im PDF.</p>
     `;
   }
   if (a.typ === 'unterschriften') {
@@ -59,7 +67,8 @@ const ABSCHNITT_DEFAULTS = {
   janein: (typ) => ({ typ, titel: 'Fragen', fragen: [] }),
   checkliste: (typ) => ({ typ, titel: 'Checkliste', punkte: [] }),
   tabelle: (typ) => ({ typ, titel: 'Tabelle', spalten: [], ergebnisSpalte: '' }),
-  raeume: (typ) => ({ typ, titel: '', mitMassen: false, mitFotoProZeile: false }),
+  raeume: (typ) => ({ typ, titel: '', mitMassen: false, mitFotoProZeile: false, mitMarkierung: false }),
+  tagesprotokoll: (typ) => ({ typ, titel: '' }),
   unterschriften: (typ) => ({ typ, labels: [] }),
 };
 

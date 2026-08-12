@@ -1,5 +1,5 @@
 import { getAll, put, remove } from './db.js';
-import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage } from './utils.js';
+import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage, openDokumentMitVorbelegung } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
@@ -21,7 +21,7 @@ function blobToDataUrl(blob) {
 }
 
 /** Repeatable Raum/Zeile-Editor für Berichte (z.B. je Raum eine Zustandsnotiz). */
-function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } = {}) {
+function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false, mitMarkierung = false } = {}) {
   let rows = [];
   function updateM2(row, i) {
     if (!mitMassen) return;
@@ -60,7 +60,7 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } 
     if (mitFotoProZeile) {
       host.querySelectorAll('[data-foto-i]').forEach((el) => {
         const i = Number(el.dataset.fotoI);
-        const editor = mountFotoEditor(el);
+        const editor = mountFotoEditor(el, { mitMarkierung });
         rows[i]._fotoEditor = editor;
       });
     }
@@ -74,8 +74,73 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false } 
   };
 }
 
+/**
+ * Öffnet ein Foto zur Markierung von Mängeln: Klick/Tap auf das Bild setzt
+ * einen roten Kreis an der Stelle. Die Markierungen werden fest ins Bild
+ * eingebrannt (wie bei der Unterschrift ein flaches PNG) - kein separates
+ * Ebenen-Modell nötig, das würde für den Zweck (auf einen Blick zeigen, wo
+ * der Mangel sitzt) unnötig kompliziert.
+ */
+function openMarkierungModal(dataUrl, onDone) {
+  const img = new Image();
+  img.onload = () => {
+    const marker = [];
+    const { body, close } = openModal({
+      title: 'Mangel auf dem Foto markieren',
+      bodyHtml: `
+        <p class="hint">Auf die Stelle im Foto tippen/klicken, um eine Markierung zu setzen.</p>
+        <div style="display:flex;justify-content:center">
+          <canvas id="mk-canvas" style="max-width:100%;border-radius:8px;touch-action:none;cursor:crosshair"></canvas>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px">
+          <button type="button" class="btn btn-sm" id="mk-clear">Markierungen entfernen</button>
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="mk-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="mk-save">Übernehmen</button>
+        </div>
+      `,
+    });
+    const canvas = body.querySelector('#mk-canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    const radius = Math.max(10, Math.round(img.naturalWidth * 0.02));
+    function draw() {
+      ctx.drawImage(img, 0, 0);
+      for (const m of marker) {
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = radius * 0.35;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(m.x, m.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#e53935';
+        ctx.lineWidth = radius * 0.22;
+        ctx.stroke();
+      }
+    }
+    draw();
+    canvas.addEventListener('pointerdown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      marker.push({
+        x: (e.clientX - rect.left) * (canvas.width / rect.width),
+        y: (e.clientY - rect.top) * (canvas.height / rect.height),
+      });
+      draw();
+    });
+    body.querySelector('#mk-clear').addEventListener('click', () => { marker.length = 0; draw(); });
+    body.querySelector('#mk-cancel').addEventListener('click', close);
+    body.querySelector('#mk-save').addEventListener('click', () => {
+      onDone(canvas.toDataURL('image/jpeg', 0.85));
+      close();
+    });
+  };
+  img.src = dataUrl;
+}
+
 /** Foto-Aufnahme/-Upload für Berichte; komprimiert und embedded als DataURL. */
-function mountFotoEditor(host) {
+function mountFotoEditor(host, { mitMarkierung = false } = {}) {
   let fotos = [];
   function render() {
     host.innerHTML = `
@@ -83,6 +148,7 @@ function mountFotoEditor(host) {
         ${fotos.map((f, i) => `
           <div class="foto-thumb" data-i="${i}">
             <img src="${f}" alt="Foto">
+            ${mitMarkierung ? '<button type="button" class="btn btn-sm foto-markieren" title="Mangel auf dem Foto markieren">🎯</button>' : ''}
             <button type="button" class="btn btn-sm btn-danger foto-del" title="Entfernen">✕</button>
           </div>
         `).join('')}
@@ -97,6 +163,15 @@ function mountFotoEditor(host) {
         const i = Number(btn.closest('.foto-thumb').dataset.i);
         fotos.splice(i, 1);
         render();
+      });
+    });
+    host.querySelectorAll('.foto-markieren').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const i = Number(btn.closest('.foto-thumb').dataset.i);
+        openMarkierungModal(fotos[i], (markiertesDataUrl) => {
+          fotos[i] = markiertesDataUrl;
+          render();
+        });
       });
     });
     host.querySelector('.foto-input').addEventListener('change', async (e) => {
@@ -234,6 +309,46 @@ function mountTabelleEditor(host, { titel, spalten, ergebnisSpalte }) {
       titel, spalten, ergebnisSpalte,
       rows: rows.filter((r) => spalten.some((s) => r[s])),
     }),
+  };
+}
+
+/**
+ * Laufendes Bautagebuch: pro Tag ein Eintrag mit Datum/Wetter/Personenzahl/
+ * Vorkommnissen - eigener Abschnittstyp statt Wiederverwendung von
+ * mountTabelleEditor, da die Spalten fest (nicht frei benennbar) und die
+ * Eingabetypen unterschiedlich sind (Datum-Picker, Zahl, Freitext).
+ */
+function mountTagesprotokollEditor(host, { titel } = {}) {
+  let rows = [{ datum: todayISO(), wetter: '', personen: '', vorkommnisse: '' }];
+  function render() {
+    host.innerHTML = `
+      ${titel ? `<p style="font-weight:600;margin:0 0 6px">${escapeHtml(titel)}</p>` : ''}
+      <div class="rz-list">
+        ${rows.map((r, i) => `
+          <div class="flex-row flex-wrap rz-row" data-i="${i}" style="align-items:center;margin-bottom:6px;gap:6px">
+            <input type="date" class="tp-datum" value="${escapeHtml(r.datum || '')}" style="width:150px">
+            <input type="text" class="tp-wetter" placeholder="Wetter" value="${escapeHtml(r.wetter || '')}" style="width:140px">
+            <input type="number" min="0" class="tp-personen" placeholder="Personen vor Ort" value="${escapeHtml(r.personen || '')}" style="width:150px">
+            <input type="text" class="tp-vorkommnisse" placeholder="Besonderheiten/Vorkommnisse" value="${escapeHtml(r.vorkommnisse || '')}" style="flex:1;min-width:200px">
+            <button type="button" class="btn btn-sm btn-ghost tp-del" title="Entfernen">✕</button>
+          </div>
+        `).join('') || '<p class="text-mute" style="font-size:12px">Noch keine Tageseinträge.</p>'}
+      </div>
+      <button type="button" class="btn btn-sm tp-add" style="margin-top:4px">+ Tageseintrag hinzufügen</button>
+    `;
+    host.querySelectorAll('.rz-row').forEach((row) => {
+      const i = Number(row.dataset.i);
+      row.querySelector('.tp-datum').addEventListener('input', (e) => { rows[i].datum = e.target.value; });
+      row.querySelector('.tp-wetter').addEventListener('input', (e) => { rows[i].wetter = e.target.value; });
+      row.querySelector('.tp-personen').addEventListener('input', (e) => { rows[i].personen = e.target.value; });
+      row.querySelector('.tp-vorkommnisse').addEventListener('input', (e) => { rows[i].vorkommnisse = e.target.value; });
+      row.querySelector('.tp-del').addEventListener('click', () => { rows.splice(i, 1); render(); });
+    });
+    host.querySelector('.tp-add').addEventListener('click', () => { rows.push({ datum: todayISO(), wetter: '', personen: '', vorkommnisse: '' }); render(); });
+  }
+  render();
+  return {
+    getEintraege: () => rows.filter((r) => r.wetter || r.personen || r.vorkommnisse),
   };
 }
 
@@ -376,6 +491,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
           ${kunde?.telefon ? '<button type="button" class="btn" id="btn-send-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+          <button type="button" class="btn" id="btn-zu-angebot" hidden>📐 Als Positionen ins Angebot übernehmen</button>
           <button type="button" class="btn" id="btn-send-email">✉️ Per E-Mail senden</button>
           <button type="button" class="btn btn-primary" id="btn-save-pdf">Als PDF speichern</button>
         </div>
@@ -429,6 +545,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     let jaNeinEditoren = [];
     let checklisteEditoren = [];
     let tabellenEditoren = [];
+    let tagesprotokollEditoren = [];
 
     function abschnittBox(host) {
       const div = document.createElement('div');
@@ -444,6 +561,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       jaNeinEditoren = [];
       checklisteEditoren = [];
       tabellenEditoren = [];
+      tagesprotokollEditoren = [];
       const abschnitte = v?.abschnitte || [];
       let raeumeOptions = {};
       let sigLabels = ['Unterschrift Kunde', 'Unterschrift Mitarbeiter'];
@@ -452,16 +570,23 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         else if (a.typ === 'janein') jaNeinEditoren.push(mountJaNeinEditor(abschnittBox(abschnitteHost), a));
         else if (a.typ === 'tabelle') tabellenEditoren.push(mountTabelleEditor(abschnittBox(abschnitteHost), a));
         else if (a.typ === 'checkliste') checklisteEditoren.push(mountChecklisteEditor(abschnittBox(checklisteHost), a));
+        else if (a.typ === 'tagesprotokoll') tagesprotokollEditoren.push(mountTagesprotokollEditor(abschnittBox(abschnitteHost), a));
         else if (a.typ === 'raeume') {
-          raeumeOptions = { mitMassen: !!a.mitMassen, mitFotoProZeile: !!a.mitFotoProZeile };
+          raeumeOptions = { mitMassen: !!a.mitMassen, mitFotoProZeile: !!a.mitFotoProZeile, mitMarkierung: !!a.mitMarkierung };
           if (a.titel) raeumeLabel.textContent = a.titel;
         } else if (a.typ === 'unterschriften' && Array.isArray(a.labels) && a.labels.length) {
           sigLabels = a.labels;
         }
       });
-      if (!abschnitte.some((a) => a.typ === 'raeume')) raeumeLabel.textContent = 'Räume / Zeilen (optional, erscheinen als Tabelle im PDF)';
+      const hatRaeumeAbschnitt = abschnitte.some((a) => a.typ === 'raeume');
+      if (!hatRaeumeAbschnitt) raeumeLabel.textContent = 'Räume / Zeilen (optional, erscheinen als Tabelle im PDF)';
       raeumeEditor = mountRaeumeEditor(raeumeHost, raeumeOptions);
       mountSigPads(sigLabels);
+      // "Ins Angebot übernehmen" ergibt nur bei echter Maß-Erfassung Sinn (z.B.
+      // Aufmaßprotokoll, mitMassen:true) - bei reinen Foto-Sammlungen ohne Maße
+      // (z.B. Mängel- oder Bautagebuch-Fotos) gäbe es keine sinnvollen Mengen/
+      // Positionen daraus abzuleiten.
+      body.querySelector('#btn-zu-angebot').hidden = !abschnitte.some((a) => a.typ === 'raeume' && a.mitMassen);
     }
 
     function substitute(text) {
@@ -506,6 +631,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         jaNeinAntworten: jaNeinEditoren.map((e) => e.getBlock()),
         checklisteAntworten: checklisteEditoren.map((e) => e.getBlock()),
         tabellenAbschnitte: tabellenEditoren.map((e) => e.getBlock()).filter((b) => b.rows.length),
+        tagesprotokoll: tagesprotokollEditoren.flatMap((e) => e.getEintraege()),
       });
     }
 
@@ -524,6 +650,33 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       toast('Bericht gespeichert', 'success');
       close();
       load();
+    });
+
+    body.querySelector('#btn-zu-angebot').addEventListener('click', () => {
+      const zeilen = raeumeEditor.getRaeume().filter((r) => (r.raum || '').trim() || (r.beschreibung || '').trim());
+      if (zeilen.length === 0) {
+        toast('Bitte zuerst mindestens eine Raum-/Aufmaß-Zeile erfassen.', 'danger');
+        return;
+      }
+      const positionen = zeilen.map((r) => {
+        const flaeche = Number(r.laenge) > 0 && Number(r.breite) > 0 ? Math.round(Number(r.laenge) * Number(r.breite) * 100) / 100 : 0;
+        return {
+          id: uid(),
+          bezeichnung: [r.raum, r.beschreibung].filter((s) => (s || '').trim()).join(' – ') || 'Position aus Aufmaß',
+          beschreibung: '',
+          einheit: flaeche ? 'm²' : 'Stk.',
+          menge: flaeche || 1,
+          einzelpreis: 0,
+          steuersatz: settings.standardSteuersatz ?? 19,
+        };
+      });
+      close();
+      openDokumentMitVorbelegung('angebote', {
+        kundeId: kunde?.id || '',
+        projektId: bezugTyp === 'projekt' ? bezugId : '',
+        betreff: titelInput.value || 'Angebot aus Aufmaß',
+        positionen,
+      });
     });
 
     body.querySelector('#btn-send-email').addEventListener('click', () => {

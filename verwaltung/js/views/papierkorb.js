@@ -10,6 +10,7 @@ const LABELS = {
   projekte: { label: 'Projekte', icon: '📁', title: (p) => p.titel || '(ohne Titel)' },
   aufgaben: { label: 'Aufgaben', icon: '✅', title: (a) => a.titel || '(ohne Titel)' },
   mitarbeiter: { label: 'Mitarbeiter', icon: '🧑‍🔧', title: (m) => m.name || '(ohne Namen)' },
+  subunternehmer: { label: 'Subunternehmer', icon: '🤝', title: (s) => s.firma || '(ohne Namen)' },
   geraete: { label: 'Geräte', icon: '🛠️', title: (g) => g.name || '(ohne Namen)' },
   flotten: { label: 'Fahrzeuge', icon: '🚐', title: (f) => f.bezeichnung || '(ohne Bezeichnung)' },
   katalog: { label: 'Artikel & Leistungen', icon: '🧾', title: (k) => k.bezeichnung || '(ohne Bezeichnung)' },

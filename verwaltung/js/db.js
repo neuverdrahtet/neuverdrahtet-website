@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 19;
+const DB_VERSION = 21;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -63,6 +63,9 @@ const STORES = {
   bankbuchungen: 'id',
   anlagegueter: 'id',
   kundenStatus: 'id',
+  subunternehmer: 'id',
+  ai_action_log: 'id',
+  ki_freigaben: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -269,6 +272,7 @@ export async function openDB() {
 export const TRASH_STORES = [
   'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
   'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen',
+  'subunternehmer',
 ];
 export function isTrashStore(storeName) {
   return TRASH_STORES.includes(storeName);
@@ -480,6 +484,8 @@ const DEFAULT_SETTINGS = {
   bankImportSpalten: {},
   aiWorkerUrl: '',
   aiAppSecret: '',
+  kiBuerokraftApiUrl: '',
+  kiWebhookUrl: '',
   lexofficeApiKey: '',
   lexofficeArbeitsstundeArtikelId: '',
   lexofficeArbeitsstundeArtikelName: '',
@@ -771,8 +777,24 @@ Bemerkungen:
 Ort, Datum: {{datum}}`,
     abschnitte: [
       { typ: 'tabelle', titel: 'Festgestellte Mängel', spalten: ['Beschreibung', 'Ort/Bauteil', 'Priorität'] },
+      { typ: 'raeume', titel: 'Mängel mit Foto (Markierung auf dem Foto möglich)', mitMassen: false, mitFotoProZeile: true, mitMarkierung: true },
       { typ: 'kopfdaten', titel: 'Frist', felder: [{ label: 'Vereinbarte Frist zur Beseitigung', typ: 'datum' }, { label: 'Zuständiger Mitarbeiter', typ: 'text' }] },
       { typ: 'unterschriften', labels: ['Unterschrift'] },
+    ],
+  },
+  {
+    id: 'vorlage-bautagebuch', typ: 'dokumentation', name: 'Bautagebuch',
+    textVorlage: `BAUTAGEBUCH
+
+Firma: {{firma}}
+Kunde: {{kunde}}
+Projekt/Objekt: {{projekt}}
+
+Allgemeine Bemerkungen:`,
+    abschnitte: [
+      { typ: 'tagesprotokoll', titel: 'Tageseinträge' },
+      { typ: 'raeume', titel: 'Fotos zum Bautagebuch', mitMassen: false, mitFotoProZeile: true, mitMarkierung: false },
+      { typ: 'unterschriften', labels: ['Unterschrift Bauleiter'] },
     ],
   },
   {
@@ -2261,6 +2283,9 @@ export const ROUTE_ROLLEN = {
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
   mitarbeiter: ['admin', 'buero'],
+  subunternehmer: ['admin', 'buero'],
+  'ki-freigaben': ['admin'],
+  'ki-aktivitaet': ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],
