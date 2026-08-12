@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 23;
+const DB_VERSION = 24;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -68,6 +68,7 @@ const STORES = {
   ki_freigaben: 'id',
   lieferanten: 'id',
   inventuren: 'id',
+  urlaubsantraege: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2284,6 +2285,7 @@ export const ROUTE_ROLLEN = {
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
+  urlaubsantraege: ['admin', 'buero', 'mitarbeiter'],
   mitarbeiter: ['admin', 'buero'],
   subunternehmer: ['admin', 'buero'],
   'ki-freigaben': ['admin'],

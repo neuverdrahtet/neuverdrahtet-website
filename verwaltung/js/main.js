@@ -41,6 +41,7 @@ const routeLoaders = {
   buchhaltung: () => import('./views/buchhaltung.js'),
   auswertungen: () => import('./views/auswertungen.js'),
   aufgaben: () => import('./views/aufgaben.js'),
+  urlaubsantraege: () => import('./views/urlaubsantraege.js'),
   geraete: () => import('./views/geraete.js'),
   papierkorb: () => import('./views/papierkorb.js'),
 };

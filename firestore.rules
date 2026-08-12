@@ -32,7 +32,7 @@ service cloud.firestore {
       return collectionId in [
         'projekte', 'termine', 'zeiterfassung', 'fotos', 'aufgaben', 'dokumente',
         'kategorien', 'nachrichten', 'geraete', 'flotten', 'terminStatus', 'aufgabenStatus',
-        'verwendungen', 'fahrten', 'marken'
+        'verwendungen', 'fahrten', 'marken', 'urlaubsantraege'
       ];
     }
 
