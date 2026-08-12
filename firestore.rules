@@ -14,6 +14,19 @@ service cloud.firestore {
     function isAdminOrBuero() { return hasRole(['admin', 'buero']); }
     function isAnyRole() { return hasRole(['admin', 'buero', 'mitarbeiter']); }
 
+    // Kundenportal (rein lesend): eigene Rolle 'kunde', verknüpft über
+    // users/{uid}.kundeId statt mitarbeiterId. Bewusst NICHT Teil von
+    // isAnyRole()/hasRole() oben - ein Kunde bekommt dadurch aus der
+    // generischen Collection-Regel unten gar nichts, sondern ausschließlich
+    // die unten einzeln aufgeführten, auf sein eigenes kundeId gefilterten
+    // Leserechte (kunden/angebote/rechnungen/termine).
+    function isKunde() { return myRole() == 'kunde'; }
+    function myKundeId() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kundeId
+        : null;
+    }
+
     // Sensible Geschäfts-/Finanz-/Personaldaten: nur Admin + Büro
     // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/angebote/rechnungen/
     // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
@@ -62,7 +75,15 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && exists(/databases/$(database)/documents/invites/$(request.resource.data.email))
         && request.resource.data.role == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.role
-        && request.resource.data.mitarbeiterId == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.mitarbeiterId;
+        && (
+          // Kunde: über kundeId verknüpft (kein mitarbeiterId-Feld nötig).
+          (request.resource.data.role == 'kunde'
+            && request.resource.data.kundeId == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.kundeId)
+          ||
+          // Mitarbeiter/Büro/Admin: wie bisher über mitarbeiterId verknüpft.
+          (request.resource.data.role != 'kunde'
+            && request.resource.data.mitarbeiterId == get(/databases/$(database)/documents/invites/$(request.resource.data.email)).data.mitarbeiterId)
+        );
       allow update, delete: if isAdmin();
     }
 
@@ -101,6 +122,25 @@ service cloud.firestore {
       // Kennungen ohne Klartext-Wert außerhalb dieses Firebase-Projekts.
       allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdminOrBuero());
       allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Kundenportal: rein lesend, ausschließlich die eigenen Dokumente
+    // (Firestore prüft bei list-Abfragen die Regel gegen jedes zurückzu-
+    // gebende Dokument - der Portal-Client fragt deshalb IMMER mit
+    // where('kundeId','==', myKundeId()) ab, siehe portal/portal.js
+    // fetchKundenScoped(); eine ungefilterte Abfrage würde diese Regel nicht
+    // erfüllen und komplett abgelehnt, nicht etwa still gefiltert).
+    match /kunden/{docId} {
+      allow read: if isKunde() && myKundeId() == docId;
+    }
+    match /angebote/{docId} {
+      allow read: if isKunde() && myKundeId() == resource.data.kundeId;
+    }
+    match /rechnungen/{docId} {
+      allow read: if isKunde() && myKundeId() == resource.data.kundeId;
+    }
+    match /termine/{docId} {
+      allow read: if isKunde() && myKundeId() == resource.data.kundeId;
     }
 
     match /{collectionId}/{docId} {

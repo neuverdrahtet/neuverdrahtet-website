@@ -7,6 +7,7 @@ import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
 import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { FIREBASE_ENABLED, inviteCustomer, revokeInvite, revokeUserAccess, getCustomerAuthStatus } from '../employeeAuth.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -381,6 +382,7 @@ export async function render(container) {
             <div class="field"><label>Straße & Hausnr.</label><input name="strasse" value="${escapeHtml(data.strasse || '')}"></div>
             <div class="field"><label>PLZ</label><input name="plz" value="${escapeHtml(data.plz || '')}"></div>
             <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
+            ${!FIREBASE_ENABLED ? `<div class="field"><label>Portal-Zugangscode (Testmodus)</label><input name="portalZugangscode" placeholder="leer = kein Portal-Zugang" value="${escapeHtml(data.portalZugangscode || '')}"></div>` : ''}
             <div class="field col-span-2"><button type="button" class="btn btn-sm" id="btn-kunde-navi">🧭 Navigation zur Adresse</button></div>
             <div class="field col-span-2">
               <label class="field-checkbox"><input type="checkbox" name="istPrivatperson" ${data.istPrivatperson ? 'checked' : ''}> Privatperson (kein Unternehmen)</label>
@@ -410,6 +412,12 @@ export async function render(container) {
             <div id="anlagen-host"></div>
             <div class="divider"></div>
             <div id="dok-host"></div>
+            ${FIREBASE_ENABLED ? `
+              <div class="divider"></div>
+              <h2 style="font-size:14px;margin:0 0 8px">🔐 Kundenportal-Zugang</h2>
+              <p class="hint">Damit kann dieser Kunde sich unter <code>/verwaltung/portal/</code> anmelden und dort seine eigenen Angebote, Rechnungen und Termine einsehen (rein lesend).</p>
+              <div id="portal-status-host">Lädt Portal-Status …</div>
+            ` : ''}
           ` : ''}
           ${isEdit && data.email ? `
             <div class="divider"></div>
@@ -491,6 +499,7 @@ export async function render(container) {
           loadEmailsBtn.textContent = 'E-Mails laden';
         });
       }
+      if (FIREBASE_ENABLED) renderPortalStatus(body, data);
     }
 
     body.querySelector('#kunde-form').addEventListener('submit', async (e) => {
@@ -513,6 +522,55 @@ export async function render(container) {
       close();
       render(container);
     });
+  }
+
+  async function renderPortalStatus(body, data) {
+    const host = body.querySelector('#portal-status-host');
+    if (!host) return;
+    const status = await getCustomerAuthStatus(data.id);
+
+    function draw() {
+      if (status.status === 'registered') {
+        host.innerHTML = `
+          <p class="hint">✅ Registriert mit <strong>${escapeHtml(status.email)}</strong> – kann sich im Portal anmelden.</p>
+          <button type="button" class="btn btn-sm btn-danger" id="btn-revoke-portal-access">Zugriff entziehen</button>
+        `;
+        host.querySelector('#btn-revoke-portal-access').addEventListener('click', async () => {
+          if (!confirmDelete('Portal-Zugriff wirklich entziehen? Der Kunde kann sich danach nicht mehr im Portal anmelden.')) return;
+          await revokeUserAccess(status.uid);
+          toast('Portal-Zugriff entzogen', 'success');
+          status.status = 'none';
+          draw();
+        });
+      } else if (status.status === 'invited') {
+        host.innerHTML = `
+          <p class="hint">📧 Eingeladen mit <strong>${escapeHtml(status.email)}</strong> – wartet auf Registrierung durch den Kunden.</p>
+          <button type="button" class="btn btn-sm" id="btn-revoke-portal-invite">Einladung zurückziehen</button>
+        `;
+        host.querySelector('#btn-revoke-portal-invite').addEventListener('click', async () => {
+          await revokeInvite(status.email);
+          toast('Einladung zurückgezogen', 'success');
+          status.status = 'none';
+          draw();
+        });
+      } else {
+        host.innerHTML = `
+          <div class="field"><label>E-Mail für Portal-Einladung</label><input type="email" id="portal-invite-email" placeholder="kunde@beispiel.de" value="${escapeHtml(data.email || '')}"></div>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-portal-invite">Zum Portal einladen</button>
+          <p class="hint">Der Kunde bekommt keine automatische E-Mail – bitte die Adresse selbst mitteilen. Registrierung erfolgt unter <code>/verwaltung/portal/</code> über "Registrieren".</p>
+        `;
+        host.querySelector('#btn-portal-invite').addEventListener('click', async () => {
+          const email = host.querySelector('#portal-invite-email').value.trim();
+          if (!email) return;
+          await inviteCustomer({ email, kundeId: data.id, name: data.firma });
+          toast('Einladung erstellt', 'success');
+          status.status = 'invited';
+          status.email = email;
+          draw();
+        });
+      }
+    }
+    draw();
   }
 
   function openKundenakte(kunde) {
