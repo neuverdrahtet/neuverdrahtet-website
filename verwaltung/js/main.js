@@ -42,6 +42,7 @@ const routeLoaders = {
   auswertungen: () => import('./views/auswertungen.js'),
   aufgaben: () => import('./views/aufgaben.js'),
   urlaubsantraege: () => import('./views/urlaubsantraege.js'),
+  formulare: () => import('./views/formulare.js'),
   geraete: () => import('./views/geraete.js'),
   papierkorb: () => import('./views/papierkorb.js'),
 };
