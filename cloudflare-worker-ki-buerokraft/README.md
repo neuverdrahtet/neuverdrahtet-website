@@ -13,9 +13,19 @@ eingeschränkte Felder), Webhooks, ein täglicher Cron-Job für überfällige
 Rechnungen/Aufgaben, sowie ein "KI-Freigaben"-Bereich in Werkora (Ansicht `ki-freigaben.js`)
 und eine "KI-Aktivität"-Ansicht (`ki-aktivitaet.js`) für das Protokoll.
 
-**Noch nicht gebaut** (Phase 2/4 deiner Vorgabe): Google-Kalender-/Gmail-Anbindung (siehe
-eigener Abschnitt unten, warum das mehr als nur diesen Worker betrifft), MCP-Server (siehe
-unten). Sag Bescheid, wenn's damit weitergehen soll.
+**Zusätzlich gebaut** (auf deinen Wunsch): Lagerbestand lesen (`GET /articles/{id}`,
+`low_stock`-Filter) und Materialentnahmen/Wareneingänge direkt buchen (`POST
+/articles/{id}/stock-movements`, siehe Endpunkt-Liste unten) - anders als die meisten
+anderen Schreibaktionen bewusst als sofort wirksame Buchung, nicht über die
+KI-Freigaben-Warteschlange, weil du das explizit so gewählt hast.
+
+**Google-Kalender-/Gmail-Anbindung ist mittlerweile gebaut** - als eigener, separater
+Worker (`cloudflare-worker-google-buero/`, eigene README dort), weil Werkora sich bei
+Google bisher nur über einen Browser-Login anmeldet und dieser Worker eine eigene,
+dauerhafte Google-Anmeldung braucht. Dieser Worker hier (`cloudflare-worker-ki-buerokraft`)
+bleibt davon unberührt.
+
+**Noch nicht gebaut**: MCP-Server (siehe unten). Sag Bescheid, wenn's damit weitergehen soll.
 
 ## Wichtige Abweichungen von deiner Vorgabe (und warum)
 
@@ -127,9 +137,14 @@ GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lese
 GET   /reminders?invoice_id=
 POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? })
 
-GET   /articles?trade=             (Katalog-Artikel, nur lesen)
+GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; low_stock=true filtert auf Bestand <= Mindestbestand)
+GET   /articles/{id}               (Preise/Stammdaten nur lesen, inkl. aktuellem Lagerbestand)
 GET   /services?trade=             (Katalog-Leistungen, nur lesen)
 GET   /price-list?trade=           (Artikel+Leistungen zusammen, nur lesen)
+
+GET   /articles/{id}/stock-movements   (Lagerbewegungs-Historie, nur lesen)
+POST  /articles/{id}/stock-movements   ({ delta, reason? } - bucht Zugang/Entnahme, ändert den Bestand sofort;
+                                         409, wenn für den Artikel keine Bestandsführung aktiviert ist)
 
 GET   /employees                   (eingeschränkte Felder, keine Gehaltsdaten)
 GET   /employees/{id}

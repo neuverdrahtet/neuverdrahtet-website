@@ -508,6 +508,10 @@ function articleToApi(k) {
   };
 }
 
+function stockMovementToApi(b) {
+  return { id: b.id, article_id: b.katalogId || '', delta: b.delta || 0, reason: b.grund || '', date: b.datum || '' };
+}
+
 function employeeToApi(m, onLeaveToday) {
   return { id: m.id, name: m.name || '', role: m.zugriffsrolle || '', trade: m.rolle || '', phone: m.telefon || '', email: m.email || '', on_leave_today: !!onLeaveToday };
 }
@@ -526,6 +530,7 @@ export {
   customerToApi, apiToCustomer, taskToApi, appointmentToApi, projectToApi, quoteToApi, invoiceToApi,
   nextDailyNummer, calcTotals, leadStatusHinweis,
   orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
+  stockMovementToApi,
 };
 
 export default {
@@ -1001,14 +1006,47 @@ export default {
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
-      // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - nur Lesen) ---
+      // --- Lagerbestand (Materialwirtschaft, Artikel mit bestandTracking=true) - lesen + Zu-/Abgänge buchen ---
+      if (teile[0] === 'articles' && teile[1] && teile[2] === 'stock-movements') {
+        const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
+        if (!artikel || artikel.typ !== 'artikel') return errorResponse('ARTICLE_NOT_FOUND', 'Artikel wurde nicht gefunden.', 404);
+        if (request.method === 'GET') {
+          let bewegungen = await firestoreList({ accessToken, projectId, collection: 'lagerbewegungen' });
+          bewegungen = bewegungen.filter((b) => b.katalogId === teile[1]).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+          await logAction(ctx, { action: 'articles.stock-movements.search', entityType: 'katalog', entityId: teile[1], status: 'success' });
+          return okResponse(bewegungen.map(stockMovementToApi));
+        }
+        if (request.method === 'POST') {
+          if (!artikel.bestandTracking) return errorResponse('STOCK_NOT_TRACKED', 'Für diesen Artikel ist keine Bestandsführung aktiviert - in Werkora unter Katalog je Artikel einschaltbar.', 409);
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const delta = Number(body.delta);
+          if (!delta || Number.isNaN(delta)) return errorResponse('VALIDATION_ERROR', 'Feld "delta" ist erforderlich (Zahl ungleich 0; positiv = Zugang, negativ = Entnahme).', 400);
+          const neuerBestand = Math.max(0, Number(artikel.bestand ?? 0) + delta);
+          const updatedArtikel = await firestoreUpdate({ accessToken, projectId, collection: 'katalog', id: teile[1], data: { bestand: neuerBestand } });
+          const movementId = crypto.randomUUID();
+          const movement = { id: movementId, katalogId: teile[1], delta, grund: body.reason || '', datum: new Date().toISOString() };
+          await firestoreCreate({ accessToken, projectId, collection: 'lagerbewegungen', id: movementId, data: movement });
+          await logAction(ctx, { action: 'articles.stock-movements.create', entityType: 'katalog', entityId: teile[1], newValue: movement, status: 'success' });
+          return okResponse({ ...articleToApi(updatedArtikel), movement: stockMovementToApi(movement) }, 201);
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - Preise/Stammdaten nur Lesen, Bestand siehe stock-movements oben) ---
       if (teile[0] === 'articles' || teile[0] === 'services' || teile[0] === 'price-list') {
         if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Der Katalog wird nur in Werkora selbst gepflegt - diese API kann ihn nur lesen.', 405);
+        if (teile[1]) {
+          const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
+          if (!artikel) return errorResponse('ARTICLE_NOT_FOUND', 'Artikel/Leistung wurde nicht gefunden.', 404);
+          await logAction(ctx, { action: 'articles.get', entityType: 'katalog', entityId: teile[1], status: 'success' });
+          return okResponse(articleToApi(artikel));
+        }
         let katalog = await firestoreList({ accessToken, projectId, collection: 'katalog' });
         if (teile[0] === 'articles') katalog = katalog.filter((k) => k.typ === 'artikel');
         if (teile[0] === 'services') katalog = katalog.filter((k) => k.typ === 'leistung');
         const gewerk = q.get('trade');
         if (gewerk) katalog = katalog.filter((k) => k.gewerk === gewerk);
+        if (q.get('low_stock') === 'true') katalog = katalog.filter((k) => k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0));
         await logAction(ctx, { action: `${teile[0]}.search`, status: 'success' });
         return okResponse(katalog.map(articleToApi));
       }
