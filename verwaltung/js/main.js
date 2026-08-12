@@ -140,8 +140,25 @@ async function router() {
 }
 
 function applyRoleToNav() {
-  document.querySelectorAll('.sidebar-nav a[data-route]').forEach((a) => {
-    a.hidden = !hasRouteAccess(session.role, a.dataset.route);
+  // Läuft in Dokumentreihenfolge über die Sidebar, damit eine .sidebar-nav-label-
+  // Überschrift (z.B. "Team & Ressourcen") ausgeblendet wird, sobald für die
+  // aktuelle Rolle kein einziger Link der jeweils folgenden Gruppe sichtbar ist.
+  let currentLabel = null;
+  let groupHasVisibleLink = false;
+  const finishGroup = () => { if (currentLabel) currentLabel.hidden = !groupHasVisibleLink; };
+  document.querySelectorAll('.sidebar-nav').forEach((nav) => {
+    Array.from(nav.children).forEach((el) => {
+      if (el.classList.contains('sidebar-nav-label')) {
+        finishGroup();
+        currentLabel = el;
+        groupHasVisibleLink = false;
+      } else if (el.dataset && el.dataset.route) {
+        el.hidden = !hasRouteAccess(session.role, el.dataset.route);
+        if (!el.hidden) groupHasVisibleLink = true;
+      }
+    });
+    finishGroup();
+    currentLabel = null;
   });
   const footer = document.querySelector('.sidebar-footer');
   if (footer && !footer.querySelector('#btn-lock')) {
