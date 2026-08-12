@@ -124,16 +124,27 @@ document.querySelectorAll('.hero-slider').forEach(slider => {
    ========================================================= */
 document.querySelectorAll('.ajax-form').forEach(form => {
   const fileInput = form.querySelector('input[type="file"]');
-
-  function postFormData(fd) {
-    return fetch(form.action, {
-      method: 'POST',
-      body: fd,
-      headers: { 'Accept': 'application/json' }
-    });
-  }
+  const nextField = form.querySelector('input[name="_next"]');
 
   form.addEventListener('submit', async (e) => {
+    const hasFiles = !!(fileInput && fileInput.files && fileInput.files.length);
+
+    if (hasFiles) {
+      // Formspree unterstützt Datei-Uploads laut eigener Dokumentation nur über
+      // ein klassisches Formular-POST (enctype="multipart/form-data"), nicht
+      // über die AJAX/JSON-Route, die der Rest der Formulare hier nutzt.
+      // Deshalb hier kein preventDefault -- der Browser sendet das Formular
+      // nativ, Formspree leitet über _next zurück zu dieser Seite, wo unten
+      // die Erfolgsmeldung eingeblendet wird.
+      if (nextField) {
+        const url = new URL(location.href);
+        url.hash = '';
+        url.searchParams.set('anfrage_gesendet', '1');
+        nextField.value = url.toString();
+      }
+      return;
+    }
+
     e.preventDefault();
     const submitBtn = form.querySelector('button[type="submit"]');
     const statusEl = form.querySelector('.form-status');
@@ -142,31 +153,12 @@ document.querySelectorAll('.ajax-form').forEach(form => {
     submitBtn.textContent = 'Wird gesendet …';
     if (statusEl) { statusEl.textContent = ''; statusEl.className = 'form-status'; }
 
-    const hasFiles = !!(fileInput && fileInput.files && fileInput.files.length);
-
     try {
-      let res = await postFormData(new FormData(form));
-
-      // Ein Foto-Anhang kann die gesamte Übertragung blockieren (z.B. wegen
-      // Formspree-Plan-Limits) — dann lieber die Anfrage ohne Fotos erneut
-      // senden, statt den ganzen Lead zu verlieren.
-      if (!res.ok && hasFiles) {
-        const bodyText = await res.text().catch(() => '(kein Antworttext)');
-        console.warn('neuverdrahtet: Übertragung mit Anhang fehlgeschlagen — Status ' + res.status + ', Antwort: ' + bodyText);
-        const fdWithoutFile = new FormData(form);
-        fdWithoutFile.delete(fileInput.name);
-        res = await postFormData(fdWithoutFile);
-        if (res.ok) {
-          if (statusEl) {
-            statusEl.textContent = 'Danke — Ihre Anfrage ist angekommen. Die Fotos konnten leider nicht übertragen werden, bitte reichen Sie diese per E-Mail an neuverdrahtet@gmail.com nach.';
-            statusEl.classList.add('ok');
-          }
-          trackEvent('generate_lead', { method: form.dataset.leadSource || 'contact_form', attachment: 'failed' });
-          form.reset();
-          return;
-        }
-      }
-
+      const res = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: { 'Accept': 'application/json' }
+      });
       if (res.ok) {
         if (statusEl) {
           statusEl.textContent = 'Danke — Ihre Anfrage ist angekommen. Rückmeldung folgt in Kürze.';
@@ -190,6 +182,30 @@ document.querySelectorAll('.ajax-form').forEach(form => {
     }
   });
 });
+
+/* Nach Formspree-Redirect eines nativ gesendeten Datei-Upload-Formulars
+   (siehe oben): Erfolgsmeldung im wieder aufgeklappten Kontakt-Panel zeigen. */
+(() => {
+  const params = new URLSearchParams(location.search);
+  if (params.get('anfrage_gesendet') !== '1') return;
+  const reveal = document.querySelector('.calc-contact-reveal');
+  const toggle = document.querySelector('.calc-contact-toggle');
+  const statusEl = reveal ? reveal.querySelector('.form-status') : null;
+  if (reveal) {
+    reveal.hidden = false;
+    toggle?.setAttribute('aria-expanded', 'true');
+  }
+  if (statusEl) {
+    statusEl.textContent = 'Danke — Ihre Anfrage inkl. Fotos ist angekommen. Rückmeldung folgt in Kürze.';
+    statusEl.classList.add('ok');
+  }
+  reveal?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const leadSource = (reveal?.querySelector('form') || {}).dataset?.leadSource || 'contact_form';
+  trackEvent('generate_lead', { method: leadSource });
+  const clean = new URL(location.href);
+  clean.searchParams.delete('anfrage_gesendet');
+  history.replaceState({}, '', clean.toString());
+})();
 
 
 /* =========================================================

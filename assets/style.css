@@ -817,6 +817,18 @@ section{ padding:88px 0; }
 .photo-single{ border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); }
 .photo-single img{ width:100%; max-height:460px; object-fit:cover; display:block; }
 
+.hero-video{
+  position:relative;
+  background:linear-gradient(160deg, var(--navy-2), var(--navy-3));
+  border:1px solid rgba(255,255,255,0.08);
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.55);
+  display:flex; align-items:center;
+  min-height:420px;
+}
+.hero-video video{ width:100%; height:auto; display:block; }
+
 .photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 @media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
 .photo-grid figure{ margin:0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--surface); }
