@@ -23,7 +23,7 @@ service cloud.firestore {
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte',
-        'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten'
+        'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für

@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 22;
+const DB_VERSION = 23;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -67,6 +67,7 @@ const STORES = {
   ai_action_log: 'id',
   ki_freigaben: 'id',
   lieferanten: 'id',
+  inventuren: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2290,6 +2291,7 @@ export const ROUTE_ROLLEN = {
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   lieferanten: ['admin', 'buero'],
+  inventur: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],
   angebote: ['admin', 'buero'],
   auftragsbestaetigung: ['admin', 'buero'],
