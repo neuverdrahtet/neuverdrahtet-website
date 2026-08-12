@@ -27,6 +27,7 @@ const routeLoaders = {
   'ki-freigaben': () => import('./views/ki-freigaben.js'),
   'ki-aktivitaet': () => import('./views/ki-aktivitaet.js'),
   katalog: () => import('./views/katalog.js'),
+  lieferanten: () => import('./views/lieferanten.js'),
   angebote: () => import('./views/angebote.js'),
   auftragsbestaetigung: () => import('./views/auftragsbestaetigung.js'),
   rechnungen: () => import('./views/rechnungen.js'),

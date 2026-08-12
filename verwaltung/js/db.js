@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 21;
+const DB_VERSION = 22;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -66,6 +66,7 @@ const STORES = {
   subunternehmer: 'id',
   ai_action_log: 'id',
   ki_freigaben: 'id',
+  lieferanten: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -271,7 +272,7 @@ export async function openDB() {
 // Termine, E-Mails oder Verwendungen bleiben normale Hard-Deletes.
 export const TRASH_STORES = [
   'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
-  'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen',
+  'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen', 'lieferanten',
   'subunternehmer',
 ];
 export function isTrashStore(storeName) {
@@ -2288,6 +2289,7 @@ export const ROUTE_ROLLEN = {
   'ki-aktivitaet': ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
+  lieferanten: ['admin', 'buero'],
   vorlagen: ['admin', 'buero'],
   angebote: ['admin', 'buero'],
   auftragsbestaetigung: ['admin', 'buero'],
@@ -2471,6 +2473,16 @@ export async function ensureSeeded() {
     if (!k.status) {
       await put('kunden', { ...k, status: 'kunde' });
     }
+  }
+  const lieferanten = await getAll('lieferanten');
+  if (lieferanten.length === 0) {
+    await put('lieferanten', {
+      id: 'lieferant-rexel', firma: 'Rexel', ansprechpartner: '', telefon: '', email: '',
+      strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '',
+      notizen: 'IDS-Connect-Zugangsdaten bei Rexel erfragen, dann unten eintragen.',
+      idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
+      farbe: '#2b7fd6',
+    });
   }
 }
 
