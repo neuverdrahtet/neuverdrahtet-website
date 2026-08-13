@@ -30,6 +30,8 @@ Kalender: searchCalendarEvents, getCalendarEvent, getCalendarAvailability,
   - Kalender-Scope `calendar.events` (lesen, anlegen, ändern). Google bietet keinen
     "nie löschen"-Scope an - das Löschen wird deshalb rein auf Anwendungsebene verhindert
     (es gibt schlicht keinen DELETE-Endpunkt im Code).
+  - Zusätzlich Kalender-Scope `calendar.freebusy` (nur "Verfügbarkeit ansehen", keine
+    Termindetails) - **NEU**, siehe "Bugfix: getCalendarAvailability" unten.
 - **Kein Secret/Token im Quellcode oder in der OpenAPI-Datei.** Alle Zugangsdaten liegen
   ausschließlich als Cloudflare-Secrets bzw. werden erst in ChatGPT selbst eingetragen (siehe
   unten) - genau wie beim ersten Worker.
@@ -106,6 +108,28 @@ Nachdem alle Secrets gesetzt sind:
 Worker schon einmal Zugriff erlaubt hatte. Beim neuverdrahtet-Google-Konto unter
 [myaccount.google.com/permissions](https://myaccount.google.com/permissions) den Eintrag für
 diese App entfernen und Schritt 1-3 hier erneut durchführen.
+
+## Bugfix: "Berechtigungsfehler" bei getCalendarAvailability
+
+`getCalendarAvailability` (`GET /calendar/availability`) schlug bisher als einziger
+Kalender-Endpunkt mit einem Berechtigungsfehler fehl, obwohl `searchCalendarEvents` und die
+übrigen Kalender-Endpunkte problemlos funktionierten. Ursache (gegen die offizielle
+Google-Dokumentation geprüft): dieser Endpunkt ruft intern Googles `freeBusy`-API auf, die
+laut Google einen **eigenen** Scope braucht (`calendar.freebusy`, `calendar.readonly` oder
+`calendar`) - der bisher angefragte Scope `calendar.events` deckt zwar Termine lesen/anlegen/
+ändern ab, aber NICHT die reine Verfügbarkeits-Abfrage. Behoben durch den zusätzlichen,
+schmalstmöglichen Scope `calendar.freebusy` (siehe oben).
+
+**Wichtig: dieser Fix braucht eine einmalige Neu-Verbindung**, weil OAuth-Berechtigungen fest
+an den beim letzten Login erteilten Zugriff gebunden sind - eine reine Codeänderung reicht
+nicht. Nach dem Deployen der aktualisierten `worker.js`:
+
+1. Schritt 1-3 aus "4) Google-Konto einmalig verbinden" oben **erneut durchführen**
+   (`/oauth/authorize?setup_key=...` im Browser aufrufen, Google zeigt jetzt einen
+   Consent-Bildschirm mit der zusätzlichen Berechtigung "Verfügbarkeit ansehen").
+2. Der neue Refresh-Token überschreibt automatisch den alten (`google_oauth_tokens/
+   neuverdrahtet` in Firestore) - kein manuelles Aufräumen nötig.
+3. Danach `getCalendarAvailability` einmal testen (siehe Abschnitt 5 unten).
 
 ## 5) Test von Hand (curl oder der Cloudflare-Dashboard "HTTP"-Tester)
 

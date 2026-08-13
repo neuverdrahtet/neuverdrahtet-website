@@ -31,6 +31,15 @@
  *     -> Termine lesen/anlegen/ändern. Ein "nur erstellen, nie löschen"-
  *        Scope gibt es bei Google nicht - das Löschen wird stattdessen
  *        auf Anwendungsebene verhindert (kein DELETE-Endpunkt implementiert).
+ *   https://www.googleapis.com/auth/calendar.freebusy
+ *     -> NUR für getCalendarAvailability (POST /freeBusy) nötig - das ist
+ *        laut Google-Dokumentation ein eigener, separater Scope, den
+ *        calendar.events NICHT mit abdeckt (bestätigter Bugfix: vorher
+ *        schlug ausschließlich dieser eine Endpunkt mit einem
+ *        Berechtigungsfehler fehl, alle anderen Kalender-Endpunkte
+ *        funktionierten bereits, weil sie nur calendar.events brauchen).
+ *        Bewusst der schmalste passende Scope (zeigt nur frei/belegt, keine
+ *        Termindetails) statt des breiteren calendar/calendar.readonly.
  *
  * Funktionsweise der Anmeldung (einmalig von Danny im Browser zu erledigen,
  * danach läuft alles automatisch über den gespeicherten Refresh-Token):
@@ -62,7 +71,8 @@
 
 const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify';
 const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const OAUTH_SCOPES = `${GMAIL_SCOPE} ${CALENDAR_SCOPE}`;
+const CALENDAR_FREEBUSY_SCOPE = 'https://www.googleapis.com/auth/calendar.freebusy';
+const OAUTH_SCOPES = `${GMAIL_SCOPE} ${CALENDAR_SCOPE} ${CALENDAR_FREEBUSY_SCOPE}`;
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
