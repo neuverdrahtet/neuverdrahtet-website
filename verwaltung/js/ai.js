@@ -97,6 +97,31 @@ export async function analyzeBeleg({ imageDataUrl, kategorien }) {
   return res.json();
 }
 
+/** Erzeugt aus einem Foto Social-Media-Texte (Instagram/Facebook/LinkedIn/Google Unternehmensprofil) samt Alt-Text und Hashtags. */
+export async function generateSocialPost({ imageDataUrl, firmenname, ort, leistung, kontext }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const res = await fetch(settings.aiWorkerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Secret': settings.aiAppSecret || '',
+    },
+    body: JSON.stringify({ action: 'social-post', imageDataUrl, firmenname, ort, leistung, kontext }),
+  });
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 /**
  * Recherchiert per KI (Claude Web-Search) marktübliche Netto-Einzelpreise für
  * unbepreiste Positionen, z.B. nach einem GAEB-Import. Batcht in Gruppen von

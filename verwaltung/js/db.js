@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 21;
+const DB_VERSION = 22;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -66,6 +66,7 @@ const STORES = {
   subunternehmer: 'id',
   ai_action_log: 'id',
   ki_freigaben: 'id',
+  socialPosts: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2299,6 +2300,7 @@ export const ROUTE_ROLLEN = {
   auswertungen: ['admin'],
   papierkorb: ['admin'],
   einstellungen: ['admin'],
+  social: ['admin', 'buero'],
 };
 
 // Alle in Deutschland aktuell gültigen USt.-Sätze (§ 12 UStG) für die
