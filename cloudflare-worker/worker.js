@@ -453,17 +453,18 @@ const SOCIAL_POST_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildSocialPostSystemPrompt({ firmenname, ort, leistung, kontext }) {
-  return `Du bist Social-Media-/Local-SEO-Texter für den deutschen Handwerksbetrieb "${firmenname || 'den Betrieb'}". Du bekommst ein Foto (z.B. von einer fertiggestellten Baustelle, einem Einsatz oder Produkt) und schreibst dazu Beitragstexte für vier Kanäle, in deutscher Sprache.
+function buildSocialPostSystemPrompt({ firmenname, ort, gewerk, leistung, kontext }) {
+  return `Du bist Social-Media-/Local-SEO-Texter für den deutschen Handwerksbetrieb "${firmenname || 'den Betrieb'}". Der Betrieb ist ein Mehrgewerke-Betrieb (u.a. Elektro, Fliesen, Bodenleger, Maler, Trockenbau, Putz/Stuckateur, Komplettbad, Wohnungssanierung/Renovierung, Abbruch) - schließe NIEMALS allein aus dem Firmennamen auf ein bestimmtes Gewerk, insbesondere nicht automatisch auf "Elektro". Welches Gewerk/Thema dieser konkrete Beitrag hat, ergibt sich ausschließlich aus den unten angegebenen Feldern (Gewerk/Leistung) und dem, was auf dem Foto tatsächlich zu sehen ist. Du bekommst ein Foto (z.B. von einer fertiggestellten Baustelle, einem Einsatz oder Produkt) und schreibst dazu Beitragstexte für vier Kanäle, in deutscher Sprache.
 
 Kontext, den du nutzen darfst (nur was hier steht bzw. auf dem Foto wirklich zu sehen ist - nichts erfinden):
+${gewerk ? `- Gewerk dieses Beitrags: ${gewerk}` : '- Kein Gewerk angegeben - leite es ausschließlich aus dem Foto und den übrigen Feldern ab, rate nicht auf Elektro.'}
 ${ort ? `- Einsatzort/Region: ${ort}` : '- Kein Ort angegeben - keinen erfinden, dann allgemein bleiben.'}
 ${leistung ? `- Leistung/Anlass: ${leistung}` : ''}
 ${kontext ? `- Zusätzliche Stichpunkte vom Mitarbeiter: ${kontext}` : ''}
 
 Regeln je Feld:
 - "altText": sachliche, kurze Bildbeschreibung (max. ca. 120 Zeichen) für Barrierefreiheit und Bild-SEO - beschreibt, was auf dem Foto zu sehen ist.
-- "hashtags": 6-10 relevante deutsche Hashtags ohne Leerzeichen (inkl. #), Mischung aus Branche (z.B. #Elektriker, #Elektroinstallation), Leistung und - falls ein Ort angegeben ist - Orts-/Regions-Hashtags (z.B. #ElektrikerEssen) für lokale Auffindbarkeit. Keine doppelten, keine generischen Massen-Hashtags wie #love #instagood.
+- "hashtags": 6-10 relevante deutsche Hashtags ohne Leerzeichen (inkl. #), passend zum oben genannten Gewerk/zur Leistung dieses Beitrags (z.B. bei Gewerk "Fliesen": #Fliesenleger, #Badsanierung - NICHT pauschal Elektro-Hashtags verwenden, außer das Gewerk ist tatsächlich Elektro) und - falls ein Ort angegeben ist - ein passendes Orts-/Regions-Hashtag (z.B. #FliesenlegerEssen) für lokale Auffindbarkeit. Keine doppelten, keine generischen Massen-Hashtags wie #love #instagood.
 - "instagram": lebendiger, bildbezogener Text (ca. 2-5 Sätze), gerne 1-3 passende Emojis, endet mit dezentem Call-to-Action (z.B. "Anfrage über den Link in der Bio"). KEINE Hashtags im Text selbst einbauen (die kommen separat in "hashtags").
 - "facebook": ähnlich wie Instagram, etwas ausführlicher/informativer (3-6 Sätze), sprich die Zielgruppe direkt an ("Ihr", "Sie" - einheitlich eine Anredeform wählen, Standard: "Sie"), max. 1-2 Emojis, Call-to-Action mit Kontaktmöglichkeit.
 - "linkedin": sachlich-professioneller Ton, keine Emojis (oder höchstens 1 dezentes), betont fachliche Kompetenz/Qualität, 2-4 Sätze, ohne Hashtags im Text.
@@ -472,7 +473,7 @@ Regeln je Feld:
 - Wenn das Bild kein erkennbares Handwerks-/Baustellenmotiv zeigt, trotzdem plausible, generische Texte zur angegebenen Leistung liefern (nicht verweigern).`;
 }
 
-async function callClaudeSocialPost({ apiKey, model, imageDataUrl, firmenname, ort, leistung, kontext }) {
+async function callClaudeSocialPost({ apiKey, model, imageDataUrl, firmenname, ort, gewerk, leistung, kontext }) {
   const match = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(imageDataUrl || '');
   if (!match) {
     throw new Error('Ungültiges Bildformat.');
@@ -489,7 +490,7 @@ async function callClaudeSocialPost({ apiKey, model, imageDataUrl, firmenname, o
     body: JSON.stringify({
       model,
       max_tokens: 2048,
-      system: buildSocialPostSystemPrompt({ firmenname, ort, leistung, kontext }),
+      system: buildSocialPostSystemPrompt({ firmenname, ort, gewerk, leistung, kontext }),
       messages: [{
         role: 'user',
         content: [
@@ -702,6 +703,7 @@ export default {
           imageDataUrl: body.imageDataUrl,
           firmenname: body.firmenname,
           ort: body.ort,
+          gewerk: body.gewerk,
           leistung: body.leistung,
           kontext: body.kontext,
         });
