@@ -98,7 +98,7 @@ export async function analyzeBeleg({ imageDataUrl, kategorien }) {
 }
 
 /** Erzeugt aus einem Foto Social-Media-Texte (Instagram/Facebook/LinkedIn/Google Unternehmensprofil) samt Alt-Text und Hashtags. */
-export async function generateSocialPost({ imageDataUrl, firmenname, ort, leistung, kontext }) {
+export async function generateSocialPost({ imageDataUrl, firmenname, ort, gewerk, leistung, kontext }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {
     throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
@@ -109,7 +109,7 @@ export async function generateSocialPost({ imageDataUrl, firmenname, ort, leistu
       'Content-Type': 'application/json',
       'X-App-Secret': settings.aiAppSecret || '',
     },
-    body: JSON.stringify({ action: 'social-post', imageDataUrl, firmenname, ort, leistung, kontext }),
+    body: JSON.stringify({ action: 'social-post', imageDataUrl, firmenname, ort, gewerk, leistung, kontext }),
   });
   if (!res.ok) {
     let message = `Fehler (${res.status})`;

@@ -1,4 +1,4 @@
-import { getSettings, getAll, put, remove } from '../db.js';
+import { getSettings, getAll, put, remove, GEWERKE } from '../db.js';
 import { uid, escapeHtml, toast, compressImage } from '../utils.js';
 import { confirmDelete } from '../ui.js';
 import { generateSocialPost } from '../ai.js';
@@ -144,7 +144,7 @@ function renderHistory(posts) {
   if (!posts.length) return '<p class="text-mute">Noch keine Posts erstellt.</p>';
   return `<div class="foto-grid">
     ${posts.map((p) => `
-      <div class="foto-thumb" data-history-id="${p.id}" title="${escapeHtml([p.leistung, p.ort].filter(Boolean).join(' – ') || 'Post')}">
+      <div class="foto-thumb" data-history-id="${p.id}" title="${escapeHtml([p.gewerk, p.leistung, p.ort].filter(Boolean).join(' – ') || 'Post')}">
         <img src="${p.thumbDataUrl || ''}" alt="">
         <button type="button" class="foto-del" data-history-del="${p.id}" title="Löschen">✕</button>
       </div>
@@ -184,8 +184,15 @@ export async function render(container) {
           <label>Foto</label>
           <input type="file" id="social-foto-input" accept="image/*">
         </div>
+        <div class="field">
+          <label>Gewerk</label>
+          <select id="social-gewerk">
+            <option value="">Kein bestimmtes Gewerk</option>
+            ${GEWERKE.map((g) => `<option value="${escapeHtml(g.titel)}">${escapeHtml(g.titel)}</option>`).join('')}
+          </select>
+        </div>
         <div class="field"><label>Ort</label><input id="social-ort" value="${escapeHtml(ortAusPlzOrt(settings.plzOrt))}" placeholder="z.B. Essen"></div>
-        <div class="field"><label>Leistung / Anlass</label><input id="social-leistung" placeholder="z.B. Wallbox-Installation"></div>
+        <div class="field col-span-2"><label>Leistung / Anlass</label><input id="social-leistung" placeholder="z.B. Wallbox-Installation, Badsanierung, Fliesenverlegung ..."></div>
         <div class="field col-span-2"><label>Kontext / Stichpunkte (optional)</label><textarea id="social-kontext" rows="2" placeholder="z.B. Neubau-Einfamilienhaus, komplette Elektroinstallation, Fertigstellung diese Woche"></textarea></div>
       </div>
       <div id="social-preview" style="margin:10px 0"></div>
@@ -325,19 +332,20 @@ export async function render(container) {
     generateBtn.disabled = true;
     generateBtn.textContent = 'Wird generiert ...';
     try {
+      const gewerk = container.querySelector('#social-gewerk').value.trim();
       const ort = container.querySelector('#social-ort').value.trim();
       const leistung = container.querySelector('#social-leistung').value.trim();
       const kontext = container.querySelector('#social-kontext').value.trim();
       const result = await generateSocialPost({
         imageDataUrl: aiImageDataUrl,
         firmenname: settings.firmenname,
-        ort, leistung, kontext,
+        ort, gewerk, leistung, kontext,
       });
       const thumbBlob = await compressImage(photoFile, { maxWidth: 300, quality: 0.6 });
       const record = {
         id: uid(),
         erstelltAm: new Date().toISOString(),
-        ort, leistung, kontext,
+        ort, gewerk, leistung, kontext,
         altText: result.altText || '',
         hashtags: Array.isArray(result.hashtags) ? result.hashtags : [],
         thumbDataUrl: await blobToDataUrl(thumbBlob),
