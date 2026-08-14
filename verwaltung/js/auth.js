@@ -41,7 +41,9 @@ function initPinLock() {
     const [settings, mitarbeiter] = await Promise.all([getSettings(), getAll('mitarbeiter')]);
     const hasProtection = !!settings.passcode || mitarbeiter.some((m) => m.zugangscode);
     if (!hasProtection) {
-      resolve({ role: 'admin', mitarbeiterId: null });
+      const session = { role: 'admin', mitarbeiterId: null };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      resolve(session);
       return;
     }
     const existing = getSession();

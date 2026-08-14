@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -474,24 +474,20 @@ let editor = createPositionsEditor({
       }
       const toRechnungBtn = body.querySelector('#btn-to-rechnung');
       if (toRechnungBtn) {
-        toRechnungBtn.addEventListener('click', async () => {
-          const totals = editor.getTotals();
-          const rSettings = await getSettings();
-          const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-            rSettings.rechnungPrefix, { datum: rSettings.rechnungNummerDatum, zaehler: rSettings.rechnungNummerZaehler }
-          );
-          const rechnung = {
-            id: uid(), nummer, kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
-            datum: todayISO(), faelligAm: addDays(todayISO(), rSettings.zahlungszielTage || 14),
-            status: 'offen', betreff: data.betreff, notizen: data.notizen, steuerart: data.steuerart || 'regel',
-            positionen: editor.getPositionen(), netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
-            createdAt: new Date().toISOString(),
-          };
-          await put('rechnungen', rechnung);
-          await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
-          toast('Rechnung aus Angebot erstellt', 'success');
+        // Öffnet die Rechnung NICHT mehr direkt fertig angelegt, sondern das
+        // volle Rechnungsformular mit übernommenen Artikeln/Leistungen -
+        // vorher gingen beim Direkt-Anlegen die "Abschlagszahlungen
+        // berücksichtigen"-Auswahl (Schlussrechnung) und die Wahl
+        // Rechnung/Abschlagsrechnung verloren, weil dieser Weg das Formular
+        // komplett umging. So bleiben Artikel/Leistungen erhalten UND die
+        // Abschlags-Verrechnung ist direkt nutzbar - kein doppeltes Erfassen mehr.
+        toRechnungBtn.addEventListener('click', () => {
           close();
-          window.location.hash = '#/rechnungen';
+          openDokumentMitVorbelegung('rechnungen', {
+            kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
+            betreff: data.betreff, steuerart: data.steuerart || 'regel',
+            positionen: editor.getPositionen().map((p) => ({ ...p, id: uid() })),
+          });
         });
       }
     }

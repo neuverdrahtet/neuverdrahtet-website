@@ -316,11 +316,11 @@ export async function render(container) {
   function openForm(r, prefill) {
     const isEdit = !!r;
     const data = r || {
-      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', angebotId: null, datum: todayISO(), leistungsdatum: todayISO(),
+      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', angebotId: prefill?.angebotId || null, auftragsbestaetigungId: prefill?.auftragsbestaetigungId || null, datum: todayISO(), leistungsdatum: todayISO(),
       faelligAm: addDays(todayISO(), settings.zahlungszielTage || 14),
-      status: 'offen', betreff: '', notizen: '', positionen: [], bezahltAm: '', createdAt: new Date().toISOString(),
+      status: 'offen', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
-      steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
+      steuerart: prefill?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
       rechnungstyp: 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
       skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
       zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',

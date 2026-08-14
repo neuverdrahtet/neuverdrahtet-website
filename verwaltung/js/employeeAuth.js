@@ -1,7 +1,9 @@
 import { firebaseConfig } from './firebase-config.js';
 
-// Nur relevant, wenn Firebase aktiv ist (Phase C: echtes Mitarbeiter-Login).
-// Im IndexedDB-Modus bleibt der alte Zugangscode in mitarbeiter.js die einzige
+// Nur relevant, wenn Firebase aktiv ist (Phase C: echtes Mitarbeiter-Login,
+// später erweitert um Kundenportal-Zugang - gleicher invites/users-
+// Mechanismus, nur mit kundeId statt mitarbeiterId verknüpft). Im
+// IndexedDB-Modus bleibt der alte Zugangscode in mitarbeiter.js die einzige
 // Zugangssteuerung, dieses Modul wird dann gar nicht importiert/aufgerufen.
 export const FIREBASE_ENABLED = !!firebaseConfig.projectId;
 
@@ -34,6 +36,31 @@ export async function getEmployeeAuthStatus(mitarbeiterId) {
   const [inviteSnap, userSnap] = await Promise.all([
     getDocs(query(collection(firestore, 'invites'), where('mitarbeiterId', '==', mitarbeiterId))),
     getDocs(query(collection(firestore, 'users'), where('mitarbeiterId', '==', mitarbeiterId))),
+  ]);
+  if (!userSnap.empty) {
+    const d = userSnap.docs[0];
+    return { status: 'registered', email: d.data().email, uid: d.id };
+  }
+  if (!inviteSnap.empty) {
+    const d = inviteSnap.docs[0];
+    return { status: 'invited', email: d.id };
+  }
+  return { status: 'none' };
+}
+
+export async function inviteCustomer({ email, kundeId, name }) {
+  const { firestore, doc, setDoc } = await fs();
+  await setDoc(doc(firestore, 'invites', email), {
+    role: 'kunde', kundeId, name, createdAt: new Date().toISOString(),
+  });
+}
+
+// { status: 'none' } | { status: 'invited', email } | { status: 'registered', email, uid }
+export async function getCustomerAuthStatus(kundeId) {
+  const { firestore, collection, query, where, getDocs } = await fs();
+  const [inviteSnap, userSnap] = await Promise.all([
+    getDocs(query(collection(firestore, 'invites'), where('kundeId', '==', kundeId))),
+    getDocs(query(collection(firestore, 'users'), where('kundeId', '==', kundeId))),
   ]);
   if (!userSnap.empty) {
     const d = userSnap.docs[0];

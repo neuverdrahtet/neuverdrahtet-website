@@ -1,0 +1,216 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Werkora Google-Büro API",
+    "description": "Liest Gmail-E-Mails und Google-Kalender-Termine des neuverdrahtet-Firmenkontos, legt E-Mail-Entwürfe (nie versendet) und Kalendertermine an. Löschen ist grundsätzlich nicht möglich, Versenden von E-Mails gibt es in dieser Schnittstelle nicht.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    { "url": "https://DEINE-WORKER-URL.workers.dev", "description": "Vor dem Einfügen in ChatGPT durch die echte Worker-URL aus dem Cloudflare Dashboard ersetzen (siehe README.md, Abschnitt 3)." }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "data": {},
+          "message": { "type": ["string", "null"] },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/emails": {
+      "get": {
+        "operationId": "searchEmails",
+        "summary": "E-Mails suchen",
+        "description": "Durchsucht das Gmail-Postfach des neuverdrahtet-Firmenkontos. Ohne Parameter werden die neuesten E-Mails geliefert.",
+        "parameters": [
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Freitext-Suche (Gmail-Suchsyntax)" },
+          { "name": "unread", "in": "query", "schema": { "type": "boolean" }, "description": "Nur ungelesene E-Mails" },
+          { "name": "from", "in": "query", "schema": { "type": "string" } },
+          { "name": "to", "in": "query", "schema": { "type": "string" } },
+          { "name": "subject", "in": "query", "schema": { "type": "string" } },
+          { "name": "after", "in": "query", "schema": { "type": "string" }, "description": "Datum YYYY-MM-DD, nur E-Mails ab diesem Tag" },
+          { "name": "before", "in": "query", "schema": { "type": "string" }, "description": "Datum YYYY-MM-DD, nur E-Mails bis zu diesem Tag" }
+        ],
+        "responses": { "200": { "description": "Gefundene E-Mails", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/emails/{message_id}": {
+      "get": {
+        "operationId": "getEmail",
+        "summary": "Einzelne E-Mail lesen",
+        "description": "Liefert Absender, Empfänger, Betreff, Volltext und Anhang-Metadaten einer einzelnen Nachricht.",
+        "parameters": [
+          { "name": "message_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "E-Mail-Details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/threads/{thread_id}": {
+      "get": {
+        "operationId": "getEmailThread",
+        "summary": "Kompletten E-Mail-Verlauf lesen",
+        "description": "Liefert alle Nachrichten eines Gmail-Threads (z.B. den ganzen Hin-und-her-Verlauf mit einem Kunden).",
+        "parameters": [
+          { "name": "thread_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Alle Nachrichten des Threads", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/emails/{message_id}/draft": {
+      "post": {
+        "operationId": "createEmailDraft",
+        "summary": "Antwort-Entwurf anlegen (versendet NICHT)",
+        "description": "Legt in Gmail einen Entwurf als Antwort auf die angegebene Nachricht an. Wird niemals automatisch versendet - Danny prüft und versendet den Entwurf selbst in Gmail.",
+        "parameters": [
+          { "name": "message_id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Die Nachricht, auf die geantwortet wird" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["to"],
+                "properties": {
+                  "to": { "type": "string" },
+                  "subject": { "type": "string", "description": "Optional, Standard: \"Re: \" + ursprünglicher Betreff" },
+                  "body_text": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Angelegter Entwurf", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/emails/{message_id}/read": {
+      "post": {
+        "operationId": "markEmailRead",
+        "summary": "E-Mail als gelesen markieren",
+        "parameters": [
+          { "name": "message_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Bestätigung", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/emails/{message_id}/labels": {
+      "post": {
+        "operationId": "addEmailLabel",
+        "summary": "Label an E-Mail anhängen",
+        "description": "Legt das Label in Gmail an, falls es noch nicht existiert.",
+        "parameters": [
+          { "name": "message_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "type": "object", "required": ["label"], "properties": { "label": { "type": "string" } } }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Bestätigung", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/calendar/events": {
+      "get": {
+        "operationId": "searchCalendarEvents",
+        "summary": "Kalendertermine suchen",
+        "parameters": [
+          { "name": "date_from", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "date_to", "in": "query", "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Freitext-Suche im Termintitel/-beschreibung" }
+        ],
+        "responses": { "200": { "description": "Gefundene Termine", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "post": {
+        "operationId": "createCalendarEvent",
+        "summary": "Kalendertermin anlegen",
+        "description": "Legt einen Termin im Google-Kalender des Firmenkontos an. Wird werkora_appointment_id mitgeschickt und existiert dafür bereits ein Termin, wird kein zweiter angelegt (already_existed: true in der Antwort).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "start", "end"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "start": { "type": "string", "description": "ISO-8601-Zeitstempel, z.B. 2026-08-20T09:00:00+02:00" },
+                  "end": { "type": "string", "description": "ISO-8601-Zeitstempel" },
+                  "description": { "type": "string" },
+                  "location": { "type": "string" },
+                  "attendee_emails": { "type": "array", "items": { "type": "string" } },
+                  "werkora_appointment_id": { "type": "string", "description": "Optional: verhindert doppelte Kalendereinträge für denselben Werkora-Termin" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "Angelegter Termin", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/calendar/events/{event_id}": {
+      "get": {
+        "operationId": "getCalendarEvent",
+        "summary": "Einzelnen Kalendertermin lesen",
+        "parameters": [
+          { "name": "event_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Termin-Details", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      },
+      "patch": {
+        "operationId": "updateCalendarEvent",
+        "summary": "Kalendertermin ändern",
+        "parameters": [
+          { "name": "event_id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "start": { "type": "string" },
+                  "end": { "type": "string" },
+                  "description": { "type": "string" },
+                  "location": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Geänderter Termin", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    },
+    "/calendar/availability": {
+      "get": {
+        "operationId": "getCalendarAvailability",
+        "summary": "Freie Zeitfenster ermitteln",
+        "description": "Berechnet freie Zeitfenster (Mo-Fr, 08:00-17:00) im angegebenen Zeitraum anhand der bestehenden Kalendertermine.",
+        "parameters": [
+          { "name": "date_from", "in": "query", "required": true, "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "date_to", "in": "query", "required": true, "schema": { "type": "string" }, "description": "YYYY-MM-DD" },
+          { "name": "duration_minutes", "in": "query", "schema": { "type": "integer" }, "description": "Länge der gewünschten Zeitfenster in Minuten, Standard 60" }
+        ],
+        "responses": { "200": { "description": "Belegte und freie Zeitfenster", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiResponse" } } } } }
+      }
+    }
+  }
+}

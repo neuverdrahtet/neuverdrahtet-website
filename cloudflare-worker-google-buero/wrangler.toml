@@ -1,0 +1,17 @@
+name = "neuverdrahtet-google-buero"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets werden NICHT hier eingetragen, sondern im Cloudflare Dashboard unter
+# Worker -> Settings -> Variables and Secrets (siehe README.md):
+#   API_KEY
+#   FIREBASE_SERVICE_ACCOUNT_JSON
+#   GOOGLE_OAUTH_CLIENT_ID
+#   GOOGLE_OAUTH_CLIENT_SECRET
+#   OAUTH_SETUP_SECRET
+# Optional als normale Variable (kein Geheimnis):
+#   GOOGLE_CALENDAR_ID (Standard: "primary")
+
+# Kein Cron-Trigger nötig - dieser Worker wird ausschließlich von der
+# KI-Bürokraft (ChatGPT-Action) live aufgerufen, im Gegensatz zu
+# cloudflare-worker-ki-buerokraft/ gibt es hier keine geplanten Aufgaben.

@@ -13,9 +13,27 @@ eingeschränkte Felder), Webhooks, ein täglicher Cron-Job für überfällige
 Rechnungen/Aufgaben, sowie ein "KI-Freigaben"-Bereich in Werkora (Ansicht `ki-freigaben.js`)
 und eine "KI-Aktivität"-Ansicht (`ki-aktivitaet.js`) für das Protokoll.
 
-**Noch nicht gebaut** (Phase 2/4 deiner Vorgabe): Google-Kalender-/Gmail-Anbindung (siehe
-eigener Abschnitt unten, warum das mehr als nur diesen Worker betrifft), MCP-Server (siehe
-unten). Sag Bescheid, wenn's damit weitergehen soll.
+**Zusätzlich gebaut** (auf deinen Wunsch): Lagerbestand lesen (`GET /articles/{id}`,
+`low_stock`-Filter) und Materialentnahmen/Wareneingänge direkt buchen (`POST
+/articles/{id}/stock-movements`, siehe Endpunkt-Liste unten) - anders als die meisten
+anderen Schreibaktionen bewusst als sofort wirksame Buchung, nicht über die
+KI-Freigaben-Warteschlange, weil du das explizit so gewählt hast.
+
+**Google-Kalender-/Gmail-Anbindung ist mittlerweile gebaut** - als eigener, separater
+Worker (`cloudflare-worker-google-buero/`, eigene README dort), weil Werkora sich bei
+Google bisher nur über einen Browser-Login anmeldet und dieser Worker eine eigene,
+dauerhafte Google-Anmeldung braucht. Dieser Worker hier (`cloudflare-worker-ki-buerokraft`)
+bleibt davon unberührt.
+
+**Zusätzlich gebaut**: der "Automatische Büroablauf" - drei tägliche Cron-Checkpoints
+(Mo-Fr, ca. 08/12/16 Uhr), die offene Aufgaben/Termine/Baustellen/Dokumentation/
+Zeiterfassung prüfen und daraus eine Werkora-Aufgabe + Push-Benachrichtigung erzeugen
+(siehe eigener Abschnitt unten). **Achtung:** deckt bisher nur Werkora-eigene Daten ab,
+noch NICHT Gmail/Google-Kalender aus dem oben genannten `cloudflare-worker-google-buero/` -
+das wäre eine naheliegende Erweiterung (der Worker existiert ja schon), aber noch nicht
+verdrahtet.
+
+**Noch nicht gebaut**: MCP-Server (siehe unten). Sag Bescheid, wenn's damit weitergehen soll.
 
 ## Wichtige Abweichungen von deiner Vorgabe (und warum)
 
@@ -127,9 +145,14 @@ GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lese
 GET   /reminders?invoice_id=
 POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? })
 
-GET   /articles?trade=             (Katalog-Artikel, nur lesen)
+GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; low_stock=true filtert auf Bestand <= Mindestbestand)
+GET   /articles/{id}               (Preise/Stammdaten nur lesen, inkl. aktuellem Lagerbestand)
 GET   /services?trade=             (Katalog-Leistungen, nur lesen)
 GET   /price-list?trade=           (Artikel+Leistungen zusammen, nur lesen)
+
+GET   /articles/{id}/stock-movements   (Lagerbewegungs-Historie, nur lesen)
+POST  /articles/{id}/stock-movements   ({ delta, reason? } - bucht Zugang/Entnahme, ändert den Bestand sofort;
+                                         409, wenn für den Artikel keine Bestandsführung aktiviert ist)
 
 GET   /employees                   (eingeschränkte Felder, keine Gehaltsdaten)
 GET   /employees/{id}
@@ -184,6 +207,54 @@ täglich wiederholter Spam für dieselbe überfällige Rechnung).
   unter **Worker → Einstellungen → Trigger-Ereignisse → Cron-Trigger hinzufügen** manuell
   `0 6 * * *` eintragen.
 
+## Automatischer Büroablauf (Mo-Fr, 08/12/16 Uhr)
+
+Derselbe `scheduled()`-Handler übernimmt zusätzlich drei weitere, unabhängige
+Cron-Trigger für die tägliche Bürocheckliste - unterschieden anhand des jeweiligen
+Cron-Ausdrucks (`event.cron`):
+
+| Cron-Ausdruck (UTC) | Deutsche Zeit (ca.)  | Checkpoint                                      |
+| -------------------- | --------------------- | ------------------------------------------------ |
+| `0 6 * * 1-5`         | 08:00 (CEST) / 07:00 (CET) | Morgenroutine: Aufgaben, Termine, Baustellen |
+| `0 10 * * 1-5`        | 12:00 (CEST) / 11:00 (CET) | Mittagscheck: Zwischenstand, Rückfragen      |
+| `0 14 * * 1-5`        | 16:00 (CEST) / 15:00 (CET) | Tagesabschluss: Dokumentation, Zeiterfassung |
+
+Die UTC-Zeiten sind bewusst fix (wie beim bestehenden `0 6 * * *`) - dadurch weicht die
+deutsche Uhrzeit in der Winterzeit (CET) ca. 1 Stunde von der oben genannten ab.
+
+**Was jeder Checkpoint macht:** liest Aufgaben/Termine/Baustellen/Angebote/Rechnungen/
+Arbeitsberichte/Dokumente/Zeiterfassung aus Firestore (nur lesen), baut daraus eine
+Checkliste, legt eine Werkora-Aufgabe mit dieser Checkliste als Beschreibung an (Titel je
+nach Checkpoint z.B. "🌅 Morgenroutine: ...") und schickt eine Push-Benachrichtigung an
+alle Geräte mit Rolle admin/buero (Firebase Cloud Messaging, dieselbe Technik, die bereits
+für fällige Mahnungen genutzt wird - kein neues Secret nötig, läuft über dasselbe
+`FIREBASE_SERVICE_ACCOUNT_JSON`).
+
+**Wichtig, damit die Push-Benachrichtigung ankommt:** mindestens ein admin- oder
+buero-Konto muss die Push-Berechtigung in Werkora einmal aktiviert haben (Einstellungen →
+Benachrichtigungen → "Push-Benachrichtigungen aktivieren"). Ohne registriertes Gerät wird
+die Aufgabe trotzdem angelegt, nur der Push bleibt aus.
+
+**Dedupe:** jede Aufgabe bekommt eine feste ID (`bueroablauf-{checkpoint}-{datum}`) statt
+einer zufälligen. Feuert derselbe Cron am selben Tag versehentlich zweimal, wird NICHT
+dupliziert - und falls die Aufgabe zwischendurch schon bearbeitet/erledigt wurde, wird sie
+bewusst nicht überschrieben (ein erneuter Lauf würde sonst einen bereits erledigten Status
+zurücksetzen).
+
+**Phase A (aktuell) vs. Phase B:** Alle vier Checks (Aufgaben, Termine/Baustellen,
+Dokumentation, Zeiterfassung, Angebote zum Nachfassen, offene Rechnungen) laufen bereits
+vollständig auf Werkora-eigenen Daten. "Neue Kundenanfragen aus Gmail", "offene Rückrufe"
+und echte Google-Kalender-Termine (statt Werkora-eigener Termine) fehlen noch - **nicht**
+weil dafür kein Gmail-/Kalender-Zugriff existiert (der `cloudflare-worker-google-buero/`
+läuft ja bereits, siehe oben), sondern weil dieser Cron ihn bisher nicht aufruft. Phase B
+wäre also: aus `runBueroCheck()` heraus `GET /emails` bzw. `GET /calendar/events` des
+anderen Workers abfragen (Server-zu-Server, mit dessen `API_KEY` als weiterem Secret hier).
+Jede Checkliste weist selbst darauf hin, solange das noch fehlt.
+
+**Bei Deploy über das Dashboard** müssen dafür zusätzlich zum bestehenden `0 6 * * *` noch
+drei weitere Cron-Trigger manuell eingetragen werden: `0 6 * * 1-5`, `0 10 * * 1-5`,
+`0 14 * * 1-5` (siehe Tabelle oben).
+
 ## Deployment (Cloudflare Dashboard, wie bei den anderen Workern)
 
 1. Cloudflare Dashboard öffnen → **Workers & Pages** → **Anwendung erstellen** →
@@ -197,9 +268,10 @@ täglich wiederholter Spam für dieselbe überfällige Rechnung).
    - `FIREBASE_SERVICE_ACCOUNT_JSON` als **Secret** anlegen – derselbe Wert, den ihr schon
      beim Kostenschätzer-Worker und beim offenen-REST-API-Worker verwendet habt (einmal
      erzeugte Firebase-Service-Account-JSON-Datei, kompletter Inhalt als ein Secret).
-4. Unter **Einstellungen → Trigger-Ereignisse → Cron-Trigger** den Trigger `0 6 * * *`
-   hinzufügen (für die überfällig-Webhooks, siehe oben - optional, falls keine Webhooks
-   genutzt werden, kann das übersprungen werden).
+4. Unter **Einstellungen → Trigger-Ereignisse → Cron-Trigger** folgende vier Trigger
+   hinzufügen: `0 6 * * *` (überfällig-Webhooks, optional falls keine Webhooks genutzt
+   werden), sowie für den automatischen Büroablauf `0 6 * * 1-5`, `0 10 * * 1-5` und
+   `0 14 * * 1-5` (siehe eigener Abschnitt weiter unten).
 5. Die im Dashboard angezeigte Worker-URL (endet auf `.workers.dev`) ist die Basis-URL für
    die KI-Bürokraft, z.B. `https://neuverdrahtet-ki-buerokraft.<dein-konto>.workers.dev`.
 

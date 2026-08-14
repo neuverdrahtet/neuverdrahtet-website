@@ -21,6 +21,11 @@
  *  14. KI-Aktionen protokollieren-> jeder Aufruf schreibt einen Eintrag in
  *                                   die Firestore-Collection ai_action_log
  *
+ * Zusätzlich: "Automatischer Büroablauf" - drei Cron-Checkpoints Mo-Fr um
+ * ca. 08/12/16 Uhr (Morgenroutine/Mittagscheck/Tagesabschluss), siehe
+ * scheduled()-Handler ganz unten und README.md, Abschnitt "Automatischer
+ * Büroablauf".
+ *
  * Zusätzlich (weil in der Vorgabe als "erlaubt" gelistet, aber nicht in der
  * 14er-Liste): PATCH /customers/{id}, GET/PATCH /leads, PATCH /tasks/{id}
  * (z.B. Status "completed").
@@ -100,6 +105,12 @@ function farbeAusText(text, palette) {
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function addDaysISO(iso, delta) {
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
 }
 
 function calcTotals(positionen) {
@@ -508,6 +519,10 @@ function articleToApi(k) {
   };
 }
 
+function stockMovementToApi(b) {
+  return { id: b.id, article_id: b.katalogId || '', delta: b.delta || 0, reason: b.grund || '', date: b.datum || '' };
+}
+
 function employeeToApi(m, onLeaveToday) {
   return { id: m.id, name: m.name || '', role: m.zugriffsrolle || '', trade: m.rolle || '', phone: m.telefon || '', email: m.email || '', on_leave_today: !!onLeaveToday };
 }
@@ -520,12 +535,198 @@ function leadStatusHinweis(sentStatus, kundenStatusSpalten) {
   return `Hinweis: Status "${sentStatus}" existiert nicht als Werkora-Status-Spalte (vorhanden: ${kundenStatusSpalten.map((s) => s.id).join(', ')}). Wurde als Notiz vermerkt, der Kunden-Status wurde NICHT geändert.`;
 }
 
+// ---------------------------------------------------------------------------
+// Automatischer Büroablauf (Mo-Fr, 08/12/16 Uhr - siehe README.md)
+//
+// Drei tägliche Cron-Checkpoints, die NUR lesen (plus: legen eine Werkora-
+// Aufgabe an/aktualisieren sie und schicken eine Push-Benachrichtigung -
+// beides von der Erlaubt-Liste des Nutzers gedeckt). Kein automatischer
+// Versand von E-Mails/Angeboten/Rechnungen/Mahnungen, keine Preisänderung,
+// kein Löschen, kein automatisches Verschieben von Fälligkeitsdaten - alles
+// wird nur AUFGELISTET, damit Danny selbst entscheidet.
+//
+// Phase A (dieser Schritt): nur Werkora-eigene Daten (Aufgaben/Termine/
+// Baustellen/Dokumentation/Zeiterfassung/Angebote/Rechnungen). "Neue
+// Kundenanfragen aus Gmail" und "echte Google-Kalender-Termine" fehlen noch -
+// nicht weil kein Gmail-/Kalender-Zugriff existiert (der separate
+// cloudflare-worker-google-buero/ läuft bereits), sondern weil dieser Cron
+// ihn bisher nicht aufruft. Phase B: aus runBueroCheck() heraus dessen
+// GET /emails bzw. GET /calendar/events abfragen (siehe README.md).
+// ---------------------------------------------------------------------------
+
+const BUEROABLAUF_TITEL = {
+  morgen: '🌅 Morgenroutine: Aufgaben, Termine und Baustellen prüfen',
+  mittag: '☀️ Mittagscheck: Zwischenstand Aufgaben, Baustellen und Rückfragen',
+  abend: '🌇 Tagesabschluss 16 Uhr: Dokumentation und Zeiterfassung prüfen',
+};
+
+/** Baut den Checklisten-Text für einen Checkpoint aus den vorbereiteten Daten. Reine Funktion, kein Netzwerk. */
+function buildBueroChecklist(checkpoint, daten) {
+  const zeilen = [];
+  const titelKurz = (x) => x.titel || '(ohne Titel)';
+  const abschnitt = (titel, items) => {
+    if (items.length === 0) return;
+    zeilen.push(`${titel}:`);
+    for (const i of items) zeilen.push(`- ${i}`);
+    zeilen.push('');
+  };
+
+  if (checkpoint === 'morgen') {
+    abschnitt('Überfällige Aufgaben', daten.ueberfaelligeAufgaben.map((a) => `${titelKurz(a)} (fällig ${a.faelligAm})`));
+    if (daten.offeneAufgaben.length) zeilen.push(`Offene Aufgaben insgesamt: ${daten.offeneAufgaben.length}\n`);
+    abschnitt('Heutige Baustellen', daten.heutigeBaustellen.map((t) => `${titelKurz(t)}${t.ort ? ' – ' + t.ort : ''}`));
+    abschnitt('Heutige Termine', daten.heutigeTermine.map((t) => `${(t.start || '').slice(11, 16)} ${titelKurz(t)}`));
+    abschnitt('Angebote zum Nachfassen', daten.angeboteNachfassen.map((a) => `${a.nummer || a.id} (versendet ${a.datum})`));
+    abschnitt('Offene Rechnungen zur Übersicht', daten.offeneRechnungen.map((r) => `${r.nummer || r.id}, fällig ${r.faelligAm || '–'}`));
+    abschnitt('Fehlende Dokumentation vom Vortag', daten.fehlendeDokuGestern.map(titelKurz));
+    abschnitt('Fehlende Zeiterfassung vom Vortag', daten.fehlendeZeitGestern.map(titelKurz));
+    if (zeilen.length === 0) zeilen.push('Alles im grünen Bereich - nichts Offenes gefunden.\n');
+    zeilen.push('Hinweis: neue Kundenanfragen aus Gmail und offene Rückrufe prüft dieser Check noch nicht (Phase B - noch nicht verdrahtet).');
+  } else if (checkpoint === 'mittag') {
+    abschnitt('Laufende Baustellen heute', daten.heutigeBaustellen.map((t) => `${titelKurz(t)}${t.ort ? ' – ' + t.ort : ''}`));
+    abschnitt('Termine am Nachmittag', daten.nachmittagsTermine.map((t) => `${(t.start || '').slice(11, 16)} ${titelKurz(t)}`));
+    abschnitt('Noch keine Dokumentation heute begonnen', daten.baustellenOhneDokuHeute.map(titelKurz));
+    abschnitt('Noch keine Zeiterfassung heute', daten.baustellenOhneZeitHeute.map(titelKurz));
+    if (zeilen.length === 0) zeilen.push('Alles im grünen Bereich - nichts Offenes gefunden.\n');
+    zeilen.push('Hinweis: neue/dringende E-Mails und Rückfragen von Kunden/Lieferanten prüft dieser Check noch nicht (Phase B - noch nicht verdrahtet).');
+  } else if (checkpoint === 'abend') {
+    abschnitt('Fehlende Zeiterfassung heute', daten.baustellenOhneZeitHeute.map(titelKurz));
+    abschnitt('Fehlende Baustellendokumentation heute', daten.baustellenOhneDokuHeute.map(titelKurz));
+    abschnitt('Heute noch offene Aufgaben', daten.heuteOffeneAufgaben.map(titelKurz));
+    abschnitt('Morgen fällige Aufgaben', daten.morgenFaelligeAufgaben.map(titelKurz));
+    abschnitt('Morgige Termine', daten.morgigeTermine.map((t) => `${(t.start || '').slice(11, 16)} ${titelKurz(t)}`));
+    if (zeilen.length === 0) zeilen.push('Alles im grünen Bereich - nichts Offenes gefunden.\n');
+    zeilen.push('Hinweis: unerledigte Aufgaben werden hier nur aufgelistet, NICHT automatisch auf morgen verschoben - das entscheidest du selbst.');
+  }
+
+  const text = zeilen.join('\n').trim();
+  return text || 'Alles im grünen Bereich - nichts Offenes gefunden.';
+}
+
+/** Sammelt alle für die Checklisten benötigten Werkora-Daten (Firestore-Reads, keine Schreibvorgänge). */
+async function gatherBueroDaten(accessToken, projectId) {
+  const heute = todayISO();
+  const gestern = addDaysISO(heute, -1);
+  const morgen = addDaysISO(heute, 1);
+
+  const [aufgaben, termine, angebote, rechnungen, arbeitsberichte, dokumente, zeiterfassung, einstellungenGlobal] = await Promise.all([
+    firestoreList({ accessToken, projectId, collection: 'aufgaben' }),
+    firestoreList({ accessToken, projectId, collection: 'termine' }),
+    firestoreList({ accessToken, projectId, collection: 'angebote' }),
+    firestoreList({ accessToken, projectId, collection: 'rechnungen' }),
+    firestoreList({ accessToken, projectId, collection: 'arbeitsberichte' }),
+    firestoreList({ accessToken, projectId, collection: 'dokumente' }),
+    firestoreList({ accessToken, projectId, collection: 'zeiterfassung' }),
+    firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' }),
+  ]);
+
+  const offeneAufgaben = aufgaben.filter((a) => !AUFGABEN_STATUS_GESCHLOSSEN.includes(a.status));
+  const ueberfaelligeAufgaben = offeneAufgaben.filter((a) => a.faelligAm && a.faelligAm < heute);
+  const heuteOffeneAufgaben = offeneAufgaben.filter((a) => a.faelligAm === heute);
+  const morgenFaelligeAufgaben = offeneAufgaben.filter((a) => a.faelligAm === morgen);
+
+  const heutigeTermine = termine.filter((t) => (t.start || '').slice(0, 10) === heute);
+  const heutigeBaustellen = heutigeTermine.filter((t) => t.typ === 'baustelle');
+  const gestrigeBaustellen = termine.filter((t) => t.typ === 'baustelle' && (t.start || '').slice(0, 10) === gestern);
+  const morgigeTermine = termine.filter((t) => (t.start || '').slice(0, 10) === morgen);
+  const nachmittagsTermine = heutigeTermine.filter((t) => (t.start || '').slice(11, 13) >= '12');
+
+  const angebotNachfassTage = Number(einstellungenGlobal?.angebotNachfassTage) || 7;
+  const nachfassGrenze = addDaysISO(heute, -angebotNachfassTage);
+  const angeboteNachfassen = angebote.filter((a) => a.status === 'versendet' && a.datum && a.datum <= nachfassGrenze);
+
+  const offeneRechnungen = rechnungen.filter((r) => RECHNUNG_OFFEN_STATUS.includes(r.status));
+
+  const hatDokumentationFuer = (termin, datum) => {
+    const hatBericht = arbeitsberichte.some((w) => w.datum === datum && ((termin.projektId && w.projektId === termin.projektId) || (termin.kundeId && w.kundeId === termin.kundeId)));
+    const hatDokument = termin.projektId && dokumente.some((d) => d.bezugTyp === 'projekt' && d.bezugId === termin.projektId && (d.createdAt || '').slice(0, 10) === datum);
+    return hatBericht || hatDokument;
+  };
+  const hatZeiterfassungFuer = (termin, datum) => zeiterfassung.some((z) => z.datum === datum && ((termin.projektId && z.projektId === termin.projektId) || (termin.mitarbeiterIds || []).includes(z.mitarbeiterId)));
+
+  return {
+    offeneAufgaben, ueberfaelligeAufgaben, heuteOffeneAufgaben, morgenFaelligeAufgaben,
+    heutigeTermine, heutigeBaustellen, morgigeTermine, nachmittagsTermine,
+    angeboteNachfassen, offeneRechnungen,
+    fehlendeDokuGestern: gestrigeBaustellen.filter((t) => !hatDokumentationFuer(t, gestern)),
+    fehlendeZeitGestern: gestrigeBaustellen.filter((t) => !hatZeiterfassungFuer(t, gestern)),
+    baustellenOhneDokuHeute: heutigeBaustellen.filter((t) => !hatDokumentationFuer(t, heute)),
+    baustellenOhneZeitHeute: heutigeBaustellen.filter((t) => !hatZeiterfassungFuer(t, heute)),
+  };
+}
+
+/**
+ * Push-Versand (Firebase Cloud Messaging HTTP v1) direkt aus dem Cron heraus,
+ * an alle admin/buero-Geräte - 1:1 dasselbe Muster wie der bestehende
+ * client-ausgelöste "push-send" im generischen cloudflare-worker/worker.js,
+ * hier aber serverseitig ohne Client-Trigger. Best effort: ein Fehler hier
+ * darf den eigentlichen Cron-Lauf (Aufgabe anlegen) nicht verhindern.
+ */
+async function sendBueroPush(serviceAccount, projectId, datastoreAccessToken, { title, body }) {
+  try {
+    const tokens = (await firestoreList({ accessToken: datastoreAccessToken, projectId, collection: 'pushTokens' }))
+      .filter((t) => t.role === 'admin' || t.role === 'buero')
+      .map((t) => t.id);
+    if (tokens.length === 0) return;
+    const fcmAccessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/firebase.messaging');
+    for (const token of tokens) {
+      await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fcmAccessToken}` },
+        body: JSON.stringify({ message: { token, notification: { title, body } } }),
+      }).catch(() => {});
+    }
+  } catch {
+    // Push ist ein Komfort-Feature - ein Fehler hier darf den Cron-Lauf nicht kippen.
+  }
+}
+
+/**
+ * Führt einen der drei täglichen Checkpoints aus: sammelt Daten, legt eine
+ * Werkora-Aufgabe mit der Checkliste an und schickt eine Push-
+ * Benachrichtigung. Deterministische Aufgaben-ID (bueroablauf-{checkpoint}-
+ * {datum}) statt crypto.randomUUID(): falls der Cron am selben Tag erneut
+ * feuert, wird NICHT dupliziert - und falls Danny die Aufgabe zwischendurch
+ * schon bearbeitet/erledigt hat, wird sie hier bewusst NICHT überschrieben
+ * (sonst würde ein erneuter Lauf einen bereits erledigten Status
+ * zurücksetzen).
+ */
+async function runBueroCheck(env, checkpoint) {
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const projectId = serviceAccount.project_id;
+  const heute = todayISO();
+  const aufgabeId = `bueroablauf-${checkpoint}-${heute}`;
+
+  const bereitsAngelegt = await firestoreGet({ accessToken, projectId, collection: 'aufgaben', id: aufgabeId });
+  if (bereitsAngelegt) return;
+
+  const daten = await gatherBueroDaten(accessToken, projectId);
+  const beschreibung = buildBueroChecklist(checkpoint, daten);
+  const titel = BUEROABLAUF_TITEL[checkpoint];
+
+  await firestoreCreate({
+    accessToken, projectId, collection: 'aufgaben', id: aufgabeId,
+    data: {
+      id: aufgabeId, titel, beschreibung, prioritaet: 'hoch', status: 'offen',
+      faelligAm: heute, kundeId: '', projektId: '', zugewiesenAn: '',
+      createdAt: new Date().toISOString(), erledigtAm: '',
+    },
+  });
+
+  await sendBueroPush(serviceAccount, projectId, accessToken, {
+    title: titel,
+    body: beschreibung.length > 180 ? `${beschreibung.slice(0, 177)}...` : beschreibung,
+  });
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen, kein Netzwerk).
 export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
   customerToApi, apiToCustomer, taskToApi, appointmentToApi, projectToApi, quoteToApi, invoiceToApi,
-  nextDailyNummer, calcTotals, leadStatusHinweis,
+  nextDailyNummer, calcTotals, leadStatusHinweis, addDaysISO, buildBueroChecklist,
   orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
+  stockMovementToApi,
 };
 
 export default {
@@ -1001,14 +1202,47 @@ export default {
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
-      // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - nur Lesen) ---
+      // --- Lagerbestand (Materialwirtschaft, Artikel mit bestandTracking=true) - lesen + Zu-/Abgänge buchen ---
+      if (teile[0] === 'articles' && teile[1] && teile[2] === 'stock-movements') {
+        const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
+        if (!artikel || artikel.typ !== 'artikel') return errorResponse('ARTICLE_NOT_FOUND', 'Artikel wurde nicht gefunden.', 404);
+        if (request.method === 'GET') {
+          let bewegungen = await firestoreList({ accessToken, projectId, collection: 'lagerbewegungen' });
+          bewegungen = bewegungen.filter((b) => b.katalogId === teile[1]).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+          await logAction(ctx, { action: 'articles.stock-movements.search', entityType: 'katalog', entityId: teile[1], status: 'success' });
+          return okResponse(bewegungen.map(stockMovementToApi));
+        }
+        if (request.method === 'POST') {
+          if (!artikel.bestandTracking) return errorResponse('STOCK_NOT_TRACKED', 'Für diesen Artikel ist keine Bestandsführung aktiviert - in Werkora unter Katalog je Artikel einschaltbar.', 409);
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const delta = Number(body.delta);
+          if (!delta || Number.isNaN(delta)) return errorResponse('VALIDATION_ERROR', 'Feld "delta" ist erforderlich (Zahl ungleich 0; positiv = Zugang, negativ = Entnahme).', 400);
+          const neuerBestand = Math.max(0, Number(artikel.bestand ?? 0) + delta);
+          const updatedArtikel = await firestoreUpdate({ accessToken, projectId, collection: 'katalog', id: teile[1], data: { bestand: neuerBestand } });
+          const movementId = crypto.randomUUID();
+          const movement = { id: movementId, katalogId: teile[1], delta, grund: body.reason || '', datum: new Date().toISOString() };
+          await firestoreCreate({ accessToken, projectId, collection: 'lagerbewegungen', id: movementId, data: movement });
+          await logAction(ctx, { action: 'articles.stock-movements.create', entityType: 'katalog', entityId: teile[1], newValue: movement, status: 'success' });
+          return okResponse({ ...articleToApi(updatedArtikel), movement: stockMovementToApi(movement) }, 201);
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - Preise/Stammdaten nur Lesen, Bestand siehe stock-movements oben) ---
       if (teile[0] === 'articles' || teile[0] === 'services' || teile[0] === 'price-list') {
         if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Der Katalog wird nur in Werkora selbst gepflegt - diese API kann ihn nur lesen.', 405);
+        if (teile[1]) {
+          const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
+          if (!artikel) return errorResponse('ARTICLE_NOT_FOUND', 'Artikel/Leistung wurde nicht gefunden.', 404);
+          await logAction(ctx, { action: 'articles.get', entityType: 'katalog', entityId: teile[1], status: 'success' });
+          return okResponse(articleToApi(artikel));
+        }
         let katalog = await firestoreList({ accessToken, projectId, collection: 'katalog' });
         if (teile[0] === 'articles') katalog = katalog.filter((k) => k.typ === 'artikel');
         if (teile[0] === 'services') katalog = katalog.filter((k) => k.typ === 'leistung');
         const gewerk = q.get('trade');
         if (gewerk) katalog = katalog.filter((k) => k.gewerk === gewerk);
+        if (q.get('low_stock') === 'true') katalog = katalog.filter((k) => k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0));
         await logAction(ctx, { action: `${teile[0]}.search`, status: 'success' });
         return okResponse(katalog.map(articleToApi));
       }
@@ -1040,15 +1274,27 @@ export default {
   },
 
   /**
-   * Cron-Job (siehe README.md für die Einrichtung im Cloudflare Dashboard):
-   * prüft täglich neu überfällige Rechnungen/Aufgaben und feuert die
-   * Webhooks invoice.overdue/task.overdue (Vorgabe Abschnitt 32) - jeweils
-   * nur EINMAL pro Rechnung/Aufgabe (Dedupe-Feld kiWebhookOverdueSentAt),
-   * damit nicht jeden Tag erneut derselbe Webhook eintrifft.
+   * Cron-Jobs (siehe README.md für die Einrichtung im Cloudflare Dashboard).
+   * Vier unabhängige Cron-Ausdrücke laufen auf denselben Handler, unter-
+   * schieden über event.cron:
+   *  - "0 6 * * *"     (alle Tage, 06:00 UTC): bestehende überfällige-
+   *                     Rechnungen/Aufgaben-Webhooks (unverändert).
+   *  - "0 6 * * 1-5"   (Mo-Fr, 06:00 UTC = 08:00 CEST/07:00 CET): Morgenroutine.
+   *  - "0 10 * * 1-5"  (Mo-Fr, 10:00 UTC = 12:00 CEST/11:00 CET): Mittagscheck.
+   *  - "0 14 * * 1-5"  (Mo-Fr, 14:00 UTC = 16:00 CEST/15:00 CET): Tagesabschluss.
+   * Die UTC-Zeiten sind bewusst fix gewählt (wie beim bestehenden 06:00-Cron)
+   * und weichen daher in der Winterzeit ca. 1 Stunde von der genannten
+   * deutschen Uhrzeit ab.
    */
   async scheduled(event, env) {
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
     try {
+      if (event.cron === '0 6 * * 1-5') { await runBueroCheck(env, 'morgen'); return; }
+      if (event.cron === '0 10 * * 1-5') { await runBueroCheck(env, 'mittag'); return; }
+      if (event.cron === '0 14 * * 1-5') { await runBueroCheck(env, 'abend'); return; }
+
+      // "0 6 * * *" (Standard, falls im Dashboard kein Trigger-Text ankommt) -
+      // bestehende überfällige-Rechnungen/Aufgaben-Webhooks.
       const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
       const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
       const projectId = serviceAccount.project_id;

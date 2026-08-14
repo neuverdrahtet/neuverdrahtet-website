@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Kundenportal – neuverdrahtet</title>
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  /* Portal ist bewusst eine eigenständige, schlanke Seite (nicht die
+     verwaltung-SPA) - Kunden sehen nie die interne Sidebar/Navigation. */
+  body { background: var(--bg); min-height: 100vh; }
+  .portal-shell { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
+  .portal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
+  .portal-header h1 { font-size: 19px; margin: 0; }
+  .portal-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .portal-tabs button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 13.5px; }
+  .portal-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div id="lock-screen" class="lock-screen" hidden>
+  <div class="lock-box">
+    <form id="auth-form">
+      <h1>Kundenportal</h1>
+      <h2 id="auth-title">Anmelden</h2>
+      <input type="email" id="auth-email" autocomplete="username" placeholder="E-Mail-Adresse" required>
+      <input type="password" id="auth-password" autocomplete="current-password" placeholder="Passwort" required minlength="6">
+      <button type="submit" id="auth-submit">Anmelden</button>
+      <p id="auth-error" class="lock-error" hidden></p>
+      <p id="auth-hint" class="lock-hint">Bitte mit deiner E-Mail und deinem Passwort anmelden.</p>
+      <a href="#" id="auth-mode-toggle" class="lock-toggle">Registrieren</a>
+    </form>
+  </div>
+</div>
+
+<div id="portal-app" class="portal-shell" hidden>
+  <div class="portal-header">
+    <div>
+      <h1 id="portal-kunde-name">Kundenportal</h1>
+      <p class="text-mute" style="margin:2px 0 0;font-size:12.5px">neuverdrahtet</p>
+    </div>
+    <button type="button" class="btn btn-sm" id="btn-logout">Abmelden</button>
+  </div>
+  <div class="portal-tabs">
+    <button type="button" data-tab="angebote" class="active">Angebote</button>
+    <button type="button" data-tab="rechnungen">Rechnungen</button>
+    <button type="button" data-tab="termine">Termine</button>
+  </div>
+  <div id="portal-content"></div>
+</div>
+
+<div id="toast-host" class="toast-host"></div>
+
+<script type="module" src="portal.js"></script>
+</body>
+</html>
