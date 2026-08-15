@@ -226,7 +226,7 @@ export async function render(container) {
       </div>
     </div>
     <div class="search-bar">
-      <input type="search" id="search" placeholder="Suche nach Firma, Ansprechpartner, Ort ...">
+      <input type="search" id="search" placeholder="Suche nach Firma, Kundennummer, Ansprechpartner, Ort ...">
     </div>
     <div id="table-host"></div>
   `;
@@ -242,7 +242,7 @@ export async function render(container) {
       ${bulk.barHtml()}
       <table class="data-table">
         <thead><tr>
-          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Status</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
+          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Kundennummer</th><th>Status</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
         </tr></thead>
         <tbody>
           ${filtered.map((k) => {
@@ -252,6 +252,7 @@ export async function render(container) {
               ${bulk.rowCell(k.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${k.farbe || '#6b7280'}"></span></td>
               <td>${escapeHtml(k.firma)}</td>
+              <td>${escapeHtml(k.kundennummer || '')}</td>
               <td>${status ? `<span class="badge" style="background:${status.farbe}22;color:${status.farbe}">${escapeHtml(status.titel)}</span>` : ''}</td>
               <td>${escapeHtml(k.ansprechpartner || '')}</td>
               <td>${escapeHtml(k.ort || '')}</td>
@@ -282,7 +283,7 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
     filtered = kunden.filter((k) =>
-      [k.firma, k.ansprechpartner, k.ort, k.email, k.telefon].filter(Boolean).join(' ').toLowerCase().includes(q)
+      [k.firma, k.kundennummer, k.ansprechpartner, k.ort, k.email, k.telefon].filter(Boolean).join(' ').toLowerCase().includes(q)
     );
     renderTable();
   });
