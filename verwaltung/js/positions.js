@@ -29,7 +29,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         <p class="hint">🔒 Diese Rechnung wurde bereits versendet und ist zur GoBD-konformen Nachvollziehbarkeit gesperrt. Änderungen nur über eine Stornorechnung.</p>
         <table class="pos-table">
           <thead><tr>
-            <th class="col-posnr">Pos.</th><th>Bezeichnung</th><th class="col-menge">Menge</th><th>Einheit</th>
+            <th class="col-posnr">Pos.</th><th>Kurztext</th><th class="col-menge">Menge</th><th>Einheit</th>
             <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th>
           </tr></thead>
           <tbody>
@@ -43,6 +43,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
                 <td class="col-steuer">${p.steuersatz ?? defaultSteuersatz}%</td>
                 <td class="col-sum">${formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</td>
               </tr>
+              ${p.beschreibung ? `<tr class="row-langtext"><td></td><td colspan="6">${escapeHtml(p.beschreibung)}</td></tr>` : ''}
             `).join('')}
           </tbody>
         </table>
@@ -53,20 +54,24 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     host.innerHTML = `
       <table class="pos-table">
         <thead><tr>
-          <th class="col-posnr">Pos.</th><th>Bezeichnung</th><th class="col-menge">Menge</th><th>Einheit</th>
+          <th class="col-posnr">Pos.</th><th>Kurztext</th><th class="col-menge">Menge</th><th>Einheit</th>
           <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th><th class="col-del"></th>
         </tr></thead>
         <tbody>
           ${posState.map((p, i) => `
             <tr data-i="${i}">
               <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen"></td>
-              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Bezeichnung"></td>
+              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext"></td>
               <td class="col-menge"><input class="f-menge" type="number" step="0.01" value="${p.menge ?? 1}"></td>
               <td><input class="f-einheit" value="${escapeHtml(p.einheit || '')}"></td>
               <td class="col-preis"><input class="f-preis" type="number" step="0.01" value="${p.einzelpreis ?? 0}"></td>
               <td class="col-steuer"><input class="f-steuer" type="number" step="1" value="${p.steuersatz ?? defaultSteuersatz}"></td>
               <td class="col-sum">${formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</td>
               <td class="col-del"><button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
+            </tr>
+            <tr class="row-langtext" data-i="${i}">
+              <td></td>
+              <td colspan="7"><textarea class="f-langtext" rows="2" placeholder="Langtext / ausführliche Beschreibung (optional, erscheint z.B. im PDF)">${escapeHtml(p.beschreibung || '')}</textarea></td>
             </tr>
           `).join('')}
         </tbody>
@@ -93,7 +98,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       <div class="totals-box">${totalsHtml(totals)}</div>
     `;
 
-    host.querySelectorAll('tbody tr').forEach((row) => {
+    host.querySelectorAll('tbody tr:not(.row-langtext)').forEach((row) => {
       const i = Number(row.dataset.i);
       row.querySelector('.f-posnr').addEventListener('input', (e) => { posState[i].posNr = e.target.value; });
       row.querySelector('.f-bez').addEventListener('input', (e) => { posState[i].bezeichnung = e.target.value; });
@@ -102,6 +107,10 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       row.querySelector('.f-preis').addEventListener('input', (e) => { posState[i].einzelpreis = Number(e.target.value); updateSum(row, i); });
       row.querySelector('.f-steuer').addEventListener('input', (e) => { posState[i].steuersatz = Number(e.target.value); refreshTotalsOnly(); });
       row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
+    });
+    host.querySelectorAll('tr.row-langtext').forEach((row) => {
+      const i = Number(row.dataset.i);
+      row.querySelector('.f-langtext').addEventListener('input', (e) => { posState[i].beschreibung = e.target.value; });
     });
 
     host.querySelector('.f-gewerk-filter').addEventListener('change', (e) => {
