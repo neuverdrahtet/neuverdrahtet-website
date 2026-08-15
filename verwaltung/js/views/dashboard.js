@@ -235,10 +235,10 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     </div>
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></div>
-      <div class="kpi-card"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></div>
-      <div class="kpi-card kpi-warn"><div class="kpi-value">${offen.length}</div><div class="kpi-label">Offene Rechnungen &middot; ${formatCurrency(offenSumme)}</div></div>
-      <div class="kpi-card kpi-danger"><div class="kpi-value">${ueberfaellig.length}</div><div class="kpi-label">Überfällig &middot; ${formatCurrency(ueberfaelligSumme)}</div></div>
+      <a class="kpi-card" href="#/kunden"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></a>
+      <a class="kpi-card" href="#/projekte"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></a>
+      <a class="kpi-card kpi-warn" href="#/rechnungen/offen"><div class="kpi-value">${offen.length}</div><div class="kpi-label">Offene Rechnungen &middot; ${formatCurrency(offenSumme)}</div></a>
+      <a class="kpi-card kpi-danger" href="#/rechnungen/ueberfaellig"><div class="kpi-value">${ueberfaellig.length}</div><div class="kpi-label">Überfällig &middot; ${formatCurrency(ueberfaelligSumme)}</div></a>
     </div>
 
     <div class="dash-layout">

@@ -97,7 +97,7 @@ function openStornoGrundDialog(nummer, onConfirm) {
   });
 }
 
-export async function render(container) {
+export async function render(container, route) {
   let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken] = await Promise.all([
     getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
   ]);
@@ -189,6 +189,8 @@ export async function render(container) {
       <input type="search" id="search" placeholder="Suche nach Nummer oder Kunde ...">
       <select id="status-filter">
         <option value="">Alle Status</option>
+        <option value="offen-alle">Offen (inkl. teilbezahlt)</option>
+        <option value="ueberfaellig">Überfällig</option>
         ${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
       </select>
     </div>
@@ -200,7 +202,10 @@ export async function render(container) {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const status = container.querySelector('#status-filter').value;
     filtered = rechnungen.filter((r) => {
-      if (status && r.status !== status) return false;
+      const istOffen = r.status === 'offen' || r.status === 'teilbezahlt';
+      if (status === 'offen-alle' && !istOffen) return false;
+      else if (status === 'ueberfaellig' && !(istOffen && r.faelligAm && r.faelligAm < today)) return false;
+      else if (status && status !== 'offen-alle' && status !== 'ueberfaellig' && r.status !== status) return false;
       if (!q) return true;
       return [r.nummer, kundenById[r.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -342,6 +347,10 @@ export async function render(container) {
 
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
+  // Direktsprung von den Dashboard-Kacheln ("Offene Rechnungen"/"Überfällig")
+  // per #/rechnungen/offen bzw. #/rechnungen/ueberfaellig - Filter direkt
+  // vorbelegen, damit die Liste sofort das zeigt, was auf der Kachel stand.
+  if (route === 'offen' || route === 'ueberfaellig') container.querySelector('#status-filter').value = route === 'offen' ? 'offen-alle' : 'ueberfaellig';
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
@@ -905,5 +914,5 @@ let editor = createPositionsEditor({
     });
   }
 
-  renderTable();
+  applyFilter();
 }
