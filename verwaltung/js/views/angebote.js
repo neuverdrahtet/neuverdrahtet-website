@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -34,6 +34,42 @@ const GRUENDE_ANNAHME = [
   { id: 'muendlich', titel: 'Mündlich vor Ort' },
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
+
+function normalizeAngebotStatus(text) {
+  const t = (text || '').trim().toLowerCase();
+  if (['versendet', 'gesendet', 'sent', 'verschickt'].includes(t)) return 'versendet';
+  if (['angenommen', 'akzeptiert', 'accepted', 'beauftragt'].includes(t)) return 'angenommen';
+  if (['abgelehnt', 'verloren', 'rejected'].includes(t)) return 'abgelehnt';
+  return 'entwurf';
+}
+
+// Bulk-Import ganzer Angebote (im Gegensatz zum GAEB-Import oben, der ein
+// einzelnes Angebot mit mehreren Positionen anlegt) - je Zeile ein Angebot
+// mit genau einer Pauschalposition, gedacht für die Migration bestehender
+// Angebotslisten aus Excel. Der Kunde muss bereits in Werkora existieren
+// (Namensabgleich exakt, ohne Groß-/Kleinschreibung) - keine automatische
+// Kundenanlage, um keine Dubletten durch Tippfehler zu erzeugen.
+function parseAngeboteCsv(text, kunden, defaultSteuersatz) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^kunde(nname)?$/i.test(cols[0] || '')) continue;
+    const [kundenname, datum, betreff, nettoRaw, ustRaw, statusRaw, nummer] = cols;
+    if (!kundenname) { errors.push(`${line} (kein Kundenname)`); continue; }
+    const kunde = kunden.find((k) => (k.firma || '').trim().toLowerCase() === kundenname.trim().toLowerCase());
+    if (!kunde) { errors.push(`${line} (Kunde "${kundenname}" nicht gefunden - erst in Werkora anlegen)`); continue; }
+    const netto = Number(String(nettoRaw || '0').replace(/\./g, '').replace(',', '.')) || 0;
+    rows.push({
+      kundeId: kunde.id, datum: datum || todayISO(), betreff: betreff || '',
+      netto, steuersatz: ustRaw ? Number(String(ustRaw).replace(',', '.')) || defaultSteuersatz : defaultSteuersatz,
+      status: normalizeAngebotStatus(statusRaw), nummer: nummer || '',
+    });
+  }
+  return { rows, errors };
+}
 
 export async function render(container) {
   let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
@@ -87,6 +123,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Angebote</h1>
       <div class="actions">
+        <button class="btn" id="btn-import">⇪ Angebote importieren</button>
         <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
@@ -156,6 +193,82 @@ export async function render(container) {
   container.querySelector('#status-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
+  container.querySelector('#btn-import').addEventListener('click', () => openAngeboteImport());
+
+  function openAngeboteImport() {
+    const { body, close } = openModal({
+      title: 'Angebote importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Kundenname;Datum (JJJJ-MM-TT);Betreff;Nettobetrag;USt-Satz;Status;Angebotsnummer</code> – nur Kundenname ist Pflicht, alles andere optional. Der Kunde muss bereits als Kunde in Werkora existieren (Name muss exakt übereinstimmen). Je Zeile wird ein Angebot mit einer einzelnen Pauschalposition (Betreff = Positionstext) angelegt - für Angebote mit mehreren Einzelpositionen bitte stattdessen einzeln anlegen und dort "aus CSV/Excel importieren" bei den Positionen nutzen. Ohne Angebotsnummer wird automatisch fortlaufend nummeriert. Status: entwurf/versendet/angenommen/abgelehnt (ohne Angabe: entwurf). Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Mustermann GmbH;2026-01-15;Elektroinstallation Neubau;4500;19;entwurf;"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = parseAngeboteCsv(text, kunden, settings.standardSteuersatz);
+      if (rows.length === 0) {
+        body.querySelector('#import-preview').textContent = errors.length
+          ? `Keine gültigen Zeilen gefunden:\n${errors.join('\n')}`
+          : 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      // Fortlaufende Nummerierung wird zeilenweise fortgeschrieben (nicht parallel),
+      // damit importierte Angebote ohne eigene Nummer keine doppelte Nummer bekommen.
+      let currentSettings = await getSettings();
+      for (const row of rows) {
+        const positionen = [{
+          id: uid(), bezeichnung: row.betreff || 'Pauschalposition', beschreibung: '',
+          einheit: 'Psch.', menge: 1, einzelpreis: row.netto, steuersatz: row.steuersatz,
+        }];
+        const totals = calcTotals(positionen);
+        let nummer = row.nummer;
+        if (!nummer) {
+          const next = nextDailyNummer(currentSettings.angebotPrefix, { datum: currentSettings.angebotNummerDatum, zaehler: currentSettings.angebotNummerZaehler });
+          nummer = next.nummer;
+          currentSettings = { ...currentSettings, angebotNummerDatum: next.datum, angebotNummerZaehler: next.zaehler };
+        }
+        const angebot = {
+          id: uid(), nummer, kundeId: row.kundeId, projektId: '', datum: row.datum,
+          gueltigBis: addDays(row.datum, settings.angebotGueltigTage || 30),
+          status: row.status, betreff: row.betreff, notizen: '', positionen, createdAt: new Date().toISOString(),
+          steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
+          unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
+          netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+        };
+        await put('angebote', angebot);
+        angebote.push(angebot);
+      }
+      await setSettings({ angebotNummerDatum: currentSettings.angebotNummerDatum, angebotNummerZaehler: currentSettings.angebotNummerZaehler });
+      toast(`${rows.length} Angebot(e) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      applyFilter();
+    });
+  }
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Angebote-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
 
