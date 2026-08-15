@@ -1,5 +1,30 @@
-import { uid, calcTotals, formatCurrency, escapeHtml, toast, katalogOptionsHtml } from './utils.js';
+import { uid, calcTotals, formatCurrency, escapeHtml, toast, katalogOptionsHtml, excelFileToCsvText } from './utils.js';
 import { put, GEWERKE } from './db.js';
+import { openModal } from './ui.js';
+
+function parseNumber(str) {
+  const n = Number(String(str ?? '').trim().replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parsePositionenCsv(text, defaultSteuersatz) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^kurztext$/i.test(cols[0] || '') || /^bezeichnung$/i.test(cols[0] || '')) continue;
+    const [bezeichnung, mengeRaw, einheit, preisRaw, ustRaw, beschreibung] = cols;
+    if (!bezeichnung) { errors.push(line); continue; }
+    rows.push({
+      id: uid(), bezeichnung, beschreibung: beschreibung || '',
+      menge: mengeRaw ? parseNumber(mengeRaw) : 1, einheit: einheit || '',
+      einzelpreis: parseNumber(preisRaw), steuersatz: ustRaw ? parseNumber(ustRaw) : defaultSteuersatz,
+    });
+  }
+  return { rows, errors };
+}
 
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
@@ -86,6 +111,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         </select>
         <button type="button" class="btn btn-sm" id="btn-add-katalog">+ übernehmen</button>
         <button type="button" class="btn btn-sm" id="btn-add-manual">+ freie Position</button>
+        <button type="button" class="btn btn-sm" id="btn-import-positionen">⇪ aus CSV/Excel importieren</button>
         ${vorlagen.length ? `
           <select class="f-vorlage-select">
             <option value="">Vorlage einfügen ...</option>
@@ -132,6 +158,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       posState.push({ id: uid(), bezeichnung: '', einheit: '', menge: 1, einzelpreis: 0, steuersatz: defaultSteuersatz });
       render();
     });
+    host.querySelector('#btn-import-positionen').addEventListener('click', () => openImportModal());
 
     const vorlageBtn = host.querySelector('#btn-add-vorlage');
     if (vorlageBtn) {
@@ -153,6 +180,54 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       await put('vorlagen', { id: uid(), name: name.trim(), positionen: posState.map((p) => ({ ...p, id: uid() })) });
       toast('Vorlage gespeichert', 'success');
     });
+
+    function openImportModal() {
+      const { body, close } = openModal({
+        title: 'Positionen aus CSV/Excel importieren',
+        wide: true,
+        bodyHtml: `
+          <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Kurztext;Menge;Einheit;Einzelpreis;USt;Langtext</code> (Langtext optional) – nur Kurztext ist Pflicht. Wird an die bestehenden Positionen angehängt. Eine optionale Kopfzeile wird erkannt.</p>
+          <div class="field" style="margin-bottom:10px">
+            <label>CSV- oder Excel-Datei</label>
+            <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+          </div>
+          <div class="field">
+            <label>oder CSV-Text einfügen</label>
+            <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Kabel NYM-J 3x1,5mm²;50;m;1,20;19
+Steckdose montieren;4;Std.;65;19"></textarea>
+          </div>
+          <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+          </div>
+        `,
+      });
+      body.querySelector('#btn-cancel').addEventListener('click', close);
+      body.querySelector('#import-file').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const isExcel = /\.xlsx?$/i.test(file.name);
+        try {
+          body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+        } catch (err) {
+          toast(err.message, 'danger');
+        }
+      });
+      body.querySelector('#btn-do-import').addEventListener('click', () => {
+        const text = body.querySelector('#import-text').value;
+        const { rows, errors } = parsePositionenCsv(text, defaultSteuersatz);
+        if (rows.length === 0) {
+          body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
+          return;
+        }
+        posState.push(...rows);
+        toast(`${rows.length} Position(en) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+        close();
+        render();
+      });
+    }
 
     function updateSum(row, i) {
       const p = posState[i];
