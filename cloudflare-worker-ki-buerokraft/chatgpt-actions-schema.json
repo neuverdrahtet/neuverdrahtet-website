@@ -1567,6 +1567,51 @@
         }
       }
     },
+    "/stock-movements": {
+      "get": {
+        "operationId": "searchAllStockMovements",
+        "summary": "Lagerbewegungen artikelübergreifend abrufen (nur lesen)",
+        "description": "Historie der Zu-/Abgänge über alle Artikel hinweg, neueste zuerst, inkl. Artikelname. Für Fragen wie 'Was waren die letzten Lagerbewegungen?' diesen Endpunkt nutzen statt searchStockMovements, wenn keine bestimmte Artikel-ID bekannt ist.",
+        "parameters": [
+          {
+            "name": "article_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional: nur Bewegungen dieses Artikels."
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default 50, Obergrenze 100)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste der Lagerbewegungen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/articles/{id}/stock-movements": {
       "get": {
         "operationId": "searchStockMovements",

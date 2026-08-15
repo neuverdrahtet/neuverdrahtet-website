@@ -1202,6 +1202,24 @@ export default {
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
+      // --- Lagerbewegungen artikelübergreifend (z.B. "was waren die letzten Zu-/Abgänge?"
+      // ohne dass die KI vorher eine bestimmte Artikel-ID kennen muss). ---
+      if (teile[0] === 'stock-movements' && !teile[1]) {
+        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+        const [bewegungen, katalog] = await Promise.all([
+          firestoreList({ accessToken, projectId, collection: 'lagerbewegungen' }),
+          firestoreList({ accessToken, projectId, collection: 'katalog' }),
+        ]);
+        const artikelNamen = new Map(katalog.map((k) => [k.id, k.bezeichnung || '']));
+        const articleId = q.get('article_id');
+        let liste = articleId ? bewegungen.filter((b) => b.katalogId === articleId) : bewegungen;
+        liste = liste.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+        await logAction(ctx, { action: 'stock-movements.search', status: 'success' });
+        if (q.get('count') === 'true') return okResponse({ count: liste.length });
+        const limit = Math.min(Number(q.get('limit')) || 50, 100);
+        return okResponse(liste.slice(0, limit).map((b) => ({ ...stockMovementToApi(b), article_name: artikelNamen.get(b.katalogId) || '' })));
+      }
+
       // --- Lagerbestand (Materialwirtschaft, Artikel mit bestandTracking=true) - lesen + Zu-/Abgänge buchen ---
       if (teile[0] === 'articles' && teile[1] && teile[2] === 'stock-movements') {
         const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
