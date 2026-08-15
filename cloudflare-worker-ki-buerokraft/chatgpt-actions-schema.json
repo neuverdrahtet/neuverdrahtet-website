@@ -604,6 +604,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele offene Aufgaben haben wir?') immer count=true nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {
@@ -907,6 +923,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele Angebote haben wir?') immer count=true nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {
@@ -1058,6 +1090,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele Rechnungen sind überfällig?') immer count=true nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {

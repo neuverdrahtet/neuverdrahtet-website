@@ -955,7 +955,9 @@ export default {
           if (projectIdFilter) aufgaben = aufgaben.filter((a) => a.projektId === projectIdFilter);
           if (assignedTo) aufgaben = aufgaben.filter((a) => a.zugewiesenAn === assignedTo);
           await logAction(ctx, { action: 'tasks.search', status: 'success' });
-          return okResponse(aufgaben.map(taskToApi));
+          if (q.get('count') === 'true') return okResponse({ count: aufgaben.length });
+          const taskLimit = Math.min(Number(q.get('limit')) || 100, 100);
+          return okResponse(aufgaben.slice(0, taskLimit).map(taskToApi));
         }
         if (request.method === 'GET' && teile[1]) {
           const a = await firestoreGet({ accessToken, projectId, collection: 'aufgaben', id: teile[1] });
@@ -1045,7 +1047,9 @@ export default {
           if (dateFrom) angebote = angebote.filter((a) => (a.datum || '') >= dateFrom);
           if (dateTo) angebote = angebote.filter((a) => (a.datum || '') <= dateTo);
           await logAction(ctx, { action: 'quotes.search', status: 'success' });
-          return okResponse(angebote.map(quoteToApi));
+          if (q.get('count') === 'true') return okResponse({ count: angebote.length });
+          const quoteLimit = Math.min(Number(q.get('limit')) || 100, 100);
+          return okResponse(angebote.slice(0, quoteLimit).map(quoteToApi));
         }
         if (request.method === 'GET' && teile[1]) {
           const a = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: teile[1] });
@@ -1103,7 +1107,9 @@ export default {
           if (dateFrom) rechnungen = rechnungen.filter((r) => (r.datum || '') >= dateFrom);
           if (dateTo) rechnungen = rechnungen.filter((r) => (r.datum || '') <= dateTo);
           await logAction(ctx, { action: 'invoices.search', status: 'success' });
-          return okResponse(rechnungen.map(invoiceToApi));
+          if (q.get('count') === 'true') return okResponse({ count: rechnungen.length });
+          const invoiceLimit = Math.min(Number(q.get('limit')) || 100, 100);
+          return okResponse(rechnungen.slice(0, invoiceLimit).map(invoiceToApi));
         }
         if (request.method === 'GET' && teile[1]) {
           const r = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: teile[1] });
