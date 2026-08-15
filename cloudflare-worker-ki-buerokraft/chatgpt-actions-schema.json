@@ -1357,6 +1357,22 @@
               "type": "boolean"
             },
             "description": "Nur Artikel, deren Bestand auf oder unter dem Mindestbestand liegt (nur Artikel mit aktivierter Bestandsführung)"
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele Artikel haben wir?') immer count=true statt der vollen Liste nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {
@@ -1384,6 +1400,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele Leistungen haben wir?') immer count=true statt der vollen Liste nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {
@@ -1411,6 +1443,22 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur die Anzahl liefern (als {\"count\": <Zahl>}) statt der vollen Liste. Bei reinen Zählfragen ('Wie viele Positionen sind in der Preisliste?') immer count=true statt der vollen Liste nutzen."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximale Anzahl Ergebnisse (Default und Obergrenze: 100)."
           }
         ],
         "responses": {

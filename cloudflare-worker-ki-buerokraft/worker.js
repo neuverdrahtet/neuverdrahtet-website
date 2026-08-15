@@ -1244,7 +1244,13 @@ export default {
         if (gewerk) katalog = katalog.filter((k) => k.gewerk === gewerk);
         if (q.get('low_stock') === 'true') katalog = katalog.filter((k) => k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0));
         await logAction(ctx, { action: `${teile[0]}.search`, status: 'success' });
-        return okResponse(katalog.map(articleToApi));
+        // Bei count=true nur die Anzahl liefern statt der vollen Liste - eine simple
+        // "Wie viele Artikel haben wir?"-Frage soll nicht am ChatGPT-Antwortlimit
+        // scheitern, wenn der Katalog groß ist. limit begrenzt aus demselben Grund
+        // auch die normale Listenausgabe (Default/Maximum 100).
+        if (q.get('count') === 'true') return okResponse({ count: katalog.length });
+        const limit = Math.min(Number(q.get('limit')) || 100, 100);
+        return okResponse(katalog.slice(0, limit).map(articleToApi));
       }
 
       // --- Mitarbeiter (Vorgabe Abschnitt 27 - eingeschränkte Felder, keine sensiblen Personaldaten) ---
