@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
@@ -31,6 +31,43 @@ const GRUENDE_STORNO = [
   { id: 'korrektur', titel: 'Preis-/Positionskorrektur nötig' },
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
+
+function normalizeRechnungStatus(text) {
+  const t = (text || '').trim().toLowerCase();
+  if (['teilbezahlt', 'partial'].includes(t)) return 'teilbezahlt';
+  if (['bezahlt', 'paid', 'bezahlt.'].includes(t)) return 'bezahlt';
+  if (['storniert', 'cancelled', 'storno'].includes(t)) return 'storniert';
+  return 'offen';
+}
+
+// Bulk-Import ganzer Rechnungen für die Migration bestehender Rechnungslisten
+// aus Excel - analog zum Angebote-Import. Importierte Rechnungen bleiben
+// bewusst unversendet (versendet:false), damit sie nicht sofort GoBD-gesperrt
+// sind und sich Fehler noch korrigieren lassen; die Rechnungsnummer selbst
+// wird trotzdem auf Eindeutigkeit geprüft, da GoBD lückenlose, eindeutige
+// Nummern verlangt. Der Kunde muss bereits existieren (kein automatisches
+// Anlegen, um keine Dubletten durch Tippfehler zu erzeugen).
+function parseRechnungenCsv(text, kunden, defaultSteuersatz) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^kunde(nname)?$/i.test(cols[0] || '')) continue;
+    const [kundenname, datum, faelligAm, betreff, nettoRaw, ustRaw, statusRaw, nummer, bezahltAm] = cols;
+    if (!kundenname) { errors.push(`${line} (kein Kundenname)`); continue; }
+    const kunde = kunden.find((k) => (k.firma || '').trim().toLowerCase() === kundenname.trim().toLowerCase());
+    if (!kunde) { errors.push(`${line} (Kunde "${kundenname}" nicht gefunden - erst in Werkora anlegen)`); continue; }
+    const netto = Number(String(nettoRaw || '0').replace(/\./g, '').replace(',', '.')) || 0;
+    rows.push({
+      kundeId: kunde.id, datum: datum || todayISO(), faelligAm: faelligAm || '', betreff: betreff || '',
+      netto, steuersatz: ustRaw ? Number(String(ustRaw).replace(',', '.')) || defaultSteuersatz : defaultSteuersatz,
+      status: normalizeRechnungStatus(statusRaw), nummer: nummer || '', bezahltAm: bezahltAm || '',
+    });
+  }
+  return { rows, errors };
+}
 
 function openStornoGrundDialog(nummer, onConfirm) {
   const { body: dBody, close: dClose } = openModal({
@@ -142,6 +179,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Rechnungen</h1>
       <div class="actions">
+        <button class="btn" id="btn-import">⇪ Rechnungen importieren</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn btn-primary" id="btn-new">+ Neue Rechnung</button>
@@ -307,6 +345,96 @@ export async function render(container) {
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
+  container.querySelector('#btn-import').addEventListener('click', () => openRechnungenImport());
+
+  function openRechnungenImport() {
+    const { body, close } = openModal({
+      title: 'Rechnungen importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Kundenname;Rechnungsdatum (JJJJ-MM-TT);Fällig am (JJJJ-MM-TT);Betreff;Nettobetrag;USt-Satz;Status;Rechnungsnummer;Bezahlt am (JJJJ-MM-TT)</code> – nur Kundenname ist Pflicht, alles andere optional. Der Kunde muss bereits als Kunde in Werkora existieren (Name muss exakt übereinstimmen). Je Zeile wird eine Rechnung mit einer einzelnen Pauschalposition angelegt - für Rechnungen mit mehreren Einzelpositionen bitte stattdessen einzeln anlegen und dort "aus CSV/Excel importieren" bei den Positionen nutzen. Ohne Rechnungsnummer wird automatisch fortlaufend nummeriert; eine angegebene Nummer wird auf Eindeutigkeit geprüft (GoBD). Importierte Rechnungen bleiben unversendet/bearbeitbar. Status: offen/teilbezahlt/bezahlt/storniert (ohne Angabe: offen). Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Mustermann GmbH;2026-01-15;2026-01-29;Elektroinstallation Neubau;4500;19;offen;;"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = parseRechnungenCsv(text, kunden, settings.standardSteuersatz);
+      // GoBD verlangt eindeutige Rechnungsnummern - vorgegebene Nummern hier
+      // gegen bestehende UND bereits in dieser Import-Charge verwendete Nummern
+      // prüfen, statt sie stillschweigend zu duplizieren.
+      const belegteNummern = new Set(rechnungen.map((r) => (r.nummer || '').trim().toLowerCase()));
+      const gueltigeRows = [];
+      for (const row of rows) {
+        if (row.nummer && belegteNummern.has(row.nummer.trim().toLowerCase())) {
+          errors.push(`Rechnungsnummer "${row.nummer}" ist bereits vergeben - Zeile übersprungen.`);
+          continue;
+        }
+        if (row.nummer) belegteNummern.add(row.nummer.trim().toLowerCase());
+        gueltigeRows.push(row);
+      }
+      if (gueltigeRows.length === 0) {
+        body.querySelector('#import-preview').textContent = errors.length
+          ? `Keine gültigen Zeilen gefunden:\n${errors.join('\n')}`
+          : 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      let currentSettings = await getSettings();
+      for (const row of gueltigeRows) {
+        const positionen = [{
+          id: uid(), bezeichnung: row.betreff || 'Pauschalposition', beschreibung: '',
+          einheit: 'Psch.', menge: 1, einzelpreis: row.netto, steuersatz: row.steuersatz,
+        }];
+        const totals = calcTotals(positionen);
+        let nummer = row.nummer;
+        if (!nummer) {
+          const next = nextDailyNummer(currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler });
+          nummer = next.nummer;
+          currentSettings = { ...currentSettings, rechnungNummerDatum: next.datum, rechnungNummerZaehler: next.zaehler };
+        }
+        const rechnung = {
+          id: uid(), nummer, kundeId: row.kundeId, projektId: '', angebotId: null, auftragsbestaetigungId: null,
+          datum: row.datum, leistungsdatum: row.datum, faelligAm: row.faelligAm || addDays(row.datum, settings.zahlungszielTage || 14),
+          status: row.status, betreff: row.betreff, notizen: '', positionen, bezahltAm: row.status === 'bezahlt' ? (row.bezahltAm || row.datum) : '',
+          createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
+          steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
+          verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
+          zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
+          netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+        };
+        await put('rechnungen', rechnung);
+        await syncBuchung(rechnung);
+        rechnungen.push(rechnung);
+      }
+      await setSettings({ rechnungNummerDatum: currentSettings.rechnungNummerDatum, rechnungNummerZaehler: currentSettings.rechnungNummerZaehler });
+      toast(`${gueltigeRows.length} Rechnung(en) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      applyFilter();
+    });
+  }
 
   // Kommt der Nutzer über den "+ Rechnung"-Schnellknopf aus der Projekt-Akte,
   // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
