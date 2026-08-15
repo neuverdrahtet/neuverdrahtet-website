@@ -1,10 +1,58 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, formatDate, todayISO, toast, farbeAusText } from '../utils.js';
+import { uid, escapeHtml, formatDate, todayISO, toast, farbeAusText, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete, optionList } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { loadZXing } from '../vendorLoader.js';
 
 const FARBEN = ['#14b8a6', '#4d8bf0', '#a463f2', '#f0a020', '#ef4444', '#16a085', '#d35400', '#2c3e50'];
+
+// Geräte und Flotten haben unterschiedliche Felder (z.B. Standort vs.
+// Kennzeichen/Kilometerstand) - deshalb zwei getrennte CSV-Parser statt
+// eines gemeinsamen. zugewiesenAn wird bewusst nicht importiert (freier
+// Name lässt sich nicht zuverlässig auf einen Mitarbeiter-Datensatz
+// abbilden) - importierte Einträge landen also erstmal "im Lager".
+function parseGeraeteCsv(text) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^name$/i.test(cols[0] || '')) continue;
+    const [name, kategorie, standort, hersteller, modell, naechstePruefung, anschaffungswert, anschaffungsdatum, notizen] = cols;
+    if (!name) { errors.push(line); continue; }
+    const neueId = uid();
+    rows.push({
+      id: neueId, name, kategorie: kategorie || '', standort: standort || '', hersteller: hersteller || '', modell: modell || '',
+      status: 'verfuegbar', naechstePruefung: naechstePruefung || '', zugewiesenAn: '', notizen: notizen || '',
+      anschaffungswert: anschaffungswert ? Number(String(anschaffungswert).replace(',', '.')) || '' : '',
+      anschaffungsdatum: anschaffungsdatum || '', farbe: farbeAusText(neueId, FARBEN),
+    });
+  }
+  return { rows, errors };
+}
+
+function parseFlottenCsv(text) {
+  const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  const errors = [];
+  for (const line of lines) {
+    const cols = line.split(delimiter).map((c) => c.trim());
+    if (/^bezeichnung$/i.test(cols[0] || '')) continue;
+    const [bezeichnung, kennzeichen, typ, hersteller, modell, tuvDatum, kilometerstand, anschaffungswert, anschaffungsdatum, notizen] = cols;
+    if (!bezeichnung) { errors.push(line); continue; }
+    const neueId = uid();
+    rows.push({
+      id: neueId, bezeichnung, kennzeichen: kennzeichen || '', typ: typ || '', hersteller: hersteller || '', modell: modell || '',
+      status: 'verfuegbar', tuvDatum: tuvDatum || '', zugewiesenAn: '', notizen: notizen || '',
+      kilometerstand: kilometerstand ? Number(String(kilometerstand).replace(',', '.')) || '' : '',
+      anschaffungswert: anschaffungswert ? Number(String(anschaffungswert).replace(',', '.')) || '' : '',
+      anschaffungsdatum: anschaffungsdatum || '', farbe: farbeAusText(neueId, FARBEN),
+    });
+  }
+  return { rows, errors };
+}
 
 // Vorschlagslisten für das Hersteller-Feld (Autovervollständigung) - deckt die
 // im Handwerk gängigsten Marken ab, ersetzt aber keine freie Eingabe.
@@ -164,6 +212,7 @@ export async function render(container) {
       <h1>Geräte &amp; Flotten</h1>
       <div class="actions">
         <button class="btn" id="btn-scan">📷 Scannen</button>
+        <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neu</button>
       </div>
     </div>
@@ -266,6 +315,63 @@ export async function render(container) {
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-scan').addEventListener('click', () => openScanModal());
+  container.querySelector('#btn-import').addEventListener('click', () => openImport());
+
+  function openImport() {
+    const isGeraet = tab === 'geraete';
+    const { body, close } = openModal({
+      title: isGeraet ? 'Geräte importieren' : 'Fahrzeuge importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: ${isGeraet
+          ? '<code>Name;Kategorie;Standort;Hersteller;Modell;Nächste Prüfung (JJJJ-MM-TT);Anschaffungswert;Anschaffungsdatum (JJJJ-MM-TT);Notizen</code> – nur Name ist Pflicht.'
+          : '<code>Bezeichnung;Kennzeichen;Typ;Hersteller;Modell;TÜV/HU (JJJJ-MM-TT);Kilometerstand;Anschaffungswert;Anschaffungsdatum (JJJJ-MM-TT);Notizen</code> – nur Bezeichnung ist Pflicht.'}
+          Status wird auf "Verfügbar" gesetzt, Zuweisung bleibt leer (Lager) - beides danach einzeln in Werkora anpassbar. Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="${isGeraet
+            ? 'Bohrhammer;Maschine;Lager Essen;Hilti;TE 30-C;2027-03-01;450;2024-05-10;'
+            : 'Sprinter 1;Nord;;Mercedes-Benz;Sprinter 316 CDI;2026-11-15;82000;;'}"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await file.text();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const { rows, errors } = isGeraet ? parseGeraeteCsv(text) : parseFlottenCsv(text);
+      if (rows.length === 0) {
+        body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
+        return;
+      }
+      const storeName = isGeraet ? 'geraete' : 'flotten';
+      for (const row of rows) await put(storeName, row);
+      if (isGeraet) geraete = geraete.concat(rows);
+      else flotten = flotten.concat(rows);
+      toast(`${rows.length} ${isGeraet ? 'Gerät(e)' : 'Fahrzeug(e)'} importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      renderTable();
+    });
+  }
 
   function findByQrPayload(text) {
     const match = /^NVQR:(geraet|flotte):(.+)$/.exec((text || '').trim());
