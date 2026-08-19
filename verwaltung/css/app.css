@@ -1,6 +1,7 @@
 :root {
-  --navy: #08090b;
-  --navy-2: #0f1013;
+  --navy: #16213e;
+  --navy-2: #1c2b4a;
+  --sidebar-active: #3a6ea5;
   --accent: #ff5a36;
   --accent-2: #e8492a;
   --bg: #0b0b0d;
@@ -172,7 +173,7 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   white-space: nowrap;
 }
 .sidebar-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
-.sidebar-nav a.active { background: var(--accent); color: #fff; font-weight: 600; }
+.sidebar-nav a.active { background: var(--sidebar-active); color: #fff; font-weight: 600; }
 .sidebar-nav-label {
   margin: 10px 0 0;
   padding: 0 12px;
