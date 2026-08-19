@@ -66,6 +66,9 @@ export function buildDocHtml({
   let positionsHtml = '';
   if (showPositions && positionen && positionen.length) {
     const rows = positionen.map((p, i) => {
+      if (p.typ === 'ueberschrift') {
+        return `<tr><td colspan="6" style="font-weight:700;padding-top:10px">${escapeHtml(p.bezeichnung || '')}</td></tr>`;
+      }
       const menge = Number(p.menge) || 0;
       const preis = Number(p.einzelpreis) || 0;
       const summe = menge * preis;

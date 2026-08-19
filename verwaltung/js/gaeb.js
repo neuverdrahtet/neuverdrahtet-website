@@ -19,7 +19,11 @@ function amount(n) {
  * verzeichnisses an einen Architekten/Ausschreiber.
  */
 export function buildGaebXml({ projektName, nummer, datum, positionen, settings }) {
-  const items = (positionen || []).map((p, i) => {
+  // Überschrift-Zeilen (reine Abschnittstitel ohne Menge/Preis) werden hier
+  // nicht mit exportiert - dieser einfache Exporter bildet nur flache Items
+  // ab, keine GAEB-"Titel"-Gliederungsebenen; ein Item mit Menge/Preis 0
+  // wäre nur eine bedeutungslose Leerzeile im Leistungsverzeichnis.
+  const items = (positionen || []).filter((p) => p.typ !== 'ueberschrift').map((p, i) => {
     const menge = Number(p.menge) || 0;
     const preis = Number(p.einzelpreis) || 0;
     const gesamt = menge * preis;

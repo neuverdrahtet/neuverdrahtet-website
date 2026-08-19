@@ -194,14 +194,16 @@ export async function buildDocPdfBlob(opts) {
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
       head: [['Pos.', 'Bezeichnung', 'Menge', 'Einheit', 'Einzel €', 'Gesamt €']],
-      body: opts.positionen.map((p, i) => [
-        p.posNr || String(i + 1),
-        p.bezeichnung || '',
-        String(p.menge ?? ''),
-        p.einheit || '',
-        formatCurrency(p.einzelpreis),
-        formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
-      ]),
+      body: opts.positionen.map((p, i) => (p.typ === 'ueberschrift'
+        ? [{ content: p.bezeichnung || '', colSpan: 6, styles: { fontStyle: 'bold' } }]
+        : [
+          p.posNr || String(i + 1),
+          p.bezeichnung || '',
+          String(p.menge ?? ''),
+          p.einheit || '',
+          formatCurrency(p.einzelpreis),
+          formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
+        ])),
       styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
       headStyles: { fillColor: accentRgb },
       columnStyles: { 0: { cellWidth: 14 } },

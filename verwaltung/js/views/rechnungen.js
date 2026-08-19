@@ -321,7 +321,7 @@ export async function render(container, route) {
       kundenById[kunde.id] = updatedKunde;
     }
 
-    const lineItems = rechnung.positionen.map((p) => ({
+    const lineItems = rechnung.positionen.filter((p) => p.typ !== 'ueberschrift').map((p) => ({
       type: 'custom',
       name: p.bezeichnung || 'Position',
       description: p.beschreibung || undefined,

@@ -26,6 +26,26 @@ function parsePositionenCsv(text, defaultSteuersatz) {
   return { rows, errors };
 }
 
+// Überschrift-Positionen (typ: 'ueberschrift') gliedern die Positionsliste in
+// nummerierte Abschnitte (1. Material/Lohn, 2. Abrissarbeiten, ...) - jede
+// "echte" Position darunter bekommt automatisch "<Abschnitt>.<laufende Nr.>"
+// als Pos.-Nr., z.B. 1.1/1.2, nach der nächsten Überschrift wieder 2.1/2.2.
+// Wird die Pos.-Nr. von Hand geändert (posNrManual), überschreibt die
+// Automatik diese Zeile danach nicht mehr.
+function renumberPositionen(posState) {
+  let abschnitt = 0;
+  let laufend = 0;
+  for (const p of posState) {
+    if (p.typ === 'ueberschrift') {
+      abschnitt++;
+      laufend = 0;
+    } else {
+      laufend++;
+      if (!p.posNrManual) p.posNr = abschnitt > 0 ? `${abschnitt}.${laufend}` : String(laufend);
+    }
+  }
+}
+
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
     .filter(([rate]) => Number(rate) > 0)
@@ -48,6 +68,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
   }
 
   function render() {
+    renumberPositionen(posState);
     const totals = calcTotals(posState);
     if (readOnly) {
       host.innerHTML = `
@@ -58,7 +79,9 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
             <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th>
           </tr></thead>
           <tbody>
-            ${posState.map((p, i) => `
+            ${posState.map((p, i) => {
+              if (p.typ === 'ueberschrift') return `<tr class="row-ueberschrift"><td colspan="7"><strong>${escapeHtml(p.bezeichnung || '')}</strong></td></tr>`;
+              return `
               <tr>
                 <td class="col-posnr">${escapeHtml(p.posNr || String(i + 1))}</td>
                 <td>${escapeHtml(p.bezeichnung || '')}</td>
@@ -69,7 +92,8 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
                 <td class="col-sum">${formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</td>
               </tr>
               ${p.beschreibung ? `<tr class="row-langtext"><td></td><td colspan="6">${escapeHtml(p.beschreibung)}</td></tr>` : ''}
-            `).join('')}
+            `;
+            }).join('')}
           </tbody>
         </table>
         <div class="totals-box">${totalsHtml(totals)}</div>
@@ -83,9 +107,16 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
           <th class="col-preis">Einzelpreis</th><th class="col-steuer">USt.%</th><th class="col-sum">Summe</th><th class="col-del"></th>
         </tr></thead>
         <tbody>
-          ${posState.map((p, i) => `
+          ${posState.map((p, i) => {
+            if (p.typ === 'ueberschrift') return `
+              <tr class="row-ueberschrift" data-i="${i}">
+                <td colspan="7"><input class="f-ueberschrift-text" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Neue Überschrift / Abschnittstitel, z.B. &quot;Abrissarbeiten&quot;"></td>
+                <td class="col-del"><button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
+              </tr>
+            `;
+            return `
             <tr data-i="${i}">
-              <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen"></td>
+              <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen - wird sonst automatisch anhand der Überschriften vergeben"></td>
               <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext"></td>
               <td class="col-menge"><input class="f-menge" type="number" step="0.01" value="${p.menge ?? 1}"></td>
               <td><input class="f-einheit" value="${escapeHtml(p.einheit || '')}"></td>
@@ -98,7 +129,8 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
               <td></td>
               <td colspan="7"><textarea class="f-langtext" rows="2" placeholder="Langtext / ausführliche Beschreibung (optional, erscheint z.B. im PDF)">${escapeHtml(p.beschreibung || '')}</textarea></td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
       <div class="flex-row flex-wrap" style="margin-bottom:14px">
@@ -111,6 +143,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         </select>
         <button type="button" class="btn btn-sm" id="btn-add-katalog">+ übernehmen</button>
         <button type="button" class="btn btn-sm" id="btn-add-manual">+ freie Position</button>
+        <button type="button" class="btn btn-sm" id="btn-add-ueberschrift">+ Überschrift</button>
         <button type="button" class="btn btn-sm" id="btn-import-positionen">⇪ aus CSV/Excel importieren</button>
         ${vorlagen.length ? `
           <select class="f-vorlage-select">
@@ -126,13 +159,17 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
 
     host.querySelectorAll('tbody tr:not(.row-langtext)').forEach((row) => {
       const i = Number(row.dataset.i);
-      row.querySelector('.f-posnr').addEventListener('input', (e) => { posState[i].posNr = e.target.value; });
+      row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
+      if (posState[i].typ === 'ueberschrift') {
+        row.querySelector('.f-ueberschrift-text').addEventListener('input', (e) => { posState[i].bezeichnung = e.target.value; });
+        return;
+      }
+      row.querySelector('.f-posnr').addEventListener('input', (e) => { posState[i].posNr = e.target.value; posState[i].posNrManual = true; });
       row.querySelector('.f-bez').addEventListener('input', (e) => { posState[i].bezeichnung = e.target.value; });
       row.querySelector('.f-einheit').addEventListener('input', (e) => { posState[i].einheit = e.target.value; });
       row.querySelector('.f-menge').addEventListener('input', (e) => { posState[i].menge = Number(e.target.value); updateSum(row, i); });
       row.querySelector('.f-preis').addEventListener('input', (e) => { posState[i].einzelpreis = Number(e.target.value); updateSum(row, i); });
       row.querySelector('.f-steuer').addEventListener('input', (e) => { posState[i].steuersatz = Number(e.target.value); refreshTotalsOnly(); });
-      row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
     });
     host.querySelectorAll('tr.row-langtext').forEach((row) => {
       const i = Number(row.dataset.i);
@@ -156,6 +193,10 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     });
     host.querySelector('#btn-add-manual').addEventListener('click', () => {
       posState.push({ id: uid(), bezeichnung: '', einheit: '', menge: 1, einzelpreis: 0, steuersatz: defaultSteuersatz });
+      render();
+    });
+    host.querySelector('#btn-add-ueberschrift').addEventListener('click', () => {
+      posState.push({ id: uid(), typ: 'ueberschrift', bezeichnung: '' });
       render();
     });
     host.querySelector('#btn-import-positionen').addEventListener('click', () => openImportModal());

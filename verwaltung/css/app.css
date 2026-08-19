@@ -1016,6 +1016,10 @@ table.data-table th.col-select, table.data-table td.col-select {
 .pos-table tr.row-langtext td { padding-top: 0; padding-bottom: 8px; }
 .pos-table tr.row-langtext textarea.f-langtext { width: 100%; resize: vertical; min-height: 36px; padding: 6px 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 12.5px; font-family: inherit; color: var(--text-mute); }
 .pos-table tr.row-langtext td:not(:has(textarea)) { color: var(--text-mute); font-size: 12.5px; white-space: pre-wrap; }
+.pos-table tr.row-ueberschrift td { padding-top: 14px; border-top: 1px solid var(--border); }
+.pos-table tr.row-ueberschrift:first-child td { border-top: none; padding-top: 4px; }
+.pos-table tr.row-ueberschrift input.f-ueberschrift-text { font-weight: 700; border: none; background: none; padding: 4px 0; font-size: 13.5px; }
+.pos-table tr.row-ueberschrift strong { font-size: 13.5px; }
 .totals-box { margin-left: auto; width: 260px; }
 .totals-box .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13.5px; }
 .totals-box .row.grand { font-weight: 700; font-size: 15px; border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }

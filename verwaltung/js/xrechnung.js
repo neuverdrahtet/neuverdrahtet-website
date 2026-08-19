@@ -101,7 +101,11 @@ export function buildXRechnungXml(opts) {
         </cac:TaxCategory>
       </cac:TaxSubtotal>`).join('');
 
-  const lines = (positionen || []).map((p, i) => {
+  // Überschrift-Zeilen (reine Abschnittstitel ohne Menge/Preis) sind keine
+  // gültigen XRechnung-Rechnungspositionen und werden hier nicht mit
+  // exportiert - eine InvoiceLine mit Menge/Preis 0 wäre nach EN16931 ein
+  // bedeutungsloser bzw. ungültiger Eintrag.
+  const lines = (positionen || []).filter((p) => p.typ !== 'ueberschrift').map((p, i) => {
     const netto = (Number(p.menge) || 0) * (Number(p.einzelpreis) || 0);
     const satz = Number(p.steuersatz) || 0;
     const zeilenKategorie = steuerart === 'regel' ? (satz === 0 ? 'Z' : 'S') : kategorie;
