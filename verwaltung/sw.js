@@ -2,7 +2,7 @@ import { initializeApp } from './js/vendor/firebase/firebase-app.js';
 import { getMessaging, onBackgroundMessage } from './js/vendor/firebase/firebase-messaging-sw.js';
 import { firebaseConfig } from './js/firebase-config.js';
 
-const CACHE_NAME = 'nv-verwaltung-v1';
+const CACHE_NAME = 'nv-verwaltung-v2';
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -25,8 +25,14 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
+  // cache: 'no-store' erzwingt eine echte Netzwerkanfrage statt einer
+  // stillen Auslieferung aus dem normalen HTTP-Cache des Browsers - sonst
+  // kann trotz "network-first" hier eine veraltete JS-Datei durchrutschen,
+  // wenn der Hoster für statische Dateien Cache-Control-Header mit
+  // Gültigkeitsdauer setzt (gemeldeter Fall: Update kam nicht an, obwohl
+  // schon live).
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-store' })
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
