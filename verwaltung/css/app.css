@@ -4,6 +4,7 @@
   --sidebar-active: #3a6ea5;
   --accent: #12b8c9;
   --accent-2: #0d9aa9;
+  --accent-rgb: 18, 184, 201;
   --bg: #0b0b0d;
   --card: #1e1e24;
   --card-2: #17171b;
@@ -454,7 +455,7 @@ table.data-table th.col-select, table.data-table td.col-select {
 .badge-success { background: var(--success-bg); color: var(--success); }
 .badge-danger { background: var(--danger-bg); color: var(--danger); }
 .badge-warn { background: var(--warn-bg); color: var(--warn); }
-.badge-accent { background: rgba(255, 90, 54, 0.16); color: var(--accent); }
+.badge-accent { background: rgba(var(--accent-rgb), 0.16); color: var(--accent); }
 .badge-purple { background: rgba(164, 99, 242, 0.16); color: #a463f2; }
 .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 
@@ -578,7 +579,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   transition: border-color .15s ease, color .15s ease, background .15s ease;
 }
 .toggle-group button:hover { color: var(--text); }
-.toggle-group button.active { border-color: var(--accent); color: var(--text); background: rgba(255, 90, 54, 0.12); }
+.toggle-group button.active { border-color: var(--accent); color: var(--text); background: rgba(var(--accent-rgb), 0.12); }
 
 /* Besonderheiten-Auswahl: einzelne Radio-Pills in einer Zeile */
 .pill-radio-group { display: flex; gap: 14px; flex-wrap: wrap; }
@@ -595,7 +596,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   cursor: pointer;
   transition: border-color .15s ease, background .15s ease;
 }
-.file-dropzone:hover, .file-dropzone.dragover { border-color: var(--accent); background: rgba(255, 90, 54, 0.06); }
+.file-dropzone:hover, .file-dropzone.dragover { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.06); }
 .file-dropzone .dz-icon { font-size: 22px; margin-bottom: 6px; }
 .file-dropzone .dz-hint { color: var(--text-mute); font-size: 12px; margin-top: 4px; }
 .file-dropzone input[type="file"] { display: none; }
@@ -837,7 +838,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   margin-bottom: 2px;
 }
 .cal-event {
-  background: rgba(255, 90, 54, 0.16);
+  background: rgba(var(--accent-rgb), 0.16);
   color: var(--accent);
   border-radius: 5px;
   padding: 1px 5px;
@@ -931,7 +932,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   cursor: pointer;
 }
 .plantafel-day:last-child { border-right: none; }
-.plantafel-day.is-today { background: rgba(255, 90, 54, 0.06); }
+.plantafel-day.is-today { background: rgba(var(--accent-rgb), 0.06); }
 .plantafel-day:hover { background: var(--card-2); }
 .plantafel-bars { position: absolute; inset: 0; pointer-events: none; }
 .plantafel-bar {
@@ -1510,7 +1511,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   cursor: pointer; background: var(--card);
 }
 .karte-list-item:hover { border-color: #46464f; }
-.karte-list-item.active { border-color: var(--accent); background: rgba(255, 90, 54, 0.08); }
+.karte-list-item.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .karte-list-item-body { min-width: 0; flex: 1; }
 @media (max-width: 880px) {
   .karte-split { flex-direction: column; }
@@ -1536,7 +1537,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   cursor: pointer; background: var(--card);
 }
 .postfach-row:hover { border-color: #46464f; }
-.postfach-row.active { border-color: var(--accent); background: rgba(255, 90, 54, 0.08); }
+.postfach-row.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
 .postfach-row.unread strong, .postfach-row.unread .postfach-row-subject { font-weight: 700; }
 .postfach-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .postfach-row-top strong { flex: 1; }

@@ -168,7 +168,7 @@ async function autoErstelleKundeAusAnfrage(email) {
     start: '', ende: '', mitarbeiterIds: [], bereich: 'auftrag', kategorieId: '', gewerk: '',
     // Auffällige Farbe + Kennzeichnung, damit die Karte im Kanban sofort ins
     // Auge fällt - wird beim ersten Öffnen der Karte wieder zurückgesetzt.
-    farbe: '#ff5a36', autoErstellt: true, createdAt: new Date().toISOString(),
+    farbe: '#f59e0b', autoErstellt: true, createdAt: new Date().toISOString(),
   };
   await put('projekte', projekt);
   await put('emails', { ...email, kundeAngelegtId: projekt.id });
@@ -203,7 +203,7 @@ async function autoErstelleTerminAusAnfrage(email, termin, { kundeId, projektId 
     notizen: `Automatisch aus E-Mail-Anfrage erkannt.\n\nBetreff: ${email.subject || ''}`,
     // Auffällige Farbe + Kennzeichnung, damit der Termin in der Plantafel
     // sofort ins Auge fällt - wird beim ersten Öffnen wieder zurückgesetzt.
-    farbe: '#ff5a36', autoErstellt: true, status: terminStatus[0]?.id || 'geplant',
+    farbe: '#f59e0b', autoErstellt: true, status: terminStatus[0]?.id || 'geplant',
   };
   await put('termine', neuerTermin);
   await put('emails', { ...email, terminAngelegtId: neuerTermin.id });
