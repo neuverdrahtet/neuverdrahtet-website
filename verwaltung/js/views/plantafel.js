@@ -43,7 +43,7 @@ function daysBetweenStr(a, b) {
   return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 }
 
-export async function render(container, _route, { autoSync = true } = {}) {
+export async function render(container, route, { autoSync = true } = {}) {
   // Der Google-Kalender-Sync (15-Monats-Fenster, ggf. viele einzelne API-
   // Aufrufe) lief bisher VOR dem ersten Rendern und blockierte damit den
   // kompletten Seitenaufbau - die Plantafel wirkte dadurch spürbar langsam.
@@ -85,6 +85,15 @@ export async function render(container, _route, { autoSync = true } = {}) {
   let viewYear = now.getFullYear();
   let viewMonth = now.getMonth();
   let tagDate = localDateStr(now);
+
+  // Direktsprung auf einen bestimmten Tag, z.B. von der Termine-Liste oder
+  // Tagesübersicht aus per #/plantafel/tag/2026-08-20.
+  const routeParts = (route || '').split('/').filter(Boolean);
+  let initialMode = 'woche';
+  if (routeParts[0] === 'tag' && routeParts[1]) {
+    initialMode = 'tag';
+    tagDate = routeParts[1];
+  }
 
   container.innerHTML = `
     <div class="view-header">
@@ -170,7 +179,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       const result = await syncCalendar();
       const failedHinweis = result.failed ? ` · ${result.failed} übersprungen (keine Berechtigung)` : '';
       toast(`Synchronisiert: ${result.created + result.pulled} von Google, ${result.updated + result.pushedNew} an Google übertragen.${failedHinweis}`, 'success');
-      render(container, _route, { autoSync: false });
+      render(container, route, { autoSync: false });
     } catch (err) {
       toast(err.message, 'danger');
       btn.disabled = false;
@@ -218,7 +227,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
         store: 'terminStatus',
         items: terminStatus,
         canDelete: (it) => !termine.some((t) => (t.status || 'geplant') === it.id),
-        onChange: () => render(container, _route, { autoSync: false }),
+        onChange: () => render(container, route, { autoSync: false }),
       });
     });
   }
@@ -794,4 +803,5 @@ export async function render(container, _route, { autoSync = true } = {}) {
   renderGrid();
   renderTagView();
   renderMonatGrid();
+  if (initialMode !== 'woche') setMode(initialMode);
 }

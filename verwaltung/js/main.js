@@ -16,12 +16,14 @@ import { preloadGis } from './google.js';
 // also genauso schnell wie vorher.
 const routeLoaders = {
   dashboard: () => import('./views/dashboard.js'),
+  tagesuebersicht: () => import('./views/tagesuebersicht.js'),
   kunden: () => import('./views/kunden.js'),
   leadpipeline: () => import('./views/leadpipeline.js'),
   kanban: () => import('./views/kanban.js'),
   projekte: () => import('./views/projekte.js'),
   auftraege: () => import('./views/auftraege.js'),
   plantafel: () => import('./views/plantafel.js'),
+  termine: () => import('./views/termineliste.js'),
   mitarbeiter: () => import('./views/mitarbeiter.js'),
   subunternehmer: () => import('./views/subunternehmer.js'),
   'ki-freigaben': () => import('./views/ki-freigaben.js'),

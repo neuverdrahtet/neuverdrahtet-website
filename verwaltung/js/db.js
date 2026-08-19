@@ -2280,12 +2280,14 @@ export const ZUGRIFFSROLLEN = [
 
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
+  tagesuebersicht: ['admin', 'buero', 'mitarbeiter'],
   kunden: ['admin', 'buero'],
   leadpipeline: ['admin', 'buero'],
   kanban: ['admin', 'buero'],
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
+  termine: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
   urlaubsantraege: ['admin', 'buero', 'mitarbeiter'],
