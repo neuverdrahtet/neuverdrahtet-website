@@ -347,6 +347,10 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 .kpi-card .kpi-label { color: var(--text-mute); font-size: 12.5px; margin-top: 2px; }
 .kpi-card.kpi-danger .kpi-value { color: var(--danger); }
 .kpi-card.kpi-warn .kpi-value { color: var(--warn); }
+.kpi-card.kpi-success .kpi-value { color: var(--success); }
+.kpi-card.kpi-accent .kpi-value { color: var(--accent); }
+.kpi-card.kpi-clickable { cursor: pointer; }
+.kpi-card.kpi-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 .card {
   background: var(--card);

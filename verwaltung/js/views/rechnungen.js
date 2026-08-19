@@ -175,6 +175,12 @@ export async function render(container, route) {
     ],
   });
 
+  const nichtStorniert = rechnungen.filter((r) => r.status !== 'storniert');
+  const kpiOffen = nichtStorniert.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
+  const kpiUeberfaellig = kpiOffen.filter((r) => r.faelligAm && r.faelligAm < today);
+  const kpiBezahlt = nichtStorniert.filter((r) => r.status === 'bezahlt');
+  const summe = (list) => list.reduce((s, r) => s + (r.brutto || 0), 0);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Rechnungen</h1>
@@ -183,6 +189,24 @@ export async function render(container, route) {
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn btn-primary" id="btn-new">+ Neue Rechnung</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-clickable kpi-accent" id="kpi-offen">
+        <div class="kpi-value">${formatCurrency(summe(kpiOffen))}</div>
+        <div class="kpi-label">Offen · ${kpiOffen.length} Rechnung(en)</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-danger" id="kpi-ueberfaellig">
+        <div class="kpi-value">${formatCurrency(summe(kpiUeberfaellig))}</div>
+        <div class="kpi-label">Überfällig · ${kpiUeberfaellig.length} Rechnung(en)</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-success" id="kpi-bezahlt">
+        <div class="kpi-value">${formatCurrency(summe(kpiBezahlt))}</div>
+        <div class="kpi-label">Bezahlt · ${kpiBezahlt.length} Rechnung(en)</div>
+      </div>
+      <div class="kpi-card kpi-clickable" id="kpi-alle">
+        <div class="kpi-value">${formatCurrency(summe(nichtStorniert))}</div>
+        <div class="kpi-label">Gesamt · ${nichtStorniert.length} Rechnung(en)</div>
       </div>
     </div>
     <div class="search-bar">
@@ -345,12 +369,25 @@ export async function render(container, route) {
     }
   }
 
+  function markActiveKpi() {
+    const status = container.querySelector('#status-filter').value;
+    const idByStatus = { 'offen-alle': 'kpi-offen', ueberfaellig: 'kpi-ueberfaellig', bezahlt: 'kpi-bezahlt', '': 'kpi-alle' };
+    container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    const active = container.querySelector(`#${idByStatus[status] || 'kpi-alle'}`);
+    if (active) active.classList.add('kpi-active');
+  }
+
   container.querySelector('#search').addEventListener('input', applyFilter);
-  container.querySelector('#status-filter').addEventListener('change', applyFilter);
+  container.querySelector('#status-filter').addEventListener('change', () => { markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-offen').addEventListener('click', () => { container.querySelector('#status-filter').value = 'offen-alle'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-ueberfaellig').addEventListener('click', () => { container.querySelector('#status-filter').value = 'ueberfaellig'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-bezahlt').addEventListener('click', () => { container.querySelector('#status-filter').value = 'bezahlt'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; markActiveKpi(); applyFilter(); });
   // Direktsprung von den Dashboard-Kacheln ("Offene Rechnungen"/"Überfällig")
   // per #/rechnungen/offen bzw. #/rechnungen/ueberfaellig - Filter direkt
   // vorbelegen, damit die Liste sofort das zeigt, was auf der Kachel stand.
   if (route === 'offen' || route === 'ueberfaellig') container.querySelector('#status-filter').value = route === 'offen' ? 'offen-alle' : 'ueberfaellig';
+  markActiveKpi();
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
