@@ -43,6 +43,40 @@ function daysBetweenStr(a, b) {
   return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 }
 
+function addMonthsToDateStr(dateStr, months) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setMonth(d.getMonth() + months);
+  return localDateStr(d);
+}
+
+const WIEDERHOLUNG_LABEL = {
+  taeglich: 'Täglich', woechentlich: 'Wöchentlich', alle2wochen: 'Alle 2 Wochen', alle4wochen: 'Alle 4 Wochen', monatlich: 'Monatlich',
+};
+const WIEDERHOLUNG_SCHRITT = {
+  taeglich: (startStr, i) => addDaysStr(startStr, i),
+  woechentlich: (startStr, i) => addDaysStr(startStr, i * 7),
+  alle2wochen: (startStr, i) => addDaysStr(startStr, i * 14),
+  alle4wochen: (startStr, i) => addDaysStr(startStr, i * 28),
+  monatlich: (startStr, i) => addMonthsToDateStr(startStr, i),
+};
+// Deckelt die Serie auf ein sinnvolles Maximum (2 Jahre wöchentlich) - schützt
+// vor versehentlich riesigen Serien, falls z.B. beim Enddatum ein falsches
+// Jahr eingetragen wird.
+const WIEDERHOLUNG_MAX_INSTANZEN = 104;
+
+function berechneSerienDaten(freq, startDateStr, { anzahl, endeDatum }) {
+  const schritt = WIEDERHOLUNG_SCHRITT[freq];
+  if (!schritt) return [startDateStr];
+  const daten = [];
+  for (let i = 0; i < WIEDERHOLUNG_MAX_INSTANZEN; i++) {
+    const d = schritt(startDateStr, i);
+    if (endeDatum && d > endeDatum) break;
+    daten.push(d);
+    if (anzahl && daten.length >= anzahl) break;
+  }
+  return daten;
+}
+
 export async function render(container, route, { autoSync = true } = {}) {
   // Der Google-Kalender-Sync (15-Monats-Fenster, ggf. viele einzelne API-
   // Aufrufe) lief bisher VOR dem ersten Rendern und blockierte damit den
@@ -744,6 +778,29 @@ export async function render(container, route, { autoSync = true } = {}) {
             <div class="field"><label>Uhrzeit</label><input type="time" name="uhrzeit" value="${startTime}"></div>
             <div class="field"><label>Von</label><input type="date" name="datum" value="${startDate}" required></div>
             <div class="field"><label>Bis (optional, für mehrtägig)</label><input type="date" name="enddatum" value="${toDateOnly(data.ende) || ''}"></div>
+            ${!isEdit ? `
+              <div class="field"><label>Wiederholung</label>
+                <select name="wiederholung">
+                  <option value="">Keine</option>
+                  ${Object.entries(WIEDERHOLUNG_LABEL).map(([id, titel]) => `<option value="${id}">${escapeHtml(titel)}</option>`).join('')}
+                </select>
+              </div>
+              <div class="field col-span-2" id="wiederholung-ende-feld" hidden>
+                <label>Endet</label>
+                <div class="flex-row flex-wrap" style="gap:14px;align-items:center">
+                  <label class="field-checkbox" style="display:flex;align-items:center;gap:6px">
+                    <input type="radio" name="wiederholungEndeArt" value="anzahl" checked>
+                    nach <input type="number" name="wiederholungAnzahl" min="2" max="${WIEDERHOLUNG_MAX_INSTANZEN}" value="4" style="width:64px"> Terminen
+                  </label>
+                  <label class="field-checkbox" style="display:flex;align-items:center;gap:6px">
+                    <input type="radio" name="wiederholungEndeArt" value="datum">
+                    am <input type="date" name="wiederholungDatum">
+                  </label>
+                </div>
+              </div>
+            ` : data.serienId ? `
+              <div class="field col-span-2"><p class="hint">Teil einer Terminserie.</p></div>
+            ` : ''}
             <div class="field"><label>Ort</label>
               <div class="flex-row" style="gap:6px">
                 <input name="ort" value="${escapeHtml(data.ort || '')}" style="flex:1">
@@ -785,7 +842,10 @@ export async function render(container, route, { autoSync = true } = {}) {
             ` : ''}
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
-          ${isEdit ? '<div class="modal-actions"><button type="button" class="btn btn-danger" id="btn-delete">Löschen</button></div>' : ''}
+          ${isEdit ? `<div class="modal-actions">
+            <button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>
+            ${data.serienId ? '<button type="button" class="btn" id="btn-delete-serie">Verbleibende Serie löschen</button>' : ''}
+          </div>` : ''}
         </form>
       </div>
     `;
@@ -847,6 +907,11 @@ export async function render(container, route, { autoSync = true } = {}) {
       if (!ort) { toast('Bitte zuerst einen Ort eintragen', 'danger'); return; }
       window.open(navigationUrl(ort), '_blank', 'noopener');
     });
+    if (!isEdit) {
+      body.querySelector('select[name="wiederholung"]').addEventListener('change', (e) => {
+        body.querySelector('#wiederholung-ende-feld').hidden = !e.target.value;
+      });
+    }
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Termin "${data.titel}" wirklich löschen?`)) return;
@@ -855,6 +920,19 @@ export async function render(container, route, { autoSync = true } = {}) {
         toast('Termin gelöscht');
         close();
       });
+      const btnSerie = body.querySelector('#btn-delete-serie');
+      if (btnSerie) {
+        btnSerie.addEventListener('click', async () => {
+          const rest = termine.filter((x) => x.serienId === data.serienId && (x.start || '') >= (data.start || ''));
+          if (!confirmDelete(`${rest.length} verbleibende Termine dieser Serie (ab diesem Termin) wirklich löschen?`)) return;
+          for (const x of rest) {
+            try { await deleteSyncedEvent(x); } catch (err) { /* ignore Google errors on delete */ }
+            await remove('termine', x.id);
+          }
+          toast(`${rest.length} Termine gelöscht`);
+          close();
+        });
+      }
     }
     body.querySelector('#pt-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -876,6 +954,33 @@ export async function render(container, route, { autoSync = true } = {}) {
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.aktualisiertAm = new Date().toISOString();
       if (!updated.titel) return;
+
+      const wiederholung = !isEdit ? (fd.get('wiederholung') || '').toString() : '';
+      if (wiederholung) {
+        const endeArt = fd.get('wiederholungEndeArt');
+        const endeDatum = endeArt === 'datum' ? (fd.get('wiederholungDatum') || '').toString() : null;
+        if (endeArt === 'datum' && !endeDatum) { toast('Bitte ein Enddatum für die Wiederholung angeben', 'danger'); return; }
+        const anzahl = endeArt === 'anzahl' ? Math.max(2, Math.min(WIEDERHOLUNG_MAX_INSTANZEN, Number(fd.get('wiederholungAnzahl')) || 4)) : null;
+        const basisDatum = fd.get('datum');
+        // Mehrtägige Spanne (Von/Bis) bleibt über die ganze Serie hinweg gleich lang.
+        const dauerTage = updated.ende ? daysBetweenStr(basisDatum, updated.ende) : 0;
+        const serienDaten = berechneSerienDaten(wiederholung, basisDatum, { anzahl, endeDatum });
+        const serienId = uid();
+        for (const [i, datum] of serienDaten.entries()) {
+          const instanz = {
+            ...updated,
+            id: i === 0 ? updated.id : uid(),
+            start: `${datum}T${fd.get('uhrzeit') || '00:00'}`,
+            ende: updated.ende ? addDaysStr(datum, dauerTage) : '',
+            serienId,
+          };
+          await put('termine', instanz);
+        }
+        toast(`${serienDaten.length} Termine der Serie angelegt`, 'success');
+        close();
+        return;
+      }
+
       await put('termine', updated);
       toast(isEdit ? 'Termin aktualisiert' : 'Termin angelegt', 'success');
       close();
