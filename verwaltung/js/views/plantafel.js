@@ -142,6 +142,7 @@ export async function render(container, route, { autoSync = true } = {}) {
           <button class="btn btn-sm" id="btn-tag-today">Heute</button>
           <button class="btn btn-sm" id="btn-tag-next">Tag →</button>
         </div>
+        <p class="hint">Termin anklicken zum Bearbeiten.</p>
         <div id="tag-host"></div>
       </div>
     </div>
@@ -577,40 +578,110 @@ export async function render(container, route, { autoSync = true } = {}) {
     return dateStr === todayStrFn() ? `Heute – ${label}` : label;
   }
 
+  // Stunden-Kalender (statt der früheren reinen Textliste): Zeitachse links,
+  // eine Spalte je Mitarbeiter - macht Lücken/Überschneidungen im Tagesplan auf
+  // einen Blick sichtbar, wie bei ToolTime/Google Calendar. Ergänzt bewusst die
+  // Woche (Gantt über mehrere Tage), statt sie zu ersetzen: hier zählt die
+  // genaue Uhrzeit, dort die Tagesspanne. Geräte/Flotten-Zuordnung bleibt der
+  // Woche vorbehalten - Termine ohne Mitarbeiter landen in "Ohne Zuordnung",
+  // damit trotzdem nichts verschwindet.
+  const TAG_HOUR_HEIGHT = 56;
+
+  function minutesOfDay(iso) {
+    const h = Number((iso || '').slice(11, 13));
+    const m = Number((iso || '').slice(14, 16));
+    if (Number.isNaN(h)) return null;
+    return h * 60 + (Number.isNaN(m) ? 0 : m);
+  }
+
+  function eventMinuteRange(e) {
+    const start = minutesOfDay(e.start) ?? 9 * 60;
+    let end = e.ende ? minutesOfDay(e.ende) : null;
+    if (end === null || end <= start) end = start + 60;
+    return { start, end };
+  }
+
   function renderTagView() {
     tagTitleEl.textContent = tagTitleText(tagDate);
     const events = terminsOnDay(tagDate);
-    if (events.length === 0) {
-      tagHost.innerHTML = '<div class="empty-state">Keine Termine an diesem Tag.</div>';
+
+    if (mitarbeiter.length === 0) {
+      tagHost.innerHTML = '<div class="empty-state">Noch keine Mitarbeiter angelegt.</div>';
       return;
     }
+
+    const ohneZuordnung = events.filter((e) => !(e.mitarbeiterIds || []).length);
+    const columns = [
+      ...mitarbeiter.map((m) => ({
+        id: m.id, name: m.name, farbe: m.farbe || '#f0a020',
+        events: events.filter((e) => (e.mitarbeiterIds || []).includes(m.id)),
+      })),
+      ...(ohneZuordnung.length ? [{ id: '__ohne__', name: 'Ohne Zuordnung', farbe: '#6b7280', events: ohneZuordnung }] : []),
+    ];
+
+    let rangeStartHour = 6;
+    let rangeEndHour = 20;
+    for (const e of events) {
+      const { start, end } = eventMinuteRange(e);
+      rangeStartHour = Math.min(rangeStartHour, Math.floor(start / 60));
+      rangeEndHour = Math.max(rangeEndHour, Math.ceil(end / 60));
+    }
+    const rangeStartMin = rangeStartHour * 60;
+    const gridHeight = (rangeEndHour - rangeStartHour) * TAG_HOUR_HEIGHT;
+    const hourMarks = Array.from({ length: rangeEndHour - rangeStartHour + 1 }, (_, i) => rangeStartHour + i);
+
+    function barsHtml(col) {
+      const items = col.events
+        .map((e) => { const { start, end } = eventMinuteRange(e); return { termin: e, startIdx: start, endIdx: end }; })
+        .sort((a, b) => a.startIdx - b.startIdx);
+      const laneCount = Math.max(1, packLanes(items));
+      return items.map((it) => {
+        const e = it.termin;
+        const farbe = e.farbe || typInfo(e.typ).farbe;
+        const marke = markeFuerTermin(e);
+        const status = statusInfo(e.status);
+        const top = (it.startIdx - rangeStartMin) / 60 * TAG_HOUR_HEIGHT;
+        const height = Math.max((it.endIdx - it.startIdx) / 60 * TAG_HOUR_HEIGHT, 22);
+        const zeit = (e.start || '').slice(11, 16) || '--:--';
+        return `
+          <div class="tag-cal-bar" data-id="${e.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
+            style="top:${top}px; height:${height}px; left:calc(${it.lane}/${laneCount}*100%); width:calc(100%/${laneCount} - 4px); background:${farbe}33; border-color:${farbe}; color:${farbe}">
+            <span class="tag-cal-bar-status" style="background:${status.farbe}" title="${escapeHtml(status.titel || '')}"></span>
+            <span class="tag-cal-bar-time">${escapeHtml(zeit)}</span>
+            <span class="tag-cal-bar-title">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    const now = new Date();
+    const nowMin = tagDate === todayStrFn() ? now.getHours() * 60 + now.getMinutes() : null;
+    const nowInRange = nowMin !== null && nowMin >= rangeStartMin && nowMin <= rangeStartMin + (rangeEndHour - rangeStartHour) * 60;
+
     tagHost.innerHTML = `
-      <ul class="cal-event-list">
-        ${events.map((e) => {
-          const farbe = e.farbe || typInfo(e.typ).farbe;
-          const marke = markeFuerTermin(e);
-          const zeit = (e.start || '').slice(11, 16) || '--:--';
-          const mitarbeiterNamen = (e.mitarbeiterIds || []).map((id) => mitarbeiterById[id]?.name).filter(Boolean).join(', ');
-          const meta = [
-            e.kundeId && kundenById[e.kundeId] ? kundenById[e.kundeId].firma : '',
-            e.ort || '',
-            mitarbeiterNamen,
-          ].filter(Boolean).join(' · ');
-          return `
-            <li data-id="${e.id}" style="cursor:pointer;border-left:3px solid ${farbe}">
-              <div>
-                <strong>${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</strong>
-                <div class="text-mute">${escapeHtml(zeit)} Uhr${meta ? ' · ' + escapeHtml(meta) : ''}${marke ? ' · ' + escapeHtml(marke.name) : ''}</div>
-              </div>
-              <span class="badge" style="background:${farbe}22;color:${farbe}">${escapeHtml(typInfo(e.typ).titel)}</span>
-            </li>
-          `;
-        }).join('')}
-      </ul>
+      <div class="tag-cal">
+        <div class="tag-cal-inner">
+          <div class="tag-cal-head">
+            <div class="tag-cal-gutter"></div>
+            ${columns.map((c) => `<div class="tag-cal-col-head"><span class="dot" style="background:${c.farbe}"></span>${escapeHtml(c.name)}</div>`).join('')}
+          </div>
+          <div class="tag-cal-body">
+            <div class="tag-cal-gutter-col" style="height:${gridHeight}px">
+              ${hourMarks.map((h) => `<div class="tag-cal-hour-label" style="top:${(h - rangeStartHour) * TAG_HOUR_HEIGHT}px">${String(h).padStart(2, '0')}:00</div>`).join('')}
+            </div>
+            <div class="tag-cal-cols" style="height:${gridHeight}px">
+              ${hourMarks.map((h) => `<div class="tag-cal-hourline" style="top:${(h - rangeStartHour) * TAG_HOUR_HEIGHT}px"></div>`).join('')}
+              ${nowInRange ? `<div class="tag-cal-now-line" style="top:${(nowMin - rangeStartMin) / 60 * TAG_HOUR_HEIGHT}px"></div>` : ''}
+              ${columns.map((c) => `<div class="tag-cal-col">${barsHtml(c)}</div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
     `;
-    tagHost.querySelectorAll('li[data-id]').forEach((li) => {
-      li.addEventListener('click', async () => {
-        const t = termine.find((x) => x.id === li.dataset.id);
+
+    tagHost.querySelectorAll('.tag-cal-bar').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const t = termine.find((x) => x.id === el.dataset.id);
         if (t?.autoErstellt) {
           t.autoErstellt = false;
           await put('termine', t);

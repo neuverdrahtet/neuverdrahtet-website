@@ -973,6 +973,75 @@ table.data-table th.col-select, table.data-table td.col-select {
   .plantafel-rowhead, .plantafel-row { grid-template-columns: 110px 1fr; }
 }
 
+/* Tag-Ansicht (Stunden-Kalender) */
+.tag-cal { overflow-x: auto; }
+.tag-cal-head { display: flex; }
+.tag-cal-gutter, .tag-cal-gutter-col { width: 52px; flex-shrink: 0; }
+.tag-cal-col-head {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tag-cal-col-head .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.tag-cal-body { position: relative; display: flex; }
+.tag-cal-gutter-col { position: relative; }
+.tag-cal-hour-label {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-50%);
+  font-size: 11px;
+  color: var(--text-mute);
+}
+.tag-cal-cols {
+  position: relative;
+  flex: 1;
+  display: flex;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tag-cal-hourline { position: absolute; left: 0; right: 0; border-top: 1px solid var(--border); }
+.tag-cal-col { flex: 1; min-width: 150px; position: relative; border-left: 1px solid var(--border); }
+.tag-cal-col:first-child { border-left: none; }
+.tag-cal-now-line { position: absolute; left: 0; right: 0; height: 0; border-top: 2px solid var(--danger); z-index: 3; }
+.tag-cal-now-line::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+}
+.tag-cal-bar {
+  position: absolute;
+  border: 1px solid;
+  border-left-width: 3px;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.tag-cal-bar-status { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; }
+.tag-cal-bar-time { font-weight: 700; }
+.tag-cal-bar-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .tag-cal-gutter, .tag-cal-gutter-col { width: 42px; }
+  .tag-cal-col-head, .tag-cal-col { min-width: 130px; }
+}
+
 /* Status-Filter-Pills (Mehrfachauswahl) */
 .status-pill-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; }
 .status-pill {
