@@ -2,12 +2,11 @@ import { el, escapeHtml, debounce } from './utils.js';
 import { searchAddress } from './geocode.js';
 
 // Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
-// (Tabellen, Plantafel, Tag-Kalender, Kanban) - macht auf schmalen Bildschirmen
-// (Handy) sichtbar, dass noch mehr Inhalt links/rechts liegt, statt dass die
-// Tabelle einfach kommentarlos am Bildschirmrand abgeschnitten wirkt. Wird
-// zentral vom Router nach jedem Seitenaufbau aufgerufen, statt in jeder
-// einzelnen Ansicht manuell verdrahtet zu werden.
-const SCROLL_FADE_SELECTOR = '#table-host, .tag-cal';
+// (Tabellen, Positionstabellen, Plantafel-Gantt, Tag-Kalender, Kanban) - macht
+// auf schmalen Bildschirmen (Handy/Tablet) sichtbar, dass noch mehr Inhalt
+// links/rechts liegt, statt dass der Inhalt einfach kommentarlos am
+// Bildschirmrand abgeschnitten wirkt.
+const SCROLL_FADE_SELECTOR = '#table-host, .tag-cal, #pos-host, .plantafel-grid, .kanban-board';
 
 function updateScrollFade(elem) {
   const canLeft = elem.scrollLeft > 4;
@@ -16,12 +15,38 @@ function updateScrollFade(elem) {
   elem.classList.toggle('can-scroll-right', canRight);
 }
 
+function wireOne(elem) {
+  if (elem.dataset.scrollFadeWired) { updateScrollFade(elem); return; }
+  elem.dataset.scrollFadeWired = '1';
+  elem.classList.add('scroll-x-fade');
+  updateScrollFade(elem);
+  elem.addEventListener('scroll', () => updateScrollFade(elem), { passive: true });
+}
+
+let scrollFadeObserver = null;
+
+/**
+ * Verdrahtet alle aktuell vorhandenen Treffer UND beobachtet den Container
+ * dauerhaft weiter (MutationObserver) - viele Ansichten (Plantafel-Woche,
+ * Kanban, Positionstabelle) ersetzen ihren Inhalt bei Filter-/Navigations-
+ * Interaktionen per innerHTML, ohne dass die Route wechselt; ein einmaliges
+ * Verdrahten würde solche neu eingefügten Elemente sonst verpassen. Wird
+ * einmalig beim App-Start auf document.body aufgerufen (main.js boot()) -
+ * nicht pro Routenwechsel, da Modals (z.B. die Positionstabelle im Angebots-
+ * /Rechnungsformular) außerhalb des Routen-Containers direkt an <body>
+ * hängen und so sonst nicht erfasst würden.
+ */
 export function wireScrollFades(root = document) {
-  root.querySelectorAll(SCROLL_FADE_SELECTOR).forEach((elem) => {
-    elem.classList.add('scroll-x-fade');
-    updateScrollFade(elem);
-    elem.addEventListener('scroll', () => updateScrollFade(elem), { passive: true });
-  });
+  if (scrollFadeObserver) scrollFadeObserver.disconnect();
+  const wireAll = () => root.querySelectorAll(SCROLL_FADE_SELECTOR).forEach(wireOne);
+  wireAll();
+  scrollFadeObserver = new MutationObserver(wireAll);
+  // attributes/attributeFilter zusätzlich zu childList: fängt auch den Fall
+  // ab, dass ein Container (z.B. die Tag-Ansicht der Plantafel) erst per
+  // hidden/class-Wechsel sichtbar wird, ohne dass dabei Kindknoten neu
+  // eingefügt werden - sonst bliebe die Breite beim ersten Verdrahten auf 0
+  // hängen (Element war zu dem Zeitpunkt noch unsichtbar).
+  scrollFadeObserver.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'style', 'class'] });
 }
 
 /**

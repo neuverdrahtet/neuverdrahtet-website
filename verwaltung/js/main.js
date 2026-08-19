@@ -146,7 +146,6 @@ async function router() {
     const mod = await routeLoaders[routeKey]();
     if (token !== routerToken) return;
     currentCleanup = await mod.render(viewEl, rest.join('/'));
-    wireScrollFades(viewEl);
   } catch (err) {
     if (token !== routerToken) return;
     console.error(err);
@@ -214,6 +213,10 @@ async function boot() {
   await applyTheme();
   applyRoleToNav();
   document.getElementById('app').hidden = false;
+  // Einmalig auf document.body statt pro Routenwechsel: erfasst so auch
+  // Modals (Positionstabelle in Angebot/Rechnung-Formularen), die außerhalb
+  // des Routen-Containers direkt an <body> gehängt werden.
+  wireScrollFades(document.body);
   // Google-Einstellungen + Anmeldeskript (GIS) schon jetzt im Hintergrund
   // vorladen, statt erst beim ersten Klick auf "Mit Google
   // verbinden/synchronisieren" - auf mobilen Browsern kann ein einziger
