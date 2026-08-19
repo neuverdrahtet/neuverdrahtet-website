@@ -1018,6 +1018,18 @@ export default {
         if (request.method === 'POST' && !teile[1]) {
           let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
           if (!body.title || !body.start) return errorResponse('VALIDATION_ERROR', 'Felder "title" und "start" sind erforderlich.', 400);
+          // Idempotenz-Prüfung: doppelte Aufrufe (Netzwerk-Retry, doppelt
+          // ausgelöster Webhook, versehentlich zweimal übermittelter Auftrag)
+          // dürfen nicht zu doppelten Terminen führen - bei exakt gleichem
+          // Titel+Startzeit (und, falls angegeben, gleichem Kunden) wird der
+          // bereits vorhandene Termin zurückgegeben statt ein neuer angelegt.
+          const bestehende = await firestoreList({ accessToken, projectId, collection: 'termine' });
+          const dupe = bestehende.find((t) => (t.titel || '').trim().toLowerCase() === (body.title || '').trim().toLowerCase()
+            && t.start === body.start && (!body.customer_id || t.kundeId === body.customer_id));
+          if (dupe) {
+            await logAction(ctx, { action: 'appointments.create.deduped', entityType: 'termine', entityId: dupe.id, status: 'success' });
+            return okResponse(appointmentToApi(dupe), 200);
+          }
           const id = crypto.randomUUID();
           const data = {
             id, titel: body.title, typ: 'termin', kundeId: body.customer_id || '', projektId: body.project_id || '',

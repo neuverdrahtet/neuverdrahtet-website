@@ -111,8 +111,34 @@ export async function syncCalendar({ silent = false } = {}) {
     }
   }
 
+  // Abgleich-Stufe gegen Duplikate: bevor ein noch nicht verknüpfter lokaler
+  // Termin als NEUES Google-Event angelegt bzw. ein noch nicht verknüpftes
+  // Google-Event als NEUER lokaler Termin übernommen wird, erst prüfen, ob es
+  // schon eine passende Gegenseite (gleicher Titel, gleiche Startzeit) gibt -
+  // z.B. wenn die KI-Bürokraft denselben Termin sowohl in Werkora als auch
+  // direkt im Google-Kalender angelegt hat. Bei Treffer wird verknüpft statt
+  // dupliziert.
+  let linked = 0;
+  const matchedGoogleIds = new Set();
+  const linkedTerminIds = new Set();
   for (const termin of allTermine) {
-    if (termin.googleEventId) continue;
+    if (termin.googleEventId || !inWindow(termin)) continue;
+    const match = Object.entries(googleById).find(([id, gEvent]) => {
+      if (consumedGoogleIds.has(id) || matchedGoogleIds.has(id)) return false;
+      const fields = fromGoogleEvent(gEvent);
+      return fields.start === termin.start && (fields.titel || '').trim().toLowerCase() === (termin.titel || '').trim().toLowerCase();
+    });
+    if (!match) continue;
+    const [id, gEvent] = match;
+    await put('termine', { ...termin, googleEventId: id, googleSyncedAt: gEvent.updated, aktualisiertAm: new Date().toISOString() });
+    consumedGoogleIds.add(id);
+    matchedGoogleIds.add(id);
+    linkedTerminIds.add(termin.id);
+    linked++;
+  }
+
+  for (const termin of allTermine) {
+    if (termin.googleEventId || linkedTerminIds.has(termin.id)) continue;
     if (!inWindow(termin)) continue;
     try {
       const resp = await google.insertCalendarEvent(calendarId, toGoogleEvent(termin));
@@ -135,7 +161,7 @@ export async function syncCalendar({ silent = false } = {}) {
     created++;
   }
 
-  return { created, updated, pulled, deletedLocal, pushedNew, failed };
+  return { created, updated, pulled, deletedLocal, pushedNew, failed, linked };
 }
 
 export async function deleteSyncedEvent(termin) {
