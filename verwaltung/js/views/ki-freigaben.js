@@ -17,9 +17,25 @@ export async function render(container) {
   let eintraege = await getAll('ki_freigaben');
   eintraege.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
+  const offenCount = eintraege.filter((e) => e.status === 'offen').length;
+
   container.innerHTML = `
     <div class="view-header">
       <h1>KI-Freigaben</h1>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card ${offenCount ? 'kpi-warn' : ''}">
+        <div class="kpi-value">${offenCount}</div>
+        <div class="kpi-label">Offen · wartet auf Prüfung</div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'freigegeben').length}</div>
+        <div class="kpi-label">Freigegeben</div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'abgelehnt').length}</div>
+        <div class="kpi-label">Abgelehnt</div>
+      </div>
     </div>
     <p class="hint">
       Aktionen, die die KI-Bürokraft versucht hat, die aber gesperrt sind (z.B. Angebot/Rechnung versenden, Löschen).

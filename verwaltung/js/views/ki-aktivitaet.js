@@ -17,6 +17,24 @@ export async function render(container) {
       <h1>KI-Aktivität</h1>
     </div>
     <p class="hint">Protokoll aller Aufrufe der Werkora-API für die KI-Bürokraft (erfolgreich, blockiert oder fehlgeschlagen) - nur lesbar. Einrichtung/Details siehe <code>cloudflare-worker-ki-buerokraft/README.md</code>.</p>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-clickable" id="kpi-alle">
+        <div class="kpi-value">${eintraege.length}</div>
+        <div class="kpi-label">Aufrufe gesamt</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-success" id="kpi-success">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'success').length}</div>
+        <div class="kpi-label">Erfolgreich</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-danger" id="kpi-blocked">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'blocked').length}</div>
+        <div class="kpi-label">Blockiert</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-warn" id="kpi-error">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'error').length}</div>
+        <div class="kpi-label">Fehler</div>
+      </div>
+    </div>
     <div class="form-row">
       <div class="field"><label>Status</label>
         <select id="filter-status">
@@ -65,7 +83,18 @@ export async function render(container) {
     `;
   }
 
-  filterStatus.addEventListener('change', renderTable);
+  function markActiveKpi() {
+    const idByStatus = { success: 'kpi-success', blocked: 'kpi-blocked', error: 'kpi-error', '': 'kpi-alle' };
+    container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    const active = container.querySelector(`#${idByStatus[filterStatus.value] || 'kpi-alle'}`);
+    if (active) active.classList.add('kpi-active');
+  }
+  filterStatus.addEventListener('change', () => { markActiveKpi(); renderTable(); });
   filterSuche.addEventListener('input', renderTable);
+  container.querySelector('#kpi-alle').addEventListener('click', () => { filterStatus.value = ''; markActiveKpi(); renderTable(); });
+  container.querySelector('#kpi-success').addEventListener('click', () => { filterStatus.value = 'success'; markActiveKpi(); renderTable(); });
+  container.querySelector('#kpi-blocked').addEventListener('click', () => { filterStatus.value = 'blocked'; markActiveKpi(); renderTable(); });
+  container.querySelector('#kpi-error').addEventListener('click', () => { filterStatus.value = 'error'; markActiveKpi(); renderTable(); });
+  markActiveKpi();
   renderTable();
 }
