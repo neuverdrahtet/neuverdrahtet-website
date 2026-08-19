@@ -789,6 +789,17 @@ table.data-table th.col-select, table.data-table td.col-select {
 .cal-day.other-month { background: var(--card-2); color: #55555f; }
 .cal-day.today { border-color: var(--accent); border-width: 2px; }
 .cal-day .day-num { font-weight: 700; margin-bottom: 4px; }
+.cal-day.today .day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  margin-bottom: 2px;
+}
 .cal-event {
   background: rgba(255, 90, 54, 0.16);
   color: var(--accent);
@@ -832,7 +843,12 @@ table.data-table th.col-select, table.data-table td.col-select {
   color: var(--text-mute);
   padding: 6px 4px;
 }
-.plantafel-head.is-today { color: var(--accent); }
+.plantafel-head.is-today {
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  margin: 0 2px;
+}
 .plantafel-days-head {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -876,7 +892,8 @@ table.data-table th.col-select, table.data-table td.col-select {
   position: absolute;
   height: 20px;
   border: 1px solid;
-  border-radius: 5px;
+  border-left-width: 3px;
+  border-radius: 7px;
   padding: 0 6px;
   display: flex;
   align-items: center;
