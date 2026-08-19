@@ -60,7 +60,7 @@ function parseKatalogCsv(text, standardSteuersatz) {
   return { rows, errors };
 }
 
-export async function render(container) {
+export async function render(container, route) {
   let items = await getAll('katalog');
   let lagerbewegungen = await getAll('lagerbewegungen');
   const settings = await getSettings();
@@ -262,6 +262,12 @@ export async function render(container) {
     applyFilter();
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  // Direktsprung auf einen einzelnen Katalog-Eintrag, z.B. vom Dashboard
+  // ("Niedriger Lagerbestand") per #/katalog/<id>.
+  if (route) {
+    const zielItem = items.find((i) => i.id === route);
+    if (zielItem) openForm(zielItem);
+  }
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
   container.querySelector('#btn-datanorm-import').addEventListener('click', () => openDatanormImport());
   container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());

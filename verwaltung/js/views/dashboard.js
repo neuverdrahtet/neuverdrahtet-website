@@ -392,10 +392,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
             <ul class="cal-event-list">
               ${heute.map((t) => {
                 const marke = markeFuerTermin(t);
+                const datum = (t.start || '').slice(0, 10);
                 return `
-                <li>
+                <li class="dash-row-link" data-href="#/plantafel/tag/${datum}">
                   <div><strong>${marke ? '🏷️ ' : ''}${escapeHtml(t.titel)}</strong><div class="text-mute">${(t.start || '').slice(11, 16)}${t.kundeId && kundenById[t.kundeId] ? ' · ' + escapeHtml(kundenById[t.kundeId].firma) : ''}${marke ? ' · ' + escapeHtml(marke.name) : ''}</div></div>
-                  <a class="btn btn-sm" href="#/plantafel">Öffnen</a>
+                  <a class="btn btn-sm" href="#/plantafel/tag/${datum}">Öffnen</a>
                 </li>
               `;
               }).join('')}
@@ -412,7 +413,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Betrag</th><th>Mahnstatus</th></tr></thead>
           <tbody>
             ${ueberfaellig.map((r) => `
-              <tr>
+              <tr class="dash-row-link" data-href="#/rechnungen/${r.id}">
                 <td>${escapeHtml(r.nummer)}</td>
                 <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
                 <td>${formatDate(r.faelligAm)}</td>
@@ -435,7 +436,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <thead><tr><th>Nummer</th><th>Kunde</th><th>Versendet am</th><th>Betrag</th></tr></thead>
           <tbody>
             ${angeboteNachfassen.map((a) => `
-              <tr>
+              <tr class="dash-row-link" data-href="#/angebote/${a.id}">
                 <td>${escapeHtml(a.nummer)}</td>
                 <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
                 <td>${formatDate(a.datum)}</td>
@@ -455,7 +456,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <thead><tr><th>Artikel</th><th class="text-right">Bestand</th><th class="text-right">Mindestbestand</th></tr></thead>
           <tbody>
             ${niedrigBestand.map((k) => `
-              <tr>
+              <tr class="dash-row-link" data-href="#/katalog/${k.id}">
                 <td>${escapeHtml(k.bezeichnung)}</td>
                 <td class="text-right">${Number(k.bestand ?? 0)} ${escapeHtml(k.einheit || '')}</td>
                 <td class="text-right">${Number(k.mindestbestand ?? 0)} ${escapeHtml(k.einheit || '')}</td>
@@ -467,6 +468,13 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     ` : ''}
   `;
+
+  container.querySelectorAll('.dash-row-link[data-href]').forEach((row) => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return; // eigener "Öffnen"-Link übernimmt die Navigation selbst
+      window.location.hash = row.dataset.href;
+    });
+  });
 
   // Manueller Sync-Button (wie in der Plantafel): der automatische Hintergrund-
   // Sync oben läuft nur an, wenn schon ein gültiges Google-Token vorliegt - ist
