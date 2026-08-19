@@ -26,9 +26,9 @@ export async function render(container) {
     board.innerHTML = spalten.map((s) => {
       const cards = kunden.filter((k) => (k.status || 'kunde') === s.id);
       return `
-        <div class="kanban-col" data-col="${s.id}">
+        <div class="kanban-col" data-col="${s.id}" style="--col-color:${escapeHtml(s.farbe || 'var(--border)')}">
           <div class="kanban-col-header">
-            <span>${escapeHtml(s.titel)}</span>
+            <span class="col-title"><span class="col-dot"></span>${escapeHtml(s.titel)}</span>
             <span class="count">${cards.length}</span>
           </div>
           <div class="kanban-cards" data-col-body="${s.id}">

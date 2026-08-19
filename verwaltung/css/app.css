@@ -745,6 +745,7 @@ table.data-table th.col-select, table.data-table td.col-select {
 .kanban-col {
   background: var(--card-2);
   border-radius: var(--radius);
+  border-top: 3px solid var(--col-color, var(--border));
   width: 260px;
   flex-shrink: 0;
   padding: 10px;
@@ -759,6 +760,8 @@ table.data-table th.col-select, table.data-table td.col-select {
   font-weight: 700;
   font-size: 13px;
 }
+.kanban-col-header .col-title { display: flex; align-items: center; gap: 7px; }
+.kanban-col-header .col-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--col-color, var(--border)); flex-shrink: 0; }
 .kanban-col-header .count { color: var(--text-mute); font-weight: 500; font-size: 12px; }
 .kanban-card {
   background: var(--card);

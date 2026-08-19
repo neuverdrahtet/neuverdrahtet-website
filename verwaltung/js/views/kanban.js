@@ -1,7 +1,9 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast, openTerminMitVorbelegung } from '../utils.js';
+import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
+
+const SPALTEN_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
 
 export async function render(container) {
   let [projekte, kunden, mitarbeiter, spalten, marken] = await Promise.all([
@@ -29,9 +31,9 @@ export async function render(container) {
     board.innerHTML = spalten.map((s) => {
       const cards = projekte.filter((p) => p.status === s.id);
       return `
-        <div class="kanban-col" data-col="${s.id}">
+        <div class="kanban-col" data-col="${s.id}" style="--col-color:${farbeAusText(s.id, SPALTEN_FARBEN)}">
           <div class="kanban-col-header">
-            <span>${escapeHtml(s.titel)}</span>
+            <span class="col-title"><span class="col-dot"></span>${escapeHtml(s.titel)}</span>
             <span class="count">${cards.length}</span>
           </div>
           <div class="kanban-cards" data-col-body="${s.id}">
