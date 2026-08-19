@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr } from '../utils.js';
-import { confirmDelete, attachAddressSearch } from '../ui.js';
+import { confirmDelete, attachAddressSearch, wireScrollFades } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -172,6 +172,9 @@ export async function render(container, route, { autoSync = true } = {}) {
     container.querySelector('#monat-view').hidden = mode !== 'monat';
     container.querySelector('#karte-view').hidden = mode !== 'karte';
     if (mode === 'karte') karte.refresh();
+    // Scroll-Fade der Tag-Ansicht war beim ursprünglichen Rendern ggf. noch
+    // hidden (Breite 0) - beim Sichtbarwerden per Tab-Klick neu berechnen.
+    if (mode === 'tag') wireScrollFades(container);
   }
   container.querySelectorAll('#pt-mode-tabs .tab-item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
 

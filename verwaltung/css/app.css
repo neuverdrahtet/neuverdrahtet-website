@@ -383,6 +383,24 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   overflow-x: auto;
   border-radius: var(--radius);
 }
+
+/* Scroll-Fade: blendet den Rand horizontal scrollbarer Container sanft aus,
+   solange dort noch mehr Inhalt liegt - v.a. auf dem Handy sichtbares Signal
+   "hier geht's noch weiter", statt dass Tabellen/Kalender kommentarlos am
+   Bildschirmrand abgeschnitten wirken. Wird zentral über wireScrollFades()
+   (ui.js) verdrahtet, siehe main.js Router. */
+.scroll-x-fade.can-scroll-right:not(.can-scroll-left) {
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent 100%);
+}
+.scroll-x-fade.can-scroll-left:not(.can-scroll-right) {
+  -webkit-mask-image: linear-gradient(to left, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to left, black calc(100% - 28px), transparent 100%);
+}
+.scroll-x-fade.can-scroll-left.can-scroll-right {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent, black 28px, black calc(100% - 28px), transparent 100%);
+}
 table.data-table {
   width: 100%;
   min-width: 560px;

@@ -1,6 +1,29 @@
 import { el, escapeHtml, debounce } from './utils.js';
 import { searchAddress } from './geocode.js';
 
+// Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
+// (Tabellen, Plantafel, Tag-Kalender, Kanban) - macht auf schmalen Bildschirmen
+// (Handy) sichtbar, dass noch mehr Inhalt links/rechts liegt, statt dass die
+// Tabelle einfach kommentarlos am Bildschirmrand abgeschnitten wirkt. Wird
+// zentral vom Router nach jedem Seitenaufbau aufgerufen, statt in jeder
+// einzelnen Ansicht manuell verdrahtet zu werden.
+const SCROLL_FADE_SELECTOR = '#table-host, .tag-cal';
+
+function updateScrollFade(elem) {
+  const canLeft = elem.scrollLeft > 4;
+  const canRight = elem.scrollLeft < elem.scrollWidth - elem.clientWidth - 4;
+  elem.classList.toggle('can-scroll-left', canLeft);
+  elem.classList.toggle('can-scroll-right', canRight);
+}
+
+export function wireScrollFades(root = document) {
+  root.querySelectorAll(SCROLL_FADE_SELECTOR).forEach((elem) => {
+    elem.classList.add('scroll-x-fade');
+    updateScrollFade(elem);
+    elem.addEventListener('scroll', () => updateScrollFade(elem), { passive: true });
+  });
+}
+
 /**
  * Hängt eine Adress-Autovervollständigung an ein Text-Input: bei Eingabe
  * (ab 3 Zeichen, debounced) werden Vorschläge über die freie Nominatim-Suche

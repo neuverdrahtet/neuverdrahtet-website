@@ -5,7 +5,7 @@ import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
 import { checkPushTriggers } from './pushTriggers.js';
 import { openGlobalSearch } from './globalSearch.js';
-import { closeAllModals } from './ui.js';
+import { closeAllModals, wireScrollFades } from './ui.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import { preloadGis } from './google.js';
 
@@ -146,6 +146,7 @@ async function router() {
     const mod = await routeLoaders[routeKey]();
     if (token !== routerToken) return;
     currentCleanup = await mod.render(viewEl, rest.join('/'));
+    wireScrollFades(viewEl);
   } catch (err) {
     if (token !== routerToken) return;
     console.error(err);
