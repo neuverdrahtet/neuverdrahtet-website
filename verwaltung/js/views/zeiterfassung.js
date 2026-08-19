@@ -206,12 +206,33 @@ export async function render(container, route) {
     mode = 'uebersicht';
   }
 
+  const heuteStr = toDateOnly(new Date().toISOString());
+  const wochenStartStr = toDateOnly(startOfWeek(new Date()).toISOString());
+  const monatPrefix = heuteStr.slice(0, 7);
+  const minutenHeute = eintraege.filter((e) => e.datum === heuteStr).reduce((s, e) => s + (e.dauerMinuten || 0), 0);
+  const minutenWoche = eintraege.filter((e) => (e.datum || '') >= wochenStartStr).reduce((s, e) => s + (e.dauerMinuten || 0), 0);
+  const minutenMonat = eintraege.filter((e) => (e.datum || '').startsWith(monatPrefix)).reduce((s, e) => s + (e.dauerMinuten || 0), 0);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Zeiterfassung</h1>
       <div class="actions">
         <button class="btn" id="btn-new-tagesbericht">+ Tagesbericht</button>
         <button class="btn btn-primary" id="btn-new">+ Eintrag erfassen</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value">${formatDuration(minutenHeute)}</div>
+        <div class="kpi-label">Heute erfasst (Team)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${formatDuration(minutenWoche)}</div>
+        <div class="kpi-label">Diese Woche</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${formatDuration(minutenMonat)}</div>
+        <div class="kpi-label">Dieser Monat</div>
       </div>
     </div>
     <div class="tabs" id="mode-tabs">
