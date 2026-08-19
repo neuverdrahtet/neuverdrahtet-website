@@ -672,7 +672,7 @@ export async function render(container) {
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Titel</th></tr></thead>
                   <tbody>${kTermine.map((t) => `
-                    <tr>
+                    <tr class="akte-row-link" data-datum="${(t.start || '').slice(0, 10)}">
                       <td>${formatDate(t.start)}</td>
                       <td>${escapeHtml((t.start || '').slice(11, 16) || '')}</td>
                       <td>${escapeHtml(t.titel)}</td>
@@ -688,7 +688,7 @@ export async function render(container) {
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Status</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
                   <tbody>${kAngebote.map((a) => `
-                    <tr>
+                    <tr class="akte-row-link" data-href="#/angebote/${a.id}">
                       <td>${formatDate(a.datum)}</td>
                       <td>${escapeHtml(a.nummer)}</td>
                       <td><span class="badge ${ANGEBOT_STATUS_BADGE[a.status] || 'badge'}">${ANGEBOT_STATUS_LABEL[a.status] || a.status}</span></td>
@@ -707,7 +707,7 @@ export async function render(container) {
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
                   <tbody>${kAB.map((a) => `
-                    <tr>
+                    <tr class="akte-row-link" data-href="#/auftragsbestaetigung/${a.id}">
                       <td>${formatDate(a.datum)}</td>
                       <td>${escapeHtml(a.nummer)}</td>
                       <td>${escapeHtml(a.betreff || '')}</td>
@@ -726,7 +726,7 @@ export async function render(container) {
                   <tbody>${kRechnungen.map((r) => {
                     const ueberfaellig = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute;
                     return `
-                    <tr>
+                    <tr class="akte-row-link" data-href="#/rechnungen/${r.id}">
                       <td>${formatDate(r.datum)}</td>
                       <td>${escapeHtml(r.nummer)}</td>
                       <td>
@@ -778,6 +778,19 @@ export async function render(container) {
 
     renderDokumenteSection(container.querySelector('#akte-kunden-dok-host'), 'kunde', kunde.id, {
       kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente',
+    });
+
+    // Termine/Angebote/Auftragsbestätigungen/Rechnungen direkt aus der
+    // Kundenakte anklickbar machen - Termine springen auf den Tag in der
+    // Plantafel (wie Termine-Liste), die Dokumente öffnen ihr Formular direkt
+    // per Deep-Link (#/angebote/<id> usw.), statt nur zur Liste zu verlinken.
+    container.querySelectorAll('tr.akte-row-link[data-href]').forEach((row) => {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => { window.location.hash = row.dataset.href; });
+    });
+    container.querySelectorAll('tr.akte-row-link[data-datum]').forEach((row) => {
+      row.style.cursor = 'pointer';
+      row.addEventListener('click', () => { window.location.hash = `#/plantafel/tag/${row.dataset.datum}`; });
     });
 
     container.querySelectorAll('.akte-ausgabe-beleg').forEach((link) => {

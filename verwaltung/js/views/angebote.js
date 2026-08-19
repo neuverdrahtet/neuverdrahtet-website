@@ -71,7 +71,7 @@ function parseAngeboteCsv(text, kunden, defaultSteuersatz) {
   return { rows, errors };
 }
 
-export async function render(container) {
+export async function render(container, route) {
   let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
     getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
   ]);
@@ -227,6 +227,12 @@ export async function render(container) {
   container.querySelector('#kpi-angenommen').addEventListener('click', () => { container.querySelector('#status-filter').value = 'angenommen'; markActiveKpi(); applyFilter(); });
   container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; markActiveKpi(); applyFilter(); });
   markActiveKpi();
+  // Direktsprung auf ein einzelnes Angebot, z.B. aus der Kundenakte/Projekt-
+  // Akte per #/angebote/<id> - öffnet das Formular sofort statt nur die Liste.
+  if (route) {
+    const zielAngebot = angebote.find((a) => a.id === route);
+    if (zielAngebot) openForm(zielAngebot);
+  }
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
   container.querySelector('#btn-import').addEventListener('click', () => openAngeboteImport());

@@ -21,7 +21,7 @@ const GRUENDE_STORNO = [
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
 
-export async function render(container) {
+export async function render(container, route) {
   let [dokumente, kunden, projekte, katalog, settings, vorlagen, textbausteine, angebote, marken] = await Promise.all([
     getAll('auftragsbestaetigungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('angebote'), getAll('marken'),
   ]);
@@ -173,6 +173,12 @@ export async function render(container) {
   container.querySelector('#kpi-bestaetigt').addEventListener('click', () => { container.querySelector('#status-filter').value = 'bestaetigt'; markActiveKpi(); applyFilter(); });
   container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; markActiveKpi(); applyFilter(); });
   markActiveKpi();
+  // Direktsprung auf eine einzelne Auftragsbestätigung, z.B. aus der Kunden-
+  // akte/Projekt-Akte per #/auftragsbestaetigung/<id>.
+  if (route) {
+    const zielDoc = dokumente.find((a) => a.id === route);
+    if (zielDoc) openForm(zielDoc);
+  }
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Auftragsbestaetigungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));

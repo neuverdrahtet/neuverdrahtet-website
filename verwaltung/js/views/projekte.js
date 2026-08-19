@@ -556,7 +556,7 @@ export async function render(container, opts = {}) {
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
                   <tbody>${linkedAngebote.map((a) => `
-                    <tr><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
+                    <tr class="akte-row-link" data-href="#/angebote/${a.id}"><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
                   `).join('')}</tbody>
                 </table>
               `}
@@ -567,7 +567,7 @@ export async function render(container, opts = {}) {
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
                   <tbody>${linkedAB.map((a) => `
-                    <tr><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
+                    <tr class="akte-row-link" data-href="#/auftragsbestaetigung/${a.id}"><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
                   `).join('')}</tbody>
                 </table>
               </div>
@@ -579,7 +579,7 @@ export async function render(container, opts = {}) {
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
                   <tbody>${linkedRechnungen.map((r) => {
                     const ueberfaellig = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute;
-                    return `<tr><td>${formatDate(r.datum)}</td><td>${escapeHtml(r.nummer)}${ueberfaellig ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td><td>${escapeHtml(r.betreff || '')}</td><td class="text-right">${formatCurrency(r.brutto)}</td></tr>`;
+                    return `<tr class="akte-row-link" data-href="#/rechnungen/${r.id}"><td>${formatDate(r.datum)}</td><td>${escapeHtml(r.nummer)}${ueberfaellig ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td><td>${escapeHtml(r.betreff || '')}</td><td class="text-right">${formatCurrency(r.brutto)}</td></tr>`;
                   }).join('')}</tbody>
                 </table>
               `}
@@ -598,6 +598,12 @@ export async function render(container, opts = {}) {
     const close = () => render(container, opts);
     container.querySelector('#akte-back').addEventListener('click', close);
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(p));
+    // Angebote/Auftragsbestätigungen/Rechnungen direkt aus der Projekt-Akte
+    // anklickbar - öffnet das jeweilige Formular per Deep-Link, wie in der
+    // Kundenakte.
+    container.querySelectorAll('tr.akte-row-link[data-href]').forEach((row) => {
+      row.addEventListener('click', () => { window.location.hash = row.dataset.href; });
+    });
     container.querySelector('#akte-neuer-termin').addEventListener('click', () => {
       openTerminMitVorbelegung({
         titel: p.titel, kundeId: kunde?.id || '', projektId: p.id,

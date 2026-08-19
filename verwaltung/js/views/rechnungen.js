@@ -388,6 +388,12 @@ export async function render(container, route) {
   // vorbelegen, damit die Liste sofort das zeigt, was auf der Kachel stand.
   if (route === 'offen' || route === 'ueberfaellig') container.querySelector('#status-filter').value = route === 'offen' ? 'offen-alle' : 'ueberfaellig';
   markActiveKpi();
+  // Direktsprung auf eine einzelne Rechnung, z.B. aus der Kundenakte/Projekt-
+  // Akte per #/rechnungen/<id> - öffnet das Formular sofort statt nur die Liste.
+  if (route && route !== 'offen' && route !== 'ueberfaellig') {
+    const zielRechnung = rechnungen.find((r) => r.id === route);
+    if (zielRechnung) openForm(zielRechnung);
+  }
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
