@@ -207,6 +207,9 @@ export async function render(container) {
   const bulkGeraete = createBulkSelect('geraete', { label: 'Geräte' });
   const bulkFlotten = createBulkSelect('flotten', { label: 'Fahrzeuge' });
 
+  const alleItems = [...geraete, ...flotten];
+  const countByStatus = (id) => alleItems.filter((item) => (item.status || 'verfuegbar') === id).length;
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Geräte &amp; Flotten</h1>
@@ -214,6 +217,24 @@ export async function render(container) {
         <button class="btn" id="btn-scan">📷 Scannen</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neu</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-success">
+        <div class="kpi-value">${countByStatus('verfuegbar')}</div>
+        <div class="kpi-label">Verfügbar</div>
+      </div>
+      <div class="kpi-card kpi-accent">
+        <div class="kpi-value">${countByStatus('im-einsatz')}</div>
+        <div class="kpi-label">Im Einsatz</div>
+      </div>
+      <div class="kpi-card kpi-warn">
+        <div class="kpi-value">${countByStatus('wartung')}</div>
+        <div class="kpi-label">Wartung/Werkstatt</div>
+      </div>
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-value">${countByStatus('defekt')}</div>
+        <div class="kpi-label">Defekt/Außer Betrieb</div>
       </div>
     </div>
     <div class="tabs" id="ge-tabs">

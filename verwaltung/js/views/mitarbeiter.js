@@ -74,6 +74,10 @@ export async function render(container) {
   syncMitarbeiterOeffentlich().catch((err) => console.error('mitarbeiterOeffentlich-Sync fehlgeschlagen:', err));
   const bulk = createBulkSelect('mitarbeiter', { label: 'Mitarbeiter' });
 
+  const statusHeute = mitarbeiter.map((m) => currentStatusFor(termine, m.id));
+  const abwesendHeute = statusHeute.filter((s) => s && ['krank', 'urlaub', 'schulung'].includes(s.id)).length;
+  const baustelleHeute = statusHeute.filter((s) => s && s.id === 'baustelle').length;
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Mitarbeiter</h1>
@@ -81,6 +85,24 @@ export async function render(container) {
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Mitarbeiter</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value">${mitarbeiter.length}</div>
+        <div class="kpi-label">Team gesamt</div>
+      </div>
+      <div class="kpi-card kpi-accent">
+        <div class="kpi-value">${baustelleHeute}</div>
+        <div class="kpi-label">Auf Baustelle heute</div>
+      </div>
+      <div class="kpi-card kpi-warn">
+        <div class="kpi-value">${abwesendHeute}</div>
+        <div class="kpi-label">Abwesend heute (Urlaub/Krank/Schulung)</div>
+      </div>
+      <div class="kpi-card kpi-success">
+        <div class="kpi-value">${mitarbeiter.length - abwesendHeute - baustelleHeute}</div>
+        <div class="kpi-label">Verfügbar heute</div>
       </div>
     </div>
     <div id="table-host"></div>

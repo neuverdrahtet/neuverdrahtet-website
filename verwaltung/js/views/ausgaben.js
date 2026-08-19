@@ -33,6 +33,13 @@ export async function render(container) {
     },
   });
 
+  const heute = todayISO();
+  const monatPrefix = heute.slice(0, 7);
+  const jahrPrefix = heute.slice(0, 4);
+  const summeMonat = ausgaben.filter((a) => (a.datum || '').startsWith(monatPrefix)).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+  const summeJahr = ausgaben.filter((a) => (a.datum || '').startsWith(jahrPrefix)).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+  const summeGesamt = ausgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Ausgaben</h1>
@@ -41,6 +48,20 @@ export async function render(container) {
         <button class="btn" id="btn-beleg-scan">📷 Beleg scannen</button>
         <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value">${formatCurrency(summeMonat)}</div>
+        <div class="kpi-label">Diesen Monat</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${formatCurrency(summeJahr)}</div>
+        <div class="kpi-label">Dieses Jahr</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${formatCurrency(summeGesamt)}</div>
+        <div class="kpi-label">Gesamt · ${ausgaben.length} Ausgabe(n)</div>
       </div>
     </div>
     <div class="search-bar">
