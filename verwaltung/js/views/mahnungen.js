@@ -107,12 +107,35 @@ export async function render(container) {
     ],
   });
 
+  const summeUeberfaellig = overdue.reduce((s, o) => s + (o.r.brutto || 0), 0);
+  const offeneMahngebuehren = mahnungen
+    .filter((m) => ['offen', 'teilbezahlt'].includes(rechnungenById[m.rechnungId]?.status))
+    .reduce((s, m) => s + (m.gebuehr || 0), 0);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Mahnungen</h1>
       <div class="actions">
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-danger">
+        <div class="kpi-value">${formatCurrency(summeUeberfaellig)}</div>
+        <div class="kpi-label">Überfällig · ${overdue.length} Rechnung(en)</div>
+      </div>
+      <div class="kpi-card kpi-warn">
+        <div class="kpi-value">${bereitCount}</div>
+        <div class="kpi-label">Bereit für nächste Mahnstufe</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${mahnungen.length}</div>
+        <div class="kpi-label">Erstellte Mahnungen gesamt</div>
+      </div>
+      <div class="kpi-card kpi-accent">
+        <div class="kpi-value">${formatCurrency(offeneMahngebuehren)}</div>
+        <div class="kpi-label">Offene Mahngebühren</div>
       </div>
     </div>
 

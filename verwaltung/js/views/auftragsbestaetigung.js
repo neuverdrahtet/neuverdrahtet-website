@@ -69,6 +69,11 @@ export async function render(container) {
     ],
   });
 
+  const kpiEntwurf = dokumente.filter((a) => a.status === 'entwurf');
+  const kpiVersendet = dokumente.filter((a) => a.status === 'versendet');
+  const kpiBestaetigt = dokumente.filter((a) => a.status === 'bestaetigt');
+  const summeAb = (list) => list.reduce((s, a) => s + (a.brutto || 0), 0);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Auftragsbestätigungen</h1>
@@ -76,6 +81,24 @@ export async function render(container) {
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn btn-primary" id="btn-new">+ Neue Auftragsbestätigung</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card kpi-clickable" id="kpi-entwurf">
+        <div class="kpi-value">${kpiEntwurf.length}</div>
+        <div class="kpi-label">Entwurf · ${formatCurrency(summeAb(kpiEntwurf))}</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-accent" id="kpi-versendet">
+        <div class="kpi-value">${kpiVersendet.length}</div>
+        <div class="kpi-label">Versendet · ${formatCurrency(summeAb(kpiVersendet))}</div>
+      </div>
+      <div class="kpi-card kpi-clickable kpi-success" id="kpi-bestaetigt">
+        <div class="kpi-value">${kpiBestaetigt.length}</div>
+        <div class="kpi-label">Bestätigt · ${formatCurrency(summeAb(kpiBestaetigt))}</div>
+      </div>
+      <div class="kpi-card kpi-clickable" id="kpi-alle">
+        <div class="kpi-value">${dokumente.length}</div>
+        <div class="kpi-label">Gesamt · ${formatCurrency(summeAb(dokumente))}</div>
       </div>
     </div>
     <div class="search-bar">
@@ -137,7 +160,19 @@ export async function render(container) {
   }
 
   container.querySelector('#search').addEventListener('input', applyFilter);
-  container.querySelector('#status-filter').addEventListener('change', applyFilter);
+  function markActiveKpi() {
+    const status = container.querySelector('#status-filter').value;
+    const idByStatus = { entwurf: 'kpi-entwurf', versendet: 'kpi-versendet', bestaetigt: 'kpi-bestaetigt', '': 'kpi-alle' };
+    container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    const active = container.querySelector(`#${idByStatus[status] || 'kpi-alle'}`);
+    if (active) active.classList.add('kpi-active');
+  }
+  container.querySelector('#status-filter').addEventListener('change', () => { markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-entwurf').addEventListener('click', () => { container.querySelector('#status-filter').value = 'entwurf'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-versendet').addEventListener('click', () => { container.querySelector('#status-filter').value = 'versendet'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-bestaetigt').addEventListener('click', () => { container.querySelector('#status-filter').value = 'bestaetigt'; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; markActiveKpi(); applyFilter(); });
+  markActiveKpi();
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Auftragsbestaetigungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));

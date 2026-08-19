@@ -35,6 +35,24 @@ export async function render(container) {
     ${istAdminOderBuero ? `
       <h2 style="margin-top:28px">Alle Anträge</h2>
       <p class="hint">Genehmigen legt automatisch einen passenden Termin an (Plantafel), Ablehnen legt nichts an.</p>
+      <div class="kpi-grid">
+        <div class="kpi-card kpi-warn">
+          <div class="kpi-value">${antraege.filter((a) => a.status === 'offen').length}</div>
+          <div class="kpi-label">Offen · wartet auf Entscheidung</div>
+        </div>
+        <div class="kpi-card kpi-success">
+          <div class="kpi-value">${antraege.filter((a) => a.status === 'genehmigt').length}</div>
+          <div class="kpi-label">Genehmigt</div>
+        </div>
+        <div class="kpi-card kpi-danger">
+          <div class="kpi-value">${antraege.filter((a) => a.status === 'abgelehnt').length}</div>
+          <div class="kpi-label">Abgelehnt</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value">${antraege.length}</div>
+          <div class="kpi-label">Gesamt</div>
+        </div>
+      </div>
       <div id="alle-host"></div>
     ` : ''}
   `;
