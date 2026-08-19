@@ -1082,6 +1082,8 @@ table.data-table th.col-select, table.data-table td.col-select {
   align-items: center;
   gap: 10px;
 }
+.tu-row-link { cursor: pointer; }
+.tu-row-link:hover { background: var(--card-2); border-color: var(--accent); }
 
 /* Positionstabelle (Angebot/Rechnung) */
 #pos-host { overflow-x: auto; }

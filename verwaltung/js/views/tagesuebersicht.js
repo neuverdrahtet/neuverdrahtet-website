@@ -81,7 +81,7 @@ export async function render(container) {
                 const kunde = kundenById[t.kundeId];
                 const mitarbeiterNamen = (t.mitarbeiterIds || []).map((id) => mitarbeiterById[id]?.name).filter(Boolean).join(', ');
                 return `
-                  <li style="border-left:3px solid ${farbe}">
+                  <li class="tu-row-link" data-datum="${(t.start || '').slice(0, 10)}" style="border-left:3px solid ${farbe}">
                     <div>
                       <strong>${escapeHtml(t.titel)}</strong>
                       <div class="text-mute">${(t.start || '').slice(11, 16) || '--:--'} Uhr${kunde ? ' · ' + escapeHtml(kunde.firma) : ''}${mitarbeiterNamen ? ' · ' + escapeHtml(mitarbeiterNamen) : ''}${t.ort ? ' · ' + escapeHtml(t.ort) : ''}</div>
@@ -104,7 +104,7 @@ export async function render(container) {
           ${angeboteOffen.length === 0 ? '<p class="text-mute">Keine offenen Angebote.</p>' : `
             <ul class="cal-event-list">
               ${angeboteOffen.slice(0, 8).map((a) => `
-                <li>
+                <li class="tu-row-link" data-href="#/angebote/${a.id}">
                   <div><strong>${escapeHtml(a.nummer)}</strong><div class="text-mute">${escapeHtml(kundenById[a.kundeId]?.firma || '')}${a.gueltigBis ? ' · gültig bis ' + formatDate(a.gueltigBis) : ''}</div></div>
                   <span>${formatCurrency(a.brutto)}</span>
                 </li>
@@ -124,7 +124,7 @@ export async function render(container) {
               ${[...offen].sort((a, b) => (a.faelligAm || '').localeCompare(b.faelligAm || '')).slice(0, 8).map((r) => {
                 const istUeberfaellig = r.faelligAm && r.faelligAm < today;
                 return `
-                  <li>
+                  <li class="tu-row-link" data-href="#/rechnungen/${r.id}">
                     <div><strong>${escapeHtml(r.nummer)}</strong><div class="text-mute">${escapeHtml(kundenById[r.kundeId]?.firma || '')}${r.faelligAm ? ' · fällig ' + formatDate(r.faelligAm) : ''}</div></div>
                     <span class="badge ${istUeberfaellig ? 'badge-danger' : ''}">${formatCurrency(r.brutto)}</span>
                   </li>
@@ -139,9 +139,16 @@ export async function render(container) {
   `;
 
   container.querySelectorAll('.btn-rechnung').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
       openDokumentMitVorbelegung('rechnungen', { kundeId: btn.dataset.kunde, projektId: btn.dataset.projekt || '' });
     });
+  });
+  container.querySelectorAll('.tu-row-link[data-href]').forEach((row) => {
+    row.addEventListener('click', () => { window.location.hash = row.dataset.href; });
+  });
+  container.querySelectorAll('.tu-row-link[data-datum]').forEach((row) => {
+    row.addEventListener('click', () => { window.location.hash = `#/plantafel/tag/${row.dataset.datum}`; });
   });
 
   const karte = mountKarte(container, { termine: termineHeute, kundenById, mitarbeiterById, settings });
