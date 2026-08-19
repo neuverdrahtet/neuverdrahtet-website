@@ -75,6 +75,9 @@ export async function render(container, route, { autoSync = true } = {}) {
     const projekt = projekteById[t.projektId];
     return projekt ? markenById[projekt.markeId] : null;
   }
+  function statusInfo(id) {
+    return terminStatus.find((s) => s.id === (id || 'geplant')) || { farbe: '#6b7280' };
+  }
   const activeStatusFilter = new Set();
   let bereichFilter = '';
 
@@ -290,10 +293,12 @@ export async function render(container, route, { autoSync = true } = {}) {
               const farbe = it.termin.farbe || typInfo(it.termin.typ).farbe;
               const span = it.endIdx - it.startIdx + 1;
               const marke = markeFuerTermin(it.termin);
+              const status = statusInfo(it.termin.status);
               return `
                 <div class="plantafel-bar" data-id="${it.termin.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
                   style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
                   <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((it.termin.start || '').slice(11, 16))} ${escapeHtml(it.termin.titel)}</span>
+                  <span class="plantafel-bar-status" style="background:${status.farbe}" title="${escapeHtml(status.titel || '')}"></span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
                 </div>
               `;
@@ -325,7 +330,10 @@ export async function render(container, route, { autoSync = true } = {}) {
           <div class="plantafel-days-head">
             ${days.map((d) => {
               const dateStr = localDateStr(d);
-              return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">${DOW[(d.getDay() + 6) % 7]}<br>${fmtDay(d)}</div>`;
+              return `<div class="plantafel-cell plantafel-head ${dateStr === todayStr ? 'is-today' : ''}">
+                <span class="plantafel-dow">${DOW[(d.getDay() + 6) % 7]}</span>
+                <span class="plantafel-daynum">${d.getDate()}</span>
+              </div>`;
             }).join('')}
           </div>
         </div>

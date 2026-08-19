@@ -837,17 +837,27 @@ table.data-table th.col-select, table.data-table td.col-select {
 }
 .plantafel-cell { padding: 6px; }
 .plantafel-head {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-mute);
   padding: 6px 4px;
 }
-.plantafel-head.is-today {
-  color: #fff;
+.plantafel-dow { text-transform: uppercase; }
+.plantafel-daynum { color: var(--text-mute); font-weight: 600; }
+.plantafel-head.is-today .plantafel-dow { color: var(--text); }
+.plantafel-head.is-today .plantafel-daynum {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
   background: var(--accent);
-  border-radius: 999px;
-  margin: 0 2px;
+  color: #fff;
 }
 .plantafel-days-head {
   display: grid;
@@ -912,6 +922,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.plantafel-bar-status { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .plantafel-bar-handle {
   width: 6px;
   align-self: stretch;
