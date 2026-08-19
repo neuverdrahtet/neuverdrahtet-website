@@ -41,7 +41,10 @@ export function attachAddressSearch(inputEl, onSelect) {
   inputEl.addEventListener('blur', () => { setTimeout(() => { dropdown.hidden = true; }, 150); });
 }
 
-let openModalCount = 0;
+// Alle aktuell offenen Modals (Stack statt reinem Zähler, damit closeAllModals()
+// unten jedes einzeln sauber über seine eigene close()/onClose()-Logik schließen
+// kann, statt nur den Backdrop pauschal aus dem DOM zu reißen).
+let openModals = [];
 
 export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   const backdrop = el(`<div class="modal-backdrop"></div>`);
@@ -60,10 +63,9 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   // scrollbar - auf iOS Safari kann das dazu führen, dass beim Scrollen im
   // Modal (oder mit dem Finger knapp daneben) die Hintergrundseite sichtbar
   // "durchscheint" (gemeldeter Bug: Formular + darunterliegende Liste
-  // gleichzeitig lesbar). Zähler statt einfachem Flag, da Modals
+  // gleichzeitig lesbar). Stack statt einfachem Flag, da Modals
   // verschachtelt geöffnet werden (z.B. der Kalkulator im Katalog-Formular).
-  if (openModalCount === 0) document.body.classList.add('modal-open');
-  openModalCount++;
+  if (openModals.length === 0) document.body.classList.add('modal-open');
 
   let closed = false;
   function close() {
@@ -71,10 +73,11 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
     closed = true;
     backdrop.remove();
     document.removeEventListener('keydown', onKey);
-    openModalCount--;
-    if (openModalCount === 0) document.body.classList.remove('modal-open');
+    openModals = openModals.filter((c) => c !== close);
+    if (openModals.length === 0) document.body.classList.remove('modal-open');
     if (onClose) onClose();
   }
+  openModals.push(close);
   function onKey(e) {
     if (e.key === 'Escape') close();
   }
@@ -85,6 +88,15 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   modal.querySelector('.modal-close').addEventListener('click', close);
 
   return { backdrop, modal, body: modal.querySelector('.modal-body'), close };
+}
+
+// Schließt alle offenen Modals (inkl. verschachtelter) über ihre jeweils
+// eigene close()-Funktion - vom Router bei jedem Routenwechsel aufgerufen,
+// damit ein offen gebliebenes Formular nicht als Karteileiche über der
+// nächsten Ansicht hängen bleibt, wenn man während der Bearbeitung z.B.
+// über die Seitenleiste wegnavigiert.
+export function closeAllModals() {
+  [...openModals].forEach((close) => close());
 }
 
 export function confirmDelete(msg = 'Wirklich löschen?') {

@@ -5,6 +5,7 @@ import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
 import { checkPushTriggers } from './pushTriggers.js';
 import { openGlobalSearch } from './globalSearch.js';
+import { closeAllModals } from './ui.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import { preloadGis } from './google.js';
 
@@ -119,6 +120,12 @@ async function router() {
   document.querySelectorAll('.sidebar-nav a').forEach((a) => {
     a.classList.toggle('active', a.dataset.route === routeKey);
   });
+
+  // Ein offen gebliebenes Formular (z.B. Rechnung bearbeiten) darf beim
+  // Routenwechsel nicht als Karteileiche über der neuen Ansicht hängen
+  // bleiben - Modals leben im DOM außerhalb von #view, daher hier explizit
+  // schließen statt sich auf currentCleanup() der alten View zu verlassen.
+  closeAllModals();
 
   if (typeof currentCleanup === 'function') {
     try { currentCleanup(); } catch (e) { /* ignore cleanup errors */ }
