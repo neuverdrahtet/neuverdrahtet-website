@@ -69,6 +69,8 @@ export async function render(container) {
   let typeFilter = '';
   const bulk = createBulkSelect('katalog', { label: 'Einträge' });
 
+  const niedrigBestand = items.filter((i) => i.typ === 'artikel' && i.bestandTracking && Number(i.bestand ?? 0) <= Number(i.mindestbestand ?? 0));
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Artikel &amp; Leistungen</h1>
@@ -79,6 +81,24 @@ export async function render(container) {
         <button class="btn" id="btn-duplikate">🔍 Duplikate prüfen</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
+      </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-value">${items.length}</div>
+        <div class="kpi-label">Einträge gesamt</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${items.filter((i) => i.typ === 'artikel').length}</div>
+        <div class="kpi-label">Material</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value">${items.filter((i) => i.typ === 'leistung').length}</div>
+        <div class="kpi-label">Leistungen</div>
+      </div>
+      <div class="kpi-card ${niedrigBestand.length ? 'kpi-danger' : ''}">
+        <div class="kpi-value">${niedrigBestand.length}</div>
+        <div class="kpi-label">Niedriger Bestand</div>
       </div>
     </div>
     <div class="search-bar">
