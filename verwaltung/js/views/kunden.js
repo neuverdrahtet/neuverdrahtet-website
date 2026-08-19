@@ -29,6 +29,11 @@ function anlagenKategorieTitel(id) {
   return ANLAGEN_KATEGORIEN.find((k) => k.id === id)?.titel || id;
 }
 
+const ANGEBOT_STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt' };
+const ANGEBOT_STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', angenommen: 'badge-success', abgelehnt: 'badge-danger' };
+const RECHNUNG_STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
+const RECHNUNG_STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
+
 // Mountet die Liste der wiederkehrenden Prüfungen (Anlagen) eines Kunden -
 // z.B. E-Check/DGUV-V3-Termine für beim Kunden verbaute Anlagen, damit man
 // proaktiv Wartungsverträge bedienen kann statt nur auf Anfrage zu reagieren.
@@ -203,8 +208,9 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe] = await Promise.all([
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
+    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -267,7 +273,7 @@ export async function render(container) {
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', () => {
         const kunde = kunden.find((k) => k.id === row.dataset.id);
-        openForm(kunde);
+        renderKundenakte(kunde);
       });
     });
     bulk.wire(tableHost, {
@@ -453,7 +459,7 @@ export async function render(container) {
       window.open(navigationUrl(adresse), '_blank', 'noopener');
     });
     if (isEdit) {
-      body.querySelector('#btn-akte').addEventListener('click', () => openKundenakte(data));
+      body.querySelector('#btn-akte').addEventListener('click', () => { close(); renderKundenakte(data); });
       mountAnlagenSection(body.querySelector('#anlagen-host'), data.id);
       renderDokumenteSection(body.querySelector('#dok-host'), 'kunde', data.id, {
         kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente (Rechnungen, Angebote, Verträge, ...)',
@@ -574,13 +580,24 @@ export async function render(container) {
     draw();
   }
 
-  function openKundenakte(kunde) {
+  // Ganzseitige Kundenakte (ToolTime-Vorbild) - kompletter Überblick über
+  // alles, was zu einem Kunden gehört: Projekte, Termine, Angebote,
+  // Rechnungen, Ausgaben und Dokumente an einer Stelle statt verteilt über
+  // mehrere Listen. Ersetzt den bisherigen Popup-Aufruf; Bearbeiten der
+  // Stammdaten läuft weiter über die bestehende openForm()-Maske.
+  function renderKundenakte(kunde) {
     const kProjekte = projekte
       .filter((p) => p.kundeId === kunde.id)
       .sort((a, b) => (b.start || b.createdAt || '').localeCompare(a.start || a.createdAt || ''));
     const projektIds = new Set(kProjekte.map((p) => p.id));
     const projekteById2 = Object.fromEntries(kProjekte.map((p) => [p.id, p]));
-    const dokAnzahl = dokumente.filter((d) => d.bezugTyp === 'projekt' && projektIds.has(d.bezugId)).length;
+    const kTermine = termine.filter((t) => t.kundeId === kunde.id).sort((a, b) => (b.start || '').localeCompare(a.start || ''));
+    const kAngebote = angebote.filter((a) => a.kundeId === kunde.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const kAB = auftragsbestaetigungen.filter((a) => a.kundeId === kunde.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const kRechnungen = rechnungen.filter((r) => r.kundeId === kunde.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const heute = todayISO();
+    const umsatz = kRechnungen.filter((r) => r.status !== 'storniert').reduce((s, r) => s + (r.brutto || 0), 0);
+    const offenerBetrag = kRechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt').reduce((s, r) => s + (r.brutto || 0), 0);
     const offen = kProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const kAusgaben = ausgaben
       .filter((a) => a.kundeId === kunde.id || projektIds.has(a.projektId))
@@ -610,44 +627,160 @@ export async function render(container) {
       `;
     }
 
-    const { body } = openModal({
-      title: `Kundenakte – ${kunde.firma}`,
-      wide: true,
-      bodyHtml: `
-        <p class="text-mute" style="margin-top:-6px">${kProjekte.length} Aufträge/Projekte insgesamt, davon ${offen} offen · ${dokAnzahl} Dokumente · ${kAusgaben.length} Ausgaben</p>
-        <div class="akte-bereich">
-          <h2 style="font-size:14px;margin:14px 0 8px">Ausgaben / Belege${kAusgaben.length ? ` (${kAusgaben.length}, ${formatCurrency(kAusgabenSumme)})` : ''}</h2>
-          ${kAusgaben.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Kunden oder seinen Projekten zugeordnet.</p>' : `
-            <table class="data-table">
-              <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag</th><th></th></tr></thead>
-              <tbody>
-                ${kAusgaben.map((a) => `
-                  <tr>
-                    <td>${formatDate(a.datum)}</td>
-                    <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
-                    <td>${escapeHtml(a.beschreibung || a.lieferant || '')}</td>
-                    <td>${escapeHtml(projekteById2[a.projektId]?.titel || '')}</td>
-                    <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
-                    <td>${a.beleg ? `<a href="#" class="btn btn-sm akte-ausgabe-beleg" data-id="${a.id}">📎</a>` : ''}</td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          `}
+    container.innerHTML = `
+      <div class="fullpage-form">
+        <div class="fullpage-form-header">
+          <button type="button" class="btn-back" id="akte-back">← ${escapeHtml(kunde.firma)}</button>
+          <div class="fullpage-form-actions">
+            <button type="button" class="btn" id="akte-edit">✏️ Bearbeiten</button>
+          </div>
         </div>
-        ${gruppen.length === 0 ? '<p class="text-mute">Noch keine Aufträge, Wartungen oder Projekte für diesen Kunden.</p>' : gruppen.map((g) => `
-          <div class="akte-bereich">
-            <h2 style="font-size:14px;margin:14px 0 8px">${escapeHtml(g.titel)} (${g.items.length})</h2>
-            <div class="akte-projekte-list">
-              ${g.items.map((p) => `<details class="akte-projekt" data-id="${p.id}">${projektMeta(p)}</details>`).join('')}
+        <div class="kpi-grid">
+          <div class="kpi-card"><div class="kpi-value">${formatCurrency(umsatz)}</div><div class="kpi-label">Umsatz (alle Rechnungen)</div></div>
+          <div class="kpi-card"><div class="kpi-value">${formatCurrency(kAusgabenSumme)}</div><div class="kpi-label">Ausgaben</div></div>
+          <div class="kpi-card ${offenerBetrag > 0 ? 'kpi-warn' : ''}"><div class="kpi-value">${formatCurrency(offenerBetrag)}</div><div class="kpi-label">Offener Betrag</div></div>
+        </div>
+        <div class="akte-split">
+          <div class="akte-info-col">
+            <div class="card">
+              <h2 style="margin-top:0">${escapeHtml(kunde.firma)}</h2>
+              <p class="text-mute" style="margin-top:-8px">${kunde.istPrivatperson ? 'Privatperson' : 'Firmenkunde'}</p>
+              ${(kunde.strasse || kunde.plz || kunde.ort) ? `<p>${escapeHtml(kunde.strasse || '')}${kunde.strasse ? '<br>' : ''}${escapeHtml([kunde.plz, kunde.ort].filter(Boolean).join(' '))}</p>` : ''}
+              <div class="akte-info-rows">
+                ${kunde.ansprechpartner ? `<div class="akte-info-row"><span class="text-mute">Ansprechpartner</span><span>${escapeHtml(kunde.ansprechpartner)}</span></div>` : ''}
+                ${kunde.telefon ? `<div class="akte-info-row"><span class="text-mute">Telefon</span><span>${escapeHtml(kunde.telefon)}</span></div>` : ''}
+                ${kunde.email ? `<div class="akte-info-row"><span class="text-mute">E-Mail</span><span>${escapeHtml(kunde.email)}</span></div>` : ''}
+                ${kunde.kundennummer ? `<div class="akte-info-row"><span class="text-mute">Kundennummer</span><span>${escapeHtml(kunde.kundennummer)}</span></div>` : ''}
+              </div>
+              ${kunde.notizen ? `<div class="divider"></div><p class="text-mute" style="white-space:pre-wrap">${escapeHtml(kunde.notizen)}</p>` : ''}
             </div>
           </div>
-        `).join('')}
-        <div class="modal-actions"><span class="spacer"></span></div>
-      `,
+          <div class="akte-main-col">
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Projekte (${kProjekte.length}, davon ${offen} offen)</h2>
+              ${gruppen.length === 0 ? '<p class="text-mute">Noch keine Aufträge, Wartungen oder Projekte für diesen Kunden.</p>' : gruppen.map((g) => `
+                <h3 style="font-size:12px;color:var(--text-mute);margin:10px 0 6px">${escapeHtml(g.titel)} (${g.items.length})</h3>
+                <div class="akte-projekte-list">
+                  ${g.items.map((p) => `<details class="akte-projekt" data-id="${p.id}">${projektMeta(p)}</details>`).join('')}
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Termine (${kTermine.length})</h2>
+              ${kTermine.length === 0 ? '<p class="text-mute">Noch keine Termine.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Uhrzeit</th><th>Titel</th></tr></thead>
+                  <tbody>${kTermine.map((t) => `
+                    <tr>
+                      <td>${formatDate(t.start)}</td>
+                      <td>${escapeHtml((t.start || '').slice(11, 16) || '')}</td>
+                      <td>${escapeHtml(t.titel)}</td>
+                    </tr>
+                  `).join('')}</tbody>
+                </table>
+              `}
+            </div>
+
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Angebote (${kAngebote.length})</h2>
+              ${kAngebote.length === 0 ? '<p class="text-mute">Noch keine Angebote.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Status</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${kAngebote.map((a) => `
+                    <tr>
+                      <td>${formatDate(a.datum)}</td>
+                      <td>${escapeHtml(a.nummer)}</td>
+                      <td><span class="badge ${ANGEBOT_STATUS_BADGE[a.status] || 'badge'}">${ANGEBOT_STATUS_LABEL[a.status] || a.status}</span></td>
+                      <td>${escapeHtml(a.betreff || '')}</td>
+                      <td class="text-right">${formatCurrency(a.brutto)}</td>
+                    </tr>
+                  `).join('')}</tbody>
+                </table>
+              `}
+              <p class="hint"><a href="#/angebote">Alle Angebote →</a></p>
+            </div>
+
+            ${kAB.length ? `
+              <div class="akte-bereich">
+                <h2 style="font-size:14px;margin:0 0 8px">Auftragsbestätigungen (${kAB.length})</h2>
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${kAB.map((a) => `
+                    <tr>
+                      <td>${formatDate(a.datum)}</td>
+                      <td>${escapeHtml(a.nummer)}</td>
+                      <td>${escapeHtml(a.betreff || '')}</td>
+                      <td class="text-right">${formatCurrency(a.brutto)}</td>
+                    </tr>
+                  `).join('')}</tbody>
+                </table>
+              </div>
+            ` : ''}
+
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Rechnungen (${kRechnungen.length})</h2>
+              ${kRechnungen.length === 0 ? '<p class="text-mute">Noch keine Rechnungen.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Status</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${kRechnungen.map((r) => {
+                    const ueberfaellig = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute;
+                    return `
+                    <tr>
+                      <td>${formatDate(r.datum)}</td>
+                      <td>${escapeHtml(r.nummer)}</td>
+                      <td>
+                        <span class="badge ${RECHNUNG_STATUS_BADGE[r.status] || 'badge'}">${RECHNUNG_STATUS_LABEL[r.status] || r.status}</span>
+                        ${ueberfaellig ? '<span class="badge badge-danger">überfällig</span>' : ''}
+                      </td>
+                      <td>${escapeHtml(r.betreff || '')}</td>
+                      <td class="text-right">${formatCurrency(r.brutto)}</td>
+                    </tr>
+                  `;
+                  }).join('')}</tbody>
+                </table>
+              `}
+              <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>
+            </div>
+
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Ausgaben / Belege${kAusgaben.length ? ` (${kAusgaben.length}, ${formatCurrency(kAusgabenSumme)})` : ''}</h2>
+              ${kAusgaben.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Kunden oder seinen Projekten zugeordnet.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Kategorie</th><th>Beschreibung</th><th>Projekt</th><th class="text-right">Betrag</th><th></th></tr></thead>
+                  <tbody>
+                    ${kAusgaben.map((a) => `
+                      <tr>
+                        <td>${formatDate(a.datum)}</td>
+                        <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
+                        <td>${escapeHtml(a.beschreibung || a.lieferant || '')}</td>
+                        <td>${escapeHtml(projekteById2[a.projektId]?.titel || '')}</td>
+                        <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
+                        <td>${a.beleg ? `<a href="#" class="btn btn-sm akte-ausgabe-beleg" data-id="${a.id}">📎</a>` : ''}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              `}
+            </div>
+
+            <div class="akte-bereich">
+              <div id="akte-kunden-dok-host"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const close = () => render(container);
+    container.querySelector('#akte-back').addEventListener('click', close);
+    container.querySelector('#akte-edit').addEventListener('click', () => openForm(kunde));
+
+    renderDokumenteSection(container.querySelector('#akte-kunden-dok-host'), 'kunde', kunde.id, {
+      kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente',
     });
 
-    body.querySelectorAll('.akte-ausgabe-beleg').forEach((link) => {
+    container.querySelectorAll('.akte-ausgabe-beleg').forEach((link) => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
         const a = kAusgaben.find((x) => x.id === link.dataset.id);
@@ -658,7 +791,7 @@ export async function render(container) {
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       });
     });
-    body.querySelectorAll('details.akte-projekt').forEach((det) => {
+    container.querySelectorAll('details.akte-projekt').forEach((det) => {
       let loaded = false;
       det.addEventListener('toggle', () => {
         if (!det.open || loaded) return;

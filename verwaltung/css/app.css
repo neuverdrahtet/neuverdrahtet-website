@@ -1262,6 +1262,17 @@ table.data-table th.col-select, table.data-table td.col-select {
 .akte-projekt summary::-webkit-details-marker { display: none; }
 .akte-projekt summary strong { flex: 1; min-width: 120px; }
 .akte-projekt-body { padding: 0 12px 14px; border-top: 1px solid var(--border); margin-top: 2px; padding-top: 12px; }
+.akte-bereich { margin-bottom: 22px; }
+.akte-split { display: flex; gap: 18px; align-items: flex-start; }
+.akte-info-col { flex: 0 0 300px; }
+.akte-main-col { flex: 1; min-width: 0; }
+.akte-info-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.akte-info-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+.akte-info-row span:last-child { text-align: right; }
+@media (max-width: 760px) {
+  .akte-split { flex-direction: column; }
+  .akte-info-col { flex: none; width: 100%; }
+}
 
 /* Dokumente */
 .dok-list { display: flex; flex-direction: column; gap: 6px; }
