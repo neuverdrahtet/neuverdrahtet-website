@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr } from '../utils.js';
-import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
+import { confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -649,10 +649,18 @@ export async function render(container, route, { autoSync = true } = {}) {
     const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
 
-    const { body, close } = openModal({
-      title: isEdit ? 'Termin bearbeiten' : 'Neuer Termin',
-      wide: true,
-      bodyHtml: `
+    // Ganzseitiges Formular statt Popup (ToolTime-Vorbild) - ersetzt den
+    // kompletten Seiteninhalt; "Abbrechen"/Löschen/Speichern führen alle
+    // zurück zur Plantafel-Liste über render(container, route, ...).
+    container.innerHTML = `
+      <div class="fullpage-form">
+        <div class="fullpage-form-header">
+          <button type="button" class="btn-back" id="pt-form-back">← ${isEdit ? 'Termin bearbeiten' : 'Termin erstellen'}</button>
+          <div class="fullpage-form-actions">
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" form="pt-form" class="btn btn-primary">Speichern</button>
+          </div>
+        </div>
         <form id="pt-form">
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
@@ -706,15 +714,13 @@ export async function render(container, route, { autoSync = true } = {}) {
             ` : ''}
             <div class="field col-span-2"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
-          <div class="modal-actions">
-            ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
-            <span class="spacer"></span>
-            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
-            <button type="submit" class="btn btn-primary">Speichern</button>
-          </div>
+          ${isEdit ? '<div class="modal-actions"><button type="button" class="btn btn-danger" id="btn-delete">Löschen</button></div>' : ''}
         </form>
-      `,
-    });
+      </div>
+    `;
+    const body = container;
+    const close = () => render(container, route, { autoSync: false });
+    body.querySelector('#pt-form-back').addEventListener('click', close);
     function renderMitarbeiterChecklist(markeId, checkedIds) {
       const host = body.querySelector('#mitarbeiter-checklist');
       const sichtbar = mitarbeiter.filter((m) => !m.markeIds?.length || m.markeIds.includes(markeId));
@@ -777,7 +783,6 @@ export async function render(container, route, { autoSync = true } = {}) {
         await remove('termine', data.id);
         toast('Termin gelöscht');
         close();
-        render(container, null, { autoSync: false });
       });
     }
     body.querySelector('#pt-form').addEventListener('submit', async (e) => {
@@ -803,7 +808,6 @@ export async function render(container, route, { autoSync = true } = {}) {
       await put('termine', updated);
       toast(isEdit ? 'Termin aktualisiert' : 'Termin angelegt', 'success');
       close();
-      render(container, null, { autoSync: false });
     });
   }
 
