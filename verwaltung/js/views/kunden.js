@@ -207,7 +207,7 @@ function parseLexofficeCsv(text) {
   return { rows, errors };
 }
 
-export async function render(container) {
+export async function render(container, route) {
   let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
     getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'),
@@ -819,5 +819,10 @@ export async function render(container) {
     });
   }
 
-  renderTable();
+  // Direktsprung auf einen einzelnen Kunden, z.B. aus den Auswertungen
+  // (Top-Kunden) per #/kunden/<id> - öffnet die Kundenakte sofort statt nur
+  // der Liste.
+  const zielKunde = route ? kunden.find((k) => k.id === route) : null;
+  if (zielKunde) renderKundenakte(zielKunde);
+  else renderTable();
 }

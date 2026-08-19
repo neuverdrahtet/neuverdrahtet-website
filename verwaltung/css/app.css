@@ -367,6 +367,8 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 /* Auswertungen: horizontale Balkenlisten (Top-Kunden, Auslastung) */
 .auswertung-liste { display: flex; flex-direction: column; gap: 10px; }
 .auswertung-row { display: grid; grid-template-columns: 140px 1fr auto; align-items: center; gap: 10px; }
+.auswertung-row-link { cursor: pointer; border-radius: 6px; padding: 3px 6px; margin: 0 -6px; }
+.auswertung-row-link:hover { background: var(--card-2); }
 .auswertung-row-label { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .auswertung-row-bar { background: var(--card-2); border-radius: 6px; height: 10px; overflow: hidden; }
 .auswertung-row-fill { background: var(--accent); height: 100%; border-radius: 6px; }

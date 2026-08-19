@@ -1,10 +1,10 @@
 import { getAll } from '../db.js';
 import { escapeHtml, formatCurrency, todayISO, addDays } from '../utils.js';
 
-function barRow(label, value, max, formatValue) {
+function barRow(label, value, max, formatValue, href) {
   const pct = max > 0 ? Math.max(2, Math.round((value / max) * 100)) : 0;
   return `
-    <div class="auswertung-row">
+    <div class="auswertung-row${href ? ' auswertung-row-link' : ''}" ${href ? `data-href="${href}"` : ''}>
       <div class="auswertung-row-label">${escapeHtml(label)}</div>
       <div class="auswertung-row-bar"><div class="auswertung-row-fill" style="width:${pct}%"></div></div>
       <div class="auswertung-row-value">${formatValue(value)}</div>
@@ -131,7 +131,7 @@ export async function render(container) {
         <h2>Top-Kunden nach Umsatz</h2>
         ${topKunden.length === 0 ? '<p class="text-mute">Noch keine Rechnungen vorhanden.</p>' : `
           <div class="auswertung-liste">
-            ${topKunden.map((k) => barRow(k.name, k.summe, topKundenMax, formatCurrency)).join('')}
+            ${topKunden.map((k) => barRow(k.name, k.summe, topKundenMax, formatCurrency, `#/kunden/${k.kundeId}`)).join('')}
           </div>
         `}
       </div>
@@ -145,4 +145,8 @@ export async function render(container) {
         `}
       </div>
   `;
+
+  container.querySelectorAll('.auswertung-row-link[data-href]').forEach((row) => {
+    row.addEventListener('click', () => { window.location.hash = row.dataset.href; });
+  });
 }
