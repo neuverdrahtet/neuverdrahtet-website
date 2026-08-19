@@ -136,7 +136,7 @@ export async function render(container, opts = {}) {
       </table>
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
-      row.addEventListener('click', () => openForm(projekte.find((p) => p.id === row.dataset.id)));
+      row.addEventListener('click', () => renderProjektAkte(projekte.find((p) => p.id === row.dataset.id)));
     });
     bulk.wire(tableHost, {
       onChange: renderTable,
@@ -382,10 +382,6 @@ export async function render(container, opts = {}) {
       id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
       start: '', ende: '', mitarbeiterIds: [], subunternehmerIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
     };
-    const linkedAngebote = isEdit ? angebote.filter((a) => a.projektId === data.id) : [];
-    const linkedAuftragsbestaetigungen = isEdit ? auftragsbestaetigungen.filter((a) => a.projektId === data.id) : [];
-    const linkedRechnungen = isEdit ? rechnungen.filter((r) => r.projektId === data.id) : [];
-    const hatUeberfaelligeRechnung = linkedRechnungen.some((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < todayISO());
     const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
     const { body, close } = openModal({
@@ -442,41 +438,8 @@ export async function render(container, opts = {}) {
               </div>
             ` : ''}
           </div>
-          ${isEdit ? `
-            <div class="divider"></div>
-            <h2 style="font-size:14px;margin:0 0 8px">Verknüpfte Angebote</h2>
-            ${linkedAngebote.length ? `<ul class="cal-event-list">${linkedAngebote.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Angebote verknüpft.</p>'}
-            <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Auftragsbestätigungen</h2>
-            ${linkedAuftragsbestaetigungen.length ? `<ul class="cal-event-list">${linkedAuftragsbestaetigungen.map((a) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Auftragsbestätigungen verknüpft.</p>'}
-            <h2 style="font-size:14px;margin:12px 0 8px">Verknüpfte Rechnungen</h2>
-            ${linkedRechnungen.length ? `<ul class="cal-event-list">${linkedRechnungen.map((r) => `<li><span>${escapeHtml(r.nummer)}</span><span>${formatCurrency(r.brutto)}</span></li>`).join('')}</ul>` : '<p class="text-mute">Keine Rechnungen verknüpft.</p>'}
-            <div class="divider"></div>
-            <div id="nk-host"></div>
-            <div class="divider"></div>
-            <div id="ausgaben-host"></div>
-            <div class="divider"></div>
-            <div id="verwendung-host"></div>
-            <div class="divider"></div>
-            <div id="tc-host"></div>
-            <div class="divider"></div>
-            <div id="foto-host"></div>
-            <div class="divider"></div>
-            <div id="dok-host"></div>
-          ` : ''}
-          ${isEdit ? `
-            <div class="divider"></div>
-            <h2 style="font-size:14px;margin:0 0 8px">Dokumente erstellen</h2>
-            <div class="flex-row flex-wrap" style="gap:6px;margin-bottom:4px">
-              <button type="button" class="btn btn-sm" id="btn-neues-angebot">📄 + Angebot</button>
-              <button type="button" class="btn btn-sm" id="btn-neue-rechnung">🧾 + Rechnung</button>
-              <button type="button" class="btn btn-sm" id="btn-neue-ab">✅ + Auftragsbestätigung</button>
-              ${hatUeberfaelligeRechnung ? '<button type="button" class="btn btn-sm btn-danger" id="btn-zu-mahnungen">🔔 Mahnung (überfällige Rechnung)</button>' : ''}
-            </div>
-          ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
-            ${isEdit ? '<button type="button" class="btn" id="btn-neuer-termin">📅 + Termin</button>' : ''}
-            ${isEdit ? '<button type="button" class="btn" id="btn-lexoffice-transfer">🧾 An lexoffice übertragen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -517,46 +480,6 @@ export async function render(container, opts = {}) {
         close();
         render(container, opts);
       });
-      renderNachkalkulation(body.querySelector('#nk-host'), {
-        projekt: data, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
-      });
-      renderProjektAusgaben(body.querySelector('#ausgaben-host'), data.id);
-      renderVerwendungen(body.querySelector('#verwendung-host'), data.id);
-      renderTeamchat(body.querySelector('#tc-host'), data.id, mitarbeiter);
-      renderFotoSection(body.querySelector('#foto-host'), data.id);
-      renderDokumenteSection(body.querySelector('#dok-host'), 'projekt', data.id, {
-        title: 'Dokumente (Berichte, Stundenzettel, ...)',
-        berichtContext: { settings: resolveMarkeSettings(settings, markenById[data.markeId]), kunde: kundenById[data.kundeId] || null, projekt: data.titel },
-      });
-      body.querySelector('#btn-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(data));
-      body.querySelector('#btn-neuer-termin').addEventListener('click', () => {
-        const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
-        const prefill = {
-          titel: data.titel, kundeId: kunde?.id || '', projektId: data.id,
-          ort: kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '',
-        };
-        close();
-        openTerminMitVorbelegung(prefill);
-      });
-      function dokumentPrefill() {
-        return { kundeId: body.querySelector('select[name="kundeId"]').value || '', projektId: data.id };
-      }
-      body.querySelector('#btn-neues-angebot').addEventListener('click', () => {
-        close();
-        openDokumentMitVorbelegung('angebote', dokumentPrefill());
-      });
-      body.querySelector('#btn-neue-rechnung').addEventListener('click', () => {
-        close();
-        openDokumentMitVorbelegung('rechnungen', dokumentPrefill());
-      });
-      body.querySelector('#btn-neue-ab').addEventListener('click', () => {
-        close();
-        openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill());
-      });
-      body.querySelector('#btn-zu-mahnungen')?.addEventListener('click', () => {
-        close();
-        window.location.hash = '#/mahnungen';
-      });
     }
     body.querySelector('#proj-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -572,6 +495,134 @@ export async function render(container, opts = {}) {
       toast(isEdit ? 'Projekt aktualisiert' : 'Projekt angelegt', 'success');
       close();
       render(container, opts);
+    });
+  }
+
+  // Ganzseitige Projekt-Akte (ToolTime-Vorbild, analog zur Kundenakte) -
+  // kompletter Überblick statt der bisherigen, sehr langen Bearbeiten-Maske:
+  // verknüpfte Angebote/Auftragsbestätigungen/Rechnungen, Nachkalkulation,
+  // Ausgaben, Verwendungen, Teamchat, Fotos und Dokumente an einer Stelle.
+  // Stammdaten bearbeiten läuft weiterhin über die schlankere openForm().
+  function renderProjektAkte(p) {
+    const linkedAngebote = angebote.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const linkedAB = auftragsbestaetigungen.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const linkedRechnungen = rechnungen.filter((r) => r.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const heute = todayISO();
+    const hatUeberfaelligeRechnung = linkedRechnungen.some((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute);
+    const kunde = kundenById[p.kundeId];
+    const mitarbeiterNamen = (p.mitarbeiterIds || []).map((id) => mitarbeiter.find((m) => m.id === id)?.name).filter(Boolean);
+    const subunternehmerNamen = (p.subunternehmerIds || []).map((id) => subunternehmer.find((s) => s.id === id)?.firma).filter(Boolean);
+
+    container.innerHTML = `
+      <div class="fullpage-form">
+        <div class="fullpage-form-header">
+          <button type="button" class="btn-back" id="akte-back">← ${escapeHtml(p.titel)}</button>
+          <div class="fullpage-form-actions">
+            <button type="button" class="btn" id="akte-edit">✏️ Bearbeiten</button>
+            <button type="button" class="btn" id="akte-neuer-termin">📅 + Termin</button>
+            <button type="button" class="btn" id="akte-neues-angebot">📄 + Angebot</button>
+            <button type="button" class="btn" id="akte-neue-rechnung">🧾 + Rechnung</button>
+            <button type="button" class="btn" id="akte-neue-ab">✅ + Auftragsbestätigung</button>
+            <button type="button" class="btn" id="akte-lexoffice-transfer">🧾 An lexoffice übertragen</button>
+            ${hatUeberfaelligeRechnung ? '<button type="button" class="btn btn-danger" id="akte-zu-mahnungen">🔔 Mahnung</button>' : ''}
+          </div>
+        </div>
+        <div class="akte-split">
+          <div class="akte-info-col">
+            <div class="card">
+              <div class="flex-row" style="align-items:center;gap:8px;margin-bottom:2px">
+                <span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span>
+                <h2 style="margin:0">${escapeHtml(p.titel)}</h2>
+              </div>
+              <p class="text-mute" style="margin-top:2px">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</p>
+              <div class="akte-info-rows">
+                ${kunde ? `<div class="akte-info-row"><span class="text-mute">Kunde</span><span>${escapeHtml(kunde.firma)}</span></div>` : ''}
+                ${BEREICHE.find((b) => b.id === p.bereich) ? `<div class="akte-info-row"><span class="text-mute">Bereich</span><span>${escapeHtml(BEREICHE.find((b) => b.id === p.bereich).titel)}</span></div>` : ''}
+                ${kategorienById[p.kategorieId] ? `<div class="akte-info-row"><span class="text-mute">Kategorie</span><span>${escapeHtml(kategorienById[p.kategorieId].titel)}</span></div>` : ''}
+                ${p.gewerk ? `<div class="akte-info-row"><span class="text-mute">Gewerk</span><span>${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || p.gewerk)}</span></div>` : ''}
+                ${p.markeId && markenById[p.markeId] ? `<div class="akte-info-row"><span class="text-mute">Marke</span><span>🏷️ ${escapeHtml(markenById[p.markeId].name)}</span></div>` : ''}
+                ${p.start ? `<div class="akte-info-row"><span class="text-mute">Start</span><span>${formatDate(p.start)}</span></div>` : ''}
+                ${p.ende ? `<div class="akte-info-row"><span class="text-mute">Ende</span><span>${formatDate(p.ende)}</span></div>` : ''}
+                ${mitarbeiterNamen.length ? `<div class="akte-info-row"><span class="text-mute">Mitarbeiter</span><span>${escapeHtml(mitarbeiterNamen.join(', '))}</span></div>` : ''}
+                ${subunternehmerNamen.length ? `<div class="akte-info-row"><span class="text-mute">Subunternehmer</span><span>${escapeHtml(subunternehmerNamen.join(', '))}</span></div>` : ''}
+              </div>
+              ${p.beschreibung ? `<div class="divider"></div><p class="text-mute" style="white-space:pre-wrap">${escapeHtml(p.beschreibung)}</p>` : ''}
+            </div>
+          </div>
+          <div class="akte-main-col">
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Angebote (${linkedAngebote.length})</h2>
+              ${linkedAngebote.length === 0 ? '<p class="text-mute">Keine Angebote verknüpft.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${linkedAngebote.map((a) => `
+                    <tr><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
+                  `).join('')}</tbody>
+                </table>
+              `}
+            </div>
+            ${linkedAB.length ? `
+              <div class="akte-bereich">
+                <h2 style="font-size:14px;margin:0 0 8px">Auftragsbestätigungen (${linkedAB.length})</h2>
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${linkedAB.map((a) => `
+                    <tr><td>${formatDate(a.datum)}</td><td>${escapeHtml(a.nummer)}</td><td>${escapeHtml(a.betreff || '')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>
+                  `).join('')}</tbody>
+                </table>
+              </div>
+            ` : ''}
+            <div class="akte-bereich">
+              <h2 style="font-size:14px;margin:0 0 8px">Rechnungen (${linkedRechnungen.length})</h2>
+              ${linkedRechnungen.length === 0 ? '<p class="text-mute">Keine Rechnungen verknüpft.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
+                  <tbody>${linkedRechnungen.map((r) => {
+                    const ueberfaellig = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute;
+                    return `<tr><td>${formatDate(r.datum)}</td><td>${escapeHtml(r.nummer)}${ueberfaellig ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td><td>${escapeHtml(r.betreff || '')}</td><td class="text-right">${formatCurrency(r.brutto)}</td></tr>`;
+                  }).join('')}</tbody>
+                </table>
+              `}
+            </div>
+            <div class="akte-bereich" id="nk-host"></div>
+            <div class="akte-bereich" id="ausgaben-host"></div>
+            <div class="akte-bereich" id="verwendung-host"></div>
+            <div class="akte-bereich" id="tc-host"></div>
+            <div class="akte-bereich" id="foto-host"></div>
+            <div class="akte-bereich" id="dok-host"></div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const close = () => render(container, opts);
+    container.querySelector('#akte-back').addEventListener('click', close);
+    container.querySelector('#akte-edit').addEventListener('click', () => openForm(p));
+    container.querySelector('#akte-neuer-termin').addEventListener('click', () => {
+      openTerminMitVorbelegung({
+        titel: p.titel, kundeId: kunde?.id || '', projektId: p.id,
+        ort: kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '',
+      });
+    });
+    function dokumentPrefill() {
+      return { kundeId: p.kundeId || '', projektId: p.id };
+    }
+    container.querySelector('#akte-neues-angebot').addEventListener('click', () => openDokumentMitVorbelegung('angebote', dokumentPrefill()));
+    container.querySelector('#akte-neue-rechnung').addEventListener('click', () => openDokumentMitVorbelegung('rechnungen', dokumentPrefill()));
+    container.querySelector('#akte-neue-ab').addEventListener('click', () => openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill()));
+    container.querySelector('#akte-zu-mahnungen')?.addEventListener('click', () => { window.location.hash = '#/mahnungen'; });
+    container.querySelector('#akte-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(p));
+
+    renderNachkalkulation(container.querySelector('#nk-host'), {
+      projekt: p, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
+    });
+    renderProjektAusgaben(container.querySelector('#ausgaben-host'), p.id);
+    renderVerwendungen(container.querySelector('#verwendung-host'), p.id);
+    renderTeamchat(container.querySelector('#tc-host'), p.id, mitarbeiter);
+    renderFotoSection(container.querySelector('#foto-host'), p.id);
+    renderDokumenteSection(container.querySelector('#dok-host'), 'projekt', p.id, {
+      title: 'Dokumente (Berichte, Stundenzettel, ...)',
+      berichtContext: { settings: resolveMarkeSettings(settings, markenById[p.markeId]), kunde: kunde || null, projekt: p.titel },
     });
   }
 
