@@ -2388,7 +2388,21 @@ export function hasRouteAccess(role, route) {
 }
 
 export async function ensureSeeded() {
-  const settingsRows = await getAll('einstellungen');
+  // Alle Lesevorgänge parallel starten statt nacheinander zu warten - jeder
+  // einzelne getAll() braucht beim allerersten Aufruf einer Collection einen
+  // vollen Firestore-Snapshot-Umlauf (siehe ensureListening()); nacheinander
+  // ausgeführt (wie zuvor) summierten sich zwölf solcher Umläufe zu einer
+  // spürbaren Wartezeit direkt beim App-Start, da die Oberfläche erst nach
+  // ensureSeeded() sichtbar wird (siehe main.js boot()).
+  const [
+    settingsRows, spalten, kategorien, terminStatus, vorlagen, textbausteine,
+    aufgabenStatus, rechnungen, konten, kundenStatus, kunden, lieferanten,
+  ] = await Promise.all([
+    getAll('einstellungen'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('terminStatus'),
+    getAll('vorlagen'), getAll('textbausteine'), getAll('aufgabenStatus'), getAll('rechnungen'),
+    getAll('konten'), getAll('kundenStatus'), getAll('kunden'), getAll('lieferanten'),
+  ]);
+
   if (settingsRows.length === 0) {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       await put('einstellungen', { key, value });
@@ -2403,7 +2417,6 @@ export async function ensureSeeded() {
   if (telefonRow && telefonRow.value === '0201 89085050') {
     await put('einstellungen', { key: 'telefon', value: DEFAULT_SETTINGS.telefon });
   }
-  const spalten = await getAll('kanbanSpalten');
   const spaltenIds = new Set(spalten.map((s) => s.id));
   const missingSpalten = DEFAULT_KANBAN_SPALTEN.filter((s) => !spaltenIds.has(s.id));
   for (const s of missingSpalten) {
@@ -2416,19 +2429,16 @@ export async function ensureSeeded() {
       await put('kanbanSpalten', s);
     }
   }
-  const kategorien = await getAll('kategorien');
   if (kategorien.length === 0) {
     for (const k of DEFAULT_KATEGORIEN) {
       await put('kategorien', k);
     }
   }
-  const terminStatus = await getAll('terminStatus');
   const terminStatusIds = new Set(terminStatus.map((s) => s.id));
   const missingTerminStatus = DEFAULT_TERMIN_STATUS.filter((s) => !terminStatusIds.has(s.id));
   for (const s of missingTerminStatus) {
     await put('terminStatus', s);
   }
-  const vorlagen = await getAll('vorlagen');
   const dokuVorlagenIds = new Set(vorlagen.filter((v) => v.typ === 'dokumentation').map((v) => v.id));
   const missingDokuVorlagen = DEFAULT_DOKU_VORLAGEN.filter((v) => !dokuVorlagenIds.has(v.id));
   for (const v of missingDokuVorlagen) {
@@ -2442,13 +2452,11 @@ export async function ensureSeeded() {
       await put('vorlagen', { ...def });
     }
   }
-  const textbausteine = await getAll('textbausteine');
   const textbausteinIds = new Set(textbausteine.map((t) => t.id));
   const missingTextbausteine = DEFAULT_TEXTBAUSTEINE.filter((t) => !textbausteinIds.has(t.id));
   for (const t of missingTextbausteine) {
     await put('textbausteine', t);
   }
-  const aufgabenStatus = await getAll('aufgabenStatus');
   if (aufgabenStatus.length === 0) {
     for (const s of DEFAULT_AUFGABEN_STATUS) {
       await put('aufgabenStatus', s);
@@ -2458,19 +2466,16 @@ export async function ensureSeeded() {
   // angelegt statt 'storniert' - dadurch verfälschte ihr negativer Betrag
   // Auswertungen/Dashboard (z.B. "Bezahlt"-Summe, Umsatz nach Marke), obwohl
   // die stornierte Original-Rechnung dort bereits korrekt ausgeschlossen wird.
-  const rechnungen = await getAll('rechnungen');
   for (const r of rechnungen) {
     if (r.stornoVonNummer && r.status !== 'storniert') {
       await put('rechnungen', { ...r, status: 'storniert', bezahltAm: '' });
     }
   }
-  const konten = await getAll('konten');
   const kontenIds = new Set(konten.map((k) => k.id));
   const missingKonten = DEFAULT_KONTEN.filter((k) => !kontenIds.has(k.id));
   for (const k of missingKonten) {
     await put('konten', k);
   }
-  const kundenStatus = await getAll('kundenStatus');
   const kundenStatusIds = new Set(kundenStatus.map((s) => s.id));
   const missingKundenStatus = DEFAULT_KUNDEN_STATUS.filter((s) => !kundenStatusIds.has(s.id));
   for (const s of missingKundenStatus) {
@@ -2479,13 +2484,11 @@ export async function ensureSeeded() {
   // Bestehende Kunden aus der Zeit vor der Lead-Pipeline haben noch kein
   // status-Feld - sie haben i.d.R. bereits eine Historie und werden daher
   // nicht rückwirkend zu "Lead" degradiert, sondern direkt als "Kunde" geführt.
-  const kunden = await getAll('kunden');
   for (const k of kunden) {
     if (!k.status) {
       await put('kunden', { ...k, status: 'kunde' });
     }
   }
-  const lieferanten = await getAll('lieferanten');
   if (lieferanten.length === 0) {
     await put('lieferanten', {
       id: 'lieferant-rexel', firma: 'Rexel', ansprechpartner: '', telefon: '', email: '',

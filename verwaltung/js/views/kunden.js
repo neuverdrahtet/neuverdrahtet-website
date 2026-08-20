@@ -208,9 +208,9 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container, route) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen] = await Promise.all([
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
-    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'),
+    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -226,6 +226,7 @@ export async function render(container, route) {
     <div class="view-header">
       <h1>Kunden</h1>
       <div class="actions">
+        <button class="btn" id="btn-duplikate">🧹 Duplikate zusammenführen</button>
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Kunde</button>
@@ -301,6 +302,122 @@ export async function render(container, route) {
     toast('Export erstellt', 'success');
   });
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
+  container.querySelector('#btn-duplikate').addEventListener('click', () => openKundenDuplikateModal());
+
+  // Findet Kunden mit exakt gleichem Firmennamen (Groß-/Kleinschreibung und
+  // Leerzeichen ignoriert) - z.B. wenn derselbe Kunde versehentlich zweimal
+  // manuell angelegt oder ein zweites Mal über eine E-Mail-Anfrage/Import
+  // erzeugt wurde. Anders als bei Terminen reicht hier "löschen" nicht: an
+  // einem Kunden hängen i.d.R. Projekte/Termine/Rechnungen usw., die sonst
+  // verwaist zurückblieben - deshalb "zusammenführen" statt nur löschen.
+  const KUNDEN_VERKNUEPFTE_COLLECTIONS = [
+    { store: 'projekte', liste: projekte, feld: 'kundeId' },
+    { store: 'termine', liste: termine, feld: 'kundeId' },
+    { store: 'angebote', liste: angebote, feld: 'kundeId' },
+    { store: 'auftragsbestaetigungen', liste: auftragsbestaetigungen, feld: 'kundeId' },
+    { store: 'rechnungen', liste: rechnungen, feld: 'kundeId' },
+    { store: 'ausgaben', liste: ausgaben, feld: 'kundeId' },
+    { store: 'aufgaben', liste: aufgaben, feld: 'kundeId' },
+  ];
+
+  function verknuepfteAnzahl(kundeId) {
+    let n = KUNDEN_VERKNUEPFTE_COLLECTIONS.reduce((s, c) => s + c.liste.filter((r) => r[c.feld] === kundeId).length, 0);
+    n += dokumente.filter((d) => d.bezugTyp === 'kunde' && d.bezugId === kundeId).length;
+    return n;
+  }
+
+  function findKundenDuplikatGruppen() {
+    const groups = new Map();
+    for (const k of kunden) {
+      const name = (k.firma || '').trim().toLowerCase();
+      if (!name) continue;
+      if (!groups.has(name)) groups.set(name, []);
+      groups.get(name).push(k);
+    }
+    return [...groups.values()].filter((g) => g.length > 1);
+  }
+
+  async function fuehreKundenZusammen(behaltenId, duplikatIds) {
+    for (const c of KUNDEN_VERKNUEPFTE_COLLECTIONS) {
+      for (const record of c.liste) {
+        if (duplikatIds.includes(record[c.feld])) {
+          await put(c.store, { ...record, [c.feld]: behaltenId });
+        }
+      }
+    }
+    for (const d of dokumente) {
+      if (d.bezugTyp === 'kunde' && duplikatIds.includes(d.bezugId)) {
+        await put('dokumente', { ...d, bezugId: behaltenId });
+      }
+    }
+    for (const id of duplikatIds) {
+      await remove('kunden', id);
+    }
+  }
+
+  function openKundenDuplikateModal() {
+    const gruppen = findKundenDuplikatGruppen();
+    if (gruppen.length === 0) {
+      toast('Keine Duplikate gefunden.', 'success');
+      return;
+    }
+    // Vorauswahl: zuerst ein Kunde mit vergebener Kundennummer (klares Signal
+    // für den "echten" Stammdatensatz), sonst der mit den meisten verknüpften
+    // Datensätzen - vor dem Zusammenführen trotzdem prüfen, da z.B. Adresse
+    // oder Ansprechpartner vom jeweils anderen Datensatz stammen könnten.
+    function kundenScore(k) {
+      return (k.kundennummer ? 1000 : 0) + verknuepfteAnzahl(k.id);
+    }
+    const empfehlung = new Map(gruppen.map((g) => {
+      const sortiert = [...g].sort((a, b) => kundenScore(b) - kundenScore(a));
+      return [g, sortiert[0].id];
+    }));
+    const { body, close } = openModal({
+      title: 'Kunden-Duplikate zusammenführen',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Firmennamen gefunden. Der ausgewählte Kunde je Gruppe bleibt bestehen, alle verknüpften Projekte/Termine/Angebote/Rechnungen/Ausgaben/Aufgaben/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht.</p>
+        <div id="kdup-groups">
+          ${gruppen.map((g, gi) => `
+            <div class="card" style="margin-bottom:10px">
+              <strong>${escapeHtml(g[0].firma)}</strong>
+              <div class="text-mute" style="font-size:12px;margin-bottom:6px">${g.length} gleiche Einträge</div>
+              ${g.map((k) => `
+                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0">
+                  <input type="radio" name="kdup-behalten-${gi}" class="kdup-behalten" data-gi="${gi}" value="${k.id}" ${k.id === empfehlung.get(g) ? 'checked' : ''}>
+                  <span>${escapeHtml([k.ansprechpartner, k.ort, k.email].filter(Boolean).join(' · ') || '– keine weiteren Angaben –')} <span class="text-mute">(${verknuepfteAnzahl(k.id)} verknüpft${k.kundennummer ? `, Nr. ${escapeHtml(k.kundennummer)}` : ''})</span></span>
+                </label>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-kdup-merge">Zusammenführen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-kdup-merge').addEventListener('click', async () => {
+      const gruppenMitAuswahl = gruppen.map((g, gi) => {
+        const gewaehlt = body.querySelector(`.kdup-behalten[data-gi="${gi}"]:checked`)?.value;
+        return { g, behaltenId: gewaehlt };
+      });
+      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder Gruppe einen Kunden zum Behalten auswählen.', 'danger'); return; }
+      if (!confirmDelete(`${gruppenMitAuswahl.length} Gruppe(n) zusammenführen? Die jeweils nicht ausgewählten Kunden werden danach gelöscht.`)) return;
+      let anzahlZusammengefuehrt = 0;
+      for (const { g, behaltenId } of gruppenMitAuswahl) {
+        const duplikatIds = g.map((k) => k.id).filter((id) => id !== behaltenId);
+        if (duplikatIds.length === 0) continue;
+        await fuehreKundenZusammen(behaltenId, duplikatIds);
+        anzahlZusammengefuehrt += duplikatIds.length;
+      }
+      toast(`${anzahlZusammengefuehrt} Duplikat(e) zusammengeführt`, 'success');
+      close();
+      render(container);
+    });
+  }
 
   function openImport() {
     const { body, close } = openModal({

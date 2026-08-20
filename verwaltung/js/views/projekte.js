@@ -16,10 +16,11 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
     getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'), getAll('subunternehmer'),
+    getAll('termine'), getAll('aufgaben'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -41,6 +42,7 @@ export async function render(container, opts = {}) {
     <div class="view-header">
       <h1>${escapeHtml(opts.titel || 'Projekte')}</h1>
       <div class="actions">
+        <button class="btn" id="btn-duplikate">🧹 Duplikate zusammenführen</button>
         <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
         <button class="btn btn-primary" id="btn-new">+ Neues Projekt</button>
       </div>
@@ -153,6 +155,116 @@ export async function render(container, opts = {}) {
   container.querySelector('#bereich-filter').addEventListener('change', applyFilter);
   container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-duplikate').addEventListener('click', () => openProjektDuplikateModal());
+
+  // Findet Projekte mit gleichem Titel beim gleichen Kunden - Projekte werden
+  // zusammengeführt (verknüpfte Termine/Angebote/AB/Rechnungen/Ausgaben/
+  // Aufgaben/Dokumente auf das behaltene Projekt umgehängt) statt nur
+  // gelöscht, da sonst verwaiste Verweise zurückblieben.
+  const PROJEKT_VERKNUEPFTE_COLLECTIONS = [
+    { store: 'termine', liste: termine, feld: 'projektId' },
+    { store: 'angebote', liste: angebote, feld: 'projektId' },
+    { store: 'auftragsbestaetigungen', liste: auftragsbestaetigungen, feld: 'projektId' },
+    { store: 'rechnungen', liste: rechnungen, feld: 'projektId' },
+    { store: 'ausgaben', liste: ausgaben, feld: 'projektId' },
+    { store: 'aufgaben', liste: aufgaben, feld: 'projektId' },
+    { store: 'zeiterfassung', liste: zeiterfassung, feld: 'projektId' },
+    { store: 'verwendungen', liste: verwendungen, feld: 'projektId' },
+  ];
+
+  function projektVerknuepfteAnzahl(projektId) {
+    let n = PROJEKT_VERKNUEPFTE_COLLECTIONS.reduce((s, c) => s + c.liste.filter((r) => r[c.feld] === projektId).length, 0);
+    n += dokumente.filter((d) => d.bezugTyp === 'projekt' && d.bezugId === projektId).length;
+    return n;
+  }
+
+  function findProjektDuplikatGruppen() {
+    const groups = new Map();
+    for (const p of projekte) {
+      const titel = (p.titel || '').trim().toLowerCase();
+      if (!titel) continue;
+      const key = `${titel}|${p.kundeId || ''}`;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(p);
+    }
+    return [...groups.values()].filter((g) => g.length > 1);
+  }
+
+  async function fuehreProjekteZusammen(behaltenId, duplikatIds) {
+    for (const c of PROJEKT_VERKNUEPFTE_COLLECTIONS) {
+      for (const record of c.liste) {
+        if (duplikatIds.includes(record[c.feld])) {
+          await put(c.store, { ...record, [c.feld]: behaltenId });
+        }
+      }
+    }
+    for (const d of dokumente) {
+      if (d.bezugTyp === 'projekt' && duplikatIds.includes(d.bezugId)) {
+        await put('dokumente', { ...d, bezugId: behaltenId });
+      }
+    }
+    for (const id of duplikatIds) {
+      await remove('projekte', id);
+    }
+  }
+
+  function openProjektDuplikateModal() {
+    const gruppen = findProjektDuplikatGruppen();
+    if (gruppen.length === 0) {
+      toast('Keine Duplikate gefunden.', 'success');
+      return;
+    }
+    const empfehlung = new Map(gruppen.map((g) => {
+      const sortiert = [...g].sort((a, b) => projektVerknuepfteAnzahl(b.id) - projektVerknuepfteAnzahl(a.id));
+      return [g, sortiert[0].id];
+    }));
+    const { body, close } = openModal({
+      title: 'Projekt-Duplikate zusammenführen',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Titel beim selben Kunden gefunden. Das ausgewählte Projekt je Gruppe bleibt bestehen, alle verknüpften Termine/Angebote/AB/Rechnungen/Ausgaben/Aufgaben/Zeiterfassung/Verwendungen/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht.</p>
+        <div id="pdup-groups">
+          ${gruppen.map((g, gi) => `
+            <div class="card" style="margin-bottom:10px">
+              <strong>${escapeHtml(g[0].titel)}</strong>
+              <div class="text-mute" style="font-size:12px;margin-bottom:6px">${escapeHtml(kundenById[g[0].kundeId]?.firma || 'ohne Kunde')} · ${g.length} gleiche Einträge</div>
+              ${g.map((p) => `
+                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0">
+                  <input type="radio" name="pdup-behalten-${gi}" class="pdup-behalten" data-gi="${gi}" value="${p.id}" ${p.id === empfehlung.get(g) ? 'checked' : ''}>
+                  <span>${formatDate(p.createdAt) || '– kein Datum –'} <span class="text-mute">(${projektVerknuepfteAnzahl(p.id)} verknüpft, Status: ${escapeHtml(spaltenById[p.status]?.titel || p.status || '–')})</span></span>
+                </label>
+              `).join('')}
+            </div>
+          `).join('')}
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-pdup-merge">Zusammenführen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-pdup-merge').addEventListener('click', async () => {
+      const gruppenMitAuswahl = gruppen.map((g, gi) => {
+        const gewaehlt = body.querySelector(`.pdup-behalten[data-gi="${gi}"]:checked`)?.value;
+        return { g, behaltenId: gewaehlt };
+      });
+      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder Gruppe ein Projekt zum Behalten auswählen.', 'danger'); return; }
+      if (!confirmDelete(`${gruppenMitAuswahl.length} Gruppe(n) zusammenführen? Die jeweils nicht ausgewählten Projekte werden danach gelöscht.`)) return;
+      let anzahlZusammengefuehrt = 0;
+      for (const { g, behaltenId } of gruppenMitAuswahl) {
+        const duplikatIds = g.map((p) => p.id).filter((id) => id !== behaltenId);
+        if (duplikatIds.length === 0) continue;
+        await fuehreProjekteZusammen(behaltenId, duplikatIds);
+        anzahlZusammengefuehrt += duplikatIds.length;
+      }
+      toast(`${anzahlZusammengefuehrt} Duplikat(e) zusammengeführt`, 'success');
+      close();
+      render(container, opts);
+    });
+  }
+
   container.querySelector('#btn-status-manage').addEventListener('click', () => {
     openStatusManager({
       title: 'Projekt-Status verwalten',
