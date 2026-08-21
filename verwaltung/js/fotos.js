@@ -1,7 +1,15 @@
 import { getAll, put, remove } from './db.js';
 import { uid, escapeHtml, compressImage, toast } from './utils.js';
-import { confirmDelete } from './ui.js';
+import { confirmDelete, openModal } from './ui.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
+
+function openFotoLightbox(url, dateiname) {
+  openModal({
+    title: dateiname || 'Foto',
+    wide: true,
+    bodyHtml: `<div style="display:flex;justify-content:center"><img src="${escapeHtml(url)}" alt="" style="max-width:100%;max-height:75vh;border-radius:8px"></div>`,
+  });
+}
 
 export function renderFotoSection(host, projektId) {
   async function load() {
@@ -20,7 +28,7 @@ export function renderFotoSection(host, projektId) {
       <div class="foto-grid" id="foto-grid">
         ${fotos.length === 0 ? '<p class="text-mute">Noch keine Fotos.</p>' : fotos.map((f) => `
           <div class="foto-thumb" data-id="${f.id}">
-            <img src="${f.url ? escapeHtml(f.url) : (f.blob ? URL.createObjectURL(f.blob) : '')}" alt="">
+            <img src="${f.url ? escapeHtml(f.url) : (f.blob ? URL.createObjectURL(f.blob) : '')}" alt="" title="Zum Vergrößern anklicken">
             <button type="button" class="foto-del" data-id="${f.id}" title="Löschen">✕</button>
           </div>
         `).join('')}
@@ -50,9 +58,17 @@ export function renderFotoSection(host, projektId) {
       load();
     });
 
+    host.querySelectorAll('.foto-thumb img').forEach((img) => {
+      img.addEventListener('click', () => {
+        const id = img.closest('.foto-thumb').dataset.id;
+        openFotoLightbox(img.src, fotos.find((f) => f.id === id)?.dateiname);
+      });
+    });
+
     host.querySelectorAll('.foto-del').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {
         ev.preventDefault();
+        ev.stopPropagation();
         if (!confirmDelete('Foto wirklich löschen?')) return;
         const foto = fotos.find((f) => f.id === btn.dataset.id);
         await remove('fotos', btn.dataset.id);

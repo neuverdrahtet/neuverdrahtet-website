@@ -736,7 +736,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
               <div class="dok-name">${escapeHtml(d.name)}</div>
               <div class="text-mute" style="font-size:11px">${escapeHtml(katLabel(d.kategorie))} · ${formatSize(d.groesse)} · ${formatDateTime(d.erstelltAm)}</div>
             </div>
-            <a class="btn btn-sm dok-download" data-id="${d.id}" href="#" download="${escapeHtml(d.name)}">Öffnen</a>
+            <a class="btn btn-sm dok-download" data-id="${d.id}" href="#">Öffnen</a>
             <button type="button" class="btn btn-sm btn-danger dok-del" data-id="${d.id}">✕</button>
           </div>
         `).join('')}
@@ -754,8 +754,19 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         a.rel = 'noopener';
       } else if (doc?.blob) {
         a.href = URL.createObjectURL(doc.blob);
+        a.target = '_blank';
+        a.rel = 'noopener';
         a.addEventListener('click', () => setTimeout(() => URL.revokeObjectURL(a.href), 4000));
       }
+    });
+
+    // Die ganze Zeile antippbar machen, nicht nur den kleinen "Öffnen"-Link -
+    // auf dem Handy war der Link sonst leicht zu verfehlen.
+    host.querySelectorAll('.dok-row').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.dok-del') || e.target.closest('.dok-download')) return;
+        row.querySelector('.dok-download')?.click();
+      });
     });
 
     host.querySelector('#dok-input').addEventListener('change', async (e) => {
