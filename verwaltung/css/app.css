@@ -417,6 +417,51 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 .tt-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 8px; }
 .tt-card-amount { font-weight: 700; font-size: 15px; white-space: nowrap; }
 
+/* Chip-Auswahl (ToolTime-Stil) - Ersatz für <select> bei Kunde/Projekt in
+   Angebots-/Auftragsbestätigungs-/Rechnungsformularen: gewählter Eintrag als
+   Chip mit Icon + Label + X, sonst leerer Platzhalter-Button. Klick öffnet ein
+   Such-Modal (mountChipPicker in ui.js). */
+.chip-picker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  background: var(--card);
+  cursor: pointer;
+  min-height: 44px;
+}
+.chip-picker:hover { border-color: var(--accent); }
+.chip-picker-disabled { cursor: default; opacity: 0.7; }
+.chip-picker-disabled:hover { border-color: var(--border); }
+.chip-picker-icon {
+  width: 28px; height: 28px; border-radius: 8px; background: var(--navy); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+}
+.chip-picker-icon-empty { background: var(--card-2); color: var(--text-mute); border: 1px dashed var(--border); }
+.chip-picker-label { font-weight: 700; font-size: 14px; flex: 1; }
+.chip-picker-placeholder { color: var(--text-mute); font-size: 14px; flex: 1; }
+.chip-picker-clear {
+  width: 24px; height: 24px; border-radius: 7px; border: none; background: var(--card-2);
+  color: var(--text-mute); font-size: 16px; line-height: 1; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.chip-picker-clear:hover { background: var(--danger-bg); color: var(--danger); }
+.chip-picker-search {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 14px; margin-bottom: 10px;
+}
+.chip-picker-results { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.chip-picker-result {
+  padding: 10px 12px; border-radius: 8px; cursor: pointer; display: flex; flex-direction: column; gap: 2px;
+}
+.chip-picker-result:hover { background: var(--card-2); }
+.chip-picker-result.is-selected { background: rgba(var(--accent-rgb), 0.12); }
+.chip-picker-result-label { font-weight: 600; font-size: 14px; }
+.chip-picker-result-sub { color: var(--text-mute); font-size: 12.5px; }
+.chip-picker-empty { color: var(--text-mute); font-size: 14px; padding: 12px; text-align: center; }
+
 /* Scroll-Fade: blendet den Rand horizontal scrollbarer Container sanft aus,
    solange dort noch mehr Inhalt liegt - v.a. auf dem Handy sichtbares Signal
    "hier geht's noch weiter", statt dass Tabellen/Kalender kommentarlos am

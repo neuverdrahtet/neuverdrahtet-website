@@ -151,6 +151,113 @@ export function confirmDelete(msg = 'Wirklich löschen?') {
   return window.confirm(msg);
 }
 
+/**
+ * Chip-Auswahl (ToolTime-Stil) als Ersatz für ein natives <select>: zeigt den
+ * gewählten Eintrag als Chip (Icon + fett + X zum Entfernen) bzw. einen
+ * leeren "+ Platzhalter"-Button, wenn nichts gewählt ist. Klick auf den Chip
+ * (außerhalb des X) öffnet ein Modal mit Suchfeld zum Auswählen. Rendert
+ * zusätzlich ein verstecktes <input type="hidden" name="..."> ins host-Element,
+ * damit FormData(form) und bestehende `[name="..."]`-Selektoren unverändert
+ * funktionieren - inkl. eines synthetischen 'change'-Events bei jeder
+ * Änderung, damit vorhandene change-Listener (z.B. Abschlags-Neuberechnung)
+ * weiterlaufen, ohne dass Aufrufer wissen müssen, dass hier kein <select> mehr
+ * steckt.
+ */
+export function mountChipPicker(host, { name, icon = '📄', title = 'Auswählen', placeholder = '– wählen –', items = [], selectedId = '', itemLabel, itemSub, onChange, disabled = false } = {}) {
+  let list = items;
+  let currentId = selectedId || '';
+
+  host.innerHTML = '';
+  const hidden = document.createElement('input');
+  hidden.type = 'hidden';
+  hidden.name = name;
+  hidden.value = currentId;
+  host.appendChild(hidden);
+
+  const box = el(`<div class="chip-picker ${disabled ? 'chip-picker-disabled' : ''}"></div>`);
+  host.appendChild(box);
+
+  function findItem(id) { return list.find((it) => String(it.id) === String(id)); }
+
+  function renderBox() {
+    const it = currentId ? findItem(currentId) : null;
+    if (it) {
+      box.innerHTML = `
+        <span class="chip-picker-icon">${icon}</span>
+        <span class="chip-picker-label">${escapeHtml(itemLabel(it))}</span>
+        ${!disabled ? '<button type="button" class="chip-picker-clear" aria-label="Entfernen">&times;</button>' : ''}
+      `;
+    } else {
+      box.innerHTML = `
+        <span class="chip-picker-icon chip-picker-icon-empty">${icon}</span>
+        <span class="chip-picker-placeholder">${escapeHtml(placeholder)}</span>
+      `;
+    }
+  }
+  renderBox();
+
+  function setValue(id, { silent = false } = {}) {
+    currentId = id || '';
+    hidden.value = currentId;
+    renderBox();
+    if (!silent) {
+      hidden.dispatchEvent(new Event('change', { bubbles: true }));
+      if (onChange) onChange(currentId);
+    }
+  }
+
+  function openPicker() {
+    const modal = openModal({
+      title,
+      bodyHtml: `
+        <input type="text" class="chip-picker-search" placeholder="Suchen…" autocomplete="off">
+        <div class="chip-picker-results"></div>
+      `,
+    });
+    const searchInput = modal.body.querySelector('.chip-picker-search');
+    const results = modal.body.querySelector('.chip-picker-results');
+    function renderResults() {
+      const q = searchInput.value.trim().toLowerCase();
+      const filtered = q ? list.filter((it) => itemLabel(it).toLowerCase().includes(q) || (itemSub && itemSub(it) || '').toLowerCase().includes(q)) : list;
+      if (!filtered.length) {
+        results.innerHTML = '<div class="chip-picker-empty">Keine Treffer</div>';
+        return;
+      }
+      results.innerHTML = filtered.map((it) => `
+        <div class="chip-picker-result ${String(it.id) === String(currentId) ? 'is-selected' : ''}" data-id="${it.id}">
+          <span class="chip-picker-result-label">${escapeHtml(itemLabel(it))}</span>
+          ${itemSub ? `<span class="chip-picker-result-sub">${escapeHtml(itemSub(it) || '')}</span>` : ''}
+        </div>
+      `).join('');
+      results.querySelectorAll('.chip-picker-result').forEach((row) => {
+        row.addEventListener('click', () => {
+          setValue(row.dataset.id);
+          modal.close();
+        });
+      });
+    }
+    renderResults();
+    searchInput.addEventListener('input', renderResults);
+    searchInput.focus();
+  }
+
+  box.addEventListener('click', (e) => {
+    if (disabled) return;
+    if (e.target.closest('.chip-picker-clear')) {
+      e.stopPropagation();
+      setValue('');
+      return;
+    }
+    openPicker();
+  });
+
+  return {
+    getValue: () => currentId,
+    setValue,
+    setItems: (newItems) => { list = newItems; renderBox(); },
+  };
+}
+
 export function optionList(items, { value = 'id', label = 'name', selected = '', placeholder = '' } = {}) {
   const labelFn = typeof label === 'function' ? label : (item) => escapeHtml(item[label] ?? '');
   let html = placeholder !== null ? `<option value="">${placeholder}</option>` : '';

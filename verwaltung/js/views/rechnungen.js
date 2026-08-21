@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, excelFileToCsvText } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -537,12 +537,8 @@ export async function render(container, route) {
           ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.stornoVonNummer && (data.stornoGrund || data.stornoGrundText) ? `Grund: ${escapeHtml([GRUENDE_STORNO.find((g) => g.id === data.stornoGrund)?.titel, data.stornoGrundText].filter(Boolean).join(' – '))}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}
           <div class="form-grid">
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}" ${locked ? 'disabled' : ''}></div>
-            <div class="field"><label>Kunde *</label>
-              <select name="kundeId" required ${locked ? 'disabled' : ''}><option value="">– wählen –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>Projekt</label>
-              <select name="projektId" ${locked ? 'disabled' : ''}><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
+            <div class="field"><label>Kunde *</label><div id="f-kunde-host"></div></div>
+            <div class="field"><label>Projekt</label><div id="f-projekt-host"></div></div>
             <div class="field"><label>Rechnungsdatum</label><input type="date" name="datum" value="${data.datum}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Leistungsdatum</label><input type="date" name="leistungsdatum" value="${data.leistungsdatum || data.datum}" ${locked ? 'disabled' : ''}><span class="hint mb-0">Datum der Leistungserbringung/Lieferung (Pflichtangabe nach § 14 Abs. 4 Nr. 6 UStG) – kann vom Rechnungsdatum abweichen.</span></div>
             <div class="field"><label>Fällig am</label><input type="date" name="faelligAm" value="${data.faelligAm}" ${locked ? 'disabled' : ''}></div>
@@ -605,7 +601,18 @@ export async function render(container, route) {
       `,
     });
 
-let editor = createPositionsEditor({
+mountChipPicker(body.querySelector('#f-kunde-host'), {
+      name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
+      items: kunden, selectedId: data.kundeId, disabled: locked,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+    });
+    mountChipPicker(body.querySelector('#f-projekt-host'), {
+      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
+      items: projekte, selectedId: data.projektId, disabled: locked,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+    });
+
+    let editor = createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
@@ -665,7 +672,7 @@ let editor = createPositionsEditor({
       function renderAbschlaegeHost() {
         const host = body.querySelector('#abschlaege-host');
         const typ = body.querySelector('#f-rechnungstyp').value;
-        const projektId = body.querySelector('select[name="projektId"]').value;
+        const projektId = body.querySelector('[name="projektId"]').value;
         if (typ !== 'rechnung') { host.innerHTML = ''; return; }
         const kandidaten = rechnungen.filter((r) =>
           r.rechnungstyp === 'abschlag' && r.id !== data.id && r.status !== 'storniert' &&
@@ -693,7 +700,7 @@ let editor = createPositionsEditor({
       }
       renderAbschlaegeHost();
       body.querySelector('#f-rechnungstyp').addEventListener('change', renderAbschlaegeHost);
-      body.querySelector('select[name="projektId"]').addEventListener('change', renderAbschlaegeHost);
+      body.querySelector('[name="projektId"]').addEventListener('change', renderAbschlaegeHost);
       body._getAbschlaegeChecked = () => Array.from(abschlaegeChecked);
     }
 
@@ -706,7 +713,7 @@ let editor = createPositionsEditor({
         btn.disabled = true;
         btn.textContent = 'KI erstellt Vorschlag ...';
         try {
-          const kundeId = body.querySelector('select[name="kundeId"]').value;
+          const kundeId = body.querySelector('[name="kundeId"]').value;
           const kunde = kundenById[kundeId];
           const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog });
           if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
@@ -728,7 +735,7 @@ let editor = createPositionsEditor({
       });
 
       body.querySelector('#btn-zeit-uebernehmen').addEventListener('click', async () => {
-        const projektId = body.querySelector('select[name="projektId"]').value;
+        const projektId = body.querySelector('[name="projektId"]').value;
         if (!projektId) { toast('Bitte zuerst ein Projekt wählen', 'danger'); return; }
         const offen = zeiterfassung.filter((z) => z.projektId === projektId && !z.abgerechnet);
         if (offen.length === 0) { toast('Keine offenen Zeiten für dieses Projekt', 'info'); return; }

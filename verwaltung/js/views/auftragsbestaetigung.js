@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printHtml, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -211,12 +211,8 @@ export async function render(container, route) {
         <form id="ab-form">
           <div class="form-grid">
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}"></div>
-            <div class="field"><label>Kunde *</label>
-              <select name="kundeId" required><option value="">– wählen –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>Projekt</label>
-              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
+            <div class="field"><label>Kunde *</label><div id="f-kunde-host"></div></div>
+            <div class="field"><label>Projekt</label><div id="f-projekt-host"></div></div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
             <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Auftragsbestätigung Elektroinstallation"></div>
             <div class="field col-span-2"><label>Steuerart</label>
@@ -253,6 +249,17 @@ export async function render(container, route) {
           </div>
         </form>
       `,
+    });
+
+    mountChipPicker(body.querySelector('#f-kunde-host'), {
+      name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+    });
+    mountChipPicker(body.querySelector('#f-projekt-host'), {
+      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
+      items: projekte, selectedId: data.projektId,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
     });
 
     const editor = createPositionsEditor({
