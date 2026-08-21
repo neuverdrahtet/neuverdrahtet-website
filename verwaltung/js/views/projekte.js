@@ -136,8 +136,27 @@ export async function render(container, opts = {}) {
           `).join('')}
         </tbody>
       </table>
+      <div class="tt-card-list">
+        ${filtered.map((p) => {
+          const kunde = kundenById[p.kundeId];
+          const adresse = kunde ? [kunde.strasse, [kunde.plz, kunde.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
+          return `
+            <div class="tt-card" data-id="${p.id}">
+              <div class="tt-card-top">
+                <span class="tt-card-meta">${escapeHtml(kunde?.firma || 'ohne Kunde')}</span>
+                <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+              </div>
+              <div class="tt-card-title-row">
+                <span class="tt-card-icon">🔧</span>
+                <span>${escapeHtml(p.titel)}</span>
+              </div>
+              ${adresse ? `<div class="tt-card-sub">${escapeHtml(adresse)}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
     `;
-    tableHost.querySelectorAll('tbody tr').forEach((row) => {
+    tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
       row.addEventListener('click', () => renderProjektAkte(projekte.find((p) => p.id === row.dataset.id)));
     });
     bulk.wire(tableHost, {

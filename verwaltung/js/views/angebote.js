@@ -198,8 +198,23 @@ export async function render(container, route) {
           `).join('')}
         </tbody>
       </table>
+      <div class="tt-card-list">
+        ${filtered.map((a) => `
+          <div class="tt-card" data-id="${a.id}">
+            <div class="tt-card-top">
+              <span class="tt-card-meta">${formatDate(a.datum)}</span>
+              <span class="badge ${STATUS_BADGE[a.status] || 'badge'}">${STATUS_LABEL[a.status] || a.status}</span>
+            </div>
+            <div class="tt-card-title-row"><span>${escapeHtml(a.nummer)} – Angebot</span></div>
+            <div class="tt-card-bottom">
+              <span class="tt-card-sub"><span class="tt-card-icon" style="width:18px;height:18px;font-size:10px;vertical-align:-4px;margin-right:5px">🏢</span>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</span>
+              <span class="tt-card-amount">${formatCurrency(a.brutto)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
     `;
-    tableHost.querySelectorAll('tbody tr').forEach((row) => {
+    tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
       row.addEventListener('click', () => openForm(angebote.find((a) => a.id === row.dataset.id)));
     });
     bulk.wire(tableHost, {

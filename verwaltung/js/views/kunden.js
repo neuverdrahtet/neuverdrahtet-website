@@ -270,8 +270,27 @@ export async function render(container, route) {
           }).join('')}
         </tbody>
       </table>
+      <div class="tt-card-list">
+        ${filtered.map((k) => {
+          const projektAnzahl = projekte.filter((p) => p.kundeId === k.id).length;
+          const adresse = [k.strasse, [k.plz, k.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+          return `
+            <div class="tt-card" data-id="${k.id}">
+              <div class="tt-card-top">
+                <span class="tt-card-id">${escapeHtml(k.kundennummer || '')}</span>
+                <span class="tt-card-meta">${projektAnzahl} Projekt${projektAnzahl === 1 ? '' : 'e'}</span>
+              </div>
+              <div class="tt-card-title-row">
+                <span class="tt-card-icon">${k.istPrivatperson ? '🏠' : '🏢'}</span>
+                <span>${escapeHtml(k.firma)}</span>
+              </div>
+              ${adresse ? `<div class="tt-card-sub">${escapeHtml(adresse)}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
     `;
-    tableHost.querySelectorAll('tbody tr').forEach((row) => {
+    tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
       row.addEventListener('click', () => {
         const kunde = kunden.find((k) => k.id === row.dataset.id);
         renderKundenakte(kunde);

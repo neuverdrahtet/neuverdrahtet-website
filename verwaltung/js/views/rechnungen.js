@@ -266,8 +266,26 @@ export async function render(container, route) {
           `; }).join('')}
         </tbody>
       </table>
+      <div class="tt-card-list">
+        ${filtered.map((r) => {
+          const overdue = (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < today;
+          return `
+            <div class="tt-card" data-id="${r.id}">
+              <div class="tt-card-top">
+                <span class="tt-card-meta">${formatDate(r.datum)}</span>
+                <span class="badge ${overdue ? 'badge-danger' : (STATUS_BADGE[r.status] || 'badge')}">${overdue ? 'Überfällig' : (STATUS_LABEL[r.status] || r.status)}</span>
+              </div>
+              <div class="tt-card-title-row"><span>${escapeHtml(r.nummer)} – ${escapeHtml(RECHNUNGSTYP_LABEL[r.rechnungstyp] || 'Rechnung')}</span></div>
+              <div class="tt-card-bottom">
+                <span class="tt-card-sub"><span class="tt-card-icon" style="width:18px;height:18px;font-size:10px;vertical-align:-4px;margin-right:5px">🏢</span>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</span>
+                <span class="tt-card-amount">${formatCurrency(r.brutto)}</span>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
     `;
-    tableHost.querySelectorAll('tbody tr').forEach((row) => {
+    tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
       row.addEventListener('click', () => openForm(rechnungen.find((r) => r.id === row.dataset.id)));
     });
     bulk.wire(tableHost, {

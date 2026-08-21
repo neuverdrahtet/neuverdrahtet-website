@@ -190,7 +190,7 @@ window.addEventListener('hashchange', router);
 
 export async function applyTheme() {
   const settings = await getSettings();
-  document.documentElement.dataset.theme = settings.theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = settings.theme === 'dark' ? 'dark' : 'light';
 }
 
 async function boot() {

@@ -1,39 +1,42 @@
+/* Hell (ToolTime-Vorbild) ist der Standard - Dunkel ist der Opt-in über den
+   Theme-Umschalter (siehe :root[data-theme="dark"] unten). */
 :root {
   --navy: #16213e;
   --navy-2: #1c2b4a;
-  --sidebar-active: #3a6ea5;
-  --accent: #12b8c9;
-  --accent-2: #0d9aa9;
-  --accent-rgb: 18, 184, 201;
+  --sidebar-active: #4a7fd6;
+  --accent: #4a7fd6;
+  --accent-2: #3d6bc0;
+  --accent-rgb: 74, 127, 214;
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --card-2: #f7f8fa;
+  --border: #dfe3e8;
+  --text: #1b1c20;
+  --text-mute: #6b6e78;
+  --danger: #ef4444;
+  --danger-bg: rgba(239, 68, 68, 0.1);
+  --success: #22c55e;
+  --success-bg: rgba(34, 197, 94, 0.1);
+  --warn: #b8860b;
+  --warn-bg: rgba(184, 134, 11, 0.12);
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(20, 20, 30, 0.06), 0 4px 14px rgba(20, 20, 30, 0.06);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
   --bg: #0b0b0d;
   --card: #1e1e24;
   --card-2: #17171b;
   --border: #2c2c33;
   --text: #f1f1f3;
   --text-mute: #9497a1;
-  --danger: #ef4444;
   --danger-bg: rgba(239, 68, 68, 0.15);
-  --success: #22c55e;
   --success-bg: rgba(34, 197, 94, 0.15);
   --warn: #f59e0b;
   --warn-bg: rgba(245, 158, 11, 0.15);
-  --radius: 10px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 14px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
-}
-
-:root[data-theme="light"] {
-  --bg: #f4f5f7;
-  --card: #ffffff;
-  --card-2: #f7f8fa;
-  --border: #dcdfe4;
-  --text: #1b1c20;
-  --text-mute: #6b6e78;
-  --danger-bg: rgba(239, 68, 68, 0.1);
-  --success-bg: rgba(34, 197, 94, 0.1);
-  --warn-bg: rgba(245, 158, 11, 0.1);
-  --shadow: 0 1px 2px rgba(20, 20, 30, 0.06), 0 4px 14px rgba(20, 20, 30, 0.06);
-  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -384,6 +387,36 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   border-radius: var(--radius);
 }
 
+/* Karten-Liste (ToolTime-Vorbild) - auf schmalen Bildschirmen statt der
+   Tabelle gezeigt (bessere mobile Lesbarkeit als eine seitlich scrollende
+   Tabelle); Tabelle und Kartenliste werden aus denselben Daten gerendert,
+   nur per Media Query umgeschaltet. */
+.tt-card-list { display: none; }
+@media (max-width: 720px) {
+  #table-host { overflow-x: visible; }
+  #table-host > table.data-table { display: none; }
+  .tt-card-list { display: flex; flex-direction: column; gap: 10px; }
+}
+.tt-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+.tt-card-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tt-card-id { font-weight: 700; font-size: 14px; }
+.tt-card-meta { color: var(--text-mute); font-size: 12.5px; white-space: nowrap; }
+.tt-card-title-row { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+.tt-card-icon {
+  width: 24px; height: 24px; border-radius: 7px; background: var(--navy); color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;
+}
+.tt-card-sub { color: var(--text-mute); font-size: 13px; display: flex; align-items: center; }
+.tt-card-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; gap: 8px; }
+.tt-card-amount { font-weight: 700; font-size: 15px; white-space: nowrap; }
+
 /* Scroll-Fade: blendet den Rand horizontal scrollbarer Container sanft aus,
    solange dort noch mehr Inhalt liegt - v.a. auf dem Handy sichtbares Signal
    "hier geht's noch weiter", statt dass Tabellen/Kalender kommentarlos am
@@ -462,21 +495,23 @@ table.data-table th.col-select, table.data-table td.col-select {
 }
 .search-bar input[type="text"], .search-bar input[type="search"] { flex: 1; min-width: 180px; }
 
-/* Badges */
+/* Badges - volltonige Pills mit weißer Schrift (ToolTime-Vorbild) statt
+   dezenter Farbtönung, damit der Status auch aus der Distanz sofort auffällt. */
 .badge {
   display: inline-block;
-  padding: 2px 9px;
+  padding: 4px 12px;
   border-radius: 999px;
   font-size: 11.5px;
-  font-weight: 600;
-  background: var(--card-2);
-  color: var(--text-mute);
+  font-weight: 700;
+  background: #5b6472;
+  color: #fff;
+  white-space: nowrap;
 }
-.badge-success { background: var(--success-bg); color: var(--success); }
-.badge-danger { background: var(--danger-bg); color: var(--danger); }
-.badge-warn { background: var(--warn-bg); color: var(--warn); }
-.badge-accent { background: rgba(var(--accent-rgb), 0.16); color: var(--accent); }
-.badge-purple { background: rgba(164, 99, 242, 0.16); color: #a463f2; }
+.badge-success { background: var(--success); color: #fff; }
+.badge-danger { background: var(--danger); color: #fff; }
+.badge-warn { background: var(--warn); color: #fff; }
+.badge-accent { background: var(--accent); color: #fff; }
+.badge-purple { background: #a463f2; color: #fff; }
 .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 
 /* Modal */

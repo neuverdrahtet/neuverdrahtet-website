@@ -500,7 +500,7 @@ const DEFAULT_SETTINGS = {
   wetterLat: 51.4556,
   wetterLng: 7.0116,
   logoDataUrl: '',
-  theme: 'dark',
+  theme: 'light',
   dokAkzentfarbe: '#0f1b2d',
   dokSchriftgroesse: 10,
   dokLogoPosition: 'links',
