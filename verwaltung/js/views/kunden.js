@@ -795,7 +795,11 @@ export async function render(container, route) {
           <div class="kpi-card"><div class="kpi-value">${formatCurrency(kAusgabenSumme)}</div><div class="kpi-label">Ausgaben</div></div>
           <div class="kpi-card ${offenerBetrag > 0 ? 'kpi-warn' : ''}"><div class="kpi-value">${formatCurrency(offenerBetrag)}</div><div class="kpi-label">Offener Betrag</div></div>
         </div>
-        <div class="akte-split">
+        <div class="tabs akte-mobile-tabs">
+          <button type="button" class="tab-item active" data-akte-tab="details">Details</button>
+          <button type="button" class="tab-item" data-akte-tab="dokumentation">Dokumentation</button>
+        </div>
+        <div class="akte-split" data-active-tab="details">
           <div class="akte-info-col">
             <div class="card">
               <h2 style="margin-top:0">${escapeHtml(kunde.firma)}</h2>
@@ -811,7 +815,7 @@ export async function render(container, route) {
             </div>
           </div>
           <div class="akte-main-col">
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Projekte (${kProjekte.length}, davon ${offen} offen)</h2>
               ${gruppen.length === 0 ? '<p class="text-mute">Noch keine Aufträge, Wartungen oder Projekte für diesen Kunden.</p>' : gruppen.map((g) => `
                 <h3 style="font-size:12px;color:var(--text-mute);margin:10px 0 6px">${escapeHtml(g.titel)} (${g.items.length})</h3>
@@ -821,7 +825,7 @@ export async function render(container, route) {
               `).join('')}
             </div>
 
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Termine (${kTermine.length})</h2>
               ${kTermine.length === 0 ? '<p class="text-mute">Noch keine Termine.</p>' : `
                 <table class="data-table">
@@ -837,7 +841,7 @@ export async function render(container, route) {
               `}
             </div>
 
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Angebote (${kAngebote.length})</h2>
               ${kAngebote.length === 0 ? '<p class="text-mute">Noch keine Angebote.</p>' : `
                 <table class="data-table">
@@ -857,7 +861,7 @@ export async function render(container, route) {
             </div>
 
             ${kAB.length ? `
-              <div class="akte-bereich">
+              <div class="akte-bereich" data-tab="details">
                 <h2 style="font-size:14px;margin:0 0 8px">Auftragsbestätigungen (${kAB.length})</h2>
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
@@ -873,7 +877,7 @@ export async function render(container, route) {
               </div>
             ` : ''}
 
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Rechnungen (${kRechnungen.length})</h2>
               ${kRechnungen.length === 0 ? '<p class="text-mute">Noch keine Rechnungen.</p>' : `
                 <table class="data-table">
@@ -898,7 +902,7 @@ export async function render(container, route) {
               <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>
             </div>
 
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Ausgaben / Belege${kAusgaben.length ? ` (${kAusgaben.length}, ${formatCurrency(kAusgabenSumme)})` : ''}</h2>
               ${kAusgaben.length === 0 ? '<p class="text-mute">Noch keine Ausgaben diesem Kunden oder seinen Projekten zugeordnet.</p>' : `
                 <table class="data-table">
@@ -919,7 +923,7 @@ export async function render(container, route) {
               `}
             </div>
 
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="dokumentation">
               <div id="akte-kunden-dok-host"></div>
             </div>
           </div>
@@ -930,6 +934,16 @@ export async function render(container, route) {
     const close = () => render(container);
     container.querySelector('#akte-back').addEventListener('click', close);
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(kunde));
+    // Reiter-Umschalter "Details"/"Dokumentation" - nur auf dem Handy sichtbar
+    // (siehe app.css @media 760px), auf dem Desktop bleiben beide Spalten wie
+    // gehabt komplett sichtbar und die Reiter-Leiste ist ausgeblendet.
+    const akteSplit = container.querySelector('.akte-split');
+    container.querySelectorAll('.akte-mobile-tabs .tab-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.akte-mobile-tabs .tab-item').forEach((b) => b.classList.toggle('active', b === btn));
+        akteSplit.dataset.activeTab = btn.dataset.akteTab;
+      });
+    });
 
     renderDokumenteSection(container.querySelector('#akte-kunden-dok-host'), 'kunde', kunde.id, {
       kategorien: KUNDE_DOKUMENT_KATEGORIEN, title: 'Dokumente',
