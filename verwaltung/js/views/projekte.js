@@ -658,7 +658,11 @@ export async function render(container, opts = {}) {
             ${hatUeberfaelligeRechnung ? '<button type="button" class="btn btn-danger" id="akte-zu-mahnungen">🔔 Mahnung</button>' : ''}
           </div>
         </div>
-        <div class="akte-split">
+        <div class="tabs akte-mobile-tabs">
+          <button type="button" class="tab-item active" data-akte-tab="details">Details</button>
+          <button type="button" class="tab-item" data-akte-tab="dokumentation">Dokumentation</button>
+        </div>
+        <div class="akte-split" data-active-tab="details">
           <div class="akte-info-col">
             <div class="card">
               <div class="flex-row" style="align-items:center;gap:8px;margin-bottom:2px">
@@ -681,7 +685,7 @@ export async function render(container, opts = {}) {
             </div>
           </div>
           <div class="akte-main-col">
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Angebote (${linkedAngebote.length})</h2>
               ${linkedAngebote.length === 0 ? '<p class="text-mute">Keine Angebote verknüpft.</p>' : `
                 <table class="data-table">
@@ -693,7 +697,7 @@ export async function render(container, opts = {}) {
               `}
             </div>
             ${linkedAB.length ? `
-              <div class="akte-bereich">
+              <div class="akte-bereich" data-tab="details">
                 <h2 style="font-size:14px;margin:0 0 8px">Auftragsbestätigungen (${linkedAB.length})</h2>
                 <table class="data-table">
                   <thead><tr><th>Datum</th><th>Nr.</th><th>Betreff</th><th class="text-right">Betrag</th></tr></thead>
@@ -703,7 +707,7 @@ export async function render(container, opts = {}) {
                 </table>
               </div>
             ` : ''}
-            <div class="akte-bereich">
+            <div class="akte-bereich" data-tab="details">
               <h2 style="font-size:14px;margin:0 0 8px">Rechnungen (${linkedRechnungen.length})</h2>
               ${linkedRechnungen.length === 0 ? '<p class="text-mute">Keine Rechnungen verknüpft.</p>' : `
                 <table class="data-table">
@@ -715,12 +719,12 @@ export async function render(container, opts = {}) {
                 </table>
               `}
             </div>
-            <div class="akte-bereich" id="nk-host"></div>
-            <div class="akte-bereich" id="ausgaben-host"></div>
-            <div class="akte-bereich" id="verwendung-host"></div>
-            <div class="akte-bereich" id="tc-host"></div>
-            <div class="akte-bereich" id="foto-host"></div>
-            <div class="akte-bereich" id="dok-host"></div>
+            <div class="akte-bereich" data-tab="details" id="nk-host"></div>
+            <div class="akte-bereich" data-tab="details" id="ausgaben-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="verwendung-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="tc-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="foto-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="dok-host"></div>
           </div>
         </div>
       </div>
@@ -728,6 +732,16 @@ export async function render(container, opts = {}) {
 
     const close = () => render(container, opts);
     container.querySelector('#akte-back').addEventListener('click', close);
+    // Reiter-Umschalter "Details"/"Dokumentation" - nur auf dem Handy sichtbar
+    // (siehe app.css @media 760px), auf dem Desktop bleiben beide Spalten wie
+    // gehabt komplett sichtbar und die Reiter-Leiste ist ausgeblendet.
+    const akteSplit = container.querySelector('.akte-split');
+    container.querySelectorAll('.akte-mobile-tabs .tab-item').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.akte-mobile-tabs .tab-item').forEach((b) => b.classList.toggle('active', b === btn));
+        akteSplit.dataset.activeTab = btn.dataset.akteTab;
+      });
+    });
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(p));
     // Angebote/Auftragsbestätigungen/Rechnungen direkt aus der Projekt-Akte
     // anklickbar - öffnet das jeweilige Formular per Deep-Link, wie in der

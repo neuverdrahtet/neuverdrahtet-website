@@ -1456,6 +1456,19 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   .akte-info-col { flex: none; width: 100%; }
 }
 
+/* Projekt-Akte auf dem Handy: statt der langen, durchgehenden Liste aller
+   Bereiche (Angebote/AB/Rechnungen/Nachkalkulation/... und Verwendungen/
+   Teamchat/Fotos/Dokumente) ein Reiter-Umschalter "Details" / "Dokumentation"
+   (ToolTime-Vorbild) - auf dem Desktop bleibt alles wie bisher untereinander
+   sichtbar, die Reiter-Leiste ist dort ausgeblendet. */
+.akte-mobile-tabs { display: none; }
+@media (max-width: 760px) {
+  .akte-mobile-tabs { display: flex; }
+  .akte-split[data-active-tab="details"] .akte-main-col > .akte-bereich[data-tab="dokumentation"] { display: none; }
+  .akte-split[data-active-tab="dokumentation"] .akte-main-col > .akte-bereich[data-tab="details"] { display: none; }
+  .akte-split[data-active-tab="dokumentation"] > .akte-info-col { display: none; }
+}
+
 /* Dokumente */
 .dok-list { display: flex; flex-direction: column; gap: 6px; }
 .dok-row {
