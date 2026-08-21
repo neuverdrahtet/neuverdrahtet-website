@@ -467,12 +467,31 @@ export async function render(container, route) {
         body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
         return;
       }
-      if (body.querySelector('#import-replace').checked) {
+      const wirdErsetzt = body.querySelector('#import-replace').checked;
+      if (wirdErsetzt) {
         if (!confirmDelete(`Wirklich ALLE ${kunden.length} bestehenden Kunden löschen und durch ${rows.length} neue ersetzen?`)) return;
         await clearStore('kunden');
       }
-      for (const row of rows) await put('kunden', row);
-      toast(`${rows.length} Kunde(n) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
+      // Duplikat-Schutz: sonst legt ein versehentlich zweimal hochgeladenes
+      // CSV (oder ein CSV mit doppelten Zeilen) bei jedem Import stillschweigend
+      // neue Kunden an, statt bestehende zu erkennen - anders als bei den
+      // übrigen Kunden-Anlage-Wegen (E-Mail-Anfrage, KI-Bürokraft-API), die
+      // bereits auf Firma/E-Mail abgleichen.
+      const bekannteNamen = new Set(wirdErsetzt ? [] : kunden.map((k) => (k.firma || '').trim().toLowerCase()));
+      let duplikate = 0;
+      const zuImportieren = [];
+      for (const row of rows) {
+        const name = (row.firma || '').trim().toLowerCase();
+        if (bekannteNamen.has(name)) { duplikate++; continue; }
+        bekannteNamen.add(name);
+        zuImportieren.push(row);
+      }
+      for (const row of zuImportieren) await put('kunden', row);
+      const hinweise = [
+        errors.length ? `${errors.length} Zeile(n) übersprungen` : '',
+        duplikate ? `${duplikate} Duplikat(e) übersprungen (Firma bereits vorhanden)` : '',
+      ].filter(Boolean).join(', ');
+      toast(`${zuImportieren.length} Kunde(n) importiert${hinweise ? `, ${hinweise}` : ''}`, 'success');
       close();
       render(container);
     });
