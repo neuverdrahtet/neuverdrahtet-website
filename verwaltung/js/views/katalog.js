@@ -5,6 +5,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
 import { parseDatanorm, readDatanormFile } from '../datanorm.js';
 import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
+import { STANDARD_KATALOG_ELEKTRO_LV } from '../standardKatalogElektroLV.js';
 import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
 import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
 import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
@@ -15,7 +16,11 @@ import { STANDARD_KATALOG_KOMPLETTBAD } from '../standardKatalogKomplettbad.js';
 import { STANDARD_KATALOG_RENOVIERUNG } from '../standardKatalogRenovierung.js';
 
 const STANDARD_KATALOGE = [
-  { gewerk: 'elektro', liste: STANDARD_KATALOG_ELEKTRO },
+  // LV zuerst: bei gleicher Bezeichnung (z.B. "Facharbeiterstunde
+  // Elektroinstallation") gewinnt beim Import der aktuellere, detailliertere
+  // LV-Preis vor dem älteren allgemeinen Richtwert - der Bezeichnungs-basierte
+  // Duplikat-Schutz überspringt dann automatisch die zweite, ältere Zeile.
+  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_ELEKTRO] },
   { gewerk: 'abbruch', liste: STANDARD_KATALOG_ABBRUCH },
   { gewerk: 'fliesen', liste: STANDARD_KATALOG_FLIESEN },
   { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
@@ -400,7 +405,7 @@ export async function render(container, route) {
           <div class="tag-list">
             ${STANDARD_KATALOGE.map(({ gewerk, liste }) => {
               const g = GEWERKE.find((x) => x.id === gewerk);
-              const neueCount = liste.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase())).length;
+              const neueCount = new Set(liste.map((v) => v.bezeichnung.trim().toLowerCase()).filter((n) => !bestehendeBezeichnungen.has(n))).size;
               return `
                 <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
                   <input type="checkbox" name="gewerke" value="${gewerk}" ${neueCount > 0 ? 'checked' : 'disabled'}>
@@ -424,12 +429,18 @@ export async function render(container, route) {
       const ausgewaehlt = fd.getAll('gewerke');
       if (ausgewaehlt.length === 0) { close(); return; }
       let importiert = 0;
+      // bestehendeBezeichnungen wird bewusst innerhalb dieser Schleife (statt
+      // vorab per liste.filter()) ergänzt - manche Standard-Kataloge (z.B.
+      // Elektro: allgemeiner Richtwert-Katalog + detailliertes LV) enthalten
+      // vereinzelt dieselbe Bezeichnung doppelt; ein vorab berechnetes filter()
+      // würde solche Duplikate innerhalb desselben Imports nicht erkennen.
       for (const gewerk of ausgewaehlt) {
         const liste = STANDARD_KATALOGE.find((k) => k.gewerk === gewerk)?.liste || [];
-        const neue = liste.filter((v) => !bestehendeBezeichnungen.has(v.bezeichnung.trim().toLowerCase()));
-        for (const v of neue) {
+        for (const v of liste) {
+          const key = v.bezeichnung.trim().toLowerCase();
+          if (bestehendeBezeichnungen.has(key)) continue;
           await put('katalog', { id: uid(), ...v, komponenten: [], bestandTracking: false, bestand: 0, mindestbestand: 0 });
-          bestehendeBezeichnungen.add(v.bezeichnung.trim().toLowerCase());
+          bestehendeBezeichnungen.add(key);
           importiert += 1;
         }
       }
