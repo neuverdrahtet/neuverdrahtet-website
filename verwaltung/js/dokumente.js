@@ -711,23 +711,34 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
   }
 
   /**
-   * Schnellerfassung per Sprachaufnahme: statt einer vollständigen
-   * Vorlage mit vielen Feldern nur Titel + frei diktierter/eingegebener
-   * Text - für kurze Vor-Ort-Notizen ("Sprachnotiz"), die als PDF im
-   * Dokumente-Bereich landen. Nutzt dieselbe PDF-Erzeugung wie "Bericht aus
-   * Vorlage" (buildBerichtPdfBlob), aber ohne Räume/Fotos/Unterschriften -
-   * die lassen sich bei Bedarf weiterhin über die volle Vorlage erfassen.
+   * Schnellerfassung per Sprachaufnahme: statt einer vollständigen Vorlage
+   * mit vielen Feldern nur Titel + Arbeitszeit + frei diktierter/
+   * eingegebener Text + Fotos - für kurze Vor-Ort-Notizen ("Sprachnotiz"),
+   * die als PDF im Dokumente-Bereich landen. Nutzt dieselbe PDF-Erzeugung
+   * wie "Bericht aus Vorlage" (buildBerichtPdfBlob) und denselben
+   * Foto-Editor (mountFotoEditor), nur ohne Räume/Checklisten/Unterschriften
+   * - die lassen sich bei Bedarf weiterhin über die volle Vorlage erfassen.
    */
   async function openSprachnotizModal() {
     const settings = berichtContext.settings || {};
     const kunde = berichtContext.kunde || null;
     const projekt = berichtContext.projekt || '';
+    const zeitPresets = ['0.25', '0.5', '0.75', '1', '1.5', '2', '2.5', '3', '4', '5', '6', '7', '8'];
 
     const { body, close } = openModal({
       title: 'Sprachnotiz',
       bodyHtml: `
         <div class="field"><label>Titel</label><input id="sn-titel" type="text" value="Sprachnotiz ${formatDate(todayISO())}"></div>
+        <div class="field" style="margin-top:8px"><label>Arbeitszeit (Std.)</label>
+          <div class="flex-row" style="gap:8px">
+            <input id="sn-arbeitszeit" type="number" step="0.25" min="0" list="sn-zeit-presets" style="max-width:120px" placeholder="frei wählbar">
+            <datalist id="sn-zeit-presets">${zeitPresets.map((z) => `<option value="${z}"></option>`).join('')}</datalist>
+            <button type="button" class="btn btn-sm" id="btn-sn-zeit-insert">+ In Text einfügen</button>
+          </div>
+        </div>
         <div class="field" style="margin-top:8px"><label>Text</label><div id="sn-recorder-host"></div></div>
+        <div class="field" style="margin-top:8px"><label>Fotos (optional)</label></div>
+        <div id="sn-fotos-host"></div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -736,6 +747,13 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       `,
     });
     const recorder = mountVoiceRecorder(body.querySelector('#sn-recorder-host'));
+    const fotoEditor = mountFotoEditor(body.querySelector('#sn-fotos-host'), {});
+    body.querySelector('#btn-sn-zeit-insert').addEventListener('click', () => {
+      const az = body.querySelector('#sn-arbeitszeit').value;
+      if (!az) return;
+      const textarea = body.querySelector('#vn-text');
+      textarea.value = (textarea.value ? textarea.value.replace(/\s+$/, '') + '\n' : '') + `Arbeitszeit: ${az} Std.`;
+    });
     body.querySelector('#btn-cancel').addEventListener('click', () => { recorder.stop(); close(); });
     body.querySelector('#btn-save').addEventListener('click', async () => {
       recorder.stop();
@@ -748,7 +766,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       ].filter(Boolean).join(' · ');
       let blob;
       try {
-        blob = await buildBerichtPdfBlob({ settings, titel, untertitel, text, datum: new Date().toISOString() });
+        blob = await buildBerichtPdfBlob({ settings, titel, untertitel, text, datum: new Date().toISOString(), fotos: fotoEditor.getFotos() });
       } catch (err) {
         toast(err.message, 'danger');
         return;
