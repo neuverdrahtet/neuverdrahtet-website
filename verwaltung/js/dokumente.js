@@ -1,5 +1,5 @@
-import { getAll, put, remove } from './db.js';
-import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage, openDokumentMitVorbelegung } from './utils.js';
+import { getAll, put, remove, GEWERKE } from './db.js';
+import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage, openDokumentMitVorbelegung, getCurrentMitarbeiterId, katalogOptionsHtml } from './utils.js';
 import { openModal, confirmDelete } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
@@ -438,7 +438,7 @@ export async function saveDokument({ bezugTyp, bezugId, kategorie, name, mime, b
  * Renders an upload + list UI for arbitrary files (reports, timesheets, photos, contracts)
  * attached to a Projekt/Kunde/Mitarbeiter. Mirrors fotos.js but for any file type.
  */
-export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = DOKUMENT_KATEGORIEN, title = 'Dokumente', berichtContext = null } = {}) {
+export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = DOKUMENT_KATEGORIEN, title = 'Dokumente', berichtContext = null, onVerwendungenChanged = null } = {}) {
   const zeigeBerichtsVorlage = berichtContext && kategorien.some((k) => k.id === 'bericht');
 
   async function openBerichtVorlage() {
@@ -724,9 +724,17 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const kunde = berichtContext.kunde || null;
     const projekt = berichtContext.projekt || '';
     const zeitPresets = ['0.25', '0.5', '0.75', '1', '1.5', '2', '2.5', '3', '4', '5', '6', '7', '8'];
+    // Verwendetes Material lässt sich nur bei Projekten strukturiert erfassen
+    // (verwendungen-Einträge hängen an einer projektId) - bei Kunden-Doku
+    // bleibt der Abschnitt aus, dort kann Material nur im Freitext erwähnt
+    // werden.
+    const mitMaterial = bezugTyp === 'projekt';
+    const katalog = mitMaterial ? await getAll('katalog') : [];
+    const materialListe = [];
 
     const { body, close } = openModal({
       title: 'Sprachnotiz',
+      wide: true,
       bodyHtml: `
         <div class="field"><label>Titel</label><input id="sn-titel" type="text" value="Sprachnotiz ${formatDate(todayISO())}"></div>
         <div class="field" style="margin-top:8px"><label>Arbeitszeit (Std.)</label>
@@ -737,6 +745,23 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           </div>
         </div>
         <div class="field" style="margin-top:8px"><label>Text</label><div id="sn-recorder-host"></div></div>
+        <p class="hint">Auch verwendetes Material lässt sich einfach mitdiktieren (z.B. "5 Steckdosen und 20 Meter Kabel verbaut") - für die Nachkalkulation zusätzlich unten strukturiert erfassen.</p>
+        ${mitMaterial ? `
+          <div class="field" style="margin-top:8px"><label>Verwendetes Material (optional)</label></div>
+          <div class="flex-row flex-wrap" style="gap:6px;margin-bottom:8px">
+            <select id="sn-mat-gewerk" style="flex:1;min-width:140px">
+              <option value="">Alle Gewerke</option>
+              ${GEWERKE.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}
+            </select>
+            <select id="sn-mat-katalog" style="flex:2;min-width:200px">
+              <option value="">– Artikel wählen –</option>
+              ${katalogOptionsHtml(katalog, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}
+            </select>
+            <input type="number" id="sn-mat-menge" placeholder="Menge" min="0" step="0.01" style="flex:1;min-width:90px">
+            <button type="button" class="btn btn-sm" id="btn-sn-mat-add">+ hinzufügen</button>
+          </div>
+          <div id="sn-mat-list" class="tag-list" style="margin-bottom:8px"></div>
+        ` : ''}
         <div class="field" style="margin-top:8px"><label>Fotos (optional)</label></div>
         <div id="sn-fotos-host"></div>
         <div class="modal-actions">
@@ -754,6 +779,37 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       const textarea = body.querySelector('#vn-text');
       textarea.value = (textarea.value ? textarea.value.replace(/\s+$/, '') + '\n' : '') + `Arbeitszeit: ${az} Std.`;
     });
+
+    if (mitMaterial) {
+      const matListHost = body.querySelector('#sn-mat-list');
+      function renderMatListe() {
+        matListHost.innerHTML = materialListe.length === 0 ? '' : materialListe.map((m, i) => `
+          <span class="badge" style="display:inline-flex;align-items:center;gap:6px">
+            ${escapeHtml(m.bezeichnung)}: ${m.menge}${m.einheit ? ` ${escapeHtml(m.einheit)}` : ''}
+            <button type="button" class="mat-del" data-i="${i}" style="background:none;border:none;color:inherit;cursor:pointer;font-weight:700">✕</button>
+          </span>
+        `).join('');
+        matListHost.querySelectorAll('.mat-del').forEach((btn) => {
+          btn.addEventListener('click', () => { materialListe.splice(Number(btn.dataset.i), 1); renderMatListe(); });
+        });
+      }
+      body.querySelector('#sn-mat-gewerk').addEventListener('change', (e) => {
+        const gefiltert = e.target.value ? katalog.filter((k) => k.gewerk === e.target.value) : katalog;
+        body.querySelector('#sn-mat-katalog').innerHTML = `<option value="">– Artikel wählen –</option>${katalogOptionsHtml(gefiltert, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}`;
+      });
+      body.querySelector('#btn-sn-mat-add').addEventListener('click', () => {
+        const katalogId = body.querySelector('#sn-mat-katalog').value;
+        const menge = parseFloat(body.querySelector('#sn-mat-menge').value);
+        const k = katalog.find((x) => x.id === katalogId);
+        if (!k || !menge || menge <= 0) { toast('Bitte Artikel und Menge angeben', 'danger'); return; }
+        materialListe.push({ katalogId, menge, bezeichnung: k.bezeichnung, einheit: k.einheit || '' });
+        renderMatListe();
+        const textarea = body.querySelector('#vn-text');
+        textarea.value = (textarea.value ? textarea.value.replace(/\s+$/, '') + '\n' : '') + `Material: ${menge}${k.einheit ? ` ${k.einheit}` : ''} ${k.bezeichnung}`;
+        body.querySelector('#sn-mat-menge').value = '';
+      });
+    }
+
     body.querySelector('#btn-cancel').addEventListener('click', () => { recorder.stop(); close(); });
     body.querySelector('#btn-save').addEventListener('click', async () => {
       recorder.stop();
@@ -775,6 +831,13 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         bezugTyp, bezugId, kategorie: 'bericht',
         name: `${titel.replace(/\d{1,2}\.\d{1,2}\.\d{4}/, '').replace(/[^a-z0-9äöüß _-]/gi, '').trim() || 'Sprachnotiz'}-${todayISO()}.pdf`, mime: 'application/pdf', blob,
       });
+      for (const m of materialListe) {
+        await put('verwendungen', {
+          id: uid(), projektId: bezugId, katalogId: m.katalogId, menge: m.menge,
+          datum: todayISO(), mitarbeiterId: getCurrentMitarbeiterId() || '',
+        });
+      }
+      if (materialListe.length && onVerwendungenChanged) onVerwendungenChanged();
       toast('Sprachnotiz gespeichert', 'success');
       close();
       load();

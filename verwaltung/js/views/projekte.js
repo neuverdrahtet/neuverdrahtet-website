@@ -774,6 +774,14 @@ export async function render(container, opts = {}) {
     renderDokumenteSection(container.querySelector('#dok-host'), 'projekt', p.id, {
       title: 'Dokumente (Berichte, Stundenzettel, ...)',
       berichtContext: { settings: resolveMarkeSettings(settings, markenById[p.markeId]), kunde: kunde || null, projekt: p.titel },
+      // Die Sprachnotiz kann direkt Verwendungen-Einträge anlegen (Material,
+      // das per Auswahl dazu erfasst wurde) - danach die eigene, bereits
+      // gerenderte Verwendungen-Liste neu laden, sonst bliebe sie bis zum
+      // nächsten Öffnen der Akte veraltet.
+      onVerwendungenChanged: async () => {
+        verwendungen = await getAll('verwendungen');
+        renderVerwendungen(container.querySelector('#verwendung-host'), p.id);
+      },
     });
   }
 
