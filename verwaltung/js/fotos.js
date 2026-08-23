@@ -22,7 +22,7 @@ export function renderFotoSection(host, projektId) {
         <h2 style="font-size:14px;margin:0">Fotos</h2>
         <label class="btn btn-sm" style="cursor:pointer">
           + Foto hinzufügen
-          <input type="file" accept="image/*" capture="environment" id="foto-input" hidden multiple>
+          <input type="file" accept="image/*" id="foto-input" hidden multiple>
         </label>
       </div>
       <div class="foto-grid" id="foto-grid">

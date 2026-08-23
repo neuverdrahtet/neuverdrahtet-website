@@ -156,7 +156,7 @@ function mountFotoEditor(host, { mitMarkierung = false } = {}) {
       </div>
       <label class="btn btn-sm" style="cursor:pointer">
         📷 Foto(s) hinzufügen
-        <input type="file" accept="image/*" capture="environment" multiple hidden class="foto-input">
+        <input type="file" accept="image/*" multiple hidden class="foto-input">
       </label>
     `;
     host.querySelectorAll('.foto-del').forEach((btn) => {
