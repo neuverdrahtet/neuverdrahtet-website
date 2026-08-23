@@ -1,4 +1,4 @@
-import { formatCurrency, formatDate, escapeHtml } from './utils.js';
+import { formatCurrency, formatDate, escapeHtml, toast } from './utils.js';
 
 export function printHtml(bodyHtml, settings) {
   const root = document.getElementById('print-root');
@@ -6,6 +6,40 @@ export function printHtml(bodyHtml, settings) {
   const fontSize = Number(settings?.dokSchriftgroesse) || 10;
   root.innerHTML = `<div class="print-doc" style="--dok-akzent:${escapeHtml(accent)};--dok-fontsize:${fontSize}px">${bodyHtml}</div>`;
   setTimeout(() => window.print(), 60);
+}
+
+// Als Home-Bildschirm-App installiert (iOS "Zum Home-Bildschirm", Android
+// PWA) läuft die Seite im "standalone"/"fullscreen" Anzeigemodus - dort
+// unterstützen die meisten mobilen Browser (v.a. iOS Safari) window.print()
+// nicht: der Aufruf tut dann einfach gar nichts, ohne Fehler. "Drucken/PDF"
+// wirkte dadurch als würde nichts passieren. Dort stattdessen ein echtes PDF
+// bauen und in einem neuen Tab öffnen - von dort aus lässt sich über das
+// Teilen-/Drucken-Symbol der PDF-Ansicht drucken oder speichern.
+function isStandaloneDisplay() {
+  return window.navigator.standalone === true
+    || window.matchMedia?.('(display-mode: standalone)').matches
+    || window.matchMedia?.('(display-mode: fullscreen)').matches;
+}
+
+/**
+ * Druckt ein Dokument (Angebot/AB/Rechnung/Mahnung): öffnet im normalen
+ * Browser-Tab den nativen Druckdialog (schnellster Weg zum Drucker), baut
+ * aber im Home-Bildschirm-App-Modus stattdessen ein echtes PDF und öffnet es
+ * in einem neuen Tab, da window.print() dort meist wirkungslos bleibt.
+ */
+export async function printDokument({ bodyHtml, settings, buildPdfBlob }) {
+  if (!isStandaloneDisplay()) {
+    printHtml(bodyHtml, settings);
+    return;
+  }
+  try {
+    const blob = await buildPdfBlob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  } catch (err) {
+    toast(err.message || 'PDF konnte nicht erstellt werden', 'danger');
+  }
 }
 
 window.addEventListener('afterprint', () => {

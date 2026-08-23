@@ -1,7 +1,7 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
-import { printHtml, buildDocHtml } from '../pdf.js';
+import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
@@ -296,7 +296,7 @@ export async function render(container) {
 
   function printMahnung(m) {
     if (!m) return;
-    printHtml(buildDocHtml(mahnungDocOpts(m)), settings);
+    printDokument({ bodyHtml: buildDocHtml(mahnungDocOpts(m)), settings, buildPdfBlob: () => buildDocPdfBlob(mahnungDocOpts(m)) });
   }
 
   function emailMahnung(m) {

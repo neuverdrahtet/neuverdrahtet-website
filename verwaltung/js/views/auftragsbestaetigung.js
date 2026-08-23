@@ -2,7 +2,7 @@ import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, ST
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
-import { printHtml, buildDocHtml } from '../pdf.js';
+import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
@@ -338,7 +338,7 @@ export async function render(container, route) {
         };
       }
       body.querySelector('#btn-print').addEventListener('click', () => {
-        printHtml(buildDocHtml(docOpts()), settings);
+        printDokument({ bodyHtml: buildDocHtml(docOpts()), settings, buildPdfBlob: () => buildDocPdfBlob(docOpts()) });
       });
       const emailBtn = body.querySelector('#btn-email');
       if (emailBtn) {

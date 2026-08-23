@@ -2,7 +2,7 @@ import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, ST
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
-import { printHtml, buildDocHtml } from '../pdf.js';
+import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { buildXRechnungBlob, xRechnungFilename } from '../xrechnung.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -844,7 +844,7 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
         openForm({ ...data });
       }
       body.querySelector('#btn-print').addEventListener('click', async () => {
-        printHtml(buildDocHtml(docOpts()), settings);
+        await printDokument({ bodyHtml: buildDocHtml(docOpts()), settings, buildPdfBlob: () => buildDocPdfBlob(docOpts()) });
         if (!locked) await markVersendetUndSperren();
       });
       body.querySelector('#btn-xrechnung').addEventListener('click', () => {
