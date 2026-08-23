@@ -390,11 +390,16 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 /* Karten-Liste (ToolTime-Vorbild) - auf schmalen Bildschirmen statt der
    Tabelle gezeigt (bessere mobile Lesbarkeit als eine seitlich scrollende
    Tabelle); Tabelle und Kartenliste werden aus denselben Daten gerendert,
-   nur per Media Query umgeschaltet. */
+   nur per Media Query umgeschaltet. Nur EINGEFÜHRT bei Ansichten, die
+   tatsächlich eine .tt-card-list rendern (:has()-Bedingung) - Ansichten
+   ohne Karten-Variante behalten sonst nur die (unsichtbare) Tabelle und
+   zeigen dadurch auf dem Handy gar nichts mehr an (genau dieser Fehler
+   wurde gemeldet: "Termine" hat keine Kartenliste, die Tabelle wurde aber
+   trotzdem global ausgeblendet). */
 .tt-card-list { display: none; }
 @media (max-width: 720px) {
-  #table-host { overflow-x: visible; }
-  #table-host > table.data-table { display: none; }
+  #table-host:has(.tt-card-list) { overflow-x: visible; }
+  #table-host:has(.tt-card-list) > table.data-table { display: none; }
   .tt-card-list { display: flex; flex-direction: column; gap: 10px; }
 }
 .tt-card {
