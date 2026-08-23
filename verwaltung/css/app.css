@@ -1487,6 +1487,11 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   cursor: pointer;
 }
 .dok-icon { font-size: 18px; }
+
+/* Sprachnotiz (Web-Speech-API-Diktat direkt in der App) */
+.voicenote-controls { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.voicenote-status { font-size: 12.5px; }
+#vn-toggle.is-recording { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
 .dok-info { flex: 1; min-width: 0; }
 .dok-name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

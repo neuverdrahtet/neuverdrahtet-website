@@ -6,6 +6,7 @@ import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
 import { mountSignaturePad } from './signature.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
+import { mountVoiceRecorder } from './voicenote.js';
 
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
@@ -709,6 +710,59 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     }
   }
 
+  /**
+   * Schnellerfassung per Sprachaufnahme: statt einer vollständigen
+   * Vorlage mit vielen Feldern nur Titel + frei diktierter/eingegebener
+   * Text - für kurze Vor-Ort-Notizen ("Sprachnotiz"), die als PDF im
+   * Dokumente-Bereich landen. Nutzt dieselbe PDF-Erzeugung wie "Bericht aus
+   * Vorlage" (buildBerichtPdfBlob), aber ohne Räume/Fotos/Unterschriften -
+   * die lassen sich bei Bedarf weiterhin über die volle Vorlage erfassen.
+   */
+  async function openSprachnotizModal() {
+    const settings = berichtContext.settings || {};
+    const kunde = berichtContext.kunde || null;
+    const projekt = berichtContext.projekt || '';
+
+    const { body, close } = openModal({
+      title: 'Sprachnotiz',
+      bodyHtml: `
+        <div class="field"><label>Titel</label><input id="sn-titel" type="text" value="Sprachnotiz ${formatDate(todayISO())}"></div>
+        <div class="field" style="margin-top:8px"><label>Text</label><div id="sn-recorder-host"></div></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-save">Als PDF speichern</button>
+        </div>
+      `,
+    });
+    const recorder = mountVoiceRecorder(body.querySelector('#sn-recorder-host'));
+    body.querySelector('#btn-cancel').addEventListener('click', () => { recorder.stop(); close(); });
+    body.querySelector('#btn-save').addEventListener('click', async () => {
+      recorder.stop();
+      const titel = body.querySelector('#sn-titel').value.trim() || 'Sprachnotiz';
+      const text = recorder.getText();
+      if (!text) { toast('Bitte zuerst Text aufnehmen oder eingeben.', 'danger'); return; }
+      const untertitel = [
+        kunde?.firma ? `Kunde: ${kunde.firma}` : '',
+        projekt ? `Projekt: ${projekt}` : '',
+      ].filter(Boolean).join(' · ');
+      let blob;
+      try {
+        blob = await buildBerichtPdfBlob({ settings, titel, untertitel, text, datum: new Date().toISOString() });
+      } catch (err) {
+        toast(err.message, 'danger');
+        return;
+      }
+      await saveDokument({
+        bezugTyp, bezugId, kategorie: 'bericht',
+        name: `${titel.replace(/\d{1,2}\.\d{1,2}\.\d{4}/, '').replace(/[^a-z0-9äöüß _-]/gi, '').trim() || 'Sprachnotiz'}-${todayISO()}.pdf`, mime: 'application/pdf', blob,
+      });
+      toast('Sprachnotiz gespeichert', 'success');
+      close();
+      load();
+    });
+  }
+
   async function load() {
     const dokumente = (await getAll('dokumente'))
       .filter((d) => d.bezugTyp === bezugTyp && d.bezugId === bezugId)
@@ -719,6 +773,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         <h2 style="font-size:14px;margin:0">${escapeHtml(title)}</h2>
         <div class="flex-row">
           ${zeigeBerichtsVorlage ? '<button type="button" class="btn btn-sm" id="btn-bericht-vorlage">📝 Bericht aus Vorlage</button>' : ''}
+          ${zeigeBerichtsVorlage ? '<button type="button" class="btn btn-sm" id="btn-sprachnotiz">🎙️ Sprachnotiz</button>' : ''}
           <select id="dok-kategorie" class="btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;">
             ${kategorien.map((k) => `<option value="${k.id}">${escapeHtml(k.titel)}</option>`).join('')}
           </select>
@@ -745,6 +800,8 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
 
     const berichtBtn = host.querySelector('#btn-bericht-vorlage');
     if (berichtBtn) berichtBtn.addEventListener('click', openBerichtVorlage);
+    const sprachnotizBtn = host.querySelector('#btn-sprachnotiz');
+    if (sprachnotizBtn) sprachnotizBtn.addEventListener('click', openSprachnotizModal);
 
     host.querySelectorAll('.dok-download').forEach((a) => {
       const doc = dokumente.find((d) => d.id === a.dataset.id);
