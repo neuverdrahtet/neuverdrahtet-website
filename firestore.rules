@@ -109,6 +109,18 @@ service cloud.firestore {
       allow write: if isAdminOrBuero();
     }
 
+    // katalog/* enthält Einkaufspreise/Zuschläge (sensible Kalkulationsdaten)
+    // - deshalb wie mitarbeiter nur für Admin+Büro lesbar. Für die reine
+    // Artikelauswahl ohne Preise (z.B. "Verwendetes Material" in der
+    // Projekt-Akte/Sprachnotiz, die auch normale Mitarbeiter nutzen dürfen)
+    // pflegt db.js parallel eine öffentliche Teilmenge (nur Bezeichnung/
+    // Einheit/Gewerk/Unterkategorie) in katalogOeffentlich, die für alle drei
+    // Rollen lesbar ist.
+    match /katalogOeffentlich/{docId} {
+      allow read: if isAnyRole();
+      allow write: if isAdminOrBuero();
+    }
+
     // Push-Benachrichtigungs-Tokens (Firebase Cloud Messaging): ein Gerät
     // gehört genau einem Nutzer - jeder darf nur seine eigenen Token-
     // Dokumente anlegen/lesen/löschen. Das Versenden selbst läuft server-

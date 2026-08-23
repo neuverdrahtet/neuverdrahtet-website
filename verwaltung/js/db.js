@@ -177,6 +177,19 @@ const ready = new Map(); // storeName -> Promise, resolved nach dem ersten Snaps
 // syncMitarbeiterOeffentlich() und den Firestore-Permission-Fallback unten.
 const MITARBEITER_OEFFENTLICH = 'mitarbeiterOeffentlich';
 
+// Gleiches Muster für 'katalog': enthält Einkaufspreise/Zuschläge (sensible
+// Kalkulationsdaten), deshalb für die Rolle "mitarbeiter" gesperrt. Damit
+// z.B. die Material-Auswahl in der Sprachnotiz/"Verwendetes Material" auch
+// für normale Mitarbeiter Artikel zum Auswählen anzeigt (nur ohne Preise),
+// pflegt db.js parallel eine öffentliche Teilmenge (Bezeichnung/Einheit/
+// Gewerk/Unterkategorie, keine Preise).
+const KATALOG_OEFFENTLICH = 'katalogOeffentlich';
+
+// Stores, die für Rollen ohne Vollzugriff (aktuell nur "mitarbeiter") eine
+// öffentliche, nicht-sensible Teilmenge als Lese-Fallback haben - siehe
+// MITARBEITER_OEFFENTLICH/KATALOG_OEFFENTLICH oben.
+const OEFFENTLICHE_FALLBACKS = { mitarbeiter: MITARBEITER_OEFFENTLICH, katalog: KATALOG_OEFFENTLICH };
+
 function ensureListening(storeName) {
   if (listeners.has(storeName)) return ready.get(storeName);
   const storeCache = new Map();
@@ -193,9 +206,10 @@ function ensureListening(storeName) {
       });
       resolveReady();
     }, (err) => {
-      if (storeName === 'mitarbeiter' && !usingFallback) {
-        console.warn(`Firestore: kein Zugriff auf "mitarbeiter" (${err.code}) - falle auf öffentliche Mitarbeiterliste zurück.`);
-        listeners.set(storeName, subscribe(MITARBEITER_OEFFENTLICH, true));
+      const fallbackCollection = OEFFENTLICHE_FALLBACKS[storeName];
+      if (fallbackCollection && !usingFallback) {
+        console.warn(`Firestore: kein Zugriff auf "${storeName}" (${err.code}) - falle auf öffentliche Teilmenge zurück.`);
+        listeners.set(storeName, subscribe(fallbackCollection, true));
         return;
       }
       console.error(`Firestore-Listener-Fehler (${storeName}):`, err);
@@ -231,6 +245,16 @@ function mitarbeiterOeffentlichData(value) {
   return { name: value.name || '', farbe: value.farbe || '', rolle: value.rolle || '' };
 }
 
+// Bewusst OHNE preis/einkaufspreis/aufschlagProzent/steuersatz - genau die
+// Kalkulationsdaten, die vor der Rolle "mitarbeiter" verborgen bleiben
+// sollen (siehe KATALOG_OEFFENTLICH oben).
+function katalogOeffentlichData(value) {
+  return {
+    typ: value.typ || 'artikel', bezeichnung: value.bezeichnung || '', einheit: value.einheit || '',
+    gewerk: value.gewerk || '', unterkategorie: value.unterkategorie || '', _geloescht: value._geloescht || false,
+  };
+}
+
 async function putFs(storeName, value) {
   if (storeName === 'einstellungen') {
     await setDoc(EINSTELLUNGEN_DOC(), { [value.key]: value.value }, { merge: true });
@@ -239,6 +263,9 @@ async function putFs(storeName, value) {
   await setDoc(doc(firestore, storeName, value.id), value);
   if (storeName === 'mitarbeiter') {
     await setDoc(doc(firestore, MITARBEITER_OEFFENTLICH, value.id), mitarbeiterOeffentlichData(value));
+  }
+  if (storeName === 'katalog') {
+    await setDoc(doc(firestore, KATALOG_OEFFENTLICH, value.id), katalogOeffentlichData(value));
   }
   return value.id;
 }
@@ -251,6 +278,9 @@ async function removeFs(storeName, key) {
   await deleteDoc(doc(firestore, storeName, key));
   if (storeName === 'mitarbeiter') {
     await deleteDoc(doc(firestore, MITARBEITER_OEFFENTLICH, key));
+  }
+  if (storeName === 'katalog') {
+    await deleteDoc(doc(firestore, KATALOG_OEFFENTLICH, key));
   }
 }
 
@@ -393,6 +423,16 @@ export async function syncMitarbeiterOeffentlich() {
   if (!FIREBASE_ENABLED) return;
   const alle = await getAllFs('mitarbeiter');
   await Promise.all(alle.map((m) => setDoc(doc(firestore, MITARBEITER_OEFFENTLICH, m.id), mitarbeiterOeffentlichData(m))));
+}
+
+// Backfill für bereits vor diesem Fix angelegte Katalog-Einträge, die noch
+// kein gespiegeltes katalogOeffentlich-Dokument haben. Nur admin/buero
+// können 'katalog' überhaupt vollständig lesen (siehe firestore.rules),
+// daher wird das einfach beim Öffnen der Katalog-Seite mit ausgeführt.
+export async function syncKatalogOeffentlich() {
+  if (!FIREBASE_ENABLED) return;
+  const alle = await getAllFs('katalog');
+  await Promise.all(alle.map((k) => setDoc(doc(firestore, KATALOG_OEFFENTLICH, k.id), katalogOeffentlichData(k))));
 }
 
 export async function clearStore(storeName) {

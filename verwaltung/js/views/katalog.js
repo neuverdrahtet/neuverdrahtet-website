@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, USTSAETZE, GEWERKE } from '../db.js';
+import { getAll, put, remove, getSettings, syncKatalogOeffentlich, USTSAETZE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -69,6 +69,7 @@ export async function render(container, route) {
   let items = await getAll('katalog');
   let lagerbewegungen = await getAll('lagerbewegungen');
   const settings = await getSettings();
+  syncKatalogOeffentlich().catch((err) => console.error('katalogOeffentlich-Sync fehlgeschlagen:', err));
   items.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   let filtered = items;
   let typeFilter = '';
