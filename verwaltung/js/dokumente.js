@@ -438,7 +438,7 @@ export async function saveDokument({ bezugTyp, bezugId, kategorie, name, mime, b
  * Renders an upload + list UI for arbitrary files (reports, timesheets, photos, contracts)
  * attached to a Projekt/Kunde/Mitarbeiter. Mirrors fotos.js but for any file type.
  */
-export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = DOKUMENT_KATEGORIEN, title = 'Dokumente', berichtContext = null, onVerwendungenChanged = null } = {}) {
+export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = DOKUMENT_KATEGORIEN, title = 'Dokumente', berichtContext = null, onProjektDatenGeaendert = null } = {}) {
   const zeigeBerichtsVorlage = berichtContext && kategorien.some((k) => k.id === 'bericht');
 
   async function openBerichtVorlage() {
@@ -745,7 +745,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           </div>
         </div>
         <div class="field" style="margin-top:8px"><label>Text</label><div id="sn-recorder-host"></div></div>
-        <p class="hint">Auch verwendetes Material lässt sich einfach mitdiktieren (z.B. "5 Steckdosen und 20 Meter Kabel verbaut") - für die Nachkalkulation zusätzlich unten strukturiert erfassen.</p>
+        <p class="hint">Arbeitszeit und verwendetes Material lassen sich einfach mitdiktieren (z.B. "3,5 Stunden gearbeitet, 5 Steckdosen und 20 Meter Kabel verbaut") - für die Nachkalkulation zusätzlich oben/unten strukturiert erfassen.</p>
         ${mitMaterial ? `
           <div class="field" style="margin-top:8px"><label>Verwendetes Material (optional)</label></div>
           <div class="flex-row flex-wrap" style="gap:6px;margin-bottom:8px">
@@ -837,7 +837,18 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           datum: todayISO(), mitarbeiterId: getCurrentMitarbeiterId() || '',
         });
       }
-      if (materialListe.length && onVerwendungenChanged) onVerwendungenChanged();
+      // Arbeitszeit landet - wie das Material - zusätzlich zur Textzeile im
+      // PDF als echter Zeiterfassungs-Eintrag, statt nur als Text stehen zu
+      // bleiben (sonst wäre die Zeit für Nachkalkulation/Abrechnung verloren).
+      const arbeitszeitStd = mitMaterial ? parseFloat(body.querySelector('#sn-arbeitszeit').value) : NaN;
+      if (mitMaterial && arbeitszeitStd > 0) {
+        await put('zeiterfassung', {
+          id: uid(), projektId: bezugId, mitarbeiterId: getCurrentMitarbeiterId() || '',
+          datum: todayISO(), dauerMinuten: Math.round(arbeitszeitStd * 60), beschreibung: titel,
+          abgerechnet: false, startzeit: '', endzeit: '', taetigkeit: 'baustelle',
+        });
+      }
+      if ((materialListe.length || arbeitszeitStd > 0) && onProjektDatenGeaendert) onProjektDatenGeaendert();
       toast('Sprachnotiz gespeichert', 'success');
       close();
       load();
