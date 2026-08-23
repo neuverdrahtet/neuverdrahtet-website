@@ -339,16 +339,16 @@ export async function render(container, opts = {}) {
       <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
         <h2 style="font-size:14px;margin:0">Verwendetes Material / Leistungen</h2>
       </div>
-      <div class="flex-row" style="gap:6px;margin-bottom:10px">
-        <select id="verwendung-gewerk" style="flex:1" title="Gewerk zum Filtern wählen">
+      <div class="flex-row flex-wrap" style="gap:6px;margin-bottom:10px">
+        <select id="verwendung-gewerk" style="flex:1;min-width:140px" title="Gewerk zum Filtern wählen">
           <option value="">Alle Gewerke</option>
           ${GEWERKE.map((g) => `<option value="${g.id}" ${verwendungGewerkFilter === g.id ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}
         </select>
-        <select id="verwendung-katalog" style="flex:2">
+        <select id="verwendung-katalog" style="flex:2;min-width:180px">
           <option value="">– Artikel wählen –</option>
           ${katalogOptionsHtml(verwendungGewerkFilter ? katalog.filter((k) => k.gewerk === verwendungGewerkFilter) : katalog, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}
         </select>
-        <input type="number" id="verwendung-menge" placeholder="Menge" min="0" step="0.01" style="flex:1">
+        <input type="number" id="verwendung-menge" placeholder="Menge" min="0" step="0.01" style="flex:1;min-width:90px">
         <button type="button" class="btn btn-sm" id="btn-verwendung-add">+ hinzufügen</button>
       </div>
       ${liste.length === 0 ? '<p class="text-mute">Noch kein Material/Leistungen erfasst.</p>' : `
