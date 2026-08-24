@@ -337,18 +337,22 @@ export async function render(container, route) {
         <div class="divider"></div>
         <h2 style="font-size:14px;margin:0 0 8px">Mögliche Duplikate (${dupGroups.length} Bezeichnung${dupGroups.length === 1 ? '' : 'en'})</h2>
         ${dupGroups.length === 0 ? '<p class="text-mute">Keine doppelten Bezeichnungen gefunden.</p>' : `
-          <p class="hint">Einträge mit identischer Bezeichnung – prüfe Gewerk/Preis und lösche überzählige Zeilen.</p>
-          ${dupGroups.map((g) => `
+          <p class="hint">Einträge mit identischer Bezeichnung – prüfe Gewerk/Preis, wähle die zu löschenden Zeilen aus (der erste Eintrag je Gruppe ist vorausgewählt zum Behalten).</p>
+          <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:8px;padding-bottom:8px">
+            <input type="checkbox" id="kdup2-select-all">
+            <span>Alle auswählen / abwählen</span>
+          </label>
+          ${dupGroups.map((g, gi) => `
             <div class="card" style="margin-bottom:8px;padding:10px">
               <strong>${escapeHtml(g[0].bezeichnung)}</strong> <span class="text-mute">(${TYP_LABEL[g[0].typ] || g[0].typ})</span>
               <table class="data-table" style="margin-top:6px">
-                <thead><tr><th>Gewerk</th><th class="text-right">VK</th><th></th></tr></thead>
+                <thead><tr><th></th><th>Gewerk</th><th class="text-right">VK</th></tr></thead>
                 <tbody>
-                  ${g.map((i) => `
+                  ${g.map((i, ii) => `
                     <tr>
-                      <td>${escapeHtml(GEWERKE.find((x) => x.id === i.gewerk)?.titel || '– kein Gewerk –')}</td>
+                      <td><input type="checkbox" class="kat-dup-del" data-gi="${gi}" data-ii="${ii}" ${ii === 0 ? '' : 'checked'}></td>
+                      <td>${escapeHtml(GEWERKE.find((x) => x.id === i.gewerk)?.titel || '– kein Gewerk –')}${ii === 0 ? ' <span class="text-mute">(bleibt erhalten)</span>' : ''}</td>
                       <td class="text-right">${formatCurrency(i.preis)}</td>
-                      <td><button type="button" class="btn btn-sm btn-danger dup-del" data-id="${i.id}">Löschen</button></td>
                     </tr>
                   `).join('')}
                 </tbody>
@@ -359,6 +363,7 @@ export async function render(container, route) {
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Schließen</button>
+          ${dupGroups.length > 0 ? '<button type="button" class="btn btn-danger" id="btn-kat-dup-delete">Ausgewählte löschen</button>' : ''}
         </div>
       `,
     });
@@ -381,18 +386,44 @@ export async function render(container, route) {
       close();
       render(container);
     });
-    body.querySelectorAll('.dup-del').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const item = items.find((i) => i.id === btn.dataset.id);
-        if (!item || !confirmDelete(`"${item.bezeichnung}" wirklich löschen?`)) return;
+    const katDupCheckboxes = () => Array.from(body.querySelectorAll('.kat-dup-del'));
+    const katDupSelectAll = body.querySelector('#kdup2-select-all');
+    const katDupDeleteBtn = body.querySelector('#btn-kat-dup-delete');
+    function updateKatDupDeleteButton() {
+      if (!katDupDeleteBtn) return;
+      const n = katDupCheckboxes().filter((cb) => cb.checked).length;
+      katDupDeleteBtn.textContent = n > 0 ? `Ausgewählte löschen (${n})` : 'Ausgewählte löschen';
+      katDupDeleteBtn.disabled = n === 0;
+    }
+    function updateKatDupSelectAllState() {
+      if (!katDupSelectAll) return;
+      const all = katDupCheckboxes();
+      katDupSelectAll.checked = all.length > 0 && all.every((cb) => cb.checked);
+      katDupSelectAll.indeterminate = all.some((cb) => cb.checked) && !katDupSelectAll.checked;
+    }
+    katDupSelectAll?.addEventListener('change', () => {
+      katDupCheckboxes().forEach((cb) => { cb.checked = katDupSelectAll.checked; });
+      updateKatDupDeleteButton();
+    });
+    katDupCheckboxes().forEach((cb) => {
+      cb.addEventListener('change', () => { updateKatDupSelectAllState(); updateKatDupDeleteButton(); });
+    });
+    updateKatDupSelectAllState();
+    updateKatDupDeleteButton();
+    katDupDeleteBtn?.addEventListener('click', async () => {
+      const checked = katDupCheckboxes().filter((cb) => cb.checked);
+      if (checked.length === 0) { toast('Keine Einträge ausgewählt.', 'danger'); return; }
+      if (!confirmDelete(`${checked.length} Eintrag/Einträge wirklich löschen?`)) return;
+      for (const cb of checked) {
+        const item = dupGroups[Number(cb.dataset.gi)][Number(cb.dataset.ii)];
         await remove('katalog', item.id);
         items = items.filter((i) => i.id !== item.id);
         filtered = filtered.filter((i) => i.id !== item.id);
-        toast('Eintrag gelöscht', 'success');
-        close();
-        renderTable();
-        openDuplikatCheck();
-      });
+      }
+      toast(`${checked.length} Eintrag/Einträge gelöscht`, 'success');
+      close();
+      renderTable();
+      openDuplikatCheck();
     });
   }
 

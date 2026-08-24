@@ -179,6 +179,10 @@ export async function render(container) {
       wide: true,
       bodyHtml: `
         <p class="hint">${gruppen.length} Gruppe(n) mit insgesamt ${gruppen.reduce((s, g) => s + g.length - 1, 0)} überzähligen Termin(en) gefunden. Vorausgewählt bleibt jeweils der mit Google verknüpfte bzw. der erste Termin erhalten - Auswahl vor dem Löschen prüfen.</p>
+        <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:8px;padding-bottom:8px">
+          <input type="checkbox" id="dup-select-all">
+          <span>Alle auswählen / abwählen</span>
+        </label>
         <div id="dup-groups">
           ${gruppen.map((g, gi) => `
             <div class="card" style="margin-bottom:10px">
@@ -200,8 +204,30 @@ export async function render(container) {
         </div>
       `,
     });
+    const delBtn = body.querySelector('#btn-dup-delete');
+    const checkboxes = () => Array.from(body.querySelectorAll('.dup-del'));
+    const selectAll = body.querySelector('#dup-select-all');
+    function updateDeleteButton() {
+      const n = checkboxes().filter((cb) => cb.checked).length;
+      delBtn.textContent = n > 0 ? `Ausgewählte löschen (${n})` : 'Ausgewählte löschen';
+      delBtn.disabled = n === 0;
+    }
+    function updateSelectAllState() {
+      const all = checkboxes();
+      selectAll.checked = all.length > 0 && all.every((cb) => cb.checked);
+      selectAll.indeterminate = all.some((cb) => cb.checked) && !selectAll.checked;
+    }
+    selectAll.addEventListener('change', () => {
+      checkboxes().forEach((cb) => { cb.checked = selectAll.checked; });
+      updateDeleteButton();
+    });
+    checkboxes().forEach((cb) => {
+      cb.addEventListener('change', () => { updateSelectAllState(); updateDeleteButton(); });
+    });
+    updateSelectAllState();
+    updateDeleteButton();
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#btn-dup-delete').addEventListener('click', async () => {
+    delBtn.addEventListener('click', async () => {
       const checked = Array.from(body.querySelectorAll('.dup-del:checked'));
       if (checked.length === 0) { toast('Keine Termine ausgewählt.', 'danger'); return; }
       if (!confirmDelete(`${checked.length} Termin(e) wirklich löschen?`)) return;

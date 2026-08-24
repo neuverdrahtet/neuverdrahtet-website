@@ -241,14 +241,21 @@ export async function render(container, opts = {}) {
       title: 'Projekt-Duplikate zusammenführen',
       wide: true,
       bodyHtml: `
-        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Titel beim selben Kunden gefunden. Das ausgewählte Projekt je Gruppe bleibt bestehen, alle verknüpften Termine/Angebote/AB/Rechnungen/Ausgaben/Aufgaben/Zeiterfassung/Verwendungen/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht.</p>
+        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Titel beim selben Kunden gefunden. Das ausgewählte Projekt je Gruppe bleibt bestehen, alle verknüpften Termine/Angebote/AB/Rechnungen/Ausgaben/Aufgaben/Zeiterfassung/Verwendungen/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht. Gruppen abwählen, die keine echten Duplikate sind.</p>
+        <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:8px;padding-bottom:8px">
+          <input type="checkbox" id="pdup-select-all" checked>
+          <span>Alle Gruppen auswählen / abwählen</span>
+        </label>
         <div id="pdup-groups">
           ${gruppen.map((g, gi) => `
             <div class="card" style="margin-bottom:10px">
-              <strong>${escapeHtml(g[0].titel)}</strong>
+              <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <input type="checkbox" class="pdup-gruppe-aktiv" data-gi="${gi}" checked>
+                <strong>${escapeHtml(g[0].titel)}</strong>
+              </label>
               <div class="text-mute" style="font-size:12px;margin-bottom:6px">${escapeHtml(kundenById[g[0].kundeId]?.firma || 'ohne Kunde')} · ${g.length} gleiche Einträge</div>
               ${g.map((p) => `
-                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0">
+                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 26px">
                   <input type="radio" name="pdup-behalten-${gi}" class="pdup-behalten" data-gi="${gi}" value="${p.id}" ${p.id === empfehlung.get(g) ? 'checked' : ''}>
                   <span>${formatDate(p.createdAt) || '– kein Datum –'} <span class="text-mute">(${projektVerknuepfteAnzahl(p.id)} verknüpft, Status: ${escapeHtml(spaltenById[p.status]?.titel || p.status || '–')})</span></span>
                 </label>
@@ -263,13 +270,38 @@ export async function render(container, opts = {}) {
         </div>
       `,
     });
+    const pdupGruppenAktivCheckboxen = () => Array.from(body.querySelectorAll('.pdup-gruppe-aktiv'));
+    const pdupSelectAll = body.querySelector('#pdup-select-all');
+    const pdupMergeBtn = body.querySelector('#btn-pdup-merge');
+    function updatePdupMergeButton() {
+      const n = pdupGruppenAktivCheckboxen().filter((cb) => cb.checked).length;
+      pdupMergeBtn.textContent = n > 0 ? `Zusammenführen (${n})` : 'Zusammenführen';
+      pdupMergeBtn.disabled = n === 0;
+    }
+    function updatePdupSelectAllState() {
+      const all = pdupGruppenAktivCheckboxen();
+      pdupSelectAll.checked = all.length > 0 && all.every((cb) => cb.checked);
+      pdupSelectAll.indeterminate = all.some((cb) => cb.checked) && !pdupSelectAll.checked;
+    }
+    pdupSelectAll.addEventListener('change', () => {
+      pdupGruppenAktivCheckboxen().forEach((cb) => { cb.checked = pdupSelectAll.checked; });
+      updatePdupMergeButton();
+    });
+    pdupGruppenAktivCheckboxen().forEach((cb) => {
+      cb.addEventListener('change', () => { updatePdupSelectAllState(); updatePdupMergeButton(); });
+    });
+    updatePdupMergeButton();
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#btn-pdup-merge').addEventListener('click', async () => {
-      const gruppenMitAuswahl = gruppen.map((g, gi) => {
-        const gewaehlt = body.querySelector(`.pdup-behalten[data-gi="${gi}"]:checked`)?.value;
-        return { g, behaltenId: gewaehlt };
-      });
-      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder Gruppe ein Projekt zum Behalten auswählen.', 'danger'); return; }
+    pdupMergeBtn.addEventListener('click', async () => {
+      const gruppenMitAuswahl = gruppen
+        .map((g, gi) => {
+          const aktiv = body.querySelector(`.pdup-gruppe-aktiv[data-gi="${gi}"]`)?.checked;
+          const gewaehlt = body.querySelector(`.pdup-behalten[data-gi="${gi}"]:checked`)?.value;
+          return { g, aktiv, behaltenId: gewaehlt };
+        })
+        .filter((x) => x.aktiv);
+      if (gruppenMitAuswahl.length === 0) { toast('Keine Gruppe ausgewählt.', 'danger'); return; }
+      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder ausgewählten Gruppe ein Projekt zum Behalten auswählen.', 'danger'); return; }
       if (!confirmDelete(`${gruppenMitAuswahl.length} Gruppe(n) zusammenführen? Die jeweils nicht ausgewählten Projekte werden danach gelöscht.`)) return;
       let anzahlZusammengefuehrt = 0;
       for (const { g, behaltenId } of gruppenMitAuswahl) {

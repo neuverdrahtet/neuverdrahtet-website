@@ -395,14 +395,21 @@ export async function render(container, route) {
       title: 'Kunden-Duplikate zusammenführen',
       wide: true,
       bodyHtml: `
-        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Firmennamen gefunden. Der ausgewählte Kunde je Gruppe bleibt bestehen, alle verknüpften Projekte/Termine/Angebote/Rechnungen/Ausgaben/Aufgaben/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht.</p>
+        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Firmennamen gefunden. Der ausgewählte Kunde je Gruppe bleibt bestehen, alle verknüpften Projekte/Termine/Angebote/Rechnungen/Ausgaben/Aufgaben/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht. Gruppen abwählen, die keine echten Duplikate sind (z.B. zufällig gleicher Firmenname).</p>
+        <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:8px;padding-bottom:8px">
+          <input type="checkbox" id="kdup-select-all" checked>
+          <span>Alle Gruppen auswählen / abwählen</span>
+        </label>
         <div id="kdup-groups">
           ${gruppen.map((g, gi) => `
             <div class="card" style="margin-bottom:10px">
-              <strong>${escapeHtml(g[0].firma)}</strong>
+              <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+                <input type="checkbox" class="kdup-gruppe-aktiv" data-gi="${gi}" checked>
+                <strong>${escapeHtml(g[0].firma)}</strong>
+              </label>
               <div class="text-mute" style="font-size:12px;margin-bottom:6px">${g.length} gleiche Einträge</div>
               ${g.map((k) => `
-                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0">
+                <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0 4px 26px">
                   <input type="radio" name="kdup-behalten-${gi}" class="kdup-behalten" data-gi="${gi}" value="${k.id}" ${k.id === empfehlung.get(g) ? 'checked' : ''}>
                   <span>${escapeHtml([k.ansprechpartner, k.ort, k.email].filter(Boolean).join(' · ') || '– keine weiteren Angaben –')} <span class="text-mute">(${verknuepfteAnzahl(k.id)} verknüpft${k.kundennummer ? `, Nr. ${escapeHtml(k.kundennummer)}` : ''})</span></span>
                 </label>
@@ -417,13 +424,38 @@ export async function render(container, route) {
         </div>
       `,
     });
+    const gruppenAktivCheckboxen = () => Array.from(body.querySelectorAll('.kdup-gruppe-aktiv'));
+    const kdupSelectAll = body.querySelector('#kdup-select-all');
+    const kdupMergeBtn = body.querySelector('#btn-kdup-merge');
+    function updateKdupMergeButton() {
+      const n = gruppenAktivCheckboxen().filter((cb) => cb.checked).length;
+      kdupMergeBtn.textContent = n > 0 ? `Zusammenführen (${n})` : 'Zusammenführen';
+      kdupMergeBtn.disabled = n === 0;
+    }
+    function updateKdupSelectAllState() {
+      const all = gruppenAktivCheckboxen();
+      kdupSelectAll.checked = all.length > 0 && all.every((cb) => cb.checked);
+      kdupSelectAll.indeterminate = all.some((cb) => cb.checked) && !kdupSelectAll.checked;
+    }
+    kdupSelectAll.addEventListener('change', () => {
+      gruppenAktivCheckboxen().forEach((cb) => { cb.checked = kdupSelectAll.checked; });
+      updateKdupMergeButton();
+    });
+    gruppenAktivCheckboxen().forEach((cb) => {
+      cb.addEventListener('change', () => { updateKdupSelectAllState(); updateKdupMergeButton(); });
+    });
+    updateKdupMergeButton();
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#btn-kdup-merge').addEventListener('click', async () => {
-      const gruppenMitAuswahl = gruppen.map((g, gi) => {
-        const gewaehlt = body.querySelector(`.kdup-behalten[data-gi="${gi}"]:checked`)?.value;
-        return { g, behaltenId: gewaehlt };
-      });
-      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder Gruppe einen Kunden zum Behalten auswählen.', 'danger'); return; }
+    kdupMergeBtn.addEventListener('click', async () => {
+      const gruppenMitAuswahl = gruppen
+        .map((g, gi) => {
+          const aktiv = body.querySelector(`.kdup-gruppe-aktiv[data-gi="${gi}"]`)?.checked;
+          const gewaehlt = body.querySelector(`.kdup-behalten[data-gi="${gi}"]:checked`)?.value;
+          return { g, aktiv, behaltenId: gewaehlt };
+        })
+        .filter((x) => x.aktiv);
+      if (gruppenMitAuswahl.length === 0) { toast('Keine Gruppe ausgewählt.', 'danger'); return; }
+      if (gruppenMitAuswahl.some((x) => !x.behaltenId)) { toast('Bitte in jeder ausgewählten Gruppe einen Kunden zum Behalten auswählen.', 'danger'); return; }
       if (!confirmDelete(`${gruppenMitAuswahl.length} Gruppe(n) zusammenführen? Die jeweils nicht ausgewählten Kunden werden danach gelöscht.`)) return;
       let anzahlZusammengefuehrt = 0;
       for (const { g, behaltenId } of gruppenMitAuswahl) {
