@@ -7,6 +7,7 @@ import { parseDatanorm, readDatanormFile } from '../datanorm.js';
 import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
 import { STANDARD_KATALOG_ELEKTRO_LV } from '../standardKatalogElektroLV.js';
 import { STANDARD_KATALOG_GROSSPROJEKT } from '../standardKatalogGrossprojekt.js';
+import { STANDARD_KATALOG_LV_ERGAENZUNG_2 } from '../standardKatalogLVErgaenzung2.js';
 import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
 import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
 import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
@@ -21,7 +22,7 @@ const STANDARD_KATALOGE = [
   // Elektroinstallation") gewinnt beim Import der aktuellere, detailliertere
   // LV-Preis vor dem älteren allgemeinen Richtwert - der Bezeichnungs-basierte
   // Duplikat-Schutz überspringt dann automatisch die zweite, ältere Zeile.
-  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
+  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_LV_ERGAENZUNG_2, ...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
   { gewerk: 'abbruch', liste: STANDARD_KATALOG_ABBRUCH },
   { gewerk: 'fliesen', liste: STANDARD_KATALOG_FLIESEN },
   { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
