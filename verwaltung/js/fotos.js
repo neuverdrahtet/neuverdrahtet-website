@@ -1,6 +1,6 @@
 import { getAll, put, remove } from './db.js';
 import { uid, escapeHtml, compressImage, toast } from './utils.js';
-import { confirmDelete, openModal } from './ui.js';
+import { confirmDelete, openModal, mountProgressBar } from './ui.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
 
 function openFotoLightbox(url, dateiname) {
@@ -25,6 +25,7 @@ export function renderFotoSection(host, projektId) {
           <input type="file" accept="image/*" id="foto-input" hidden multiple>
         </label>
       </div>
+      <div id="foto-progress-host"></div>
       <div class="foto-grid" id="foto-grid">
         ${fotos.length === 0 ? '<p class="text-mute">Noch keine Fotos.</p>' : fotos.map((f) => `
           <div class="foto-thumb" data-id="${f.id}">
@@ -37,8 +38,11 @@ export function renderFotoSection(host, projektId) {
 
     host.querySelector('#foto-input').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
       const label = host.querySelector('label.btn');
       label.textContent = 'Lädt ...';
+      const progress = mountProgressBar(host.querySelector('#foto-progress-host'), { label: `0 / ${files.length} Foto(s) hochgeladen` });
+      let fertig = 0;
       for (const file of files) {
         try {
           const blob = await compressImage(file);
@@ -54,7 +58,11 @@ export function renderFotoSection(host, projektId) {
         } catch (err) {
           toast(err.message, 'danger');
         }
+        fertig += 1;
+        progress.setProgress((fertig / files.length) * 100);
+        progress.setLabel(`${fertig} / ${files.length} Foto(s) hochgeladen`);
       }
+      progress.remove();
       load();
     });
 

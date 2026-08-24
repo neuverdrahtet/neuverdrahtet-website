@@ -152,6 +152,40 @@ export function confirmDelete(msg = 'Wirklich löschen?') {
 }
 
 /**
+ * Ladebalken für Datei-Uploads (Fotos/Dokumente/Berichte/Material) - macht
+ * sichtbar, dass ein Vorgang noch läuft, statt dass der Nutzer bei einer
+ * langsamen Verbindung nur eine reglose Seite sieht und ggf. mehrfach
+ * klickt. `setProgress(pct)` für echten Fortschritt (z.B. "Datei X von Y"
+ * bei mehreren Dateien in einer Schleife); ohne bekannten Fortschritt
+ * `indeterminate: true` übergeben - zeigt eine wandernde Animation statt
+ * einer festen Prozentzahl.
+ */
+export function mountProgressBar(host, { indeterminate = false, label = '' } = {}) {
+  const wrap = el(`
+    <div class="progress-wrap">
+      ${label ? `<div class="progress-label">${escapeHtml(label)}</div>` : ''}
+      <div class="progress-bar ${indeterminate ? 'is-indeterminate' : ''}"><div class="progress-bar-fill" style="width:${indeterminate ? '40' : '0'}%"></div></div>
+    </div>
+  `);
+  host.appendChild(wrap);
+  return {
+    setProgress: (pct) => {
+      wrap.querySelector('.progress-bar').classList.remove('is-indeterminate');
+      wrap.querySelector('.progress-bar-fill').style.width = `${Math.max(0, Math.min(100, pct))}%`;
+    },
+    setLabel: (text) => {
+      let labelEl = wrap.querySelector('.progress-label');
+      if (!labelEl) {
+        labelEl = el('<div class="progress-label"></div>');
+        wrap.insertBefore(labelEl, wrap.firstChild);
+      }
+      labelEl.textContent = text;
+    },
+    remove: () => wrap.remove(),
+  };
+}
+
+/**
  * Chip-Auswahl (ToolTime-Stil) als Ersatz für ein natives <select>: zeigt den
  * gewählten Eintrag als Chip (Icon + fett + X zum Entfernen) bzw. einen
  * leeren "+ Platzhalter"-Button, wenn nichts gewählt ist. Klick auf den Chip

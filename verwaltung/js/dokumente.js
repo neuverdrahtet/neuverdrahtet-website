@@ -1,6 +1,6 @@
 import { getAll, put, remove, GEWERKE } from './db.js';
 import { uid, escapeHtml, formatDate, formatDateTime, todayISO, toast, compressImage, openDokumentMitVorbelegung, getCurrentMitarbeiterId, katalogOptionsHtml } from './utils.js';
-import { openModal, confirmDelete } from './ui.js';
+import { openModal, confirmDelete, mountProgressBar } from './ui.js';
 import { buildBerichtPdfBlob } from './docpdf.js';
 import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
@@ -496,6 +496,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <button type="button" class="btn" id="btn-send-email">✉️ Per E-Mail senden</button>
           <button type="button" class="btn btn-primary" id="btn-save-pdf">Als PDF speichern</button>
         </div>
+        <div id="ber-save-progress-host"></div>
       `,
     });
     const vorlageSelect = body.querySelector('#ber-vorlage');
@@ -637,17 +638,23 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     }
 
     body.querySelector('#btn-save-pdf').addEventListener('click', async () => {
+      const saveBtn = body.querySelector('#btn-save-pdf');
+      saveBtn.disabled = true;
+      const progress = mountProgressBar(body.querySelector('#ber-save-progress-host'), { indeterminate: true, label: 'Bericht wird erstellt und gespeichert ...' });
       let blob;
       try {
         blob = await buildPdf();
       } catch (err) {
         toast(err.message, 'danger');
+        progress.remove();
+        saveBtn.disabled = false;
         return;
       }
       await saveDokument({
         bezugTyp, bezugId, kategorie: 'bericht',
         name: currentFilename(), mime: 'application/pdf', blob,
       });
+      progress.remove();
       toast('Bericht gespeichert', 'success');
       close();
       load();
@@ -769,6 +776,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
           <button type="button" class="btn btn-primary" id="btn-save">Als PDF speichern</button>
         </div>
+        <div id="sn-save-progress-host"></div>
       `,
     });
     const recorder = mountVoiceRecorder(body.querySelector('#sn-recorder-host'));
@@ -816,6 +824,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
       const titel = body.querySelector('#sn-titel').value.trim() || 'Sprachnotiz';
       const text = recorder.getText();
       if (!text) { toast('Bitte zuerst Text aufnehmen oder eingeben.', 'danger'); return; }
+      const saveBtn = body.querySelector('#btn-save');
+      saveBtn.disabled = true;
+      const progress = mountProgressBar(body.querySelector('#sn-save-progress-host'), { indeterminate: true, label: 'Sprachnotiz wird gespeichert ...' });
       const untertitel = [
         kunde?.firma ? `Kunde: ${kunde.firma}` : '',
         projekt ? `Projekt: ${projekt}` : '',
@@ -825,6 +836,8 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         blob = await buildBerichtPdfBlob({ settings, titel, untertitel, text, datum: new Date().toISOString(), fotos: fotoEditor.getFotos() });
       } catch (err) {
         toast(err.message, 'danger');
+        progress.remove();
+        saveBtn.disabled = false;
         return;
       }
       await saveDokument({
@@ -849,6 +862,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         });
       }
       if ((materialListe.length || arbeitszeitStd > 0) && onProjektDatenGeaendert) onProjektDatenGeaendert();
+      progress.remove();
       toast('Sprachnotiz gespeichert', 'success');
       close();
       load();
@@ -875,6 +889,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           </label>
         </div>
       </div>
+      <div id="dok-progress-host"></div>
       <div class="dok-list" id="dok-list">
         ${dokumente.length === 0 ? '<p class="text-mute">Noch keine Dokumente.</p>' : dokumente.map((d) => `
           <div class="dok-row" data-id="${d.id}">
@@ -920,17 +935,24 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
 
     host.querySelector('#dok-input').addEventListener('change', async (e) => {
       const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
       const kategorie = host.querySelector('#dok-kategorie').value;
       const label = host.querySelector('label.btn');
       const originalText = label.textContent;
       label.textContent = 'Lädt ...';
+      const progress = mountProgressBar(host.querySelector('#dok-progress-host'), { label: `0 / ${files.length} Datei(en) hochgeladen` });
+      let fertig = 0;
       for (const file of files) {
         try {
           await saveDokument({ bezugTyp, bezugId, kategorie, name: file.name, mime: file.type, blob: file });
         } catch (err) {
           toast(err.message, 'danger');
         }
+        fertig += 1;
+        progress.setProgress((fertig / files.length) * 100);
+        progress.setLabel(`${fertig} / ${files.length} Datei(en) hochgeladen`);
       }
+      progress.remove();
       label.textContent = originalText;
       load();
     });

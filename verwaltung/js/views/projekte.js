@@ -375,10 +375,13 @@ export async function render(container, opts = {}) {
       const gefiltert = verwendungGewerkFilter ? katalog.filter((k) => k.gewerk === verwendungGewerkFilter) : katalog;
       host.querySelector('#verwendung-katalog').innerHTML = `<option value="">– Artikel wählen –</option>${katalogOptionsHtml(gefiltert, (k) => `${escapeHtml(k.bezeichnung)}${k.einheit ? ` (${escapeHtml(k.einheit)})` : ''}`)}`;
     });
-    host.querySelector('#btn-verwendung-add').addEventListener('click', async () => {
+    host.querySelector('#btn-verwendung-add').addEventListener('click', async (e) => {
       const katalogId = host.querySelector('#verwendung-katalog').value;
       const menge = parseFloat(host.querySelector('#verwendung-menge').value);
       if (!katalogId || !menge || menge <= 0) { toast('Bitte Artikel und Menge angeben', 'danger'); return; }
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Speichert ...';
       const entry = {
         id: uid(), projektId, katalogId, menge, datum: new Date().toISOString().slice(0, 10),
         mitarbeiterId: getCurrentMitarbeiterId() || '',
