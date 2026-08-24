@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, syncKatalogOeffentlich, USTSAETZE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountProgressBar } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
 import { parseDatanorm, readDatanormFile } from '../datanorm.js';
@@ -450,9 +450,10 @@ export async function render(container, route) {
           <div class="modal-actions">
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
-            <button type="submit" class="btn btn-primary">Importieren</button>
+            <button type="submit" class="btn btn-primary" id="btn-std-kat-import">Importieren</button>
           </div>
         </form>
+        <div id="std-kat-progress-host"></div>
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -461,6 +462,25 @@ export async function render(container, route) {
       const fd = new FormData(e.target);
       const ausgewaehlt = fd.getAll('gewerke');
       if (ausgewaehlt.length === 0) { close(); return; }
+      // Gesamtzahl vorab ermitteln (unter Berücksichtigung von Dubletten
+      // innerhalb der Auswahl), damit die Ladeleiste einen echten Fortschritt
+      // statt nur eines unbestimmten Balkens zeigen kann - bei mehreren
+      // hundert Einträgen (z.B. Elektro-Kataloge zusammen) dauert der Import
+      // über Firestore spürbar, ohne Rückmeldung wirkte das wie ein Hänger.
+      const geplante = new Set(bestehendeBezeichnungen);
+      let gesamt = 0;
+      for (const gewerk of ausgewaehlt) {
+        const liste = STANDARD_KATALOGE.find((k) => k.gewerk === gewerk)?.liste || [];
+        for (const v of liste) {
+          const key = v.bezeichnung.trim().toLowerCase();
+          if (geplante.has(key)) continue;
+          geplante.add(key);
+          gesamt += 1;
+        }
+      }
+      const importBtn = body.querySelector('#btn-std-kat-import');
+      importBtn.disabled = true;
+      const progress = mountProgressBar(body.querySelector('#std-kat-progress-host'), { label: `0 / ${gesamt} importiert` });
       let importiert = 0;
       // bestehendeBezeichnungen wird bewusst innerhalb dieser Schleife (statt
       // vorab per liste.filter()) ergänzt - manche Standard-Kataloge (z.B.
@@ -475,8 +495,11 @@ export async function render(container, route) {
           await put('katalog', { id: uid(), ...v, komponenten: [], bestandTracking: false, bestand: 0, mindestbestand: 0 });
           bestehendeBezeichnungen.add(key);
           importiert += 1;
+          progress.setProgress((importiert / gesamt) * 100);
+          progress.setLabel(`${importiert} / ${gesamt} importiert`);
         }
       }
+      progress.remove();
       toast(`${importiert} Standard-Einträge übernommen`, 'success');
       close();
       render(container);
@@ -565,6 +588,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
           <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
         </div>
+        <div id="kat-import-progress-host"></div>
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -585,7 +609,17 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
         body.querySelector('#import-preview').textContent = 'Keine gültigen Zeilen gefunden.';
         return;
       }
-      for (const row of rows) await put('katalog', row);
+      const importBtn = body.querySelector('#btn-do-import');
+      importBtn.disabled = true;
+      const progress = mountProgressBar(body.querySelector('#kat-import-progress-host'), { label: `0 / ${rows.length} importiert` });
+      let n = 0;
+      for (const row of rows) {
+        await put('katalog', row);
+        n += 1;
+        progress.setProgress((n / rows.length) * 100);
+        progress.setLabel(`${n} / ${rows.length} importiert`);
+      }
+      progress.remove();
       toast(`${rows.length} Einträge importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
       close();
       render(container);
@@ -608,6 +642,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
           <button type="button" class="btn btn-primary" id="btn-do-datanorm-import" disabled>Importieren</button>
         </div>
+        <div id="datanorm-progress-host"></div>
       `,
     });
     let parsed = null;
@@ -628,8 +663,11 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
     importBtn.addEventListener('click', async () => {
       if (!parsed || parsed.rows.length === 0) return;
       const byLieferantenNr = new Map(items.filter((i) => i.lieferantenArtikelnummer).map((i) => [i.lieferantenArtikelnummer, i]));
+      importBtn.disabled = true;
+      const progress = mountProgressBar(body.querySelector('#datanorm-progress-host'), { label: `0 / ${parsed.rows.length} importiert` });
       let neu = 0;
       let aktualisiert = 0;
+      let n = 0;
       for (const row of parsed.rows) {
         const bestehend = byLieferantenNr.get(row.lieferantenArtikelnummer);
         if (bestehend) {
@@ -639,7 +677,11 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           await put('katalog', { ...row, id: uid() });
           neu += 1;
         }
+        n += 1;
+        progress.setProgress((n / parsed.rows.length) * 100);
+        progress.setLabel(`${n} / ${parsed.rows.length} importiert`);
       }
+      progress.remove();
       toast(`DATANORM-Import: ${neu} neu, ${aktualisiert} aktualisiert.`, 'success');
       close();
       render(container);
