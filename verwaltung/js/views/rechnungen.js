@@ -807,6 +807,7 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
         const kunde = kundenById[data.kundeId];
         const zahlungsartLive = body.querySelector('#f-zahlungsart')?.value || data.zahlungsart || 'ueberweisung';
         const istBar = zahlungsartLive === 'bar';
+        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
         return {
           settings: getEffectiveSettings(), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
           leistungsdatum: data.leistungsdatum || data.datum,
@@ -819,7 +820,7 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
           aufbewahrungsHinweis: kunde?.istPrivatperson
             ? 'Hinweis gemäß § 14 Abs. 4 Nr. 9 UStG: Als Privatperson sind Sie verpflichtet, diese Rechnung sowie zugehörige Zahlungsbelege im Zusammenhang mit dieser Werklieferung/Leistung 2 Jahre lang aufzubewahren.'
             : '',
-          closingText: (data.notizen || '') +
+          closingText: notizenLive +
             (data.skontoProzent > 0
               ? `\n\nBei Zahlung bis zum ${formatDate(addDays(data.datum, data.skontoTage || 0))} (${data.skontoTage || 0} Tage) gewähren wir ${data.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * data.skontoProzent) / 100)}).`
               : '') +

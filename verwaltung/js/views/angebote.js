@@ -573,6 +573,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       }
       function docOpts() {
         const totals = editor.getTotals();
+        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
         return {
           settings: getEffectiveSettings(), art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
@@ -581,7 +582,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          closingText: (data.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
+          closingText: notizenLive + '\n\nWir freuen uns auf Ihren Auftrag.',
           zeigeUnterschriftsfeld: true,
           unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
         };

@@ -325,6 +325,7 @@ export async function render(container, route) {
       }
       function docOpts() {
         const totals = editor.getTotals();
+        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
         return {
           settings: getEffectiveSettings(), art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
           kunde: kundenById[data.kundeId], betreff: data.betreff,
@@ -332,7 +333,7 @@ export async function render(container, route) {
           introText: 'vielen Dank für Ihren Auftrag. Wir bestätigen hiermit folgende Leistungen:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          closingText: (data.notizen || '') + '\n\nWir freuen uns auf die Zusammenarbeit.',
+          closingText: notizenLive + '\n\nWir freuen uns auf die Zusammenarbeit.',
           zeigeUnterschriftsfeld: true,
           unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
         };
