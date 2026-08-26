@@ -442,7 +442,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       items: kunden, selectedId: data.kundeId,
       itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
     });
-    mountChipPicker(body.querySelector('#f-projekt-host'), {
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
       name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
       items: projekte, selectedId: data.projektId,
       itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
@@ -567,18 +567,21 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         close();
         render(container);
       });
-      function getEffectiveSettings() {
-        const projekt = projekte.find((p) => p.id === data.projektId);
+      function getEffectiveSettings(projektId) {
+        const projekt = projekte.find((p) => p.id === projektId);
         return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
       }
       function docOpts() {
         const totals = editor.getTotals();
         const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
+        const kundeIdLive = kundePicker.getValue() || data.kundeId;
+        const projektIdLive = projektPicker.getValue() || data.projektId;
+        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
         return {
-          settings: getEffectiveSettings(), art: 'Angebot', nummer: data.nummer, datum: data.datum,
+          settings: getEffectiveSettings(projektIdLive), art: 'Angebot', nummer: data.nummer, datum: data.datum,
           refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
-          kunde: kundenById[data.kundeId], betreff: data.betreff,
-          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
+          kunde: kundenById[kundeIdLive], betreff: betreffLive,
+          projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
           introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
@@ -610,7 +613,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Angebot-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -622,7 +625,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings(data.projektId).firmenname}`,
             pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Angebot-${data.nummer}.pdf`,
           });

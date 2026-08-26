@@ -601,12 +601,12 @@ export async function render(container, route) {
       `,
     });
 
-mountChipPicker(body.querySelector('#f-kunde-host'), {
+const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
       items: kunden, selectedId: data.kundeId, disabled: locked,
       itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
     });
-    mountChipPicker(body.querySelector('#f-projekt-host'), {
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
       name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
       items: projekte, selectedId: data.projektId, disabled: locked,
       itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
@@ -797,23 +797,26 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
           });
         });
       }
-      function getEffectiveSettings() {
-        const projekt = projekte.find((p) => p.id === data.projektId);
+      function getEffectiveSettings(projektId) {
+        const projekt = projekte.find((p) => p.id === projektId);
         return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
       }
       function docOpts() {
         const totals = editor.getTotals();
         const istAbschlag = data.rechnungstyp === 'abschlag';
-        const kunde = kundenById[data.kundeId];
+        const kundeIdLive = kundePicker.getValue() || data.kundeId;
+        const projektIdLive = projektPicker.getValue() || data.projektId;
+        const kunde = kundenById[kundeIdLive];
+        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
         const zahlungsartLive = body.querySelector('#f-zahlungsart')?.value || data.zahlungsart || 'ueberweisung';
         const istBar = zahlungsartLive === 'bar';
         const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
         return {
-          settings: getEffectiveSettings(), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
+          settings: getEffectiveSettings(projektIdLive), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
           leistungsdatum: data.leistungsdatum || data.datum,
           refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
-          kunde, betreff: data.betreff,
-          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
+          kunde, betreff: betreffLive,
+          projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
           introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
@@ -864,7 +867,7 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Rechnung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Rechnung-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -877,7 +880,7 @@ mountChipPicker(body.querySelector('#f-kunde-host'), {
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Rechnung ${data.nummer} (fällig am ${formatDate(data.faelligAm)}). Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings(data.projektId).firmenname}`,
             pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Rechnung-${data.nummer}.pdf`,
           });

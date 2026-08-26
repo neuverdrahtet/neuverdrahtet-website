@@ -251,12 +251,12 @@ export async function render(container, route) {
       `,
     });
 
-    mountChipPicker(body.querySelector('#f-kunde-host'), {
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
       items: kunden, selectedId: data.kundeId,
       itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
     });
-    mountChipPicker(body.querySelector('#f-projekt-host'), {
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
       name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
       items: projekte, selectedId: data.projektId,
       itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
@@ -319,17 +319,20 @@ export async function render(container, route) {
         close();
         render(container);
       });
-      function getEffectiveSettings() {
-        const projekt = projekte.find((p) => p.id === data.projektId);
+      function getEffectiveSettings(projektId) {
+        const projekt = projekte.find((p) => p.id === projektId);
         return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
       }
       function docOpts() {
         const totals = editor.getTotals();
         const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
+        const kundeIdLive = kundePicker.getValue() || data.kundeId;
+        const projektIdLive = projektPicker.getValue() || data.projektId;
+        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
         return {
-          settings: getEffectiveSettings(), art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
-          kunde: kundenById[data.kundeId], betreff: data.betreff,
-          projekt: projekte.find((p) => p.id === data.projektId)?.titel || '',
+          settings: getEffectiveSettings(projektIdLive), art: 'Auftragsbestätigung', nummer: data.nummer, datum: data.datum,
+          kunde: kundenById[kundeIdLive], betreff: betreffLive,
+          projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
           introText: 'vielen Dank für Ihren Auftrag. Wir bestätigen hiermit folgende Leistungen:',
           positionen: editor.getPositionen(), totals,
           steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
@@ -348,7 +351,7 @@ export async function render(container, route) {
           openEmailComposer({
             to: kunde?.email || '',
             subject: `Auftragsbestätigung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings().firmenname}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(docOpts()),
           });
@@ -360,7 +363,7 @@ export async function render(container, route) {
           const kunde = kundenById[data.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings().firmenname}`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings(data.projektId).firmenname}`,
             pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
           });
