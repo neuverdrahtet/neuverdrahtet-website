@@ -221,9 +221,22 @@ function ensureListening(storeName) {
 }
 
 async function getEinstellungenRows() {
-  const snap = await getDoc(EINSTELLUNGEN_DOC());
-  const data = snap.exists() ? snap.data() : {};
-  return Object.entries(data).map(([key, value]) => ({ key, value }));
+  // Anders als die übrigen Collections (siehe ensureListening() oben) nutzt
+  // dieser Read einen einmaligen getDoc() statt eines onSnapshot()-Listeners
+  // und profitiert dadurch nicht automatisch vom selben Offline-Fallback: ist
+  // noch kein lokaler Cache vorhanden (z.B. neues Gerät) und das Netz gerade
+  // schlecht (Baustelle/Keller), wirft getDoc() nach ca. 10s einen Fehler.
+  // getSettings() wird auf praktisch jeder Seite aufgerufen - ohne dieses
+  // try/catch würde eine schlechte Verbindung die ganze Seite zum Absturz
+  // bringen statt nur mit Standard-Einstellungen weiterzulaufen.
+  try {
+    const snap = await getDoc(EINSTELLUNGEN_DOC());
+    const data = snap.exists() ? snap.data() : {};
+    return Object.entries(data).map(([key, value]) => ({ key, value }));
+  } catch (err) {
+    console.warn('Einstellungen konnten nicht geladen werden (offline?) - verwende Standardwerte.', err);
+    return [];
+  }
 }
 
 async function getAllFs(storeName) {
