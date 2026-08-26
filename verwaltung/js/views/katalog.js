@@ -8,6 +8,7 @@ import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
 import { STANDARD_KATALOG_ELEKTRO_LV } from '../standardKatalogElektroLV.js';
 import { STANDARD_KATALOG_GROSSPROJEKT } from '../standardKatalogGrossprojekt.js';
 import { STANDARD_KATALOG_LV_ERGAENZUNG_2 } from '../standardKatalogLVErgaenzung2.js';
+import { STANDARD_KATALOG_LV_ECHT } from '../standardKatalogLVEcht.js';
 import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
 import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
 import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
@@ -18,11 +19,13 @@ import { STANDARD_KATALOG_KOMPLETTBAD } from '../standardKatalogKomplettbad.js';
 import { STANDARD_KATALOG_RENOVIERUNG } from '../standardKatalogRenovierung.js';
 
 const STANDARD_KATALOGE = [
-  // LV zuerst: bei gleicher Bezeichnung (z.B. "Facharbeiterstunde
-  // Elektroinstallation") gewinnt beim Import der aktuellere, detailliertere
-  // LV-Preis vor dem älteren allgemeinen Richtwert - der Bezeichnungs-basierte
-  // Duplikat-Schutz überspringt dann automatisch die zweite, ältere Zeile.
-  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_LV_ERGAENZUNG_2, ...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
+  // Reihenfolge = Priorität beim Import: bei gleicher Bezeichnung gewinnt der
+  // Preis aus der weiter vorne stehenden Liste, der Bezeichnungs-basierte
+  // Duplikat-Schutz überspringt die späteren, schwächer belegten Zeilen.
+  // STANDARD_KATALOG_LV_ECHT enthält ECHTE, vom Nutzer bereitgestellte
+  // Kalkulationspreise aus einer realen Ausschreibung (kein Richtwert) und
+  // steht deshalb ganz vorne, noch vor den recherchierten Marktrichtpreisen.
+  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_LV_ECHT, ...STANDARD_KATALOG_LV_ERGAENZUNG_2, ...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
   { gewerk: 'abbruch', liste: STANDARD_KATALOG_ABBRUCH },
   { gewerk: 'fliesen', liste: STANDARD_KATALOG_FLIESEN },
   { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
