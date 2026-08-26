@@ -2,8 +2,8 @@
 // Leistungsverzeichnis "Umbau Hotel und Boardinghaus in Mietwohnungen -
 // Elektroarbeiten" (Neanderstraße 2-4, 40699 Erkrath) - im Unterschied zu den
 // zuvor recherchierten Marktrichtpreisen (standardKatalogElektroLV.js,
-// standardKatalogGrossprojekt.js, standardKatalogLVErgaenzung2.js) sind dies
-// ECHTE, bereits kalkulierte Einheitspreise aus der Cosuno-Ausschreibung -
+// standardKatalogGrossprojekt.js) sind dies ECHTE, bereits kalkulierte
+// Einheitspreise aus der Cosuno-Ausschreibung -
 // keine Schätzungen. Bei gleichnamigen Positionen mit unterschiedlichem Preis
 // (z.B. dieselbe Steckdose in Musterwohnung Typ A/B/C oder in der allgemeinen
 // Installationsgeräte-Liste) wurde die Bezeichnung um die Herkunfts-Gruppe

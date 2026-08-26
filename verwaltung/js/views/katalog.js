@@ -7,8 +7,8 @@ import { parseDatanorm, readDatanormFile } from '../datanorm.js';
 import { STANDARD_KATALOG_ELEKTRO } from '../standardKatalogElektro.js';
 import { STANDARD_KATALOG_ELEKTRO_LV } from '../standardKatalogElektroLV.js';
 import { STANDARD_KATALOG_GROSSPROJEKT } from '../standardKatalogGrossprojekt.js';
-import { STANDARD_KATALOG_LV_ERGAENZUNG_2 } from '../standardKatalogLVErgaenzung2.js';
 import { STANDARD_KATALOG_LV_ECHT } from '../standardKatalogLVEcht.js';
+import { STANDARD_KATALOG_LV_ECHT_DORMAGEN } from '../standardKatalogLVEchtDormagen.js';
 import { STANDARD_KATALOG_ABBRUCH } from '../standardKatalogAbbruch.js';
 import { STANDARD_KATALOG_BODENLEGER } from '../standardKatalogBodenleger.js';
 import { STANDARD_KATALOG_FLIESEN } from '../standardKatalogFliesen.js';
@@ -25,7 +25,7 @@ const STANDARD_KATALOGE = [
   // STANDARD_KATALOG_LV_ECHT enthält ECHTE, vom Nutzer bereitgestellte
   // Kalkulationspreise aus einer realen Ausschreibung (kein Richtwert) und
   // steht deshalb ganz vorne, noch vor den recherchierten Marktrichtpreisen.
-  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_LV_ECHT, ...STANDARD_KATALOG_LV_ERGAENZUNG_2, ...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
+  { gewerk: 'elektro', liste: [...STANDARD_KATALOG_LV_ECHT, ...STANDARD_KATALOG_LV_ECHT_DORMAGEN, ...STANDARD_KATALOG_ELEKTRO_LV, ...STANDARD_KATALOG_GROSSPROJEKT, ...STANDARD_KATALOG_ELEKTRO] },
   { gewerk: 'abbruch', liste: STANDARD_KATALOG_ABBRUCH },
   { gewerk: 'fliesen', liste: STANDARD_KATALOG_FLIESEN },
   { gewerk: 'boden', liste: STANDARD_KATALOG_BODENLEGER },
