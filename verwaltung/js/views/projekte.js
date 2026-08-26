@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -44,6 +44,8 @@ export async function render(container, opts = {}) {
       <div class="actions">
         <button class="btn" id="btn-duplikate">🧹 Duplikate zusammenführen</button>
         <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
+        <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neues Projekt</button>
       </div>
     </div>
@@ -175,6 +177,17 @@ export async function render(container, opts = {}) {
   container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-duplikate').addEventListener('click', () => openProjektDuplikateModal());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const header = ['Titel', 'Kunde', 'Bereich', 'Status', 'Gewerk', 'Beschreibung', 'Start', 'Ende', 'Erstellt am'];
+    const rows = [header, ...filtered.map((p) => [
+      p.titel || '', kundenById[p.kundeId]?.firma || '', scopedBereiche.find((b) => b.id === p.bereich)?.titel || p.bereich || '',
+      spaltenById[p.status]?.titel || p.status || '', GEWERKE.find((g) => g.id === p.gewerk)?.titel || '',
+      p.beschreibung || '', p.start || '', p.ende || '', p.createdAt ? formatDate(p.createdAt) : '',
+    ])];
+    downloadTextFile(`neuverdrahtet-projekte-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
+  container.querySelector('#btn-import').addEventListener('click', () => openProjekteImport());
 
   // Findet Projekte mit gleichem Titel beim gleichen Kunden - Projekte werden
   // zusammengeführt (verknüpfte Termine/Angebote/AB/Rechnungen/Ausgaben/
@@ -821,6 +834,67 @@ export async function render(container, opts = {}) {
           projekt: p, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
         });
       },
+    });
+  }
+
+  function openProjekteImport() {
+    const { body, close } = openModal({
+      title: 'Projekte importieren',
+      wide: true,
+      bodyHtml: `
+        <p class="hint">CSV oder Excel (.xlsx/.xls) einfügen/wählen. Spalten: <code>Titel;Kunde;Bereich;Gewerk;Beschreibung</code> – nur Titel ist Pflicht. Kunde/Bereich/Gewerk werden per Name zugeordnet (Kunde muss bereits existieren, sonst bleibt das Projekt ohne Kunden-Zuordnung). Eine optionale Kopfzeile wird erkannt.</p>
+        <div class="field" style="margin-bottom:10px">
+          <label>CSV- oder Excel-Datei</label>
+          <input type="file" id="import-file" accept=".csv,.xlsx,.xls,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel">
+        </div>
+        <div class="field">
+          <label>oder CSV-Text einfügen</label>
+          <textarea id="import-text" style="min-height:160px;font-family:monospace" placeholder="Neubau Musterstr. 5;Mustermann GmbH;auftrag;elektro;Komplettinstallation"></textarea>
+        </div>
+        <div id="import-preview" class="text-mute" style="margin-top:8px"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="btn-do-import">Importieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#import-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const isExcel = /\.xlsx?$/i.test(file.name);
+      try {
+        body.querySelector('#import-text').value = isExcel ? await excelFileToCsvText(file) : await readTextAutoEncoding(file);
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+    body.querySelector('#btn-do-import').addEventListener('click', async () => {
+      const text = body.querySelector('#import-text').value;
+      const delimiter = (text.split('\n')[0] || '').includes(';') ? ';' : ',';
+      const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+      let angelegt = 0;
+      const uebersprungen = [];
+      for (const line of lines) {
+        const cols = line.split(delimiter).map((c) => c.trim());
+        if (/^titel$/i.test(cols[0] || '')) continue;
+        const [titel, kundeName, bereichName, gewerkName, beschreibung] = cols;
+        if (!titel) { uebersprungen.push(line); continue; }
+        const kunde = kundeName ? kunden.find((k) => (k.firma || '').trim().toLowerCase() === kundeName.trim().toLowerCase()) : null;
+        const bereich = scopedBereiche.find((b) => b.titel.toLowerCase() === (bereichName || '').trim().toLowerCase())?.id
+          || bereichScope?.[0] || 'auftrag';
+        const gewerk = GEWERKE.find((g) => g.titel.toLowerCase() === (gewerkName || '').trim().toLowerCase() || g.id === (gewerkName || '').trim().toLowerCase())?.id || '';
+        await put('projekte', {
+          id: uid(), titel, kundeId: kunde?.id || '', status: spalten[0]?.id || '', beschreibung: beschreibung || '',
+          start: '', ende: '', mitarbeiterIds: [], subunternehmerIds: [], bereich, kategorieId: '', gewerk, farbe: '', markeId: '',
+          createdAt: new Date().toISOString(),
+        });
+        angelegt++;
+      }
+      toast(`${angelegt} Projekt(e) importiert${uebersprungen.length ? `, ${uebersprungen.length} Zeile(n) übersprungen` : ''}`, 'success');
+      close();
+      render(container, opts);
     });
   }
 

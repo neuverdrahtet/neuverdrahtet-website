@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast, farbeAusText, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, toast, farbeAusText, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 
@@ -9,6 +9,8 @@ import { createBulkSelect } from '../bulkselect.js';
 // jeweilige Großhändler echte Zugangsdaten herausgegeben hat - ohne die
 // funktioniert nur die Stammdatenverwaltung, keine Live-Preisabfrage.
 const FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
+const LIEFERANTEN_HEADER = ['Firma', 'Ansprechpartner', 'Telefon', 'E-Mail', 'Straße', 'PLZ', 'Ort', 'Kundennummer', 'Zahlungsziel (Tage)', 'Notizen'];
+const LIEFERANTEN_FELDER = ['firma', 'ansprechpartner', 'telefon', 'email', 'strasse', 'plz', 'ort', 'kundennummer', 'zahlungszielTage', 'notizen'];
 
 function parseLieferantenCsv(text) {
   const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
@@ -41,6 +43,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Lieferanten</h1>
       <div class="actions">
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Lieferant</button>
       </div>
@@ -88,6 +91,11 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const rows = [LIEFERANTEN_HEADER, ...liste.map((l) => LIEFERANTEN_FELDER.map((f) => l[f] ?? ''))];
+    downloadTextFile(`neuverdrahtet-lieferanten-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
 
   function openImport() {

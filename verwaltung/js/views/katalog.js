@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, syncKatalogOeffentlich, USTSAETZE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete, mountProgressBar } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
@@ -91,6 +91,7 @@ export async function render(container, route) {
         <button class="btn" id="btn-standard-import">📥 Standard-Kataloge importieren</button>
         <button class="btn" id="btn-duplikate">🔍 Duplikate prüfen</button>
         <button class="btn" id="btn-lexoffice-sync">🔗 Aus lexoffice abgleichen</button>
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Eintrag</button>
       </div>
     </div>
@@ -284,6 +285,15 @@ export async function render(container, route) {
   container.querySelector('#btn-standard-import').addEventListener('click', () => openStandardKatalogAuswahl());
   container.querySelector('#btn-duplikate').addEventListener('click', () => openDuplikatCheck());
   container.querySelector('#btn-lexoffice-sync').addEventListener('click', () => openLexofficeSync());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const header = ['Typ', 'Bezeichnung', 'Beschreibung', 'Einheit', 'Einkaufspreis', 'Aufschlag %', 'Preis', 'Steuersatz', 'Gewerk', 'Unterkategorie'];
+    const rows = [header, ...filtered.map((i) => [
+      i.typ || '', i.bezeichnung || '', i.beschreibung || '', i.einheit || '', i.einkaufspreis ?? '',
+      i.aufschlagProzent ?? '', i.preis ?? '', i.steuersatz ?? '', i.gewerk || '', i.unterkategorie || '',
+    ])];
+    downloadTextFile(`neuverdrahtet-katalog-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
 
   function normName(s) {
     return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');

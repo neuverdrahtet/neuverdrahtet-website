@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -47,6 +47,7 @@ export async function render(container) {
         <button class="btn" id="btn-beleg-import">⇪ Belege importieren (ZIP)</button>
         <button class="btn" id="btn-beleg-scan">📷 Beleg scannen</button>
         <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
       </div>
     </div>
@@ -130,6 +131,15 @@ export async function render(container) {
   container.querySelector('#filter-kategorie').addEventListener('change', applyFilter);
   container.querySelector('#filter-kunde').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const header = ['Datum', 'Kategorie', 'Beschreibung', 'Lieferant', 'Betrag netto', 'USt.-Satz', 'Betrag brutto', 'Bezahlt mit'];
+    const rows = [header, ...filtered.map((a) => [
+      a.datum || '', a.kategorie || '', a.beschreibung || '', a.lieferant || '',
+      a.betragNetto ?? '', a.steuersatz ?? '', a.betragBrutto ?? '', a.bezahltMit || '',
+    ])];
+    downloadTextFile(`neuverdrahtet-ausgaben-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
   container.querySelector('#btn-beleg-import').addEventListener('click', () => {
     openBelegImport({ onImported: () => render(container) });
   });

@@ -1,5 +1,5 @@
 import { getAll, put, remove, GEWERKE } from '../db.js';
-import { uid, escapeHtml, toast, farbeAusText, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, toast, farbeAusText, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 
@@ -47,6 +47,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Subunternehmer</h1>
       <div class="actions">
+        <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Subunternehmer</button>
       </div>
@@ -92,6 +93,12 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-export').addEventListener('click', () => {
+    const header = ['Firma', 'Ansprechpartner', 'Telefon', 'E-Mail', 'Gewerk', 'Stundensatz', 'Notizen'];
+    const rows = [header, ...liste.map((s) => [s.firma || '', s.ansprechpartner || '', s.telefon || '', s.email || '', gewerkTitel(s.gewerk), s.stundensatz ?? '', s.notizen || ''])];
+    downloadTextFile(`neuverdrahtet-subunternehmer-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
+    toast('Export erstellt', 'success');
+  });
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
 
   function openImport() {
