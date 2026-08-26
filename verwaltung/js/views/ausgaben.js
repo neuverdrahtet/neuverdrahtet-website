@@ -7,7 +7,7 @@ import { analyzeBeleg } from '../ai.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as journal from '../journal.js';
 
-export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges'];
+export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
 
 function blobToDataUrl(blob) {
