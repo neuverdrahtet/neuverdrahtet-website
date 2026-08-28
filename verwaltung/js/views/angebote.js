@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
@@ -12,6 +12,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
 import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
+import * as google from '../google.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -72,11 +73,26 @@ function parseAngeboteCsv(text, kunden, defaultSteuersatz) {
 }
 
 export async function render(container, route) {
-  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken] = await Promise.all([
-    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
+  let [angebote, kunden, projekte, katalog, settings, vorlagen, textbausteine, marken, lieferanten] = await Promise.all([
+    getAll('angebote'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'), getAll('lieferanten'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
+  const lieferantenById = Object.fromEntries(lieferanten.map((l) => [l.id, l]));
+  const katalogByBezeichnung = new Map(katalog.map((k) => [(k.bezeichnung || '').trim().toLowerCase(), k]));
+  // "KI berücksichtigt Lieferantenpräferenzen": die KI selbst kennt keine
+  // Lieferantendaten (externer Worker, kein Zugriff auf unsere Stammdaten) -
+  // deshalb hier client-seitig nachgezogen: generierte Positionen, die zu
+  // einem Katalog-Artikel mit hinterlegtem bevorzugtem Lieferanten passen,
+  // bekommen einen entsprechenden Hinweis im Langtext ergänzt.
+  function mitLieferantenpraeferenz(positionen) {
+    return (positionen || []).map((p) => {
+      const treffer = katalogByBezeichnung.get((p.bezeichnung || '').trim().toLowerCase());
+      const lieferant = treffer?.bevorzugterLieferantId ? lieferantenById[treffer.bevorzugterLieferantId] : null;
+      if (!lieferant || (p.beschreibung || '').includes(lieferant.firma)) return p;
+      return { ...p, beschreibung: `${p.beschreibung ? p.beschreibung + ' ' : ''}(bevorzugter Lieferant: ${lieferant.firma})` };
+    });
+  }
   angebote.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
   let filtered = angebote;
 
@@ -132,6 +148,7 @@ export async function render(container, route) {
         <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
+        <button class="btn" id="btn-new-privat">⚡ Privatkunden-Angebot</button>
         <button class="btn btn-primary" id="btn-new">+ Neues Angebot</button>
       </div>
     </div>
@@ -249,8 +266,72 @@ export async function render(container, route) {
     if (zielAngebot) openForm(zielAngebot);
   }
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-new-privat').addEventListener('click', () => openPrivatkundenSchnellstart());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
   container.querySelector('#btn-import').addEventListener('click', () => openAngeboteImport());
+
+  const KUNDEN_FARBEN_QUICK = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
+  // Schnellstart für Privatkunden: Name/Adresse + Stichpunkte in einem
+  // kompakten Dialog statt der vollen Kunden- und Angebots-Formulare - legt
+  // den Kunden minimal an und öffnet das normale Angebotsformular direkt mit
+  // KI-generierten Positionen vorausgefüllt.
+  function openPrivatkundenSchnellstart() {
+    const { body, close } = openModal({
+      title: 'Privatkunden-Angebot in Minuten',
+      bodyHtml: `
+        <form id="privat-schnell-form">
+          <p class="hint">Legt einen neuen Privatkunden minimal an und erstellt daraus direkt ein Angebot - Details lassen sich danach im normalen Formular noch anpassen.</p>
+          <div class="form-grid">
+            <div class="field col-span-2"><label>Name *</label><input name="name" required placeholder="Vor- und Nachname"></div>
+            <div class="field"><label>Straße, Nr.</label><input name="strasse"></div>
+            <div class="field"><label>PLZ</label><input name="plz"></div>
+            <div class="field col-span-2"><label>Ort</label><input name="ort"></div>
+            <div class="field"><label>Telefon</label><input name="telefon"></div>
+            <div class="field"><label>E-Mail</label><input type="email" name="email"></div>
+            <div class="field col-span-2"><label>Betreff</label><input name="betreff" placeholder="z.B. Elektroinstallation Neubau"></div>
+            <div class="field col-span-2"><label>Stichpunkte für die KI (optional)</label><textarea name="stichpunkte" rows="3" placeholder="z.B. Neuverkabelung Küche, 6 Steckdosen, 2 Deckenauslässe"></textarea></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="privat-schnell-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Angebot erstellen</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#privat-schnell-cancel').addEventListener('click', close);
+    body.querySelector('#privat-schnell-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const name = (fd.get('name') || '').toString().trim();
+      if (!name) return;
+      const submitBtn = body.querySelector('button[type="submit"]');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Erstelle ...';
+      const neuerKunde = {
+        id: uid(), firma: name, ansprechpartner: '', strasse: (fd.get('strasse') || '').toString().trim(),
+        plz: (fd.get('plz') || '').toString().trim(), ort: (fd.get('ort') || '').toString().trim(),
+        telefon: (fd.get('telefon') || '').toString().trim(), email: (fd.get('email') || '').toString().trim(),
+        notizen: '', kundennummer: '', istPrivatperson: true, farbe: farbeAusText(name, KUNDEN_FARBEN_QUICK), status: 'kunde',
+      };
+      await put('kunden', neuerKunde);
+      kunden.push(neuerKunde);
+      const betreff = (fd.get('betreff') || '').toString().trim();
+      const stichpunkte = (fd.get('stichpunkte') || '').toString().trim();
+      let positionen = [];
+      if (stichpunkte) {
+        try {
+          const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: neuerKunde.firma, katalog });
+          positionen = mitLieferantenpraeferenz(result.positionen).map((p) => ({ ...p, id: uid() }));
+          toast(`${positionen.length} Position(en) von der KI übernommen`, 'success');
+        } catch (err) {
+          toast(`KI-Vorschlag fehlgeschlagen (${err.message}) - bitte Positionen manuell ergänzen`, 'danger');
+        }
+      }
+      close();
+      openForm(null, { kundeId: neuerKunde.id, betreff, positionen });
+    });
+  }
 
   function openAngeboteImport() {
     const { body, close } = openModal({
@@ -516,7 +597,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         }
         const neuePositionen = [
           ...editor.getPositionen(),
-          ...(result.positionen || []).map((p) => ({ ...p, id: uid() })),
+          ...mitLieferantenpraeferenz(result.positionen).map((p) => ({ ...p, id: uid() })),
         ];
         editor = createPositionsEditor({
           host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen,
@@ -723,8 +804,36 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         await setSettings({ angebotNummerDatum: nDatum, angebotNummerZaehler: nZaehler });
       }
 
+      const wurdeGeradeVersendet = isEdit && data.status !== 'versendet' && updated.status === 'versendet';
       await put('angebote', updated);
       toast(isEdit ? 'Angebot aktualisiert' : 'Angebot angelegt', 'success');
+
+      // Automatischer Versand bei Freigabe (Statuswechsel -> "Versendet"):
+      // bewusst nur wenn explizit in den Einstellungen aktiviert (Standard
+      // aus), da hier ohne weitere Rückfrage eine echte E-Mail an den Kunden
+      // rausgeht. Ein Fehlschlag (z.B. Google nicht verbunden) blockt nicht
+      // das Speichern - der Status bleibt "Versendet", nur der Versand selbst
+      // muss dann manuell nachgeholt werden.
+      if (wurdeGeradeVersendet && settings.angebotAutoVersandBeiFreigabe) {
+        const kunde = kundenById[updated.kundeId];
+        if (kunde?.email) {
+          try {
+            const blob = await buildDocPdfBlob(docOpts());
+            await google.sendEmailWithAttachment({
+              to: kunde.email,
+              subject: `Angebot ${updated.nummer}${updated.betreff ? ' – ' + updated.betreff : ''}`,
+              bodyText: `Hallo${kunde.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${updated.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(updated.projektId).firmenname}`,
+              attachmentName: `Angebot-${updated.nummer}.pdf`,
+              attachmentBlob: blob,
+            });
+            toast('Angebot automatisch per E-Mail versendet', 'success');
+          } catch (err) {
+            toast(`Automatischer Versand fehlgeschlagen (${err.message}) - bitte manuell per E-Mail senden`, 'danger');
+          }
+        } else {
+          toast('Automatischer Versand übersprungen: keine E-Mail-Adresse beim Kunden hinterlegt', 'info');
+        }
+      }
       close();
       render(container);
     });

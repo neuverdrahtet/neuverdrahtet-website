@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, resolveMarkeSettings } from '../db.js';
+import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
@@ -7,6 +7,7 @@ import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
+import * as google from '../google.js';
 
 const STUFE_TEXT = {
   1: (settings, frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
@@ -77,6 +78,15 @@ export async function render(container) {
     })
     .sort((a, b) => b.tageUeberfaellig - a.tageUeberfaellig);
   const bereitCount = overdue.filter((o) => o.bereit).length;
+
+  // Automatischer Mahnungsversand (Einstellungen → KI-Angebotserstellung,
+  // Schalter "Fällige Mahnungen automatisch versenden"): läuft höchstens
+  // einmal pro Kalendertag beim Öffnen dieser Ansicht, da es hier keinen
+  // eigenen Server-Cron gibt - "automatisch" heißt hier "ohne dass jemand
+  // jede Mahnung einzeln anklicken muss", nicht "rund um die Uhr im
+  // Hintergrund". Legt neue Mahnungen erst NACH diesem Lauf angelegt an,
+  // deshalb bei tatsächlicher Aktivität komplett neu rendern.
+  if (await autoVersendeFaelligeMahnungen()) return render(container);
 
   mahnungen.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
 
@@ -322,6 +332,49 @@ export async function render(container) {
       pdfBlob: await buildDocPdfBlob(mahnungDocOpts(m)),
       filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
     });
+  }
+
+  // Legt für alle überfälligen Rechnungen mit erreichter nächster Mahnstufe
+  // automatisch die Mahnung an UND versendet sie sofort per E-Mail - nur
+  // wenn der Nutzer das in den Einstellungen aktiviert hat (Standard aus,
+  // da hier echte E-Mails an Kunden rausgehen). Gibt true zurück, wenn
+  // tatsächlich etwas angelegt wurde (Aufrufer sollte dann neu rendern).
+  async function autoVersendeFaelligeMahnungen() {
+    if (!settings.mahnungenAutoVersand) return false;
+    const heute = todayISO();
+    if (settings.mahnungenAutoVersandAm === heute) return false;
+    const bereitEintraege = overdue.filter((o) => o.bereit);
+    if (bereitEintraege.length === 0) {
+      await setSettings({ mahnungenAutoVersandAm: heute });
+      return false;
+    }
+    let gesendet = 0, keineEmail = 0, fehler = 0;
+    for (const { r, nextStufe } of bereitEintraege) {
+      const kunde = kundenById[r.kundeId];
+      const neueMahnung = buildMahnungData(r, nextStufe);
+      await put('mahnungen', neueMahnung);
+      if (!kunde?.email) { keineEmail++; continue; }
+      try {
+        const blob = await buildDocPdfBlob(mahnungDocOpts(neueMahnung));
+        await google.sendEmailWithAttachment({
+          to: kunde.email,
+          subject: `${neueMahnung.stufe}. Mahnung zu Rechnung ${r.nummer || ''}`,
+          bodyText: `Hallo${kunde.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${neueMahnung.text}\n\nMit freundlichen Grüßen\n${getEffectiveSettingsForMahnung(neueMahnung).firmenname}`,
+          attachmentName: `Mahnung-${neueMahnung.stufe}-${r.nummer || ''}.pdf`,
+          attachmentBlob: blob,
+        });
+        gesendet++;
+      } catch {
+        fehler++;
+      }
+    }
+    await setSettings({ mahnungenAutoVersandAm: heute });
+    const teile = [];
+    if (gesendet) teile.push(`${gesendet} automatisch versendet`);
+    if (keineEmail) teile.push(`${keineEmail} angelegt, aber ohne E-Mail-Adresse nicht verschickt`);
+    if (fehler) teile.push(`${fehler} fehlgeschlagen (bitte manuell versenden)`);
+    if (teile.length) toast(`Mahnverfahren: ${teile.join(', ')}`, fehler ? 'info' : 'success');
+    return true;
   }
 
   function openForm(rechnung, stufe) {

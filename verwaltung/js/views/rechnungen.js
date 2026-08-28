@@ -519,12 +519,15 @@ export async function render(container, route) {
       status: 'offen', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
       steuerart: prefill?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
-      rechnungstyp: 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
+      rechnungstyp: prefill?.rechnungstyp || 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
       skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
       zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
     };
     const locked = isEdit && !!data.versendet;
-    const abschlaegeChecked = new Set((data.verrechneteAbschlaege || []).map((a) => a.rechnungId));
+    const abschlaegeChecked = new Set(
+      (data.verrechneteAbschlaege || []).map((a) => a.rechnungId)
+      .concat(!isEdit ? (prefill?.abschlagIds || []) : [])
+    );
     const suggestedNummer = !isEdit
       ? nextDailyNummer(settings.rechnungPrefix, { datum: settings.rechnungNummerDatum, zaehler: settings.rechnungNummerZaehler }).nummer
       : '';

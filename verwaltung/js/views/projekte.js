@@ -3,6 +3,7 @@ import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getC
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
+import { renderAufmassSection } from '../aufmass.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { renderNachkalkulation } from '../nachkalkulation.js';
 import { renderTeamchat } from '../teamchat.js';
@@ -686,6 +687,7 @@ export async function render(container, opts = {}) {
     const linkedAngebote = angebote.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const linkedAB = auftragsbestaetigungen.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const linkedRechnungen = rechnungen.filter((r) => r.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const offeneAbschlaege = linkedRechnungen.filter((r) => r.rechnungstyp === 'abschlag' && r.status !== 'storniert' && !r.verrechnetIn);
     const heute = todayISO();
     const hatUeberfaelligeRechnung = linkedRechnungen.some((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute);
     const kunde = kundenById[p.kundeId];
@@ -701,6 +703,7 @@ export async function render(container, opts = {}) {
             <button type="button" class="btn" id="akte-neuer-termin">📅 + Termin</button>
             <button type="button" class="btn" id="akte-neues-angebot">📄 + Angebot</button>
             <button type="button" class="btn" id="akte-neue-rechnung">🧾 + Rechnung</button>
+            ${linkedAngebote.length || offeneAbschlaege.length ? '<button type="button" class="btn" id="akte-schlussrechnung">🧾✓ Schlussrechnung erstellen</button>' : ''}
             <button type="button" class="btn" id="akte-neue-ab">✅ + Auftragsbestätigung</button>
             <button type="button" class="btn" id="akte-lexoffice-transfer">🧾 An lexoffice übertragen</button>
             ${hatUeberfaelligeRechnung ? '<button type="button" class="btn btn-danger" id="akte-zu-mahnungen">🔔 Mahnung</button>' : ''}
@@ -771,6 +774,7 @@ export async function render(container, opts = {}) {
             <div class="akte-bereich" data-tab="details" id="ausgaben-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="verwendung-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="tc-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="aufmass-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="foto-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="dok-host"></div>
           </div>
@@ -808,6 +812,20 @@ export async function render(container, opts = {}) {
     }
     container.querySelector('#akte-neues-angebot').addEventListener('click', () => openDokumentMitVorbelegung('angebote', dokumentPrefill()));
     container.querySelector('#akte-neue-rechnung').addEventListener('click', () => openDokumentMitVorbelegung('rechnungen', dokumentPrefill()));
+    container.querySelector('#akte-schlussrechnung')?.addEventListener('click', () => {
+      // Schlussrechnung automatisch vorbereiten: Positionen aus dem (bevorzugt
+      // angenommenen) Angebot übernehmen und alle noch nicht verrechneten
+      // Abschlagsrechnungen dieses Projekts direkt zum Verrechnen vorauswählen
+      // - der Nutzer sieht/prüft alles im Formular, bevor gespeichert wird.
+      const quellAngebot = linkedAngebote.find((a) => a.status === 'angenommen') || linkedAngebote[0];
+      openDokumentMitVorbelegung('rechnungen', {
+        ...dokumentPrefill(),
+        rechnungstyp: 'rechnung',
+        betreff: quellAngebot ? `Schlussrechnung zu ${quellAngebot.betreff || p.titel}` : `Schlussrechnung ${p.titel}`,
+        positionen: (quellAngebot?.positionen || []).map((pos) => ({ ...pos, id: uid() })),
+        abschlagIds: offeneAbschlaege.map((r) => r.id),
+      });
+    });
     container.querySelector('#akte-neue-ab').addEventListener('click', () => openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill()));
     container.querySelector('#akte-zu-mahnungen')?.addEventListener('click', () => { window.location.hash = '#/mahnungen'; });
     container.querySelector('#akte-lexoffice-transfer').addEventListener('click', () => uebertrageAnLexoffice(p));
@@ -818,6 +836,7 @@ export async function render(container, opts = {}) {
     renderProjektAusgaben(container.querySelector('#ausgaben-host'), p.id);
     renderVerwendungen(container.querySelector('#verwendung-host'), p.id);
     renderTeamchat(container.querySelector('#tc-host'), p.id, mitarbeiter);
+    renderAufmassSection(container.querySelector('#aufmass-host'), p.id);
     renderFotoSection(container.querySelector('#foto-host'), p.id);
     renderDokumenteSection(container.querySelector('#dok-host'), 'projekt', p.id, {
       title: 'Dokumente (Berichte, Stundenzettel, ...)',

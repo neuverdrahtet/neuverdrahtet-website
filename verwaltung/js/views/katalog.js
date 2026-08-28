@@ -73,12 +73,60 @@ function parseKatalogCsv(text, standardSteuersatz) {
 export async function render(container, route) {
   let items = await getAll('katalog');
   let lagerbewegungen = await getAll('lagerbewegungen');
+  const lieferanten = await getAll('lieferanten');
+  const lieferantenById = Object.fromEntries(lieferanten.map((l) => [l.id, l]));
   const settings = await getSettings();
   syncKatalogOeffentlich().catch((err) => console.error('katalogOeffentlich-Sync fehlgeschlagen:', err));
   items.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   let filtered = items;
   let typeFilter = '';
-  const bulk = createBulkSelect('katalog', { label: 'Einträge' });
+  function openBulkZeitKalkulator(ids) {
+    const betroffen = items.filter((i) => ids.includes(i.id) && Number(i.zeitStunden) > 0);
+    if (betroffen.length === 0) {
+      toast('Keine der ausgewählten Positionen hat eine hinterlegte Arbeitszeit (über "🧮 Material + Zeit + Gewinn kalkulieren" je Position einmalig eintragen, dann wirkt diese Sammel-Aktion).', 'info');
+      return;
+    }
+    const { body: kBody, close: kClose } = openModal({
+      title: `Preis aus Zeit neu berechnen (${betroffen.length} Position${betroffen.length === 1 ? '' : 'en'})`,
+      bodyHtml: `
+        <form id="bulk-zeit-form">
+          <p class="hint">Für jede ausgewählte Position mit hinterlegter Arbeitszeit wird der Preis neu berechnet: Zeit × Stundensatz = Basiskosten, darauf der Gewinn-Aufschlag.</p>
+          <div class="form-grid">
+            <div class="field"><label>Stundensatz (€/Std.)</label><input type="number" step="0.5" min="0" name="stundensatz" value="${settings.stundensatz || 0}" required></div>
+            <div class="field"><label>Gewinn-Aufschlag (%)</label><input type="number" step="1" min="0" name="gewinn" value="${settings.standardAufschlagProzent || 20}" required></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="bulk-zeit-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Für ${betroffen.length} Position${betroffen.length === 1 ? '' : 'en'} übernehmen</button>
+          </div>
+        </form>
+      `,
+    });
+    kBody.querySelector('#bulk-zeit-cancel').addEventListener('click', kClose);
+    kBody.querySelector('#bulk-zeit-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const stundensatz = Number(fd.get('stundensatz')) || 0;
+      const gewinn = Number(fd.get('gewinn')) || 0;
+      for (const i of betroffen) {
+        const basis = Number(i.zeitStunden) * stundensatz;
+        const preis = Math.round(basis * (1 + gewinn / 100) * 100) / 100;
+        const updated = { ...i, einkaufspreis: Math.round(basis * 100) / 100, aufschlagProzent: gewinn, preis };
+        await put('katalog', updated);
+        Object.assign(i, updated);
+      }
+      toast(`${betroffen.length} Position(en) neu berechnet`, 'success');
+      kClose();
+      renderTable();
+    });
+  }
+  const bulk = createBulkSelect('katalog', {
+    label: 'Einträge',
+    extraActions: [
+      { id: 'bulk-zeit-kalkulator', label: '🧮 Preis aus Zeit berechnen', onClick: openBulkZeitKalkulator },
+    ],
+  });
 
   const niedrigBestand = items.filter((i) => i.typ === 'artikel' && i.bestandTracking && Number(i.bestand ?? 0) <= Number(i.mindestbestand ?? 0));
 
@@ -787,7 +835,11 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           <div class="flex-row" style="margin-bottom:8px">
             <button type="button" class="btn btn-sm" id="btn-kalkulator">🧮 Material + Zeit + Gewinn kalkulieren</button>
           </div>
+          <input type="hidden" name="zeitStunden" id="f-zeit-stunden" value="${data.zeitStunden || ''}">
           <div class="form-grid">
+            <div class="field"><label>Bevorzugter Lieferant</label>
+              <select name="bevorzugterLieferantId"><option value="">– keiner –</option>${lieferanten.map((l) => `<option value="${l.id}" ${l.id === data.bevorzugterLieferantId ? 'selected' : ''}>${escapeHtml(l.firma)}</option>`).join('')}</select>
+            </div>
             <div class="field"><label>Einkaufspreis EK (€, optional)</label><input type="number" step="0.01" min="0" name="einkaufspreis" id="f-ek" value="${data.einkaufspreis || ''}"></div>
             <div class="field"><label>Zuschlag (%)</label><input type="number" step="1" min="0" name="aufschlagProzent" id="f-zuschlag" value="${data.aufschlagProzent ?? 20}"></div>
             <div class="field"><label>Verkaufspreis VK netto (€) *</label><input type="number" step="0.01" min="0" name="preis" id="f-vk" required value="${data.preis}"></div>
@@ -857,16 +909,21 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           <div class="row"><span>Basiskosten (EK)</span><span>${formatCurrency(basis)}</span></div>
           <div class="row grand"><span>Verkaufspreis netto (+${gewinn}% Gewinn)</span><span>${formatCurrency(vk)}</span></div>
         `;
-        return { basis, gewinn };
+        return { basis, gewinn, zeit };
       }
       kBody.querySelectorAll('#kalk-form input').forEach((inp) => inp.addEventListener('input', updatePreview));
       updatePreview();
       kBody.querySelector('#k-btn-cancel').addEventListener('click', kClose);
       kBody.querySelector('#kalk-form').addEventListener('submit', (e) => {
         e.preventDefault();
-        const { basis, gewinn } = updatePreview();
+        const { basis, gewinn, zeit } = updatePreview();
         body.querySelector('#f-ek').value = basis.toFixed(2);
         body.querySelector('#f-zuschlag').value = gewinn;
+        // Arbeitszeit merken (nicht nur zum VK-Berechnen verwenden) - damit
+        // sie für die Sammel-Neuberechnung mehrerer Positionen (Bulk-Aktion
+        // in der Liste) wiederverwendet werden kann, ohne pro Position erneut
+        // eingegeben werden zu müssen.
+        body.querySelector('#f-zeit-stunden').value = zeit || '';
         recalcVk();
         toast('Kalkulation übernommen', 'success');
         kClose();
@@ -950,6 +1007,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
       updated.preis = Number(updated.preis) || 0;
       updated.einkaufspreis = Number(updated.einkaufspreis) || 0;
       updated.aufschlagProzent = Number(updated.aufschlagProzent) || 0;
+      updated.zeitStunden = Number(updated.zeitStunden) || 0;
       updated.steuersatz = Number(updated.steuersatz) || 0;
       updated.bestandTracking = updated.typ === 'artikel' && body.querySelector('#f-bestand-tracking').checked;
       updated.bestand = updated.bestandTracking ? (Number(updated.bestand) || 0) : (data.bestand || 0);
