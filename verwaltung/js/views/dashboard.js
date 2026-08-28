@@ -115,13 +115,16 @@ export async function render(container, _route, { autoSync = true } = {}) {
     });
   }
 
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, katalog, angebote, marken] = await Promise.all([
+  // Katalog bewusst NICHT hier mitladen (siehe renderNiedrigBestand unten): die
+  // Collection wächst mit jedem Preisimport (LV-Listen etc.) immer weiter und
+  // hat inzwischen tausend+ Einträge - würde sie den ersten Dashboard-Aufbau
+  // blockieren, verzögert das jeden App-Start unnötig, nur für die kleine
+  // "Niedriger Bestand"-Karte. Stattdessen lädt sie asynchron nach und
+  // ergänzt ihre Karte erst, wenn sie fertig ist.
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, angebote, marken] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('katalog'), getAll('angebote'), getAll('marken'),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('angebote'), getAll('marken'),
   ]);
-  const niedrigBestand = katalog
-    .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
-    .sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
   const today = todayISO();
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -449,7 +452,29 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     ` : ''}
 
-    ${niedrigBestand.length ? `
+    <div id="dash-niedrig-bestand-host"></div>
+  `;
+
+  function bindRowLinks(root) {
+    root.querySelectorAll('.dash-row-link[data-href]').forEach((row) => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('a')) return; // eigener "Öffnen"-Link übernimmt die Navigation selbst
+        window.location.hash = row.dataset.href;
+      });
+    });
+  }
+  bindRowLinks(container);
+
+  // Katalog asynchron nachladen (siehe Kommentar oben) - blockiert den ersten
+  // Dashboard-Aufbau nicht mehr, ergänzt die Karte erst wenn fertig.
+  getAll('katalog').then((katalog) => {
+    const host = container.querySelector('#dash-niedrig-bestand-host');
+    if (!host) return; // Nutzer hat die Seite inzwischen verlassen
+    const niedrigBestand = katalog
+      .filter((k) => k.typ === 'artikel' && k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0))
+      .sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
+    if (!niedrigBestand.length) return;
+    host.innerHTML = `
       <div class="card">
         <h2>Niedriger Lagerbestand <span class="badge badge-danger">${niedrigBestand.length}</span></h2>
         <table class="data-table">
@@ -466,15 +491,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </table>
         <p class="hint"><a href="#/katalog">→ Zu Artikel &amp; Leistungen</a></p>
       </div>
-    ` : ''}
-  `;
-
-  container.querySelectorAll('.dash-row-link[data-href]').forEach((row) => {
-    row.addEventListener('click', (e) => {
-      if (e.target.closest('a')) return; // eigener "Öffnen"-Link übernimmt die Navigation selbst
-      window.location.hash = row.dataset.href;
-    });
-  });
+    `;
+    bindRowLinks(host);
+  }).catch(() => { /* Katalog-Sync ist hier nur ein Komfort-Widget, darf das Dashboard nicht stören */ });
 
   // Manueller Sync-Button (wie in der Plantafel): der automatische Hintergrund-
   // Sync oben läuft nur an, wenn schon ein gültiges Google-Token vorliegt - ist
