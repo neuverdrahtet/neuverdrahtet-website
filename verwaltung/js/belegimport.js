@@ -56,12 +56,16 @@ export function parseDatevLedgerXml(xmlText) {
   if (!/<LedgerImport[\s>]/.test(xmlText)) return null;
   const doc = new DOMParser().parseFromString(xmlText, 'application/xml');
   if (doc.querySelector('parsererror')) return null;
-  const ledger = doc.querySelector('accountsPayableLedger');
+  const payable = doc.querySelector('accountsPayableLedger');
+  const receivable = doc.querySelector('accountsReceivableLedger');
+  const ledger = payable || receivable;
   if (!ledger) return null;
   const get = (tag) => ledger.querySelector(tag)?.textContent?.trim() || '';
   return {
+    typ: payable ? 'ausgabe' : 'einnahme',
     datum: get('date'), betrag: Number(get('amount')) || 0, steuersatz: Number(get('tax')) || 0,
-    accountNo: get('accountNo'), accountName: get('accountName'), lieferant: get('supplierName'),
+    accountNo: get('accountNo'), accountName: get('accountName'),
+    gegenpartei: payable ? get('supplierName') : get('customerName'),
     beschreibung: get('bookingText') || get('information'), belegnummer: get('invoiceId'),
   };
 }
@@ -108,7 +112,7 @@ export function openBelegImport({ onImported } = {}) {
     title: 'Belege importieren (ZIP)',
     wide: true,
     bodyHtml: `
-      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch zwei Formate: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden) und DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen). Dateien vom Typ "Einnahme" (eigene Rechnungen) werden dem passenden Kunden als Dokument zugeordnet, sofern ein Kunde mit passendem Namen existiert. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
+      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch zwei Formate: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden) und DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen). Belege vom Typ "Einnahme" (eigene Rechnungen, bei beiden Formaten) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet, sofern ein Kunde mit passendem Namen existiert. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
       <div class="field" style="margin-bottom:10px">
         <label>ZIP-Datei</label>
         <input type="file" id="beleg-zip-input" accept=".zip,application/zip">
@@ -167,18 +171,36 @@ export function openBelegImport({ onImported } = {}) {
         const xmlText = await (await xmlEntry.getBlob('application/xml')).text();
         const parsed = parseDatevLedgerXml(xmlText);
         if (!parsed || !parsed.datum || !parsed.betrag) continue;
-        if (bestehendeSchluessel.has(dupKey(parsed.datum, parsed.betrag, parsed.lieferant))) {
+        const pdfEntry = pdfEntriesByBasename.get(basename);
+
+        if (parsed.typ === 'einnahme') {
+          // Einnahmen-Beleg (Kundenrechnung): keine Ausgabe, sondern - falls ein
+          // PDF dabei ist und ein passender Kunde gefunden wird - als Dokument
+          // in der Kundenakte ablegen. Ohne PDF gibt es nichts abzulegen.
+          if (!pdfEntry) continue;
+          const kunde = findMatchingKunde(kunden, parsed.gegenpartei);
+          if (!kunde) { unzugeordnet.push(`${parsed.gegenpartei} (${basename}.pdf)`); continue; }
+          const blob = await pdfEntry.getBlob('application/pdf');
+          await saveDokument({
+            bezugTyp: 'kunde', bezugId: kunde.id, kategorie: 'rechnung',
+            name: `Rechnung ${parsed.belegnummer || basename} - ${formatDate(parsed.datum)}.pdf`,
+            mime: 'application/pdf', blob,
+          });
+          zugeordnetCount++;
+          continue;
+        }
+
+        if (bestehendeSchluessel.has(dupKey(parsed.datum, parsed.betrag, parsed.gegenpartei))) {
           duplikateUebersprungen++;
           continue;
         }
-        const pdfEntry = pdfEntriesByBasename.get(basename);
         const blob = pdfEntry ? await pdfEntry.getBlob('application/pdf') : null;
         const ausgabeId = uid();
         const betragNetto = parsed.steuersatz ? Math.round((parsed.betrag / (1 + parsed.steuersatz / 100)) * 100) / 100 : parsed.betrag;
         const ausgabe = {
-          id: ausgabeId, datum: parsed.datum, kategorie: guessKategorieAusKonto(parsed.accountNo, parsed.lieferant),
+          id: ausgabeId, datum: parsed.datum, kategorie: guessKategorieAusKonto(parsed.accountNo, parsed.gegenpartei),
           beschreibung: parsed.beschreibung || `Beleg ${parsed.belegnummer}`,
-          lieferant: parsed.lieferant, betragNetto, steuersatz: parsed.steuersatz || (settings.standardSteuersatz ?? 19),
+          lieferant: parsed.gegenpartei, betragNetto, steuersatz: parsed.steuersatz || (settings.standardSteuersatz ?? 19),
           betragBrutto: parsed.betrag, bezahltMit: 'überweisung',
           beleg: blob ? (FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${ausgabeId}`, blob) : blob) : null,
           projektId: '', kundeId: '', kalkKategorie: '', bezahlstatus: '', faelligAm: '', bezahltAm: parsed.datum, istInvestition: false,
