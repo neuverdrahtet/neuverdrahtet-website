@@ -2,7 +2,7 @@ import { openModal } from './ui.js';
 import { escapeHtml, toast } from './utils.js';
 import * as google from './google.js';
 
-export function openEmailComposer({ to, subject, bodyText, filename, buildPdfBlob }) {
+export function openEmailComposer({ to, subject, bodyText, filename, buildPdfBlob, onSent }) {
   const { body, close } = openModal({
     title: 'Per E-Mail senden',
     bodyHtml: `
@@ -35,6 +35,7 @@ export function openEmailComposer({ to, subject, bodyText, filename, buildPdfBlo
       const blob = await buildPdfBlob();
       await google.sendEmailWithAttachment({ to, subject, bodyText, attachmentName: filename, attachmentBlob: blob });
       toast('E-Mail gesendet', 'success');
+      if (onSent) await onSent().catch(() => { /* Folgeaktion ist ein Komfort-Feature, Versand ist bereits erfolgt */ });
       close();
     } catch (err) {
       toast(err.message, 'danger');

@@ -6,7 +6,7 @@ import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
-import { generateAngebotFromStichpunkte, rechercherePreiseFuerPositionen } from '../ai.js';
+import { generateAngebotFromStichpunkte, rechercherePreiseFuerPositionen, chatMitAssistent } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
@@ -139,6 +139,10 @@ export async function render(container, route) {
   const kpiAngenommen = angebote.filter((a) => a.status === 'angenommen');
   const kpiEntwurf = angebote.filter((a) => a.status === 'entwurf');
   const summeAngebote = (list) => list.reduce((s, a) => s + (a.brutto || 0), 0);
+  const nachfassGrenze = addDays(todayISO(), -(settings.angebotNachfassTage || 7));
+  const istNachfassFaellig = (a) => a.status === 'versendet' && (a.nachfassGesendetAm || a.datum) <= nachfassGrenze;
+  const kpiNachfass = kpiVersendet.filter(istNachfassFaellig);
+  let nachfassOnly = false;
 
   container.innerHTML = `
     <div class="view-header">
@@ -165,6 +169,10 @@ export async function render(container, route) {
         <div class="kpi-value">${kpiAngenommen.length}</div>
         <div class="kpi-label">Angenommen · ${formatCurrency(summeAngebote(kpiAngenommen))}</div>
       </div>
+      <div class="kpi-card kpi-clickable kpi-warn" id="kpi-nachfass" title="Versendet, seit mehr als ${settings.angebotNachfassTage || 7} Tagen ohne Rückmeldung">
+        <div class="kpi-value">${kpiNachfass.length}</div>
+        <div class="kpi-label">Ohne Rückmeldung · ${formatCurrency(summeAngebote(kpiNachfass))}</div>
+      </div>
       <div class="kpi-card kpi-clickable" id="kpi-alle">
         <div class="kpi-value">${angebote.length}</div>
         <div class="kpi-label">Gesamt · ${formatCurrency(summeAngebote(angebote))}</div>
@@ -186,6 +194,7 @@ export async function render(container, route) {
     const status = container.querySelector('#status-filter').value;
     filtered = angebote.filter((a) => {
       if (status && a.status !== status) return false;
+      if (nachfassOnly && !istNachfassFaellig(a)) return false;
       if (!q) return true;
       return [a.nummer, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -246,18 +255,23 @@ export async function render(container, route) {
 
   function markActiveKpi() {
     const status = container.querySelector('#status-filter').value;
-    const idByStatus = { entwurf: 'kpi-entwurf', versendet: 'kpi-versendet', angenommen: 'kpi-angenommen', '': 'kpi-alle' };
     container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    if (nachfassOnly) {
+      container.querySelector('#kpi-nachfass').classList.add('kpi-active');
+      return;
+    }
+    const idByStatus = { entwurf: 'kpi-entwurf', versendet: 'kpi-versendet', angenommen: 'kpi-angenommen', '': 'kpi-alle' };
     const active = container.querySelector(`#${idByStatus[status] || 'kpi-alle'}`);
     if (active) active.classList.add('kpi-active');
   }
 
   container.querySelector('#search').addEventListener('input', applyFilter);
-  container.querySelector('#status-filter').addEventListener('change', () => { markActiveKpi(); applyFilter(); });
-  container.querySelector('#kpi-entwurf').addEventListener('click', () => { container.querySelector('#status-filter').value = 'entwurf'; markActiveKpi(); applyFilter(); });
-  container.querySelector('#kpi-versendet').addEventListener('click', () => { container.querySelector('#status-filter').value = 'versendet'; markActiveKpi(); applyFilter(); });
-  container.querySelector('#kpi-angenommen').addEventListener('click', () => { container.querySelector('#status-filter').value = 'angenommen'; markActiveKpi(); applyFilter(); });
-  container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; markActiveKpi(); applyFilter(); });
+  container.querySelector('#status-filter').addEventListener('change', () => { nachfassOnly = false; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-entwurf').addEventListener('click', () => { container.querySelector('#status-filter').value = 'entwurf'; nachfassOnly = false; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-versendet').addEventListener('click', () => { container.querySelector('#status-filter').value = 'versendet'; nachfassOnly = false; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-angenommen').addEventListener('click', () => { container.querySelector('#status-filter').value = 'angenommen'; nachfassOnly = false; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-nachfass').addEventListener('click', () => { container.querySelector('#status-filter').value = 'versendet'; nachfassOnly = true; markActiveKpi(); applyFilter(); });
+  container.querySelector('#kpi-alle').addEventListener('click', () => { container.querySelector('#status-filter').value = ''; nachfassOnly = false; markActiveKpi(); applyFilter(); });
   markActiveKpi();
   // Direktsprung auf ein einzelnes Angebot, z.B. aus der Kundenakte/Projekt-
   // Akte per #/angebote/<id> - öffnet das Formular sofort statt nur die Liste.
@@ -508,6 +522,7 @@ export async function render(container, route) {
             ${isEdit ? '<button type="button" class="btn" id="btn-gaeb-export" title="Bepreistes Leistungsverzeichnis im GAEB-Format">GAEB exportieren</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
+            ${isEdit && data.status === 'versendet' && data.kundeId ? '<button type="button" class="btn" id="btn-nachfassen" title="Erinnerungs-Mail an den Kunden, KI schlägt den Text vor">🔔 Jetzt nachfassen (KI)</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-ab">→ Auftragsbestätigung erstellen</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
@@ -709,6 +724,41 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unser Angebot ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings(data.projektId).firmenname}`,
             pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Angebot-${data.nummer}.pdf`,
+          });
+        });
+      }
+      const nachfassBtn = body.querySelector('#btn-nachfassen');
+      if (nachfassBtn) {
+        nachfassBtn.addEventListener('click', async () => {
+          const kunde = kundenById[data.kundeId];
+          const firmenname = getEffectiveSettings(data.projektId).firmenname;
+          nachfassBtn.disabled = true;
+          nachfassBtn.textContent = 'KI verfasst Text ...';
+          let entwurfText = `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nwir wollten kurz nachfragen, ob Sie sich bereits zu unserem Angebot ${data.nummer}${data.betreff ? ' (' + data.betreff + ')' : ''} vom ${formatDate(data.datum)} entscheiden konnten. Gerne stehen wir für Rückfragen zur Verfügung.\n\nMit freundlichen Grüßen\n${firmenname}`;
+          try {
+            const result = await chatMitAssistent({
+              messages: [{
+                role: 'user',
+                content: `Formuliere eine kurze, freundliche Nachfass-E-Mail (nur den Fließtext ohne Betreffzeile, max. 6 Sätze) an einen Kunden, dessen Angebot "${data.betreff || data.nummer}" vom ${formatDate(data.datum)} bisher unbeantwortet ist. Anrede: "${kunde?.ansprechpartner || 'Guten Tag'}". Unterschreibe mit dem Firmennamen "${firmenname}".`,
+              }],
+            });
+            if (result?.reply) entwurfText = result.reply;
+          } catch { /* KI-Text ist ein Komfort-Feature, Standardtext bleibt als Fallback */ }
+          nachfassBtn.disabled = false;
+          nachfassBtn.textContent = '🔔 Jetzt nachfassen (KI)';
+          openEmailComposer({
+            to: kunde?.email || '',
+            subject: `Nachfrage zu unserem Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
+            bodyText: entwurfText,
+            filename: `Angebot-${data.nummer}.pdf`,
+            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+            onSent: async () => {
+              const nachfassGesendetAm = todayISO();
+              await put('angebote', { ...data, nachfassGesendetAm });
+              data.nachfassGesendetAm = nachfassGesendetAm;
+              const idx = angebote.findIndex((x) => x.id === data.id);
+              if (idx !== -1) angebote[idx] = { ...angebote[idx], nachfassGesendetAm };
+            },
           });
         });
       }
