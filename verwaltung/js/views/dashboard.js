@@ -152,7 +152,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // --- Angebote ohne Rückmeldung (Nachfassen) ---
   const nachfassGrenze = addDays(today, -(settings.angebotNachfassTage || 7));
   const angeboteNachfassen = angebote
-    .filter((a) => a.status === 'versendet' && a.datum && a.datum <= nachfassGrenze)
+    .filter((a) => a.status === 'versendet' && a.datum && (a.nachfassGesendetAm || a.datum) <= nachfassGrenze)
     .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
 
   // --- Cashflow-Score ---
