@@ -131,6 +131,18 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-
   toggleBtn.addEventListener('click', () => (geoeffnet ? schliessePanel() : oeffnePanel()));
   closeBtn.addEventListener('click', schliessePanel);
 
+  // Klick außerhalb des Panels und Escape schließen den Chat ebenfalls -
+  // der Kunde soll ihn jederzeit unaufdringlich wieder loswerden können,
+  // nicht nur über den kleinen X-Button.
+  document.addEventListener('click', (e) => {
+    if (!geoeffnet) return;
+    if (panel.contains(e.target) || toggleBtn.contains(e.target)) return;
+    schliessePanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (geoeffnet && e.key === 'Escape') schliessePanel();
+  });
+
   /* ---------- Eingabe: Enter sendet, Shift+Enter neue Zeile; Textarea wächst automatisch ---------- */
   inputEl.addEventListener('input', () => {
     inputEl.style.height = 'auto';

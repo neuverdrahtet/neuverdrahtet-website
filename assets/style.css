@@ -911,6 +911,11 @@ section{ padding:88px 0; }
   box-shadow:0 24px 48px -12px rgba(12,24,38,0.35);
   display:flex; flex-direction:column; overflow:hidden;
 }
+/* [hidden] und .ki-assistent-panel haben ohne dieses Overwrite dieselbe
+   Spezifität - da Autor-CSS die UA-Stylesheet-Regel "[hidden]{display:none}"
+   sonst gewinnt, blieb das Panel trotz panel.hidden=true sichtbar (weiße
+   Box, die sich nicht wegklicken ließ). */
+.ki-assistent-panel[hidden]{ display:none; }
 .ki-assistent-header{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:14px 16px; background:var(--navy); color:#fff; flex:none;
