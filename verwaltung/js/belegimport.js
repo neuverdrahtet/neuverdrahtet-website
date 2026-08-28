@@ -11,14 +11,14 @@ const LIEFERANT_KATEGORIE_MAP = [
   { match: /hornbach|baumarkt|obi\b|bauhaus/i, kategorie: 'Material' },
   { match: /sammellieferant|elektro.?gro[ßs]handel|sonepar|rexel/i, kategorie: 'Material' },
   { match: /werkzeug/i, kategorie: 'Werkzeug/Maschinen' },
-  { match: /esso|aral|shell|tankstelle|tanken/i, kategorie: 'Fahrzeug/Sprit' },
+  { match: /esso|aral|shell|tankstelle|tanken|benzin|diesel|kraftstoff|sprit|ladestrom|autohaus|werkstatt|reifen|tüv|hauptuntersuchung/i, kategorie: 'Fahrzeug/Sprit' },
   { match: /haufe|lexware|software|abo\b/i, kategorie: 'Büro/Verwaltung' },
   { match: /aok|barmer|techniker|tk\b|dak|ikk|knappschaft|krankenkasse|berufsgenossenschaft/i, kategorie: 'Personal' },
   { match: /versicherung/i, kategorie: 'Versicherung' },
   { match: /miete|vermietung/i, kategorie: 'Miete' },
 ];
 
-function guessAusgabenKategorie(lieferant) {
+export function guessAusgabenKategorie(lieferant) {
   const hit = LIEFERANT_KATEGORIE_MAP.find((m) => m.match.test(lieferant));
   return hit ? hit.kategorie : 'Sonstiges';
 }

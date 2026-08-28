@@ -1,7 +1,7 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
-import { openBelegImport } from '../belegimport.js';
+import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
 import { downloadBlob } from '../docexport.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -11,6 +11,17 @@ import * as journal from '../journal.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
+const KATEGORIE_BADGE_CLASS = {
+  'Material': 'badge-kat-material',
+  'Werkzeug/Maschinen': 'badge-kat-werkzeug',
+  'Fahrzeug/Sprit': 'badge-kat-fahrzeug',
+  'Miete': 'badge-kat-miete',
+  'Versicherung': 'badge-kat-versicherung',
+  'Büro/Verwaltung': 'badge-kat-buero',
+  'Werbung/Marketing': 'badge-kat-werbung',
+  'Personal': 'badge-kat-personal',
+  'Sonstiges': 'badge-kat-sonstiges',
+};
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -28,6 +39,7 @@ export async function render(container) {
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
   const jahrOptionen = Array.from(new Set(ausgaben.map((a) => (a.datum || '').slice(0, 4)).filter(Boolean))).sort().reverse();
+  const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
   function imQuartal(datum, q) {
     if (!q) return true;
     const monat = Number((datum || '').slice(5, 7));
@@ -86,6 +98,10 @@ export async function render(container) {
         <option value="3">3. Quartal</option>
         <option value="4">4. Quartal</option>
       </select>
+      <select id="filter-monat">
+        <option value="">Alle Monate</option>
+        ${MONATSNAMEN.map((name, i) => `<option value="${String(i + 1).padStart(2, '0')}">${name}</option>`).join('')}
+      </select>
     </div>
     <div id="table-host"></div>
   `;
@@ -97,11 +113,13 @@ export async function render(container) {
     const kundeId = container.querySelector('#filter-kunde').value;
     const jahrFilter = container.querySelector('#filter-jahr').value;
     const quartalFilter = container.querySelector('#filter-quartal').value;
+    const monatFilter = container.querySelector('#filter-monat').value;
     filtered = ausgaben.filter((a) => {
       if (kategorie && a.kategorie !== kategorie) return false;
       if (kundeId && a.kundeId !== kundeId) return false;
       if (jahrFilter && (a.datum || '').slice(0, 4) !== jahrFilter) return false;
-      if (quartalFilter && !imQuartal(a.datum, quartalFilter)) return false;
+      if (monatFilter && (a.datum || '').slice(5, 7) !== monatFilter) return false;
+      if (!monatFilter && quartalFilter && !imQuartal(a.datum, quartalFilter)) return false;
       if (!q) return true;
       return [a.beschreibung, a.lieferant, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -124,7 +142,7 @@ export async function render(container) {
             <tr data-id="${a.id}">
               ${bulk.rowCell(a.id)}
               <td>${formatDate(a.datum)}</td>
-              <td><span class="badge">${escapeHtml(a.kategorie)}</span></td>
+              <td><span class="badge ${KATEGORIE_BADGE_CLASS[a.kategorie] || ''}">${escapeHtml(a.kategorie)}</span></td>
               <td>${escapeHtml(a.beschreibung || '')}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
@@ -152,7 +170,14 @@ export async function render(container) {
   container.querySelector('#filter-kategorie').addEventListener('change', applyFilter);
   container.querySelector('#filter-kunde').addEventListener('change', applyFilter);
   container.querySelector('#filter-jahr').addEventListener('change', applyFilter);
-  container.querySelector('#filter-quartal').addEventListener('change', applyFilter);
+  container.querySelector('#filter-quartal').addEventListener('change', (e) => {
+    if (e.target.value) container.querySelector('#filter-monat').value = '';
+    applyFilter();
+  });
+  container.querySelector('#filter-monat').addEventListener('change', (e) => {
+    if (e.target.value) container.querySelector('#filter-quartal').value = '';
+    applyFilter();
+  });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export').addEventListener('click', () => {
     const header = ['Datum', 'Kategorie', 'Beschreibung', 'Lieferant', 'Betrag netto', 'USt.-Satz', 'Betrag brutto', 'Bezahlt mit'];
@@ -271,10 +296,10 @@ export async function render(container) {
           <div class="form-grid">
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
             <div class="field"><label>Kategorie</label>
-              <select name="kategorie">${KATEGORIEN.map((k) => `<option value="${k}" ${k === data.kategorie ? 'selected' : ''}>${k}</option>`).join('')}</select>
+              <select name="kategorie" id="ausgabe-kategorie">${KATEGORIEN.map((k) => `<option value="${k}" ${k === data.kategorie ? 'selected' : ''}>${k}</option>`).join('')}</select>
             </div>
-            <div class="field col-span-2"><label>Beschreibung</label><input name="beschreibung" value="${escapeHtml(data.beschreibung || '')}"></div>
-            <div class="field"><label>Lieferant</label><input name="lieferant" value="${escapeHtml(data.lieferant || '')}"></div>
+            <div class="field col-span-2"><label>Beschreibung</label><input name="beschreibung" id="ausgabe-beschreibung" value="${escapeHtml(data.beschreibung || '')}"></div>
+            <div class="field"><label>Lieferant</label><input name="lieferant" id="ausgabe-lieferant" value="${escapeHtml(data.lieferant || '')}"></div>
             <div class="field"><label>Bezahlt mit</label>
               <select name="bezahltMit">
                 <option value="überweisung" ${data.bezahltMit === 'überweisung' ? 'selected' : ''}>Überweisung</option>
@@ -355,6 +380,23 @@ export async function render(container) {
       const projektKundeId = e.target.selectedOptions[0]?.dataset.kunde || '';
       if (projektKundeId && !kundeSelect.value) kundeSelect.value = projektKundeId;
     });
+
+    // Kategorie automatisch aus Lieferant/Beschreibung vorschlagen (gleiche
+    // Erkennung wie beim Belege-Import) - nur solange der Nutzer die
+    // Kategorie noch nicht selbst per Hand geändert hat, damit ein bewusst
+    // gewählter Wert nicht überschrieben wird.
+    const kategorieSelect = body.querySelector('#ausgabe-kategorie');
+    let kategorieManuellGewaehlt = isEdit;
+    kategorieSelect.addEventListener('change', () => { kategorieManuellGewaehlt = true; });
+    const kategorieAutoErkennen = () => {
+      if (kategorieManuellGewaehlt) return;
+      const text = `${body.querySelector('#ausgabe-lieferant').value} ${body.querySelector('#ausgabe-beschreibung').value}`.trim();
+      if (!text) return;
+      const erkannt = guessAusgabenKategorie(text);
+      if (erkannt !== 'Sonstiges' && KATEGORIEN.includes(erkannt)) kategorieSelect.value = erkannt;
+    };
+    body.querySelector('#ausgabe-lieferant').addEventListener('input', kategorieAutoErkennen);
+    body.querySelector('#ausgabe-beschreibung').addEventListener('input', kategorieAutoErkennen);
 
     // newBelegBlob ist nur gesetzt, wenn der Nutzer gerade eine neue Datei
     // ausgewählt hat (entweder über den Datei-Input oder - noch nicht

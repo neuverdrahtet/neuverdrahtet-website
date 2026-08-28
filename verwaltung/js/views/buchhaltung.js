@@ -85,12 +85,21 @@ export async function render(container) {
   jahre.add(String(new Date().getFullYear()));
   const jahrOptions = Array.from(jahre).filter(Boolean).sort().reverse();
 
+  const MONATSNAMEN = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
   let jahr = String(new Date().getFullYear());
   let quartal = '';
+  let monatFilter = '';
   function imQuartal(datum, q) {
     if (!q) return true;
     const monat = Number((datum || '').slice(5, 7));
     return monat >= (Number(q) - 1) * 3 + 1 && monat <= Number(q) * 3;
+  }
+  // Monat hat Vorrang vor Quartal (gegenseitig exklusiv in der UI - siehe
+  // Change-Listener unten, die die jeweils andere Auswahl zurücksetzen).
+  function imZeitraum(datum, q, m) {
+    if (m) return (datum || '').slice(5, 7) === m;
+    return imQuartal(datum, q);
   }
 
   container.innerHTML = `
@@ -116,6 +125,10 @@ export async function render(container) {
                 <option value="2">2. Quartal</option>
                 <option value="3">3. Quartal</option>
                 <option value="4">4. Quartal</option>
+              </select>
+              <select id="uebersicht-monat-select">
+                <option value="">Alle Monate</option>
+                ${MONATSNAMEN.map((name, i) => `<option value="${String(i + 1).padStart(2, '0')}">${name}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -240,6 +253,12 @@ export async function render(container) {
   });
   container.querySelector('#uebersicht-quartal-select').addEventListener('change', (e) => {
     quartal = e.target.value;
+    if (quartal) { monatFilter = ''; container.querySelector('#uebersicht-monat-select').value = ''; }
+    renderContent();
+  });
+  container.querySelector('#uebersicht-monat-select').addEventListener('change', (e) => {
+    monatFilter = e.target.value;
+    if (monatFilter) { quartal = ''; container.querySelector('#uebersicht-quartal-select').value = ''; }
     renderContent();
   });
 
@@ -252,9 +271,9 @@ export async function render(container) {
     // hier falsche/irreführende Werte liefern).
     const einnahmenJahr = bezahlteRechnungen.filter((r) => (r.bezahltAm || r.datum).slice(0, 4) === jahr);
     const ausgabenJahr = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === jahr);
-    // Für Kennzahlen/Tabelle/Export: bei gesetztem Quartal auf dessen 3 Monate eingeschränkt.
-    const einnahmenAnzeige = einnahmenJahr.filter((r) => imQuartal(r.bezahltAm || r.datum, quartal));
-    const ausgabenAnzeige = ausgabenJahr.filter((a) => imQuartal(a.datum, quartal));
+    // Für Kennzahlen/Tabelle/Export: bei gesetztem Quartal/Monat entsprechend eingeschränkt.
+    const einnahmenAnzeige = einnahmenJahr.filter((r) => imZeitraum(r.bezahltAm || r.datum, quartal, monatFilter));
+    const ausgabenAnzeige = ausgabenJahr.filter((a) => imZeitraum(a.datum, quartal, monatFilter));
 
     const einnahmenBrutto = einnahmenAnzeige.reduce((s, r) => s + (r.brutto || 0), 0);
     const einnahmenNetto = einnahmenAnzeige.reduce((s, r) => s + (r.netto || 0), 0);
@@ -267,7 +286,8 @@ export async function render(container) {
 
     const monthly = Array.from({ length: 12 }, (_, i) => {
       const mm = String(i + 1).padStart(2, '0');
-      if (quartal && Number(mm) < (Number(quartal) - 1) * 3 + 1 || quartal && Number(mm) > Number(quartal) * 3) return null;
+      if (monatFilter && mm !== monatFilter) return null;
+      if (!monatFilter && quartal && Number(mm) < (Number(quartal) - 1) * 3 + 1 || !monatFilter && quartal && Number(mm) > Number(quartal) * 3) return null;
       const ein = einnahmenJahr.filter((r) => (r.bezahltAm || r.datum).slice(5, 7) === mm).reduce((s, r) => s + (r.brutto || 0), 0);
       const aus = ausgabenJahr.filter((a) => (a.datum || '').slice(5, 7) === mm).reduce((s, a) => s + (a.betragBrutto || 0), 0);
       return { monat: MONTHS[i], ein, aus, saldo: ein - aus };
@@ -324,6 +344,7 @@ export async function render(container) {
       <div class="card">
         <h2>Steuerschätzung ${jahr}</h2>
         <p class="hint">Grobe Schätzung auf Basis des vereinfachten Überschusses oben - ohne Rückstellungen, Sonderabschreibungen, Verlustvorträge o.ä. Ersetzt nicht die Steuererklärung deines Steuerberaters.</p>
+        ${ueberschussJahr <= 0 ? `<p class="hint">ℹ️ Alle Werte unten sind 0 €, weil das Jahr ${jahr} bislang einen Verlust bzw. keinen Überschuss ausweist (${formatCurrency(ueberschussJahr)}) - auf einen Verlust fällt keine Gewerbesteuer an. Das ist kein Rechenfehler, sondern erwartungsgemäß (ggf. sind auch einfach noch nicht alle Monate erfasst).</p>` : ''}
         <p class="hint">Gewerbeertrag (abgerundet auf volle 100 €): ${formatCurrency(gewerbeertragAbgerundet)}${gewerbesteuerFreibetrag ? ` · Freibetrag: ${formatCurrency(gewerbesteuerFreibetrag)}` : ''} · Steuermessbetrag (3,5%): ${formatCurrency(steuermessbetrag)}</p>
         <div class="kpi-grid">
           <div class="kpi-card"><div class="kpi-value">${formatCurrency(gewerbesteuer)}</div><div class="kpi-label">Gewerbesteuer (Hebesatz ${hebesatz}%)</div></div>
@@ -347,7 +368,7 @@ export async function render(container) {
       </div>
     `;
 
-    const dateiSuffix = quartal ? `${jahr}-Q${quartal}` : jahr;
+    const dateiSuffix = monatFilter ? `${jahr}-${monatFilter}` : quartal ? `${jahr}-Q${quartal}` : jahr;
 
     host.querySelector('#btn-export-csv').addEventListener('click', () => {
       const rows = [['Datum', 'Typ', 'Beschreibung', 'Netto', 'USt.', 'Brutto']];

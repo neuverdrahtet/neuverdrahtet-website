@@ -562,6 +562,17 @@ table.data-table th.col-select, table.data-table td.col-select {
 .badge-warn { background: var(--warn); color: #fff; }
 .badge-accent { background: var(--accent); color: #fff; }
 .badge-purple { background: #a463f2; color: #fff; }
+/* Ausgaben-Kategorien - feste Farben statt einheitlichem Grau, damit die
+   Kategorie in der Liste auf einen Blick erkennbar ist (nicht per Text lesen). */
+.badge-kat-material { background: #2b7fd6; color: #fff; }
+.badge-kat-werkzeug { background: #14b8a6; color: #fff; }
+.badge-kat-fahrzeug { background: #f0a020; color: #fff; }
+.badge-kat-miete { background: #8e44ad; color: #fff; }
+.badge-kat-versicherung { background: #6366f1; color: #fff; }
+.badge-kat-buero { background: #6b7280; color: #fff; }
+.badge-kat-werbung { background: #e91e8c; color: #fff; }
+.badge-kat-personal { background: #1f8a4c; color: #fff; }
+.badge-kat-sonstiges { background: #94a3b8; color: #fff; }
 .color-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 
 /* Modal */
