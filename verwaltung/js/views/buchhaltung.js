@@ -746,7 +746,13 @@ export async function render(container) {
     const { vierteljaehrlich, optionen } = await ustvaZeitraeume();
     const optionenKey = vierteljaehrlich ? 'q' : 'm';
     if (periodeSelect.dataset.filled !== optionenKey) {
-      periodeSelect.innerHTML = optionen.map((o) => `<option value="${o.wert}">${escapeHtml(o.label)}</option>`).join('');
+      // Ohne "selected" würde der Browser immer die erste Option (Januar bzw.
+      // 1. Quartal) vorauswählen, egal welcher Monat/welches Quartal gerade
+      // läuft - deshalb hier gezielt den aktuellen Monat/das aktuelle Quartal
+      // markieren, damit die UStVA beim Öffnen direkt den passenden Zeitraum zeigt.
+      const aktuellerMonat = new Date().getMonth() + 1;
+      const aktuellePeriode = vierteljaehrlich ? Math.ceil(aktuellerMonat / 3) : aktuellerMonat;
+      periodeSelect.innerHTML = optionen.map((o) => `<option value="${o.wert}" ${o.wert === aktuellePeriode ? 'selected' : ''}>${escapeHtml(o.label)}</option>`).join('');
       periodeSelect.dataset.filled = optionenKey;
     }
 

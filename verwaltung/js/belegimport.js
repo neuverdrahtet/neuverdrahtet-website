@@ -1,9 +1,11 @@
 import { getAll, put, getSettings } from './db.js';
-import { uid, escapeHtml, formatDate, toast } from './utils.js';
+import { uid, escapeHtml, formatDate, toast, farbeAusText } from './utils.js';
 import { openModal } from './ui.js';
 import { saveDokument } from './dokumente.js';
 import { readZipEntries } from './zipreader.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from './blobstore.js';
+
+const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
 const LIEFERANT_KATEGORIE_MAP = [
   { match: /hornbach|baumarkt|obi\b|bauhaus/i, kategorie: 'Material' },
@@ -66,6 +68,7 @@ export function parseDatevLedgerXml(xmlText) {
     datum: get('date'), betrag: Number(get('amount')) || 0, steuersatz: Number(get('tax')) || 0,
     accountNo: get('accountNo'), accountName: get('accountName'),
     gegenpartei: payable ? get('supplierName') : get('customerName'),
+    gegenparteiOrt: get('customerCity'), gegenparteiKundennummer: get('bpAccountNo') || get('partyId'),
     beschreibung: get('bookingText') || get('information'), belegnummer: get('invoiceId'),
   };
 }
@@ -112,7 +115,7 @@ export function openBelegImport({ onImported } = {}) {
     title: 'Belege importieren (ZIP)',
     wide: true,
     bodyHtml: `
-      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch zwei Formate: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden) und DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen). Belege vom Typ "Einnahme" (eigene Rechnungen, bei beiden Formaten) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet, sofern ein Kunde mit passendem Namen existiert. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
+      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch zwei Formate: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden) und DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen). Belege vom Typ "Einnahme" (eigene Rechnungen, bei beiden Formaten) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
       <div class="field" style="margin-bottom:10px">
         <label>ZIP-Datei</label>
         <input type="file" id="beleg-zip-input" accept=".zip,application/zip">
@@ -162,6 +165,7 @@ export function openBelegImport({ onImported } = {}) {
 
       let ausgabenCount = 0;
       let zugeordnetCount = 0;
+      let kundenAngelegtCount = 0;
       let duplikateUebersprungen = 0;
       const unzugeordnet = [];
       let uebersprungen = 0;
@@ -175,11 +179,28 @@ export function openBelegImport({ onImported } = {}) {
 
         if (parsed.typ === 'einnahme') {
           // Einnahmen-Beleg (Kundenrechnung): keine Ausgabe, sondern - falls ein
-          // PDF dabei ist und ein passender Kunde gefunden wird - als Dokument
-          // in der Kundenakte ablegen. Ohne PDF gibt es nichts abzulegen.
+          // PDF dabei ist - als Dokument in der Kundenakte ablegen. Ohne PDF
+          // gibt es nichts abzulegen. Existiert der Kunde noch nicht, wird er
+          // mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu
+          // angelegt statt den Beleg unzugeordnet zu lassen - dabei in der
+          // lokalen kunden-Liste ergänzen, damit weitere Belege desselben
+          // (neuen) Kunden in diesem Importlauf ihn ebenfalls finden, statt
+          // ihn mehrfach anzulegen.
           if (!pdfEntry) continue;
-          const kunde = findMatchingKunde(kunden, parsed.gegenpartei);
-          if (!kunde) { unzugeordnet.push(`${parsed.gegenpartei} (${basename}.pdf)`); continue; }
+          let kunde = findMatchingKunde(kunden, parsed.gegenpartei);
+          if (!kunde && parsed.gegenpartei) {
+            kunde = {
+              id: uid(), firma: parsed.gegenpartei, ansprechpartner: '', strasse: '',
+              plz: '', ort: parsed.gegenparteiOrt || '', telefon: '', email: '',
+              notizen: 'Automatisch angelegt beim Belege-Import (DATEV/Lexware).',
+              kundennummer: parsed.gegenparteiKundennummer || '', istPrivatperson: false,
+              farbe: farbeAusText(parsed.gegenpartei, KUNDEN_FARBEN), status: 'kunde',
+            };
+            await put('kunden', kunde);
+            kunden.push(kunde);
+            kundenAngelegtCount++;
+          }
+          if (!kunde) { unzugeordnet.push(`${parsed.gegenpartei || basename} (${basename}.pdf)`); continue; }
           const blob = await pdfEntry.getBlob('application/pdf');
           await saveDokument({
             bezugTyp: 'kunde', bezugId: kunde.id, kategorie: 'rechnung',
@@ -249,6 +270,7 @@ export function openBelegImport({ onImported } = {}) {
         <div class="card">
           <p>✅ ${ausgabenCount} Ausgabe(n) importiert</p>
           <p>✅ ${zugeordnetCount} Rechnung(en) passenden Kunden zugeordnet</p>
+          ${kundenAngelegtCount ? `<p>✅ ${kundenAngelegtCount} neue(r) Kunde(n) automatisch angelegt (Name/Ort/Kundennummer aus dem Beleg)</p>` : ''}
           ${duplikateUebersprungen ? `<p class="text-mute">${duplikateUebersprungen} Beleg(e) übersprungen (Datum/Betrag/Lieferant stimmt mit bereits vorhandener Ausgabe überein).</p>` : ''}
           ${unzugeordnet.length ? `<p>⚠️ ${unzugeordnet.length} Rechnung(en) ohne passenden Kunden gefunden:</p><ul class="cal-event-list">${unzugeordnet.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
           ${uebersprungen ? `<p class="text-mute">${uebersprungen} Datei(en) mit unbekanntem Format übersprungen.</p>` : ''}
