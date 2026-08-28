@@ -1,16 +1,18 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche + Social-Media-Post (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche + Social-Media-Post + KI-Assistent-Chat (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
  * Angebotspositionen erzeugen, analysiert ein fotografiertes Beleg-Bild und
  * liefert Händler/Datum/Betrag/Kategorie zurück, recherchiert für
  * unbepreiste GAEB-Positionen per Web-Search-Tool marktübliche Preise,
  * erzeugt aus einem Baustellen-/Projektfoto passende Social-Media-Texte je
- * Kanal (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), oder löst
- * eine Firebase-Cloud-Messaging-Push-Benachrichtigung an einzelne
- * Geräte-Tokens aus. Die Geheimnisse (Anthropic-API-Key, Firebase-Service-
- * Account) bleiben ausschließlich hier im Worker (als Secrets) – sie werden
- * NIE an den Browser geschickt.
+ * Kanal (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), beantwortet
+ * als interner KI-Assistent (Chat) Fragen zu den echten Firmendaten per
+ * Tool-Use-Loop gegen die KI-Bürokraft-API, oder löst eine Firebase-Cloud-
+ * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Die
+ * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
+ * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
+ * Browser geschickt.
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -27,6 +29,14 @@
  *                        Account-JSON-Datei (Firebase-Konsole -> Projekt-
  *                        einstellungen -> Dienstkonten -> Neuen privaten
  *                        Schlüssel generieren), als einzeiliger String.
+ *   KI_BUEROKRAFT_URL  (Variable, nur für den KI-Assistenten-Chat nötig) –
+ *                        Basis-URL des cloudflare-worker-ki-buerokraft-Workers,
+ *                        z.B. https://neuverdrahtet-ki-buerokraft.<konto>.workers.dev
+ *   KI_BUEROKRAFT_API_KEY (Secret, nur für den KI-Assistenten-Chat nötig) –
+ *                        derselbe API_KEY, den der KI-Bürokraft-Worker erwartet
+ *                        (siehe cloudflare-worker-ki-buerokraft/README.md).
+ *                        Ohne diese beiden Variablen läuft der Chat trotzdem,
+ *                        kann dann aber keine echten Firmendaten abrufen.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -520,6 +530,423 @@ async function callClaudeSocialPost({ apiKey, model, imageDataUrl, firmenname, o
   return JSON.parse(textBlock.text);
 }
 
+// --- KI-Assistent (Chat) für die Verwaltungs-Software: ein Claude-Tool-Use-
+// Loop gegen die bestehende Werkora-API für die KI-Bürokraft
+// (cloudflare-worker-ki-buerokraft/, eigene README dort). Statt Firestore
+// direkt anzusprechen, ruft dieser Worker die andere REST-API server-zu-
+// server auf (mit deren API_KEY) - genau wie es sonst ChatGPT über die
+// Custom-GPT-Action tut, nur jetzt direkt in der Verwaltungs-Oberfläche
+// (verwaltung/js/views/ki-assistent.js) nutzbar. Bewusst nur eine kuratierte
+// Auswahl der dortigen Endpunkte (die für ein Gespräch nützlichsten), keine
+// 1:1-Kopie der kompletten chatgpt-actions-schema.json - siehe README. ---
+
+function buildQuery(input, keys) {
+  const params = new URLSearchParams();
+  for (const key of keys) {
+    const val = input[key];
+    if (val === undefined || val === null || val === '') continue;
+    params.set(key, String(val));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+/** Entfernt "id" (dient nur der Pfad-Ersetzung) aus dem an die API gesendeten JSON-Body. */
+function bodyOhneId(input) {
+  const { id, ...rest } = input || {};
+  return rest;
+}
+
+const KI_BUEROKRAFT_TOOLS = [
+  {
+    name: 'getDashboard',
+    method: 'GET',
+    path: () => '/assistant/dashboard',
+    description: 'Kompakte Unternehmensübersicht: neue Leads, offene Aufgaben, überfällige Rechnungen usw.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'searchCustomers',
+    method: 'GET',
+    path: (i) => '/customers' + buildQuery(i, ['email', 'phone', 'name', 'postal_code', 'city']),
+    description: 'Kunden suchen. Vor dem Anlegen eines neuen Kunden IMMER zuerst hiermit prüfen, ob er schon existiert (per E-Mail oder Telefon).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        name: { type: 'string', description: 'Sucht in Firma/Name und Ansprechpartner.' },
+        postal_code: { type: 'string' },
+        city: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'getCustomer',
+    method: 'GET',
+    path: (i) => `/customers/${encodeURIComponent(i.id)}`,
+    description: 'Einen Kunden per ID abrufen.',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+  },
+  {
+    name: 'createCustomer',
+    method: 'POST',
+    path: () => '/customers',
+    body: bodyOhneId,
+    description: 'Neuen Kunden anlegen (bekommt automatisch Status "lead"). Vorher IMMER mit searchCustomers prüfen, ob er schon existiert - sonst 409-Fehler.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Firma oder vollständiger Name (Pflicht, wenn "company" fehlt).' },
+        company: { type: 'string' },
+        type: { type: 'string', enum: ['private', 'company'] },
+        contact_name: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        street: { type: 'string' },
+        postal_code: { type: 'string' },
+        city: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchLeads',
+    method: 'GET',
+    path: (i) => '/leads' + buildQuery(i, ['status']),
+    description: 'Leads abrufen (Kunden im Status "lead" oder einem anderen Status). Ohne Angabe: nur "lead".',
+    input_schema: { type: 'object', properties: { status: { type: 'string', description: 'z.B. lead, interessent, kunde, verloren.' } }, additionalProperties: false },
+  },
+  {
+    name: 'createLead',
+    method: 'POST',
+    path: () => '/leads',
+    body: bodyOhneId,
+    description: 'Lead anlegen (neuer Kunde oder Notiz an bestehendem Kunden).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string', description: 'Falls der Kunde schon existiert (per searchCustomers gefunden).' },
+        title: { type: 'string', description: 'Pflicht, wenn kein customer_id angegeben ist.' },
+        description: { type: 'string' },
+        trade: { type: 'string', description: 'Gewerk, z.B. elektro.' },
+        source: { type: 'string' },
+        priority: { type: 'string' },
+        estimated_value: { type: 'number' },
+        next_action: { type: 'string' },
+        next_action_date: { type: 'string' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'updateLead',
+    method: 'PATCH',
+    path: (i) => `/leads/${encodeURIComponent(i.id)}`,
+    body: bodyOhneId,
+    description: 'Lead aktualisieren (Status, nächster Schritt, Notiz). Nur bekannte Werkora-Status-Werte ändern den Status wirklich, sonst wird nur eine Notiz vermerkt.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string' },
+        next_action: { type: 'string' },
+        next_action_date: { type: 'string' },
+        notes: { type: 'string' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchProjects',
+    method: 'GET',
+    path: (i) => '/projects' + buildQuery(i, ['customer_id', 'status']),
+    description: 'Projekte abrufen.',
+    input_schema: { type: 'object', properties: { customer_id: { type: 'string' }, status: { type: 'string' } }, additionalProperties: false },
+  },
+  {
+    name: 'getProject',
+    method: 'GET',
+    path: (i) => `/projects/${encodeURIComponent(i.id)}`,
+    description: 'Ein Projekt per ID abrufen.',
+    input_schema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'], additionalProperties: false },
+  },
+  {
+    name: 'searchTasks',
+    method: 'GET',
+    path: (i) => '/tasks' + buildQuery(i, ['status', 'priority', 'due_date', 'customer_id', 'project_id', 'assigned_to', 'count', 'limit']),
+    description: 'Aufgaben abrufen. Bei reinen Zählfragen ("Wie viele offene Aufgaben haben wir?") count=true statt der vollen Liste nutzen.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'offen, in-arbeit, klaerung, erledigt' },
+        priority: { type: 'string' },
+        due_date: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_to: { type: 'string' },
+        count: { type: 'boolean' },
+        limit: { type: 'integer' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'createTask',
+    method: 'POST',
+    path: () => '/tasks',
+    body: bodyOhneId,
+    description: 'Aufgabe erstellen.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string', description: 'niedrig, normal, hoch' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_to: { type: 'string' },
+      },
+      required: ['title'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'updateTask',
+    method: 'PATCH',
+    path: (i) => `/tasks/${encodeURIComponent(i.id)}`,
+    body: bodyOhneId,
+    description: 'Aufgabe aktualisieren oder abschließen. status="completed" schließt die Aufgabe ab.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string' },
+        due_date: { type: 'string' },
+        assigned_to: { type: 'string' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchAppointments',
+    method: 'GET',
+    path: (i) => '/appointments' + buildQuery(i, ['customer_id', 'project_id', 'date_from', 'date_to']),
+    description: 'Termine abrufen.',
+    input_schema: {
+      type: 'object',
+      properties: { customer_id: { type: 'string' }, project_id: { type: 'string' }, date_from: { type: 'string' }, date_to: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'createAppointment',
+    method: 'POST',
+    path: () => '/appointments',
+    body: bodyOhneId,
+    description: 'Termin erstellen.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        start: { type: 'string', description: 'z.B. 2026-08-14T09:00' },
+        end: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        address: { type: 'string' },
+        assigned_employee_ids: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['title', 'start'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchQuotes',
+    method: 'GET',
+    path: (i) => '/quotes' + buildQuery(i, ['customer_id', 'project_id', 'status', 'date_from', 'date_to', 'count', 'limit']),
+    description: 'Angebote abrufen. Bei reinen Zählfragen count=true statt der vollen Liste nutzen.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        status: { type: 'string', description: 'draft, sent, accepted, rejected' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        count: { type: 'boolean' },
+        limit: { type: 'integer' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'createQuoteDraft',
+    method: 'POST',
+    path: () => '/quotes',
+    body: bodyOhneId,
+    description: 'Angebotsentwurf erstellen (immer Status "draft" - Versand/Freigabe ist über die API gesperrt und muss in Werkora selbst erfolgen).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        title: { type: 'string' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string' },
+              description: { type: 'string' },
+              quantity: { type: 'number' },
+              unit: { type: 'string' },
+              unit_price_net: { type: 'number' },
+              vat_rate: { type: 'number', description: 'z.B. 19' },
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['customer_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchInvoices',
+    method: 'GET',
+    path: (i) => '/invoices' + buildQuery(i, ['status', 'customer_id', 'project_id', 'date_from', 'date_to', 'count', 'limit']),
+    description: 'Rechnungen abrufen, inkl. überfällige (status=overdue). Anlegen/Versenden ist über die API gesperrt (GoBD) - das läuft ausschließlich über Werkora selbst.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'draft, sent, paid, overdue, cancelled' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        count: { type: 'boolean' },
+        limit: { type: 'integer' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'getPriceList',
+    method: 'GET',
+    path: (i) => '/price-list' + buildQuery(i, ['trade', 'count', 'limit']),
+    description: 'Komplette Preisliste (Artikel+Leistungen) abrufen (nur lesen).',
+    input_schema: { type: 'object', properties: { trade: { type: 'string' }, count: { type: 'boolean' }, limit: { type: 'integer' } }, additionalProperties: false },
+  },
+];
+
+async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input }) {
+  const path = tool.path(input || {});
+  const url = `${kiBuerokraftUrl.replace(/\/$/, '')}${path}`;
+  const options = {
+    method: tool.method,
+    headers: { Authorization: `Bearer ${kiBuerokraftApiKey}` },
+  };
+  if (tool.method !== 'GET') {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(tool.body ? tool.body(input || {}) : (input || {}));
+  }
+  const res = await fetch(url, options);
+  const data = await res.json().catch(() => ({}));
+  return { status: res.status, data };
+}
+
+const ASSISTENT_CHAT_SYSTEM_PROMPT = `Du bist der interne KI-Assistent in der Verwaltungs-Software (Werkora) des deutschen Elektro-Handwerksbetriebs neuverdrahtet. Du sprichst mit einem Mitarbeiter/der Geschäftsführung, nicht mit Kunden.
+
+Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHREIBENDEN Zugriff auf die echten Firmendaten (Kunden, Leads, Projekte, Aufgaben, Termine, Angebote, Rechnungen, Preisliste). Wichtige Regeln:
+- Nutze die Tools aktiv, um Fragen zu beantworten - rate nichts, was du stattdessen nachschlagen kannst.
+- Vor dem Anlegen eines neuen Kunden IMMER zuerst mit searchCustomers prüfen, ob er schon existiert (E-Mail/Telefon).
+- Bei reinen Zählfragen ("Wie viele offene Aufgaben haben wir?") das jeweilige Tool nach Möglichkeit mit count=true aufrufen statt die volle Liste zu laden.
+- Rechnungen anlegen, Angebote/Rechnungen versenden oder freigeben sowie jedes Löschen ist über diese API technisch gesperrt (Sicherheitsregeln der Werkora-API) - wenn danach gefragt wird, erkläre freundlich, dass das aktuell nur direkt in Werkora selbst geht, und biete stattdessen die verfügbare Alternative an (z.B. einen Angebots-Entwurf statt einer Rechnung anlegen).
+- Erfinde niemals Ergebnisse, IDs oder Daten - nutze ausschließlich das, was die Tools tatsächlich zurückgeben. Bei einem Tool-Fehler erkläre ehrlich, was schiefging.
+- Antworte präzise und knapp auf Deutsch. Bei Listen mit vielen Treffern eine sinnvolle, kompakte Zusammenfassung liefern statt jeden Datensatz einzeln auszuschreiben, außer explizit nach Details gefragt wird.
+- Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.`;
+
+async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey }) {
+  let conversation = messages;
+
+  for (let iteration = 0; iteration < 8; iteration++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2048,
+        system: ASSISTENT_CHAT_SYSTEM_PROMPT,
+        messages: conversation,
+        tools: KI_BUEROKRAFT_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema })),
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+
+    const data = await res.json();
+    if (data.stop_reason === 'refusal') {
+      throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+    }
+
+    const toolUses = (data.content || []).filter((b) => b.type === 'tool_use');
+    if (toolUses.length === 0 || data.stop_reason !== 'tool_use') {
+      const textBlock = (data.content || []).find((b) => b.type === 'text');
+      return { reply: textBlock ? textBlock.text : 'Dazu kann ich gerade nichts sagen.' };
+    }
+
+    conversation = [...conversation, { role: 'assistant', content: data.content }];
+
+    if (!kiBuerokraftUrl || !kiBuerokraftApiKey) {
+      const toolResults = toolUses.map((tu) => ({
+        type: 'tool_result', tool_use_id: tu.id,
+        content: 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).',
+        is_error: true,
+      }));
+      conversation = [...conversation, { role: 'user', content: toolResults }];
+      continue;
+    }
+
+    const toolResults = [];
+    for (const toolUse of toolUses) {
+      const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
+      if (!tool) {
+        toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Unbekanntes Werkzeug: ${toolUse.name}`, is_error: true });
+        continue;
+      }
+      try {
+        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
+        toolResults.push({
+          type: 'tool_result', tool_use_id: toolUse.id,
+          content: JSON.stringify(ergebnis).slice(0, 8000),
+          is_error: status >= 400,
+        });
+      } catch (err) {
+        toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Fehler beim Aufruf: ${err.message}`, is_error: true });
+      }
+    }
+    conversation = [...conversation, { role: 'user', content: toolResults }];
+  }
+
+  return { reply: 'Das dauert gerade zu lange oder braucht zu viele Schritte - bitte die Frage eingrenzen oder in Werkora direkt nachsehen.' };
+}
+
 // --- Push-Versand (Firebase Cloud Messaging HTTP v1, Server-Auth per Service Account) ---
 
 function base64UrlEncode(data) {
@@ -751,6 +1178,30 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           positionen: body.positionen,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'assistent-chat') {
+      if (!Array.isArray(body.messages) || body.messages.length === 0) {
+        return new Response(JSON.stringify({ error: 'Feld "messages" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeAssistentChat({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
+          kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
+          kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
