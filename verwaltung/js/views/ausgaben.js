@@ -54,11 +54,6 @@ export async function render(container) {
   });
 
   const heute = todayISO();
-  const monatPrefix = heute.slice(0, 7);
-  const jahrPrefix = heute.slice(0, 4);
-  const summeMonat = ausgaben.filter((a) => (a.datum || '').startsWith(monatPrefix)).reduce((s, a) => s + (a.betragBrutto || 0), 0);
-  const summeJahr = ausgaben.filter((a) => (a.datum || '').startsWith(jahrPrefix)).reduce((s, a) => s + (a.betragBrutto || 0), 0);
-  const summeGesamt = ausgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
 
   container.innerHTML = `
     <div class="view-header">
@@ -74,15 +69,15 @@ export async function render(container) {
     </div>
     <div class="kpi-grid">
       <div class="kpi-card">
-        <div class="kpi-value">${formatCurrency(summeMonat)}</div>
-        <div class="kpi-label">Diesen Monat</div>
+        <div class="kpi-value" id="kpi-periode-wert">–</div>
+        <div class="kpi-label" id="kpi-periode-label">–</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-value">${formatCurrency(summeJahr)}</div>
-        <div class="kpi-label">Dieses Jahr</div>
+        <div class="kpi-value" id="kpi-jahr-wert">–</div>
+        <div class="kpi-label" id="kpi-jahr-label">–</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-value">${formatCurrency(summeGesamt)}</div>
+        <div class="kpi-value" id="kpi-gesamt-wert">–</div>
         <div class="kpi-label">Gesamt · ${ausgaben.length} Ausgabe(n)</div>
       </div>
     </div>
@@ -123,7 +118,36 @@ export async function render(container) {
       if (!q) return true;
       return [a.beschreibung, a.lieferant, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
+    updateKpis(jahrFilter, quartalFilter, monatFilter);
     renderTable();
+  }
+
+  // Die drei Kennzahlen-Kacheln oben folgen der Jahr-/Quartal-/Monat-Auswahl
+  // statt immer nur den aktuellen Kalendermonat zu zeigen - so stimmen die
+  // Zahlen auch, wenn z.B. "2025" und "Januar" oder "2. Quartal" gewählt ist.
+  function updateKpis(jahrFilter, quartalFilter, monatFilter) {
+    const aktJahr = jahrFilter || heute.slice(0, 4);
+    let periodeLabel, periodeSumme;
+    if (monatFilter) {
+      periodeLabel = `${MONATSNAMEN[Number(monatFilter) - 1]} ${aktJahr}`;
+      periodeSumme = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === aktJahr && (a.datum || '').slice(5, 7) === monatFilter).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    } else if (quartalFilter) {
+      periodeLabel = `${quartalFilter}. Quartal ${aktJahr}`;
+      periodeSumme = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === aktJahr && imQuartal(a.datum, quartalFilter)).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    } else if (jahrFilter) {
+      periodeLabel = `Jahr ${aktJahr}`;
+      periodeSumme = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === aktJahr).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    } else {
+      periodeLabel = 'Diesen Monat';
+      periodeSumme = ausgaben.filter((a) => (a.datum || '').startsWith(heute.slice(0, 7))).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    }
+    const jahrSumme = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === aktJahr).reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    const gesamtSumme = ausgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    container.querySelector('#kpi-periode-wert').textContent = formatCurrency(periodeSumme);
+    container.querySelector('#kpi-periode-label').textContent = periodeLabel;
+    container.querySelector('#kpi-jahr-wert').textContent = formatCurrency(jahrSumme);
+    container.querySelector('#kpi-jahr-label').textContent = `Jahr ${aktJahr} gesamt`;
+    container.querySelector('#kpi-gesamt-wert').textContent = formatCurrency(gesamtSumme);
   }
 
   function renderTable() {
@@ -494,5 +518,5 @@ export async function render(container) {
     });
   }
 
-  renderTable();
+  applyFilter();
 }
