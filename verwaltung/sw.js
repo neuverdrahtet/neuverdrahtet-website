@@ -2,7 +2,7 @@ import { initializeApp } from './js/vendor/firebase/firebase-app.js';
 import { getMessaging, onBackgroundMessage } from './js/vendor/firebase/firebase-messaging-sw.js';
 import { firebaseConfig } from './js/firebase-config.js';
 
-const CACHE_NAME = 'nv-verwaltung-v2';
+const CACHE_NAME = 'nv-verwaltung-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting();

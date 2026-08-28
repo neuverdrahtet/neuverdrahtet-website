@@ -255,6 +255,9 @@ boot();
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { type: 'module' }).catch(() => { /* Offline-Support optional */ });
+    navigator.serviceWorker
+      .register('./sw.js', { type: 'module', updateViaCache: 'none' })
+      .then((reg) => reg.update().catch(() => {}))
+      .catch(() => { /* Offline-Support optional */ });
   });
 }
