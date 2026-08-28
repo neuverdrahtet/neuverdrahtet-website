@@ -38,17 +38,17 @@ Kostenschätzer-Worker.
    - `ANTHROPIC_API_KEY` = der oben erzeugte Schlüssel
    - `FIREBASE_SERVICE_ACCOUNT_JSON` = der einzeilige JSON-String
 5. **Die entstandene Worker-URL notieren** (z.B.
-   `https://neuverdrahtet-ki-assistent.<dein-konto>.workers.dev`) und im
-   Repo an folgenden Stellen eintragen (beide müssen exakt übereinstimmen):
-   - `assets/ki-assistent.js` → Konstante `KI_ASSISTENT_WORKER_URL` ganz oben.
-   - Alle öffentlichen HTML-Seiten → CSP-Meta-Tag im `<head>`, im
-     `connect-src`-Teil. Da die Widget-URL auf ~35 Seiten eingebunden ist,
-     lohnt sich eine einmalige Ersetzung per Kommandozeile statt von Hand:
+   `https://neuverdrahtet-ki-assistent.<dein-konto>.workers.dev`) und im Repo
+   überall eintragen, wo aktuell noch der Platzhalter
+   `https://neuverdrahtet-ki-assistent.PLATZHALTER-KONTO.workers.dev` steht -
+   das ist die Konstante `KI_ASSISTENT_WORKER_URL` in `assets/ki-assistent.js`
+   sowie der `connect-src`-Teil im CSP-Meta-Tag von ~35 öffentlichen
+   HTML-Seiten. Eine einmalige Ersetzung per Kommandozeile spart das
+   manuelle Durchklicken jeder Datei:
      ```bash
-     find . -maxdepth 1 -name "*.html" -exec sed -i \
-       's#PLATZHALTER-KI-ASSISTENT-WORKER-URL#https://neuverdrahtet-ki-assistent.<dein-konto>.workers.dev#g' {} +
+     sed -i 's#https://neuverdrahtet-ki-assistent.PLATZHALTER-KONTO.workers.dev#https://neuverdrahtet-ki-assistent.<dein-konto>.workers.dev#g' *.html assets/ki-assistent.js
      ```
-     (ersetze `<dein-konto>` durch deinen tatsächlichen Cloudflare-Workers-Kontonamen).
+     (im Hauptverzeichnis des Repos ausführen; ersetze `<dein-konto>` durch deinen tatsächlichen Cloudflare-Workers-Kontonamen - der Befehl deckt sowohl alle HTML-Seiten als auch die JS-Datei in einem Durchgang ab).
 
 ## Danach einmal live testen
 
