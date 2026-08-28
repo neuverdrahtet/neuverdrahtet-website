@@ -25,6 +25,12 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
   let filtered = ausgaben;
+  const jahrOptionen = Array.from(new Set(ausgaben.map((a) => (a.datum || '').slice(0, 4)).filter(Boolean))).sort().reverse();
+  function imQuartal(datum, q) {
+    if (!q) return true;
+    const monat = Number((datum || '').slice(5, 7));
+    return monat >= (Number(q) - 1) * 3 + 1 && monat <= Number(q) * 3;
+  }
   const bulk = createBulkSelect('ausgaben', {
     label: 'Ausgaben',
     deleteFn: async (id) => {
@@ -69,6 +75,14 @@ export async function render(container) {
       <input type="search" id="search" placeholder="Suche nach Beschreibung/Lieferant ...">
       <select id="filter-kategorie"><option value="">Alle Kategorien</option>${KATEGORIEN.map((k) => `<option value="${k}">${k}</option>`).join('')}</select>
       <select id="filter-kunde"><option value="">Alle Kunden</option>${kunden.map((k) => `<option value="${k.id}">${escapeHtml(k.firma)}</option>`).join('')}</select>
+      <select id="filter-jahr"><option value="">Alle Jahre</option>${jahrOptionen.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+      <select id="filter-quartal">
+        <option value="">Ganzes Jahr</option>
+        <option value="1">1. Quartal</option>
+        <option value="2">2. Quartal</option>
+        <option value="3">3. Quartal</option>
+        <option value="4">4. Quartal</option>
+      </select>
     </div>
     <div id="table-host"></div>
   `;
@@ -78,9 +92,13 @@ export async function render(container) {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const kategorie = container.querySelector('#filter-kategorie').value;
     const kundeId = container.querySelector('#filter-kunde').value;
+    const jahrFilter = container.querySelector('#filter-jahr').value;
+    const quartalFilter = container.querySelector('#filter-quartal').value;
     filtered = ausgaben.filter((a) => {
       if (kategorie && a.kategorie !== kategorie) return false;
       if (kundeId && a.kundeId !== kundeId) return false;
+      if (jahrFilter && (a.datum || '').slice(0, 4) !== jahrFilter) return false;
+      if (quartalFilter && !imQuartal(a.datum, quartalFilter)) return false;
       if (!q) return true;
       return [a.beschreibung, a.lieferant, kundenById[a.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -130,6 +148,8 @@ export async function render(container) {
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#filter-kategorie').addEventListener('change', applyFilter);
   container.querySelector('#filter-kunde').addEventListener('change', applyFilter);
+  container.querySelector('#filter-jahr').addEventListener('change', applyFilter);
+  container.querySelector('#filter-quartal').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export').addEventListener('click', () => {
     const header = ['Datum', 'Kategorie', 'Beschreibung', 'Lieferant', 'Betrag netto', 'USt.-Satz', 'Betrag brutto', 'Bezahlt mit'];

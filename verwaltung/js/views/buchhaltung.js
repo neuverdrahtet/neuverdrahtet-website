@@ -86,6 +86,12 @@ export async function render(container) {
   const jahrOptions = Array.from(jahre).filter(Boolean).sort().reverse();
 
   let jahr = String(new Date().getFullYear());
+  let quartal = '';
+  function imQuartal(datum, q) {
+    if (!q) return true;
+    const monat = Number((datum || '').slice(5, 7));
+    return monat >= (Number(q) - 1) * 3 + 1 && monat <= Number(q) * 3;
+  }
 
   container.innerHTML = `
     <div class="view-header">
@@ -104,6 +110,13 @@ export async function render(container) {
             <h2 class="mb-0">Übersicht</h2>
             <div class="actions">
               <select id="jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+              <select id="uebersicht-quartal-select">
+                <option value="">Ganzes Jahr</option>
+                <option value="1">1. Quartal</option>
+                <option value="2">2. Quartal</option>
+                <option value="3">3. Quartal</option>
+                <option value="4">4. Quartal</option>
+              </select>
             </div>
           </div>
           <div class="card" style="background:#fff6e0;border-color:#f0d78c">
@@ -225,32 +238,49 @@ export async function render(container) {
     jahr = e.target.value;
     renderContent();
   });
+  container.querySelector('#uebersicht-quartal-select').addEventListener('change', (e) => {
+    quartal = e.target.value;
+    renderContent();
+  });
 
   const host = container.querySelector('#content-host');
 
   function renderContent() {
+    // Immer das GANZE Jahr - Grundlage der Steuerschätzung weiter unten, die
+    // bewusst NICHT auf das gewählte Quartal eingeschränkt wird (Freibeträge/
+    // Progressionsrechnung sind Jahresgrößen, ein Quartalsausschnitt würde
+    // hier falsche/irreführende Werte liefern).
     const einnahmenJahr = bezahlteRechnungen.filter((r) => (r.bezahltAm || r.datum).slice(0, 4) === jahr);
     const ausgabenJahr = ausgaben.filter((a) => (a.datum || '').slice(0, 4) === jahr);
+    // Für Kennzahlen/Tabelle/Export: bei gesetztem Quartal auf dessen 3 Monate eingeschränkt.
+    const einnahmenAnzeige = einnahmenJahr.filter((r) => imQuartal(r.bezahltAm || r.datum, quartal));
+    const ausgabenAnzeige = ausgabenJahr.filter((a) => imQuartal(a.datum, quartal));
 
-    const einnahmenBrutto = einnahmenJahr.reduce((s, r) => s + (r.brutto || 0), 0);
-    const einnahmenNetto = einnahmenJahr.reduce((s, r) => s + (r.netto || 0), 0);
-    const vereinnahmteUst = einnahmenJahr.reduce((s, r) => s + (r.steuer || 0), 0);
-    const ausgabenBrutto = ausgabenJahr.reduce((s, a) => s + (a.betragBrutto || 0), 0);
-    const ausgabenNetto = ausgabenJahr.reduce((s, a) => s + (a.betragNetto || 0), 0);
+    const einnahmenBrutto = einnahmenAnzeige.reduce((s, r) => s + (r.brutto || 0), 0);
+    const einnahmenNetto = einnahmenAnzeige.reduce((s, r) => s + (r.netto || 0), 0);
+    const vereinnahmteUst = einnahmenAnzeige.reduce((s, r) => s + (r.steuer || 0), 0);
+    const ausgabenBrutto = ausgabenAnzeige.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    const ausgabenNetto = ausgabenAnzeige.reduce((s, a) => s + (a.betragNetto || 0), 0);
     const gezahlteUst = ausgabenBrutto - ausgabenNetto;
     const ueberschuss = einnahmenBrutto - ausgabenBrutto;
     const ustSaldo = vereinnahmteUst - gezahlteUst;
 
     const monthly = Array.from({ length: 12 }, (_, i) => {
       const mm = String(i + 1).padStart(2, '0');
+      if (quartal && Number(mm) < (Number(quartal) - 1) * 3 + 1 || quartal && Number(mm) > Number(quartal) * 3) return null;
       const ein = einnahmenJahr.filter((r) => (r.bezahltAm || r.datum).slice(5, 7) === mm).reduce((s, r) => s + (r.brutto || 0), 0);
       const aus = ausgabenJahr.filter((a) => (a.datum || '').slice(5, 7) === mm).reduce((s, a) => s + (a.betragBrutto || 0), 0);
       return { monat: MONTHS[i], ein, aus, saldo: ein - aus };
-    });
+    }).filter(Boolean);
 
     // --- Steuerschätzung (grob, auf Basis des vereinfachten Überschusses) ---
+    // Bewusst auf Basis des GANZEN Jahres (einnahmenJahr/ausgabenJahr), nicht
+    // des ggf. gewählten Quartals - siehe Kommentar oben.
+    const einnahmenBruttoJahr = einnahmenJahr.reduce((s, r) => s + (r.brutto || 0), 0);
+    const ausgabenBruttoJahr = ausgabenJahr.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    const ueberschussJahr = einnahmenBruttoJahr - ausgabenBruttoJahr;
     const istKapitalgesellschaft = settings.rechtsform !== 'einzelunternehmen' && settings.rechtsform !== 'personengesellschaft';
-    const gewerbeertragRoh = Math.max(0, ueberschuss);
+    const gewerbeertragRoh = Math.max(0, ueberschussJahr);
     // §11 Abs.1 GewStG: Gewerbeertrag wird auf volle 100 € abgerundet.
     const gewerbeertragAbgerundet = Math.floor(gewerbeertragRoh / 100) * 100;
     // Freibetrag von 24.500 € gilt nur für Einzelunternehmen/Personengesellschaften, nicht für Kapitalgesellschaften.
@@ -317,21 +347,23 @@ export async function render(container) {
       </div>
     `;
 
+    const dateiSuffix = quartal ? `${jahr}-Q${quartal}` : jahr;
+
     host.querySelector('#btn-export-csv').addEventListener('click', () => {
       const rows = [['Datum', 'Typ', 'Beschreibung', 'Netto', 'USt.', 'Brutto']];
-      for (const r of einnahmenJahr) {
+      for (const r of einnahmenAnzeige) {
         rows.push([r.bezahltAm || r.datum, 'Einnahme', `Rechnung ${r.nummer} – ${kundenById[r.kundeId]?.firma || ''}`, deNum(r.netto), deNum(r.steuer), deNum(r.brutto)]);
       }
-      for (const a of ausgabenJahr) {
+      for (const a of ausgabenAnzeige) {
         const bezug = ausgabeBezug(a);
         rows.push([a.datum, 'Ausgabe', `${a.kategorie}: ${a.beschreibung || ''}${bezug ? ` (${bezug})` : ''}`, deNum(a.betragNetto), deNum(a.betragBrutto - a.betragNetto), deNum(a.betragBrutto)]);
       }
       const csv = rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(';')).join('\r\n');
-      downloadFile(csv, `buchhaltung-${jahr}.csv`, 'text/csv;charset=utf-8');
+      downloadFile(csv, `buchhaltung-${dateiSuffix}.csv`, 'text/csv;charset=utf-8');
     });
 
     host.querySelector('#btn-export-datev').addEventListener('click', () => {
-      downloadFile(buildDatevCsv({ einnahmenJahr, ausgabenJahr, kundenById, settings, jahr }), `datev-buchungsstapel-${jahr}.csv`, 'text/csv;charset=windows-1252');
+      downloadFile(buildDatevCsv({ einnahmenJahr: einnahmenAnzeige, ausgabenJahr: ausgabenAnzeige, kundenById, settings, jahr }), `datev-buchungsstapel-${dateiSuffix}.csv`, 'text/csv;charset=windows-1252');
     });
   }
 
