@@ -1,5 +1,5 @@
 import { getAll, put, getSettings } from './db.js';
-import { uid, escapeHtml, formatDate, toast, farbeAusText } from './utils.js';
+import { uid, escapeHtml, formatDate, toast, farbeAusText, todayISO } from './utils.js';
 import { openModal } from './ui.js';
 import { saveDokument } from './dokumente.js';
 import { readZipEntries } from './zipreader.js';
@@ -115,7 +115,7 @@ export function openBelegImport({ onImported } = {}) {
     title: 'Belege importieren (ZIP)',
     wide: true,
     bodyHtml: `
-      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch zwei Formate: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden) und DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen). Belege vom Typ "Einnahme" (eigene Rechnungen, bei beiden Formaten) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
+      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden), DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen) sowie lose Belegfotos/-scans (JPG/PNG/HEIC/PDF ohne erkennbare Namenskonvention, z.B. Kamera-Fotos) - diese werden als Entwurf angelegt (Betrag 0, Datum aus dem Foto-Zeitstempel geschätzt) und müssen danach geprüft werden. Belege vom Typ "Einnahme" (eigene Rechnungen, bei DATEV/lexoffice) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
       <div class="field" style="margin-bottom:10px">
         <label>ZIP-Datei</label>
         <input type="file" id="beleg-zip-input" accept=".zip,application/zip">
@@ -166,12 +166,19 @@ export function openBelegImport({ onImported } = {}) {
       let ausgabenCount = 0;
       let zugeordnetCount = 0;
       let kundenAngelegtCount = 0;
+      let loseBelegeCount = 0;
       let duplikateUebersprungen = 0;
       const unzugeordnet = [];
-      let uebersprungen = 0;
+      // Dateinamen, die zu einem der drei Formate gehören (erkannt oder als
+      // Duplikat/Foto-Entwurf verarbeitet) - alles, was am Ende hier nicht
+      // drinsteht, ist wirklich unbekannt und wird als übersprungen gemeldet.
+      const verarbeitet = new Set();
 
       // --- Format 1: DATEV/Lexware "Belege Online" (XML je Beleg, PDF optional) ---
       for (const [basename, xmlEntry] of xmlEntriesByBasename) {
+        verarbeitet.add(xmlEntry.name);
+        const pdfEntryVorab = pdfEntriesByBasename.get(basename);
+        if (pdfEntryVorab) verarbeitet.add(pdfEntryVorab.name);
         const xmlText = await (await xmlEntry.getBlob('application/xml')).text();
         const parsed = parseDatevLedgerXml(xmlText);
         if (!parsed || !parsed.datum || !parsed.betrag) continue;
@@ -233,10 +240,12 @@ export function openBelegImport({ onImported } = {}) {
 
       // --- Format 2: lexoffice-Export (PDF-Dateiname kodiert Datum/Typ/Lieferant) ---
       const pdfEntries = entries.filter((e) => /\.pdf$/i.test(e.name) && !xmlEntriesByBasename.has(e.name.replace(/\.pdf$/i, '')));
+      const unklarePdfs = [];
 
       for (const entry of pdfEntries) {
         const parsed = parseBelegFilename(entry.name);
-        if (!parsed) { uebersprungen++; continue; }
+        if (!parsed) { unklarePdfs.push(entry); continue; }
+        verarbeitet.add(entry.name);
         const blob = await entry.getBlob('application/pdf');
 
         if (parsed.typ === 'ausgabe') {
@@ -266,12 +275,44 @@ export function openBelegImport({ onImported } = {}) {
         }
       }
 
+      // --- Format 3: lose Belegfotos/-scans ohne erkennbares Namensschema
+      // (z.B. Kamera-Fotos, Scan-App-Export) und PDFs, die zu keinem der
+      // beiden anderen Formate passen. Werden als Entwurf angelegt (Betrag
+      // 0, Datum aus dem Foto-Zeitstempel im ZIP geschätzt) - die genauen
+      // Angaben müssen danach manuell geprüft werden, aber der Beleg selbst
+      // geht so nicht mehr verloren.
+      const IMAGE_EXT_RE = /\.(jpe?g|png|heic|heif|webp|gif|bmp)$/i;
+      const bildEntries = entries.filter((e) => IMAGE_EXT_RE.test(e.name));
+      const bereitsImportierteDateien = new Set(ausgabenBestehend.map((a) => a.importDateiname).filter(Boolean));
+
+      for (const entry of [...unklarePdfs, ...bildEntries]) {
+        verarbeitet.add(entry.name);
+        if (bereitsImportierteDateien.has(entry.name)) { duplikateUebersprungen++; continue; }
+        const mime = /\.pdf$/i.test(entry.name) ? 'application/pdf' : (/\.png$/i.test(entry.name) ? 'image/png' : 'image/jpeg');
+        const blob = await entry.getBlob(mime);
+        const ausgabeId = uid();
+        const ausgabe = {
+          id: ausgabeId, datum: entry.date || todayISO(), kategorie: 'Sonstiges',
+          beschreibung: `Beleg aus Import (${entry.name}) – bitte Datum/Betrag/Lieferant prüfen`,
+          lieferant: '', betragNetto: 0, steuersatz: settings.standardSteuersatz ?? 19, betragBrutto: 0,
+          bezahltMit: 'überweisung', beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${ausgabeId}`, blob) : blob,
+          projektId: '', kundeId: '', kalkKategorie: '', bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false,
+          importDateiname: entry.name,
+        };
+        await put('ausgaben', ausgabe);
+        bereitsImportierteDateien.add(entry.name);
+        loseBelegeCount++;
+      }
+
+      const uebersprungen = entries.filter((e) => !verarbeitet.has(e.name) && !/(^|\/)document\.xml$/i.test(e.name)).length;
+
       resultHost.innerHTML = `
         <div class="card">
           <p>✅ ${ausgabenCount} Ausgabe(n) importiert</p>
+          ${loseBelegeCount ? `<p>✅ ${loseBelegeCount} Beleg(e) als Entwurf angelegt (Foto/Scan ohne erkennbares Datum/Betrag - bitte prüfen)</p>` : ''}
           <p>✅ ${zugeordnetCount} Rechnung(en) passenden Kunden zugeordnet</p>
           ${kundenAngelegtCount ? `<p>✅ ${kundenAngelegtCount} neue(r) Kunde(n) automatisch angelegt (Name/Ort/Kundennummer aus dem Beleg)</p>` : ''}
-          ${duplikateUebersprungen ? `<p class="text-mute">${duplikateUebersprungen} Beleg(e) übersprungen (Datum/Betrag/Lieferant stimmt mit bereits vorhandener Ausgabe überein).</p>` : ''}
+          ${duplikateUebersprungen ? `<p class="text-mute">${duplikateUebersprungen} Beleg(e) übersprungen (bereits vorhanden bzw. Datum/Betrag/Lieferant stimmt mit bestehender Ausgabe überein).</p>` : ''}
           ${unzugeordnet.length ? `<p>⚠️ ${unzugeordnet.length} Rechnung(en) ohne passenden Kunden gefunden:</p><ul class="cal-event-list">${unzugeordnet.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
           ${uebersprungen ? `<p class="text-mute">${uebersprungen} Datei(en) mit unbekanntem Format übersprungen.</p>` : ''}
         </div>

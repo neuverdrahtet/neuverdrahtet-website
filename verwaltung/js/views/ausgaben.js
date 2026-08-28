@@ -2,6 +2,8 @@ import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '..
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport } from '../belegimport.js';
+import { buildZipBlob } from '../zipwriter.js';
+import { downloadBlob } from '../docexport.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
@@ -54,6 +56,7 @@ export async function render(container) {
         <button class="btn" id="btn-beleg-scan">📷 Beleg scannen</button>
         <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
+        <button class="btn" id="btn-export-belege">⇩ Belege exportieren (ZIP)</button>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
       </div>
     </div>
@@ -159,6 +162,48 @@ export async function render(container) {
     ])];
     downloadTextFile(`neuverdrahtet-ausgaben-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(rows));
     toast('Export erstellt', 'success');
+  });
+  container.querySelector('#btn-export-belege').addEventListener('click', async () => {
+    const mitBeleg = filtered.filter((a) => a.beleg);
+    if (mitBeleg.length === 0) { toast('Keine Ausgabe mit angehängtem Beleg in der aktuellen Auswahl', 'info'); return; }
+    const exportBtn = container.querySelector('#btn-export-belege');
+    exportBtn.disabled = true;
+    try {
+      const usedNames = new Set();
+      const files = [];
+      for (let i = 0; i < mitBeleg.length; i++) {
+        const a = mitBeleg[i];
+        exportBtn.textContent = `Lade Belege ... (${i + 1}/${mitBeleg.length})`;
+        let blob;
+        if (a.beleg instanceof Blob) {
+          blob = a.beleg;
+        } else if (a.beleg?.url) {
+          try {
+            blob = await (await fetch(a.beleg.url)).blob();
+          } catch {
+            continue; // einzelner Beleg nicht abrufbar (z.B. noch nicht hochgeladen) - überspringen statt Export abzubrechen
+          }
+        } else {
+          continue;
+        }
+        const mime = blob.type || a.beleg?.mime || '';
+        const ext = mime === 'application/pdf' ? 'pdf' : mime === 'image/png' ? 'png' : /^image\//.test(mime) ? 'jpg' : 'bin';
+        const lieferant = (a.lieferant || a.kategorie || 'Beleg').replace(/[^\p{L}\p{N} ._-]+/gu, '').trim().replace(/\s+/g, '-');
+        let name = `${a.datum || 'ohne-datum'}_${lieferant}_${(a.betragBrutto || 0).toFixed(2).replace('.', ',')}EUR.${ext}`;
+        if (usedNames.has(name)) {
+          const dot = name.lastIndexOf('.');
+          name = `${name.slice(0, dot)}-${i + 1}${name.slice(dot)}`;
+        }
+        usedNames.add(name);
+        files.push({ name, blob });
+      }
+      if (files.length === 0) { toast('Keine Belegdateien abrufbar', 'danger'); return; }
+      downloadBlob(await buildZipBlob(files), `neuverdrahtet-belege-${new Date().toISOString().slice(0, 10)}.zip`);
+      toast(`${files.length} Beleg(e) exportiert`, 'success');
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = '⇩ Belege exportieren (ZIP)';
+    }
   });
   container.querySelector('#btn-beleg-import').addEventListener('click', () => {
     openBelegImport({ onImported: () => render(container) });

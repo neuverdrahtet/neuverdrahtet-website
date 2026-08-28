@@ -28,6 +28,8 @@ export async function readZipEntries(file) {
     const sig = view.getUint32(offset, true);
     if (sig !== 0x02014b50) break;
     const compressionMethod = view.getUint16(offset + 10, true);
+    const modTime = view.getUint16(offset + 12, true);
+    const modDate = view.getUint16(offset + 14, true);
     const compressedSize = view.getUint32(offset + 20, true);
     const nameLen = view.getUint16(offset + 28, true);
     const extraLen = view.getUint16(offset + 30, true);
@@ -35,7 +37,7 @@ export async function readZipEntries(file) {
     const localHeaderOffset = view.getUint32(offset + 42, true);
     const nameBytes = bytes.subarray(offset + 46, offset + 46 + nameLen);
     const name = new TextDecoder('utf-8').decode(nameBytes);
-    rawEntries.push({ name, compressionMethod, compressedSize, localHeaderOffset });
+    rawEntries.push({ name, compressionMethod, compressedSize, localHeaderOffset, modTime, modDate });
     offset += 46 + nameLen + extraLen + commentLen;
   }
 
@@ -53,10 +55,23 @@ export async function readZipEntries(file) {
     throw new Error(`Nicht unterstützte ZIP-Kompressionsmethode (${entry.compressionMethod}) bei "${entry.name}".`);
   }
 
+  // DOS-Datum (MS-DOS-Zeitstempel, wie ihn ZIP intern speichert) in ISO
+  // umrechnen - dient als Fallback-Datum für Belege, die selbst keine
+  // erkennbaren Datumsangaben enthalten (z.B. lose Fotos ohne Dateinamen-
+  // Konvention).
+  function dosDateToIso(modDate) {
+    const year = ((modDate >> 9) & 0x7f) + 1980;
+    const month = (modDate >> 5) & 0x0f;
+    const day = modDate & 0x1f;
+    if (!month || !day) return '';
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
   return rawEntries
     .filter((e) => !e.name.endsWith('/'))
     .map((e) => ({
       name: e.name,
+      date: dosDateToIso(e.modDate),
       getBlob: async (mime) => new Blob([await readEntryData(e)], { type: mime || 'application/octet-stream' }),
     }));
 }
