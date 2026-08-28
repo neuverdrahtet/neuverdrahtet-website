@@ -904,6 +904,11 @@ section{ padding:88px 0; }
 .fab-chat{ background:linear-gradient(135deg, var(--orange-2), var(--navy)); }
 .fab-chat.is-active{ box-shadow:0 0 0 3px var(--orange-soft), 0 10px 24px -6px rgba(0,0,0,0.5); }
 
+.ki-assistent-backdrop{
+  position:fixed; inset:0; z-index:79; background:rgba(8,9,11,0.4);
+  opacity:0; pointer-events:none; transition:opacity 0.2s ease;
+}
+
 .ki-assistent-panel{
   position:fixed; right:20px; bottom:96px; z-index:80;
   width:min(360px, calc(100vw - 32px)); height:min(520px, calc(100vh - 140px));
@@ -911,6 +916,11 @@ section{ padding:88px 0; }
   box-shadow:0 24px 48px -12px rgba(12,24,38,0.35);
   display:flex; flex-direction:column; overflow:hidden;
 }
+/* [hidden] und .ki-assistent-panel haben ohne dieses Overwrite dieselbe
+   Spezifität - da Autor-CSS die UA-Stylesheet-Regel "[hidden]{display:none}"
+   sonst gewinnt, blieb das Panel trotz panel.hidden=true sichtbar (weiße
+   Box, die sich nicht wegklicken ließ). */
+.ki-assistent-panel[hidden]{ display:none; }
 .ki-assistent-header{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:14px 16px; background:var(--navy); color:#fff; flex:none;
@@ -961,8 +971,42 @@ section{ padding:88px 0; }
 }
 .ki-assistent-footnote a{ color:var(--copper); }
 
-@media (max-width:640px){
-  .ki-assistent-panel{ right:14px; bottom:86px; width:calc(100vw - 28px); height:min(480px, calc(100vh - 120px)); }
+/* Handy/Tablet (Touch-Bedienung, Tastatur kann Viewport verändern): statt
+   der kleinen freischwebenden Ecken-Box eine Bottom-Sheet-Ansicht, die vom
+   unteren Rand hochfährt, die volle Breite nutzt und mit "dvh" die vom
+   mobilen Browser aktuell tatsächlich sichtbare Höhe berücksichtigt (100vh
+   schließt auf Handys oft die ein-/ausblendende Adressleiste/Tastatur mit
+   ein und schneidet dann den unteren Teil des Panels ab). Zusätzlich ein
+   abgedunkelter Hintergrund wie bei einem nativen Bottom-Sheet - Tippen
+   darauf schließt den Chat über den bereits vorhandenen "Klick außerhalb"-
+   Handler in ki-assistent.js. */
+@media (max-width:900px){
+  .ki-assistent-backdrop.is-visible{ opacity:1; pointer-events:auto; }
+
+  .ki-assistent-panel{
+    left:10px; right:10px; bottom:10px; top:auto;
+    width:auto;
+    height:min(75vh, 560px);
+    height:min(75dvh, 560px);
+    max-height:calc(100vh - 20px);
+    max-height:calc(100dvh - 20px);
+  }
+  .ki-assistent-close{ padding:10px; font-size:18px; }
+  .ki-assistent-input{ font-size:16px; } /* verhindert Auto-Zoom beim Fokussieren in Safari/iOS */
+  .ki-assistent-send{ width:44px; height:44px; }
+}
+
+@media (max-width:520px){
+  .ki-assistent-panel{
+    left:0; right:0; bottom:0;
+    width:100%;
+    height:min(88vh, 620px);
+    height:min(88dvh, 620px);
+    max-height:100vh;
+    max-height:100dvh;
+    border-radius:var(--radius) var(--radius) 0 0;
+  }
+  .ki-assistent-footnote{ padding-bottom:16px; }
 }
 
 /* =========================================================

@@ -67,6 +67,13 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-
   `;
   document.body.appendChild(panel);
 
+  // Nur auf Handy/Tablet sichtbar (siehe CSS) - dort füllt das Panel als
+  // Bottom-Sheet fast den ganzen Bildschirm, daher ein abgedunkelter
+  // Hintergrund wie bei einem nativen Sheet statt der freien Restfläche.
+  const backdrop = document.createElement('div');
+  backdrop.className = 'ki-assistent-backdrop';
+  document.body.appendChild(backdrop);
+
   const messagesEl = panel.querySelector('.ki-assistent-messages');
   const formEl = panel.querySelector('.ki-assistent-form');
   const inputEl = panel.querySelector('.ki-assistent-input');
@@ -117,6 +124,7 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-
   function oeffnePanel() {
     geoeffnet = true;
     panel.hidden = false;
+    backdrop.classList.add('is-visible');
     toggleBtn.setAttribute('aria-expanded', 'true');
     toggleBtn.classList.add('is-active');
     if (messagesEl.children.length === 0) renderVerlauf();
@@ -125,11 +133,24 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-
   function schliessePanel() {
     geoeffnet = false;
     panel.hidden = true;
+    backdrop.classList.remove('is-visible');
     toggleBtn.setAttribute('aria-expanded', 'false');
     toggleBtn.classList.remove('is-active');
   }
   toggleBtn.addEventListener('click', () => (geoeffnet ? schliessePanel() : oeffnePanel()));
   closeBtn.addEventListener('click', schliessePanel);
+
+  // Klick außerhalb des Panels und Escape schließen den Chat ebenfalls -
+  // der Kunde soll ihn jederzeit unaufdringlich wieder loswerden können,
+  // nicht nur über den kleinen X-Button.
+  document.addEventListener('click', (e) => {
+    if (!geoeffnet) return;
+    if (panel.contains(e.target) || toggleBtn.contains(e.target)) return;
+    schliessePanel();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (geoeffnet && e.key === 'Escape') schliessePanel();
+  });
 
   /* ---------- Eingabe: Enter sendet, Shift+Enter neue Zeile; Textarea wächst automatisch ---------- */
   inputEl.addEventListener('input', () => {
