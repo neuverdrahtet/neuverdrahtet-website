@@ -348,6 +348,9 @@ export async function render(container) {
           <p class="hint">
             Erstellt Angebotspositionen automatisch aus Stichpunkten (z.B. auf der Baustelle diktiert). Dafür wird ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt, der deinen Anthropic-API-Schlüssel sicher verwahrt – der Schlüssel selbst liegt niemals im Browser. Details/Einrichtung: Ordner <code>cloudflare-worker/</code> im Projekt bzw. frag im Chat nach.
           </p>
+          <p class="hint">
+            Derselbe Worker treibt auch den <strong>KI-Assistenten</strong> (Chat, siehe Menüpunkt "KI-Bürokraft → KI-Assistent") an - dieselbe Worker-URL/App-Secret gelten dafür mit. Damit der Assistent auf echte Firmendaten zugreifen kann, zusätzlich am Worker die Variablen <code>KI_BUEROKRAFT_URL</code> und <code>KI_BUEROKRAFT_API_KEY</code> setzen (siehe Kommentar oben in <code>cloudflare-worker/worker.js</code> bzw. <code>cloudflare-worker-ki-buerokraft/README.md</code>).
+          </p>
           <form id="ai-form">
             <div class="form-grid">
               <div class="field col-span-2"><label>Worker-URL</label><input name="aiWorkerUrl" placeholder="https://neuverdrahtet-ki-angebote.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.aiWorkerUrl || '')}"></div>

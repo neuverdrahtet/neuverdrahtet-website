@@ -181,6 +181,51 @@ export async function rechercherePreiseFuerPositionen(positionen) {
 }
 
 /**
+ * Interner KI-Assistent (Chat): schickt den kompletten bisherigen
+ * Gesprächsverlauf an denselben Cloudflare Worker, der auch die
+ * Angebotserstellung antreibt. Der Worker führt dort einen Tool-Use-Loop
+ * gegen die KI-Bürokraft-API aus (echte Kunden-/Projekt-/Aufgabendaten) und
+ * gibt nur die finale Textantwort zurück - siehe cloudflare-worker/worker.js,
+ * Aktion "assistent-chat".
+ */
+export async function chatMitAssistent({ messages }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let res;
+  try {
+    res = await fetch(settings.aiWorkerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Secret': settings.aiAppSecret || '',
+      },
+      body: JSON.stringify({ action: 'assistent-chat', messages }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Zeitüberschreitung beim KI-Assistenten (keine Antwort innerhalb von 45s).');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+/**
  * Löst über denselben Cloudflare Worker eine Push-Benachrichtigung an die
  * übergebenen FCM-Geräte-Tokens aus. Der Worker braucht dafür zusätzlich das
  * Secret FIREBASE_SERVICE_ACCOUNT_JSON (siehe worker.js-Kommentar). Läuft

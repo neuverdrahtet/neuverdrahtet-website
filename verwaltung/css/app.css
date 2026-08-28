@@ -1439,6 +1439,21 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 .tc-input-row { display: flex; gap: 8px; align-items: flex-end; }
 .tc-input-row textarea { flex: 1; resize: vertical; min-height: 40px; }
 
+/* KI-Assistent (Chat) */
+.ka-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+  padding-right: 4px;
+}
+.ka-msg { border-radius: 8px; padding: 8px 10px; max-width: 80%; }
+.ka-msg-user { background: var(--accent); color: #fff; align-self: flex-end; }
+.ka-msg-user .tc-msg-head, .ka-msg-user .text-mute { color: rgba(255,255,255,0.75); }
+.ka-msg-assistant { background: var(--card-2); align-self: flex-start; }
+
 /* Kundenakte */
 .akte-bereich { margin-bottom: 6px; }
 .akte-projekte-list { display: flex; flex-direction: column; gap: 8px; }
