@@ -70,7 +70,8 @@
 }
 
 *,*::before,*::after{ box-sizing:border-box; }
-html{ scroll-behavior:smooth; }
+[hidden]{ display:none !important; }
+html{ scroll-behavior:smooth; overflow-x:hidden; }
 @media (prefers-reduced-motion: reduce){
   html{ scroll-behavior:auto; }
   *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
@@ -78,6 +79,7 @@ html{ scroll-behavior:smooth; }
 
 body{
   margin:0;
+  overflow-x:hidden;
   background:var(--paper);
   color:var(--ink);
   font-family:var(--font-body);
@@ -102,6 +104,7 @@ h1,h2,h3,h4{
   margin:0;
   letter-spacing:-0.01em;
   color:var(--ink);
+  overflow-wrap:break-word;
 }
 
 .eyebrow{
@@ -174,6 +177,14 @@ h1,h2,h3,h4{
   .header-cta{ gap:8px; }
   .header-cta .btn-sm{ padding:9px 14px; font-size:13px; white-space:nowrap; }
   .nav-toggle{ padding:9px 10px; }
+}
+@media (max-width:360px){
+  .site-header .wrap{ padding:0 14px; }
+  .brand{ gap:8px; }
+  .brand-logo{ height:26px; }
+  .header-cta{ gap:6px; }
+  .header-cta .btn-sm{ padding:8px 11px; font-size:12px; }
+  .nav-toggle{ padding:8px 9px; }
 }
 
 .main-nav{ display:flex; align-items:center; gap:8px; }
@@ -273,6 +284,7 @@ h1,h2,h3,h4{
   padding:76px 0 0;
 }
 .hero .wrap{ display:grid; grid-template-columns:1.05fr 0.95fr; gap:56px; align-items:center; padding-bottom:56px; }
+.hero .wrap > *{ min-width:0; }
 @media (max-width:900px){ .hero .wrap{ grid-template-columns:1fr; } }
 
 .hero h1{
@@ -518,7 +530,7 @@ section{ padding:88px 0; }
   background:var(--navy-3); border:1px solid var(--line); color:#fff; text-align:center;
 }
 .calc-result .label{ font-family:var(--font-mono); font-size:12px; letter-spacing:0.06em; text-transform:uppercase; color:rgba(255,255,255,0.55); margin-bottom:10px; }
-.calc-result .range{ font-family:var(--font-display); font-size:clamp(26px,4vw,36px); font-weight:700; }
+.calc-result .range{ font-family:var(--font-display); font-size:clamp(26px,4vw,36px); font-weight:700; overflow-wrap:break-word; }
 .calc-result .range .dash{ color:var(--orange-2); margin:0 10px; }
 .calc-result .note{ font-size:12.5px; color:rgba(255,255,255,0.5); margin-top:10px; }
 
