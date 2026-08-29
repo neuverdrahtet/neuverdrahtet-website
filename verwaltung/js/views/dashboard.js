@@ -27,15 +27,16 @@ const WEATHER_ICON = {
 };
 const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 
-function lastNMonths(n) {
-  const out = [];
-  const now = new Date();
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({ key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, label: `${MONTH_SHORT[d.getMonth()]} ${String(d.getFullYear()).slice(2)}` });
-  }
-  return out;
+// Januar-Dezember des gewählten Jahres statt der letzten 12 Kalendermonate ab
+// heute - so lässt sich das Zahlen-Board auch für vergangene Jahre ansehen,
+// nicht nur als rollierendes Fenster bis zum aktuellen Monat.
+function monthsOfYear(jahr) {
+  return Array.from({ length: 12 }, (_, i) => ({
+    key: `${jahr}-${String(i + 1).padStart(2, '0')}`, label: `${MONTH_SHORT[i]} ${String(jahr).slice(2)}`,
+  }));
 }
+
+const DASH_JAHR_KEY = 'nv-dashboard-jahr';
 
 function niceMax(v) {
   if (v <= 0) return 100;
@@ -164,8 +165,20 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const scoreColor = score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warn)' : 'var(--danger)';
   const scoreLabel = score >= 80 ? 'Gesund' : score >= 50 ? 'Beobachten' : 'Kritisch';
 
-  // --- Umsatz & Ausgaben chart (12 months) ---
-  const months = lastNMonths(12);
+  // --- Zahlen-Board: Jahr wählbar, Standard ist immer das aktuelle Jahr ---
+  const aktuellesJahr = new Date().getFullYear();
+  const jahrOptionenSet = new Set([aktuellesJahr]);
+  for (const r of rechnungen) { const j = Number((r.datum || '').slice(0, 4)); if (j) jahrOptionenSet.add(j); }
+  for (const a of ausgaben) { const j = Number((a.datum || '').slice(0, 4)); if (j) jahrOptionenSet.add(j); }
+  const jahrOptionen = Array.from(jahrOptionenSet).sort((a, b) => b - a);
+  let dashJahr = aktuellesJahr;
+  try {
+    const gespeichert = Number(sessionStorage.getItem(DASH_JAHR_KEY));
+    if (gespeichert && jahrOptionen.includes(gespeichert)) dashJahr = gespeichert;
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
+
+  // --- Umsatz & Ausgaben chart (gewähltes Jahr, Jan-Dez) ---
+  const months = monthsOfYear(dashJahr);
   const umsatzByMonth = Object.fromEntries(months.map((m) => [m.key, 0]));
   const ausgabenByMonth = Object.fromEntries(months.map((m) => [m.key, 0]));
   for (const r of rechnungen) {
@@ -182,7 +195,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const ausgabenSumme = ausgabenSeries.reduce((s, v) => s + v, 0);
   const uebrigSumme = umsatzSumme - ausgabenSumme;
 
-  // --- Umsatz je Marke (aktuelles Jahr, wie Auswertungen-Seite) ---
+  // --- Umsatz je Marke (gewähltes Jahr, wie Auswertungen-Seite) ---
   const STANDARD_LABEL = 'Standard (Hauptfirma)';
   const OHNE_PROJEKT_LABEL = 'Ohne Projektbezug';
   function markeLabelFuerProjekt(projektId) {
@@ -190,10 +203,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
     if (!projekt) return OHNE_PROJEKT_LABEL;
     return markenById[projekt.markeId]?.name || STANDARD_LABEL;
   }
-  const jahresbeginn = `${new Date().getFullYear()}-01-01`;
+  const jahresbeginn = `${dashJahr}-01-01`;
+  const jahresende = `${dashJahr}-12-31`;
   const umsatzByMarke = {};
   for (const r of rechnungen) {
-    if (r.status === 'storniert' || (r.datum || '') < jahresbeginn) continue;
+    if (r.status === 'storniert' || (r.datum || '') < jahresbeginn || (r.datum || '') > jahresende) continue;
     const label = markeLabelFuerProjekt(r.projektId);
     umsatzByMarke[label] = (umsatzByMarke[label] || 0) + (Number(r.brutto) || 0);
   }
@@ -269,16 +283,19 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </div>
 
         <div class="card">
-          <div class="flex-row" style="justify-content:space-between;margin-bottom:6px">
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0">Umsatz &amp; Ausgaben</h2>
-            <div class="cal-legend" style="margin:0">
-              <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_UMSATZ_COLOR}"></span>Umsatz</span>
-              <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_AUSGABEN_COLOR}"></span>Ausgaben</span>
+            <div class="flex-row" style="gap:10px;align-items:center">
+              <div class="cal-legend" style="margin:0">
+                <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_UMSATZ_COLOR}"></span>Umsatz</span>
+                <span class="cal-legend-item"><span class="cal-legend-dot" style="background:${CHART_AUSGABEN_COLOR}"></span>Ausgaben</span>
+              </div>
+              <select id="dash-jahr-select">${jahrOptionen.map((j) => `<option value="${j}" ${j === dashJahr ? 'selected' : ''}>${j}</option>`).join('')}</select>
             </div>
           </div>
           <div class="dash-score-stats" style="margin-top:0;padding-top:0;border-top:none;margin-bottom:12px">
-            <div><span class="text-mute">Einnahmen (12 Mon.)</span><strong style="color:${CHART_UMSATZ_COLOR}">${formatCurrency(umsatzSumme)}</strong></div>
-            <div><span class="text-mute">Ausgaben (12 Mon.)</span><strong style="color:${CHART_AUSGABEN_COLOR}">${formatCurrency(ausgabenSumme)}</strong></div>
+            <div><span class="text-mute">Einnahmen ${dashJahr}</span><strong style="color:${CHART_UMSATZ_COLOR}">${formatCurrency(umsatzSumme)}</strong></div>
+            <div><span class="text-mute">Ausgaben ${dashJahr}</span><strong style="color:${CHART_AUSGABEN_COLOR}">${formatCurrency(ausgabenSumme)}</strong></div>
             <div><span class="text-mute">Übrig</span><strong style="color:${uebrigSumme >= 0 ? 'var(--success)' : 'var(--danger)'}">${formatCurrency(uebrigSumme)}</strong></div>
           </div>
           ${buildLineChart(months, umsatzSeries, ausgabenSeries)}
@@ -287,10 +304,10 @@ export async function render(container, _route, { autoSync = true } = {}) {
         ${marken.length > 0 ? `
           <div class="card">
             <div class="flex-row" style="justify-content:space-between;margin-bottom:6px">
-              <h2 style="margin:0">Umsatz nach Marke <span class="text-mute" style="font-size:12px;font-weight:400">(dieses Jahr)</span></h2>
+              <h2 style="margin:0">Umsatz nach Marke <span class="text-mute" style="font-size:12px;font-weight:400">(${dashJahr})</span></h2>
               <a class="text-mute" href="#/auswertungen" style="font-size:12.5px">Details →</a>
             </div>
-            ${markenUmsatz.length === 0 ? '<p class="text-mute">Noch keine Rechnungen in diesem Jahr.</p>' : `
+            ${markenUmsatz.length === 0 ? `<p class="text-mute">Noch keine Rechnungen in ${dashJahr}.</p>` : `
               <div class="auswertung-liste">
                 ${markenUmsatz.map((m) => `
                   <div class="auswertung-row">
@@ -501,6 +518,10 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // Ohne diesen Button blieb das Dashboard dann dauerhaft veraltet, während die
   // Plantafel über ihren eigenen Button (der auch ein abgelaufenes Token per
   // Consent-Dialog erneuert) wieder aktuell wurde.
+  container.querySelector('#dash-jahr-select')?.addEventListener('change', (e) => {
+    try { sessionStorage.setItem(DASH_JAHR_KEY, e.target.value); } catch { /* sessionStorage evtl. nicht verfügbar */ }
+    render(container, null, { autoSync: false });
+  });
   container.querySelector('#btn-dash-sync')?.addEventListener('click', async () => {
     const btn = container.querySelector('#btn-dash-sync');
     btn.disabled = true;
