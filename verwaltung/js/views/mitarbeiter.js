@@ -51,7 +51,14 @@ function currentStatusFor(termine, mitarbeiterId) {
 }
 
 const FARBEN = ['#f0a020', '#2b7fd6', '#1f8a4c', '#c0392b', '#8e44ad', '#16a085', '#d35400', '#2c3e50'];
-const VERTRAGSARTEN = ['Vollzeit', 'Teilzeit', 'Minijob', 'Werkstudent', 'Auszubildender', 'Praktikant'];
+const VERTRAGSARTEN = ['Vollzeit', 'Teilzeit', 'Minijob', 'Midijob', 'Werkstudent', 'Auszubildender', 'Praktikant', 'Kurzfristig beschäftigt', 'Geschäftsführer'];
+const STEUERKLASSEN = ['1', '2', '3', '4', '5', '6'];
+const KONFESSIONEN = [
+  { id: '', titel: '– keine/konfessionslos –' },
+  { id: 'ev', titel: 'Evangelisch' },
+  { id: 'rk', titel: 'Römisch-katholisch' },
+  { id: 'sonstige', titel: 'Sonstige (kirchensteuerpflichtig)' },
+];
 const MA_DOKUMENT_KATEGORIEN = [
   { id: 'bericht', titel: 'Bericht/Protokoll' },
   { id: 'vertrag', titel: 'Vertrag' },
@@ -68,7 +75,7 @@ function currentYearCount(termine, mitarbeiterId, typ) {
 }
 
 export async function render(container) {
-  let [mitarbeiter, termine, marken, settings] = await Promise.all([getAll('mitarbeiter'), getAll('termine'), getAll('marken'), getSettings()]);
+  let [mitarbeiter, termine, marken, settings, zeiterfassung] = await Promise.all([getAll('mitarbeiter'), getAll('termine'), getAll('marken'), getSettings(), getAll('zeiterfassung')]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   syncMitarbeiterOeffentlich().catch((err) => console.error('mitarbeiterOeffentlich-Sync fehlgeschlagen:', err));
@@ -84,6 +91,7 @@ export async function render(container) {
       <div class="actions">
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-import">⇪ Importieren</button>
+        <button class="btn" id="btn-lohnvorbereitung">⇩ Lohnvorbereitung exportieren</button>
         <button class="btn btn-primary" id="btn-new">+ Neuer Mitarbeiter</button>
       </div>
     </div>
@@ -158,6 +166,102 @@ export async function render(container) {
     toast('Export erstellt', 'success');
   });
   container.querySelector('#btn-import').addEventListener('click', () => openImport());
+  container.querySelector('#btn-lohnvorbereitung').addEventListener('click', () => openLohnvorbereitung());
+
+  // Lohnvorbereitung: KEINE echte Lohnabrechnung (keine Steuer-/SV-Berechnung,
+  // keine Meldungen an Finanzamt/Krankenkassen) - stellt nur die für einen
+  // Monat benötigten Stammdaten + Ist-Stunden (aus Zeiterfassung) + Urlaubs-/
+  // Krankheitstage (aus dem Kalender) zusammen, damit sie an Steuerberater/
+  // Lohnbüro/externen Abrechnungsdienst übergeben werden können.
+  function tageImMonat(termin, typ, monatStart, monatEnde) {
+    if (termin.typ !== typ) return 0;
+    const start = (termin.start || '').slice(0, 10);
+    const ende = (termin.ende || '').slice(0, 10) || start;
+    const von = start < monatStart ? monatStart : start;
+    const bis = ende > monatEnde ? monatEnde : ende;
+    if (von > bis) return 0;
+    return Math.round((new Date(bis) - new Date(von)) / 86400000) + 1;
+  }
+  function openLohnvorbereitung() {
+    const heute = new Date();
+    const { body, close } = openModal({
+      title: 'Lohnvorbereitung',
+      wide: true,
+      bodyHtml: `
+        <div class="card" style="background:#fff6e0;border-color:#f0d78c;margin-bottom:10px">
+          <p class="mb-0">⚠️ <strong>Keine echte Lohnabrechnung.</strong> Es werden keine Steuer-/Sozialversicherungsbeträge berechnet und keine Meldungen an Finanzamt/Krankenkassen übermittelt. Diese Übersicht stellt nur die vorhandenen Stammdaten und die Ist-Stunden/Abwesenheiten des Monats für die Übergabe an Steuerberater, Lohnbüro oder einen externen Abrechnungsdienst zusammen.</p>
+        </div>
+        <div class="flex-row" style="gap:10px;margin-bottom:10px">
+          <select id="lv-monat">${Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}" ${i + 1 === heute.getMonth() + 1 ? 'selected' : ''}>${['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'][i]}</option>`).join('')}</select>
+          <select id="lv-jahr">${[heute.getFullYear(), heute.getFullYear() - 1].map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
+        </div>
+        <div id="lv-host"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Schließen</button>
+          <button type="button" class="btn btn-primary" id="btn-lv-export">⇩ Als CSV exportieren</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+
+    function berechneZeilen() {
+      const monat = Number(body.querySelector('#lv-monat').value);
+      const jahr = Number(body.querySelector('#lv-jahr').value);
+      const monatStart = `${jahr}-${String(monat).padStart(2, '0')}-01`;
+      const letzterTag = new Date(jahr, monat, 0).getDate();
+      const monatEnde = `${jahr}-${String(monat).padStart(2, '0')}-${String(letzterTag).padStart(2, '0')}`;
+      const aktive = mitarbeiter.filter((m) => (!m.austrittsdatum || m.austrittsdatum >= monatStart) && (!m.eintrittsdatum || m.eintrittsdatum <= monatEnde));
+      return aktive.map((m) => {
+        const istMinuten = zeiterfassung.filter((e) => e.mitarbeiterId === m.id && e.datum >= monatStart && e.datum <= monatEnde).reduce((s, e) => s + (Number(e.dauerMinuten) || 0), 0);
+        const urlaubstage = termine.filter((t) => t.mitarbeiterIds?.includes(m.id)).reduce((s, t) => s + tageImMonat(t, 'urlaub', monatStart, monatEnde), 0);
+        const krankheitstage = termine.filter((t) => t.mitarbeiterIds?.includes(m.id)).reduce((s, t) => s + tageImMonat(t, 'krank', monatStart, monatEnde), 0);
+        const fehlend = [
+          !m.steuerId && 'Steuer-ID', !m.sozialversicherungsnummer && 'SV-Nummer', !m.steuerklasse && 'Steuerklasse',
+          !m.krankenkasse && 'Krankenkasse', !m.iban && 'IBAN',
+        ].filter(Boolean);
+        return { m, istStunden: Math.round((istMinuten / 60) * 100) / 100, urlaubstage, krankheitstage, fehlend, monatStart, monatEnde };
+      });
+    }
+
+    function renderLvTable() {
+      const zeilen = berechneZeilen();
+      body.querySelector('#lv-host').innerHTML = zeilen.length === 0 ? '<p class="text-mute">Keine im Zeitraum beschäftigten Mitarbeiter gefunden.</p>' : `
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Beschäftigungsart</th><th class="text-right">Ist-Std.</th><th class="text-right">Urlaub (Tage)</th><th class="text-right">Krank (Tage)</th><th>Fehlende Angaben</th></tr></thead>
+          <tbody>
+            ${zeilen.map(({ m, istStunden, urlaubstage, krankheitstage, fehlend }) => `
+              <tr>
+                <td>${escapeHtml(m.name)}</td>
+                <td>${escapeHtml(m.vertragsart || '')}</td>
+                <td class="text-right">${istStunden}</td>
+                <td class="text-right">${urlaubstage}</td>
+                <td class="text-right">${krankheitstage}</td>
+                <td>${fehlend.length ? `<span class="badge badge-warn">${fehlend.join(', ')}</span>` : '<span class="badge badge-success">vollständig</span>'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    body.querySelector('#lv-monat').addEventListener('change', renderLvTable);
+    body.querySelector('#lv-jahr').addEventListener('change', renderLvTable);
+    body.querySelector('#btn-lv-export').addEventListener('click', () => {
+      const zeilen = berechneZeilen();
+      const header = ['Personalnummer', 'Name', 'Geburtsdatum', 'Straße', 'PLZ', 'Ort', 'Steuer-ID', 'SV-Nummer', 'Steuerklasse', 'Kinderfreibeträge', 'Konfession', 'Krankenversicherung', 'Krankenkasse', 'IBAN', 'Beschäftigungsart', 'Wochenstunden', 'Stundenlohn', 'Gehalt monatlich', 'Eintrittsdatum', 'Ist-Stunden Monat', 'Urlaubstage Monat', 'Krankheitstage Monat', 'Fehlende Angaben'];
+      const rows = [header, ...zeilen.map(({ m, istStunden, urlaubstage, krankheitstage, fehlend }) => [
+        m.personalnummer || '', m.name || '', m.geburtsdatum || '', m.strasse || '', m.plz || '', m.ort || '',
+        m.steuerId || '', m.sozialversicherungsnummer || '', m.steuerklasse || '', m.kinderfreibetraege ?? 0,
+        m.konfession || '', m.kvArt === 'privat' ? 'Privat' : 'Gesetzlich', m.krankenkasse || '', m.iban || '',
+        m.vertragsart || '', m.wochenstunden ?? '', m.stundenlohn ?? '', m.gehaltMonatlich ?? '', m.eintrittsdatum || '',
+        istStunden, urlaubstage, krankheitstage, fehlend.join('; '),
+      ])];
+      const { monatStart } = zeilen[0] || { monatStart: `${body.querySelector('#lv-jahr').value}-${String(body.querySelector('#lv-monat').value).padStart(2, '0')}` };
+      downloadTextFile(`Lohnvorbereitung-${monatStart.slice(0, 7)}.csv`, toCsv(rows));
+      toast('Export erstellt', 'success');
+    });
+    renderLvTable();
+  }
 
   function openImport() {
     const { body, close } = openModal({
@@ -278,6 +382,7 @@ export async function render(container) {
       eintrittsdatum: '', austrittsdatum: '', vertragsart: 'Vollzeit', wochenstunden: 40,
       stundenlohn: '', gehaltMonatlich: '', urlaubsanspruchTage: 30,
       iban: '', steuerId: '', sozialversicherungsnummer: '', krankenkasse: '',
+      steuerklasse: '', kinderfreibetraege: 0, konfession: '', kvArt: 'gesetzlich',
       notfallkontaktName: '', notfallkontaktTelefon: '', notizen: '',
       zugangscode: '', zugriffsrolle: 'mitarbeiter', markeIds: [],
     };
@@ -325,6 +430,25 @@ export async function render(container) {
             <div class="field"><label>Sozialversicherungsnr.</label><input name="sozialversicherungsnummer" value="${escapeHtml(data.sozialversicherungsnummer || '')}"></div>
             <div class="field"><label>Krankenkasse</label><input name="krankenkasse" value="${escapeHtml(data.krankenkasse || '')}"></div>
           </div>
+
+          <div class="divider"></div>
+          <h2 style="font-size:14px;margin:0 0 8px">Für Lohnabrechnung (Übergabe an Steuerberater/Lohnbüro)</h2>
+          <div class="form-grid">
+            <div class="field"><label>Steuerklasse</label>
+              <select name="steuerklasse"><option value="">– unbekannt –</option>${STEUERKLASSEN.map((s) => `<option value="${s}" ${s === data.steuerklasse ? 'selected' : ''}>${s}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Kinderfreibeträge</label><input type="number" step="0.5" min="0" name="kinderfreibetraege" value="${data.kinderfreibetraege ?? 0}"></div>
+            <div class="field"><label>Konfession (Kirchensteuer)</label>
+              <select name="konfession">${KONFESSIONEN.map((k) => `<option value="${k.id}" ${k.id === (data.konfession || '') ? 'selected' : ''}>${escapeHtml(k.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field"><label>Krankenversicherung</label>
+              <select name="kvArt">
+                <option value="gesetzlich" ${data.kvArt !== 'privat' ? 'selected' : ''}>Gesetzlich</option>
+                <option value="privat" ${data.kvArt === 'privat' ? 'selected' : ''}>Privat</option>
+              </select>
+            </div>
+          </div>
+          <p class="hint">Ersetzt keine echte Lohnabrechnung - dient nur zur vollständigen Übergabe der Stammdaten an Steuerberater/Lohnbüro/externen Abrechnungsdienst (siehe Mitarbeiter → "⇩ Lohnvorbereitung exportieren").</p>
 
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Urlaub & Krankheit</h2>
@@ -428,6 +552,7 @@ export async function render(container) {
       const fd = new FormData(e.target);
       const updated = { ...data };
       for (const [k, v] of fd.entries()) updated[k] = v.trim ? v.trim() : v;
+      updated.kinderfreibetraege = Number(updated.kinderfreibetraege) || 0;
       updated.markeIds = fd.getAll('markeIds');
       if (!updated.name) return;
       await put('mitarbeiter', updated);
