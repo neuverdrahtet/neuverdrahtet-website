@@ -308,7 +308,10 @@ export default {
             telefon: body.telefon || '',
             email: body.email,
             status: 'lead',
-            notizen: 'Angelegt über das Kontaktformular (Website)',
+            // Dieselbe Beschreibung wie im Projekt auch hier im Kunden-Notizfeld,
+            // damit Leistung + Nachricht direkt in der Lead-Pipeline (Kunden-Ansicht)
+            // sichtbar sind, statt nur im separaten Projekte-Board.
+            notizen: buildKontaktBeschreibung(body),
           },
           projekt: {
             titel: `Kontaktanfrage${body.service ? ': ' + body.service : ''} (Website)`,
@@ -347,7 +350,9 @@ export default {
           telefon: kontakt.telefon || '',
           email: kontakt.email,
           status: 'lead',
-          notizen: 'Angelegt über Wallbox-Kostenschätzer (Website)',
+          // s. Kommentar im "kontakt"-Zweig oben - dieselbe Beschreibung wie im
+          // Projekt auch hier im Kunden-Notizfeld für die Lead-Pipeline-Ansicht.
+          notizen: buildBeschreibung(body),
         },
         projekt: {
           titel: 'Wallbox-Anfrage (Website)',
