@@ -193,6 +193,18 @@ async function leadAnlegen({ env, input, telefon }) {
   const projektId = crypto.randomUUID();
   const name = (input.name || '').trim() || 'WhatsApp-Chat (kein Name angegeben)';
 
+  const beschreibung = [
+    `[KI-Assistent] Lead über WhatsApp (${new Date().toLocaleDateString('de-DE')})`,
+    '',
+    `Telefonnummer (WhatsApp): ${telefon || '–'}`,
+    `Leistung/Thema: ${input.leistung || '–'}`,
+    `PLZ/Ort: ${input.plzOrt || '–'}`,
+    `Dringlichkeit: ${input.dringlichkeit || '–'}`,
+    '',
+    `Zusammenfassung des Anliegens:`,
+    input.zusammenfassung || '–',
+  ].join('\n');
+
   const kunde = {
     firma: name,
     ansprechpartner: '',
@@ -200,7 +212,10 @@ async function leadAnlegen({ env, input, telefon }) {
     email: '',
     status: 'lead',
     farbe: farbeAusText(kundeId, KUNDEN_FARBEN),
-    notizen: 'Angelegt über den KI-Assistenten per WhatsApp',
+    // Dieselbe Beschreibung wie im Projekt auch hier im Kunden-Notizfeld,
+    // damit das Anliegen direkt in der Lead-Pipeline (Kunden-Ansicht)
+    // sichtbar ist, statt nur im separaten Projekte-Board.
+    notizen: beschreibung,
   };
   const projekt = {
     titel: `WhatsApp-Anfrage${input.leistung ? ': ' + input.leistung : ''}`,
@@ -209,17 +224,7 @@ async function leadAnlegen({ env, input, telefon }) {
     bereich: 'auftrag',
     kategorieId: 'auftrag-elektroinstallation',
     gewerk: 'elektro',
-    beschreibung: [
-      `[KI-Assistent] Lead über WhatsApp (${new Date().toLocaleDateString('de-DE')})`,
-      '',
-      `Telefonnummer (WhatsApp): ${telefon || '–'}`,
-      `Leistung/Thema: ${input.leistung || '–'}`,
-      `PLZ/Ort: ${input.plzOrt || '–'}`,
-      `Dringlichkeit: ${input.dringlichkeit || '–'}`,
-      '',
-      `Zusammenfassung des Anliegens:`,
-      input.zusammenfassung || '–',
-    ].join('\n'),
+    beschreibung,
     mitarbeiterIds: [],
     farbe: '',
     markeId: '',
