@@ -535,6 +535,7 @@ const DEFAULT_SETTINGS = {
   stundensatzModus: 'ist',
   stundensatzSchaetzPersonalkosten: 0,
   stundensatzSchaetzBetriebskosten: 0,
+  betriebskostenPositionen: [],
   datevBeraterNr: '',
   datevMandantNr: '',
   datevErloesKonto: '8400',

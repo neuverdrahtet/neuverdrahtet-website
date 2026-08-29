@@ -1273,6 +1273,14 @@ export async function render(container) {
     const betragByKategorie = Object.fromEntries(betriebskostenAlle.zeilen.map((z) => [z.kategorie, z.betrag]));
     const kategorieZeilen = AUSGABEN_KATEGORIEN.map((kategorie) => ({ kategorie, betrag: betragByKategorie[kategorie] || 0 }));
     const afaGesamt = berechneAbschreibungenGesamt(anlagen, jahr);
+    // Selbst eingetragene Betriebskosten-Positionen (Schätzung-Modus) - bei
+    // erstem Aufruf einmalig aus dem alten Einzelfeld übernehmen, damit ein
+    // bereits konfigurierter Wert nicht kommentarlos verschwindet.
+    const betriebskostenState = (settings.betriebskostenPositionen && settings.betriebskostenPositionen.length > 0)
+      ? settings.betriebskostenPositionen.map((p) => ({ ...p }))
+      : (settings.stundensatzSchaetzBetriebskosten > 0
+        ? [{ id: uid(), bezeichnung: 'Betriebskosten (übernommen)', betragJahr: settings.stundensatzSchaetzBetriebskosten }]
+        : []);
 
     host.innerHTML = `
       <div class="card">
@@ -1305,8 +1313,20 @@ export async function render(container) {
         <div class="card">
           <h3>Betriebskosten${modus === 'ist' ? ` ${jahr}` : ''}</h3>
           ${modus === 'schaetzung' ? `
-            <div class="field"><label>Betriebskosten gesamt, geschätzt (€/Jahr, inkl. Miete/Versicherung/Abschreibungen usw.)</label><input type="number" id="ss-betriebskosten-schaetzung" step="100" min="0" value="${settings.stundensatzSchaetzBetriebskosten || 0}"></div>
-            <p class="hint">Material/Fremdleistung nicht einrechnen - wird 1:1 an Kunden weiterberechnet.</p>
+            <p class="hint">Einzelne Positionen selbst eintragen (z.B. Miete, Versicherung, Leasing, Telefon/Software) - Material/Fremdleistung nicht einrechnen, wird 1:1 an Kunden weiterberechnet.</p>
+            <table class="data-table" id="ss-betriebskosten-tabelle">
+              <thead><tr><th>Bezeichnung</th><th class="text-right">€/Jahr</th><th></th></tr></thead>
+              <tbody>
+                ${betriebskostenState.map((pos, i) => `
+                  <tr data-i="${i}">
+                    <td><input type="text" class="ss-bk-bezeichnung" value="${escapeHtml(pos.bezeichnung || '')}" placeholder="z.B. Miete"></td>
+                    <td class="text-right"><input type="number" class="ss-bk-betrag" step="10" min="0" value="${pos.betragJahr || 0}" style="width:110px;text-align:right"></td>
+                    <td><button type="button" class="btn btn-sm btn-ghost ss-bk-del" title="Entfernen">✕</button></td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <button type="button" class="btn btn-sm" id="btn-bk-hinzufuegen" style="margin-top:6px">+ Position hinzufügen</button>
           ` : `
             <p class="hint">Material ist standardmäßig ausgeschlossen (durchlaufender Posten, 1:1 an Kunden weiterberechnet).</p>
             <table class="data-table">
@@ -1371,7 +1391,7 @@ export async function render(container) {
 
       let betriebskostenGesamt;
       if (modus === 'schaetzung') {
-        betriebskostenGesamt = Number(host.querySelector('#ss-betriebskosten-schaetzung').value) || 0;
+        betriebskostenGesamt = betriebskostenState.reduce((s, pos) => s + (Number(pos.betragJahr) || 0), 0);
       } else {
         const ausgeschlossen = Array.from(host.querySelectorAll('.ss-kategorie-checkbox')).filter((cb) => !cb.checked).map((cb) => cb.dataset.kategorie);
         const betriebskosten = berechneBetriebskosten(ausgaben, jahr, ausgeschlossen);
@@ -1392,6 +1412,47 @@ export async function render(container) {
       host.dataset.empfohlen = empfohlen;
     }
 
+    function renderBkZeilen() {
+      const tbody = host.querySelector('#ss-betriebskosten-tabelle tbody');
+      if (!tbody) return;
+      tbody.innerHTML = betriebskostenState.map((pos, i) => `
+        <tr data-i="${i}">
+          <td><input type="text" class="ss-bk-bezeichnung" value="${escapeHtml(pos.bezeichnung || '')}" placeholder="z.B. Miete"></td>
+          <td class="text-right"><input type="number" class="ss-bk-betrag" step="10" min="0" value="${pos.betragJahr || 0}" style="width:110px;text-align:right"></td>
+          <td><button type="button" class="btn btn-sm btn-ghost ss-bk-del" title="Entfernen">✕</button></td>
+        </tr>
+      `).join('');
+      wireBkZeilen();
+    }
+    function wireBkZeilen() {
+      host.querySelectorAll('.ss-bk-bezeichnung').forEach((el) => {
+        el.addEventListener('input', (e) => {
+          betriebskostenState[Number(e.target.closest('tr').dataset.i)].bezeichnung = e.target.value;
+        });
+      });
+      host.querySelectorAll('.ss-bk-betrag').forEach((el) => {
+        el.addEventListener('input', (e) => {
+          betriebskostenState[Number(e.target.closest('tr').dataset.i)].betragJahr = Number(e.target.value) || 0;
+          recompute();
+        });
+      });
+      host.querySelectorAll('.ss-bk-del').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          betriebskostenState.splice(Number(e.target.closest('tr').dataset.i), 1);
+          renderBkZeilen();
+          recompute();
+        });
+      });
+    }
+    if (modus === 'schaetzung') {
+      wireBkZeilen();
+      host.querySelector('#btn-bk-hinzufuegen')?.addEventListener('click', () => {
+        betriebskostenState.push({ id: uid(), bezeichnung: '', betragJahr: 0 });
+        renderBkZeilen();
+        recompute();
+      });
+    }
+
     host.querySelectorAll('input[type="number"]').forEach((el) => el.addEventListener('input', recompute));
     host.querySelectorAll('.ss-kategorie-checkbox').forEach((el) => el.addEventListener('change', recompute));
     host.querySelectorAll('input[name="ss-modus"]').forEach((el) => el.addEventListener('change', async (e) => {
@@ -1405,7 +1466,8 @@ export async function render(container) {
       const patch = { stundensatz: wert };
       if (modus === 'schaetzung') {
         patch.stundensatzSchaetzPersonalkosten = Number(host.querySelector('#ss-personalkosten-schaetzung').value) || 0;
-        patch.stundensatzSchaetzBetriebskosten = Number(host.querySelector('#ss-betriebskosten-schaetzung').value) || 0;
+        patch.betriebskostenPositionen = betriebskostenState.filter((p) => p.bezeichnung.trim() || p.betragJahr);
+        patch.stundensatzSchaetzBetriebskosten = patch.betriebskostenPositionen.reduce((s, p) => s + (Number(p.betragJahr) || 0), 0);
       }
       await setSettings(patch);
       Object.assign(settings, patch);
