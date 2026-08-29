@@ -283,11 +283,22 @@ export default {
       return jsonResponse({ error: 'Ungültiger Request-Body.' }, 400, headers);
     }
 
-    // Anti-Spam: Honeypot-Feld ausgefüllt oder verdächtig schnell abgesendet
-    // (ein Mensch braucht für den 7-Schritte-Assistenten realistisch mehrere
+    // Anti-Spam: verdächtig schnell abgesendet (ein Mensch braucht für den
+    // 7-Schritte-Assistenten bzw. das Kontaktformular realistisch mehrere
     // Sekunden). Bot nicht warnen, dass er erkannt wurde - einfach "ok" ohne
     // wirklich etwas anzulegen.
-    if (body.website || typeof body.ladezeitMs !== 'number' || body.ladezeitMs < 3000) {
+    //
+    // Das Honeypot-Feld (body.website) fließt bewusst NICHT mehr allein in
+    // diese Entscheidung ein: Browser-Autofill befüllt es bei echten Nutzern
+    // gelegentlich fälschlich (beobachtet mit Chrome, das das Feld anhand
+    // des - für Menschen unsichtbaren - Labels "Firma" erkennt und trotz
+    // autocomplete="off" aus dem gespeicherten Profil ausfüllt). Ein allein
+    // darauf gestütztes Verwerfen hätte damit echte Leads stillschweigend
+    // verschluckt. Nur in Kombination mit einer zu schnellen Absendezeit
+    // gilt ein befülltes Honeypot-Feld als zusätzliches Bot-Indiz.
+    const ladezeitMs = typeof body.ladezeitMs === 'number' ? body.ladezeitMs : 0;
+    const zuSchnell = ladezeitMs < 3000;
+    if (zuSchnell || (body.website && ladezeitMs < 10000)) {
       return jsonResponse({ ok: true }, 200, headers);
     }
 
