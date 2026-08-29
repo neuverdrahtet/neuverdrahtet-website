@@ -1,0 +1,9 @@
+name = "neuverdrahtet-ki-assistent"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets (ANTHROPIC_API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON) werden NICHT hier
+# eingetragen, sondern per "wrangler secret put" bzw. im Cloudflare-Dashboard gesetzt.
+
+[vars]
+ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"

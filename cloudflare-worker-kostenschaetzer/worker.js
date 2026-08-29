@@ -1,10 +1,16 @@
 /**
- * neuverdrahtet Wallbox-Kostenschätzer – Lead-Erstellung (Cloudflare Worker)
+ * neuverdrahtet Wallbox-Kostenschätzer + Kontaktformular – Lead-Erstellung (Cloudflare Worker)
  *
- * Nimmt eine abgeschlossene Anfrage aus dem öffentlichen Wallbox-
- * Kostenschätzer (wallbox-kostenschaetzer.html) entgegen und legt daraus
- * automatisch einen Kunden (Status "Lead") + ein Projekt in der Werkora-
- * Lead-Pipeline an. Läuft bewusst als eigener, dedizierter Worker getrennt
+ * Nimmt zwei Arten von Anfragen entgegen und legt daraus jeweils automatisch
+ * einen Kunden (Status "Lead") + ein Projekt in der Werkora-Lead-Pipeline an:
+ *   1. Eine abgeschlossene Anfrage aus dem öffentlichen Wallbox-Kostenschätzer
+ *      (wallbox-kostenschaetzer.html) - Standardfall, kein "formTyp"-Feld.
+ *   2. Das allgemeine Kontaktformular auf index.html (assets/script.js,
+ *      .ajax-form-Handler) - erkennbar am Feld "formTyp":"kontakt". Läuft
+ *      parallel zur bestehenden Formspree-E-Mail-Zustellung, nicht als
+ *      Ersatz dafür (falls der Worker/Firebase mal nicht erreichbar ist,
+ *      kommt die Anfrage trotzdem per E-Mail an).
+ * Läuft bewusst als eigener, dedizierter Worker getrennt
  * vom internen Admin-Worker (cloudflare-worker/) - dieser Endpunkt ist
  * absichtlich öffentlich ohne Secret erreichbar (die Anfrage kommt direkt
  * von unauthentifizierten Website-Besuchern), während der Admin-Worker
@@ -225,6 +231,35 @@ function buildBeschreibung(payload) {
   return zeilen.join('\n');
 }
 
+// --- Allgemeines Kontaktformular (index.html) ---
+
+function buildKontaktBeschreibung(payload) {
+  const zeilen = [
+    `Anfrage über das Kontaktformular auf der Website (${new Date().toLocaleDateString('de-DE')})`,
+    '',
+    `Leistung: ${payload.service || '–'}`,
+    '',
+    'Nachricht:',
+    payload.nachricht || '–',
+  ];
+  return zeilen.join('\n');
+}
+
+/**
+ * Schreibt Kunde + Projekt für einen Lead nach Firestore (gemeinsam für beide
+ * Formular-Arten). "kunde" wird ohne "farbe" übergeben - die wird hier aus
+ * der frisch vergebenen kundeId berechnet (wie im ursprünglichen
+ * Wallbox-Pfad).
+ */
+async function legeLeadAn({ env, kunde, projekt }) {
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const kundeId = crypto.randomUUID();
+  const projektId = crypto.randomUUID();
+  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
+  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: { ...projekt, kundeId } });
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
 // ohne Netzwerkzugriff) - der Cloudflare-Worker-Laufzeit stört das nicht,
 // die Plattform ruft ausschließlich den default-Export auf.
@@ -256,6 +291,44 @@ export default {
       return jsonResponse({ ok: true }, 200, headers);
     }
 
+    if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+      return jsonResponse({ error: 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }, 500, headers);
+    }
+
+    if (body.formTyp === 'kontakt') {
+      if (!body.name || !body.email) {
+        return jsonResponse({ error: 'Bitte Name und E-Mail angeben.' }, 400, headers);
+      }
+      try {
+        await legeLeadAn({
+          env,
+          kunde: {
+            firma: body.name,
+            ansprechpartner: '',
+            telefon: body.telefon || '',
+            email: body.email,
+            status: 'lead',
+            notizen: 'Angelegt über das Kontaktformular (Website)',
+          },
+          projekt: {
+            titel: `Kontaktanfrage${body.service ? ': ' + body.service : ''} (Website)`,
+            status: 'neue-anfrage',
+            bereich: 'auftrag',
+            kategorieId: 'auftrag-elektroinstallation',
+            gewerk: 'elektro',
+            beschreibung: buildKontaktBeschreibung(body),
+            mitarbeiterIds: [],
+            farbe: '',
+            markeId: '',
+            createdAt: new Date().toISOString(),
+          },
+        });
+        return jsonResponse({ ok: true }, 200, headers);
+      } catch (err) {
+        return jsonResponse({ error: err.message || 'Unbekannter Fehler' }, 500, headers);
+      }
+    }
+
     const kontakt = body.kontakt || {};
     if (!kontakt.vorname || !kontakt.nachname || !kontakt.email) {
       return jsonResponse({ error: 'Bitte Vorname, Nachname und E-Mail angeben.' }, 400, headers);
@@ -264,44 +337,31 @@ export default {
       return jsonResponse({ error: 'Einwilligung zur Datenverarbeitung erforderlich.' }, 400, headers);
     }
 
-    if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-      return jsonResponse({ error: 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }, 500, headers);
-    }
-
     try {
-      const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
-      const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
-
-      const kundeId = crypto.randomUUID();
-      const projektId = crypto.randomUUID();
       const vollerName = `${kontakt.vorname} ${kontakt.nachname}`.trim();
-
-      const kunde = {
-        firma: vollerName,
-        ansprechpartner: '',
-        telefon: kontakt.telefon || '',
-        email: kontakt.email,
-        status: 'lead',
-        farbe: farbeAusText(kundeId, KUNDEN_FARBEN),
-        notizen: 'Angelegt über Wallbox-Kostenschätzer (Website)',
-      };
-      const projekt = {
-        titel: 'Wallbox-Anfrage (Website)',
-        kundeId,
-        status: 'neue-anfrage',
-        bereich: 'auftrag',
-        kategorieId: 'auftrag-elektroinstallation',
-        gewerk: 'elektro',
-        beschreibung: buildBeschreibung(body),
-        mitarbeiterIds: [],
-        farbe: '',
-        markeId: '',
-        createdAt: new Date().toISOString(),
-      };
-
-      await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: kunde });
-      await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: projekt });
-
+      await legeLeadAn({
+        env,
+        kunde: {
+          firma: vollerName,
+          ansprechpartner: '',
+          telefon: kontakt.telefon || '',
+          email: kontakt.email,
+          status: 'lead',
+          notizen: 'Angelegt über Wallbox-Kostenschätzer (Website)',
+        },
+        projekt: {
+          titel: 'Wallbox-Anfrage (Website)',
+          status: 'neue-anfrage',
+          bereich: 'auftrag',
+          kategorieId: 'auftrag-elektroinstallation',
+          gewerk: 'elektro',
+          beschreibung: buildBeschreibung(body),
+          mitarbeiterIds: [],
+          farbe: '',
+          markeId: '',
+          createdAt: new Date().toISOString(),
+        },
+      });
       return jsonResponse({ ok: true }, 200, headers);
     } catch (err) {
       return jsonResponse({ error: err.message || 'Unbekannter Fehler' }, 500, headers);

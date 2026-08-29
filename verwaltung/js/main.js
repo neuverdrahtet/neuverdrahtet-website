@@ -29,6 +29,7 @@ const routeLoaders = {
   subunternehmer: () => import('./views/subunternehmer.js'),
   'ki-freigaben': () => import('./views/ki-freigaben.js'),
   'ki-aktivitaet': () => import('./views/ki-aktivitaet.js'),
+  'ki-assistent': () => import('./views/ki-assistent.js'),
   katalog: () => import('./views/katalog.js'),
   lieferanten: () => import('./views/lieferanten.js'),
   inventur: () => import('./views/inventur.js'),

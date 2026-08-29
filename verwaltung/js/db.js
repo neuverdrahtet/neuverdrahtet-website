@@ -2354,6 +2354,7 @@ export const ROUTE_ROLLEN = {
   subunternehmer: ['admin', 'buero'],
   'ki-freigaben': ['admin'],
   'ki-aktivitaet': ['admin'],
+  'ki-assistent': ['admin', 'buero'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   lieferanten: ['admin', 'buero'],

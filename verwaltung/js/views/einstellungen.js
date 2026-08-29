@@ -194,6 +194,7 @@ export async function render(container) {
               <div class="field"><label>Angebot gültig (Tage)</label><input type="number" name="angebotGueltigTage" value="${settings.angebotGueltigTage}"></div>
               <div class="field"><label>Zahlungsziel Rechnung (Tage)</label><input type="number" name="zahlungszielTage" value="${settings.zahlungszielTage}"></div>
               <div class="field"><label>Mahnfrist (Tage)</label><input type="number" name="mahnfristTage" value="${settings.mahnfristTage}"></div>
+              <div class="field"><label>Nachfass-Erinnerung Angebot (Tage)</label><input type="number" name="angebotNachfassTage" value="${settings.angebotNachfassTage}"><span class="hint mb-0">Ab wie vielen Tagen ohne Rückmeldung ein versendetes Angebot im Dashboard, in der Angebotsliste und per Push-Benachrichtigung als "nachfassen" markiert wird.</span></div>
               <div class="field"><label>Mahngebühr Stufe 1 (€)</label><input type="number" step="0.01" name="mahn1" value="${settings.mahnGebuehr?.[1] ?? 0}"></div>
               <div class="field"><label>Mahngebühr Stufe 2 (€)</label><input type="number" step="0.01" name="mahn2" value="${settings.mahnGebuehr?.[2] ?? 0}"></div>
               <div class="field"><label>Mahngebühr Stufe 3 (€)</label><input type="number" step="0.01" name="mahn3" value="${settings.mahnGebuehr?.[3] ?? 0}"></div>
@@ -347,6 +348,9 @@ export async function render(container) {
           <h2>KI-Angebotserstellung</h2>
           <p class="hint">
             Erstellt Angebotspositionen automatisch aus Stichpunkten (z.B. auf der Baustelle diktiert). Dafür wird ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt, der deinen Anthropic-API-Schlüssel sicher verwahrt – der Schlüssel selbst liegt niemals im Browser. Details/Einrichtung: Ordner <code>cloudflare-worker/</code> im Projekt bzw. frag im Chat nach.
+          </p>
+          <p class="hint">
+            Derselbe Worker treibt auch den <strong>KI-Assistenten</strong> (Chat, siehe Menüpunkt "KI-Bürokraft → KI-Assistent") an - dieselbe Worker-URL/App-Secret gelten dafür mit. Damit der Assistent auf echte Firmendaten zugreifen kann, zusätzlich am Worker die Variablen <code>KI_BUEROKRAFT_URL</code> und <code>KI_BUEROKRAFT_API_KEY</code> setzen (siehe Kommentar oben in <code>cloudflare-worker/worker.js</code> bzw. <code>cloudflare-worker-ki-buerokraft/README.md</code>).
           </p>
           <form id="ai-form">
             <div class="form-grid">
@@ -967,6 +971,7 @@ export async function render(container) {
       angebotGueltigTage: Number(fd.get('angebotGueltigTage')) || 30,
       zahlungszielTage: Number(fd.get('zahlungszielTage')) || 14,
       mahnfristTage: Number(fd.get('mahnfristTage')) || 10,
+      angebotNachfassTage: Number(fd.get('angebotNachfassTage')) || 7,
       mahnGebuehr: [0, Number(fd.get('mahn1')) || 0, Number(fd.get('mahn2')) || 0, Number(fd.get('mahn3')) || 0],
       skontoProzentStandard: Number(fd.get('skontoProzentStandard')) || 0,
       skontoTageStandard: Number(fd.get('skontoTageStandard')) || 0,

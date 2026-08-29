@@ -16,6 +16,7 @@ export async function checkPushTriggers() {
   await checkFaelligeMahnungen(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
   await checkFaelligeGeraetePruefungen(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
   await checkFaelligeAnlagenPruefungen(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
+  await checkFaelligeAngebotNachfass(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
   await checkTerminErinnerungen(settings).catch(() => { /* E-Mail-Erinnerung ist ein Komfort-Feature */ });
 }
 
@@ -72,6 +73,30 @@ async function checkFaelligeAnlagenPruefungen(settings) {
     url: './index.html#/kunden',
   });
   await setSettings({ pushNotifiedAnlagenPruefungAm: today });
+}
+
+// Angebote, die versendet, aber seit angebotNachfassTage Tagen ohne
+// Rückmeldung (Status weiterhin "versendet") geblieben sind - nutzt zum
+// Nachfass-Zeitpunkt wahlweise das ursprüngliche Versanddatum oder, falls
+// bereits einmal nachgefasst wurde, das Datum der letzten Nachfass-Mail
+// (siehe angebote.js, Feld nachfassGesendetAm), damit nach einer Nachfrage
+// nicht sofort wieder erinnert wird.
+async function checkFaelligeAngebotNachfass(settings) {
+  const today = todayISO();
+  if (settings.pushNotifiedAngebotNachfassAm === today) return;
+
+  const nachfassTage = settings.angebotNachfassTage || 7;
+  const grenze = addDays(today, -nachfassTage);
+  const angebote = await getAll('angebote');
+  const faellig = angebote.filter((a) => a.status === 'versendet' && (a.nachfassGesendetAm || a.datum) <= grenze);
+  if (faellig.length === 0) return;
+
+  await push.notifyRoles(['admin', 'buero'], {
+    title: 'Angebote ohne Rückmeldung',
+    body: `${faellig.length} Angebot${faellig.length === 1 ? '' : 'e'} warten seit mehr als ${nachfassTage} Tagen auf Rückmeldung.`,
+    url: './index.html#/angebote',
+  });
+  await setSettings({ pushNotifiedAngebotNachfassAm: today });
 }
 
 // Erinnert Kunden per E-Mail an ihren Termin am nächsten Tag (reduziert
