@@ -122,6 +122,53 @@ document.querySelectorAll('.hero-slider').forEach(slider => {
    (index.html's main form + per-calculator inline lead forms
    all share the .ajax-form/.form-status convention)
    ========================================================= */
+const scriptLoadedAt = Date.now();
+
+// Derselbe Cloudflare-Worker wie der Wallbox-Kostenschätzer (siehe
+// cloudflare-worker-kostenschaetzer/worker.js) - erkennt formTyp:"kontakt"
+// und legt daraus einen Lead in Werkora an. Läuft rein additiv neben
+// Formspree her: schlägt dieser Aufruf fehl, bleibt die Formspree-
+// E-Mail-Zustellung trotzdem intakt (siehe sendeWerkoraLead unten).
+const WERKORA_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetworkersdev.workers.dev';
+
+/** Feuert einen best-effort Lead-Request an Werkora ab, ohne die eigentliche
+ *  Formular-Zustellung (Formspree) zu blockieren oder von deren Erfolg
+ *  abhängig zu machen. keepalive sorgt dafür, dass die Anfrage auch bei
+ *  einer nativen Formular-Navigation (Datei-Upload-Fall) noch abgesendet
+ *  wird, bevor der Browser die Seite verlässt. */
+function sendeWerkoraLead(form) {
+  if (form.dataset.werkoraLead !== 'true') return;
+  const data = new FormData(form);
+  const payload = {
+    formTyp: 'kontakt',
+    name: data.get('name') || '',
+    email: data.get('email') || '',
+    telefon: data.get('phone') || '',
+    service: data.get('service') || '',
+    nachricht: data.get('message') || '',
+    website: data.get('_gotcha') || '',
+    ladezeitMs: Date.now() - scriptLoadedAt,
+  };
+  fetch(WERKORA_WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    keepalive: true,
+  }).then((res) => {
+    // fetch() lehnt das Promise nur bei Netzwerkfehlern ab, nicht bei
+    // HTTP-Fehlerstatus - daher hier zusätzlich res.ok separat prüfen,
+    // damit ein serverseitiges Problem (z.B. falsch konfiguriertes
+    // Worker-Secret) nicht komplett unbemerkt bleibt.
+    if (!res.ok) {
+      res.text().then((text) => {
+        console.warn('neuverdrahtet: Werkora-Worker hat den Lead abgelehnt (Formspree-Zustellung ist davon unabhängig) — Status ' + res.status + ': ' + text);
+      });
+    }
+  }).catch((err) => {
+    console.warn('neuverdrahtet: Lead konnte nicht direkt an Werkora übertragen werden (Formspree-Zustellung ist davon unabhängig):', err);
+  });
+}
+
 document.querySelectorAll('.ajax-form').forEach(form => {
   const fileInput = form.querySelector('input[type="file"]');
   const nextField = form.querySelector('input[name="_next"]');
@@ -136,6 +183,7 @@ document.querySelectorAll('.ajax-form').forEach(form => {
       // Deshalb hier kein preventDefault -- der Browser sendet das Formular
       // nativ, Formspree leitet über _next zurück zu dieser Seite, wo unten
       // die Erfolgsmeldung eingeblendet wird.
+      sendeWerkoraLead(form);
       if (nextField) {
         const url = new URL(location.href);
         url.hash = '';
@@ -146,6 +194,7 @@ document.querySelectorAll('.ajax-form').forEach(form => {
     }
 
     e.preventDefault();
+    sendeWerkoraLead(form);
     const submitBtn = form.querySelector('button[type="submit"]');
     const statusEl = form.querySelector('.form-status');
     const originalLabel = submitBtn.textContent;
