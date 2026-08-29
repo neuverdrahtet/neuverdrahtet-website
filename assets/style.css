@@ -1011,6 +1011,9 @@ body:has(.cookie-banner) .contact-fab{ bottom:110px; }
   .ki-assistent-close{ padding:10px; font-size:18px; }
   .ki-assistent-input{ font-size:16px; } /* verhindert Auto-Zoom beim Fokussieren in Safari/iOS */
   .ki-assistent-send{ width:44px; height:44px; }
+  /* Sonst überdeckt der Cookie-Banner (z-index:90 > Panel z-index:80) das
+     Eingabefeld komplett - Nachricht tippen ist dann unmöglich. */
+  body:has(.cookie-banner) .ki-assistent-panel{ bottom:190px; }
 }
 
 @media (max-width:520px){
@@ -1022,6 +1025,13 @@ body:has(.cookie-banner) .contact-fab{ bottom:110px; }
     max-height:100vh;
     max-height:100dvh;
     border-radius:var(--radius) var(--radius) 0 0;
+  }
+  body:has(.cookie-banner) .ki-assistent-panel{
+    bottom:190px;
+    height:min(75vh, 560px);
+    height:min(75dvh, 560px);
+    max-height:calc(100vh - 210px);
+    max-height:calc(100dvh - 210px);
   }
   .ki-assistent-footnote{ padding-bottom:16px; }
 }
