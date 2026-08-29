@@ -4,7 +4,7 @@
    Backend: cloudflare-worker-ki-assistent/ (siehe README dort).
    ========================================================= */
 
-const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-KONTO.workers.dev';
+const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.neuverdrahtetworkersdev.workers.dev';
 
 (() => {
   const fabHost = document.querySelector('.contact-fab');
