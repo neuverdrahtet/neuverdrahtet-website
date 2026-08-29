@@ -23,6 +23,16 @@ const KATEGORIE_BADGE_CLASS = {
   'Sonstiges': 'badge-kat-sonstiges',
 };
 
+function openBelegAnsicht(beleg) {
+  if (beleg?.url) {
+    window.open(beleg.url, '_blank', 'noopener');
+  } else if (beleg instanceof Blob) {
+    const url = URL.createObjectURL(beleg);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+}
+
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -64,6 +74,7 @@ export async function render(container) {
         <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-export-belege">⇩ Belege exportieren (ZIP)</button>
+        <button class="btn" id="btn-ausgaben-pruefen">🔍 Ausgaben prüfen</button>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
       </div>
     </div>
@@ -257,6 +268,142 @@ export async function render(container) {
   container.querySelector('#btn-beleg-import').addEventListener('click', () => {
     openBelegImport({ onImported: () => render(container) });
   });
+  container.querySelector('#btn-ausgaben-pruefen').addEventListener('click', () => openAusgabenPruefung());
+
+  // "Ausgaben prüfen": findet mögliche Duplikate (gleiches Datum/Betrag/
+  // Lieferant - z.B. wenn dieselbe ZIP-Datei versehentlich zweimal
+  // importiert wurde), unvollständige Einträge (Betrag 0 - typisch für lose
+  // importierte Belegfotos ohne erkennbaren Betrag) und Ausgaben, die noch
+  // als "Sonstiges" laufen, obwohl Lieferant/Beschreibung inzwischen einer
+  // konkreteren Kategorie zuordenbar wären (z.B. weil die Erkennung erst
+  // später ergänzt wurde).
+  function openAusgabenPruefung() {
+    const dupKey = (a) => `${a.datum}|${Number(a.betragBrutto).toFixed(2)}|${(a.lieferant || '').trim().toLowerCase()}`;
+    const dupGroups = Array.from(
+      ausgaben.filter((a) => Number(a.betragBrutto) > 0).reduce((map, a) => {
+        const key = dupKey(a);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(a);
+        return map;
+      }, new Map()).values()
+    ).filter((g) => g.length > 1);
+
+    const unvollstaendig = ausgaben.filter((a) => !Number(a.betragBrutto));
+    const kategorieVerbesserbar = ausgaben
+      .filter((a) => a.kategorie === 'Sonstiges')
+      .map((a) => ({ a, vorschlag: guessAusgabenKategorie(`${a.lieferant || ''} ${a.beschreibung || ''}`) }))
+      .filter(({ vorschlag }) => vorschlag !== 'Sonstiges');
+    // Ohne Kunde/Projekt: kein Fehler an sich (allgemeine Kosten wie Miete/
+    // Versicherung/Büromaterial brauchen keine Zuordnung) - hier trotzdem
+    // auflisten, damit gezielt geprüft werden kann, ob einzelne davon
+    // eigentlich einem Projekt zugeordnet gehören (z.B. für die
+    // Nachkalkulation). Ohne Betrag bereits oben gelistet, daher hier
+    // ausgeschlossen, um nicht doppelt zu erscheinen.
+    const ohneZuordnung = ausgaben.filter((a) => Number(a.betragBrutto) > 0 && !a.kundeId && !a.projektId);
+    const OHNE_ZUORDNUNG_LIMIT = 30;
+
+    const { body, close } = openModal({
+      title: 'Ausgaben prüfen',
+      wide: true,
+      bodyHtml: `
+        <h2 style="font-size:14px;margin:0 0 8px">Mögliche Duplikate (${dupGroups.length} Gruppe${dupGroups.length === 1 ? '' : 'n'})</h2>
+        ${dupGroups.length === 0 ? '<p class="text-mute">Keine Ausgaben mit identischem Datum/Betrag/Lieferant gefunden.</p>' : `
+          <p class="hint">Gleiches Datum, gleicher Betrag, gleicher Lieferant – prüfe vor dem Löschen, ob es wirklich Duplikate sind (der erste Eintrag je Gruppe ist vorausgewählt zum Behalten).</p>
+          ${dupGroups.map((g, gi) => `
+            <div class="card" style="margin-bottom:8px;padding:10px">
+              <strong>${formatDate(g[0].datum)} · ${formatCurrency(g[0].betragBrutto)} · ${escapeHtml(g[0].lieferant || '– kein Lieferant –')}</strong>
+              <table class="data-table" style="margin-top:6px">
+                <thead><tr><th></th><th>Kategorie</th><th>Beschreibung</th><th></th></tr></thead>
+                <tbody>
+                  ${g.map((a, ai) => `
+                    <tr>
+                      <td><input type="checkbox" class="ausg-dup-del" data-gi="${gi}" data-ai="${ai}" ${ai === 0 ? '' : 'checked'}></td>
+                      <td>${escapeHtml(a.kategorie)}</td>
+                      <td>${escapeHtml(a.beschreibung || '')}${ai === 0 ? ' <span class="text-mute">(bleibt erhalten)</span>' : ''}</td>
+                      <td>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `).join('')}
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Kategorie "Sonstiges" könnte konkreter sein (${kategorieVerbesserbar.length})</h2>
+        ${kategorieVerbesserbar.length === 0 ? '<p class="text-mute">Keine Verbesserungsvorschläge gefunden.</p>' : `
+          <p class="hint">Anhand von Lieferant/Beschreibung erkennbar einer konkreteren Kategorie zuordenbar.</p>
+          <ul class="cal-event-list">
+            ${kategorieVerbesserbar.map(({ a, vorschlag }) => `<li><span>${formatDate(a.datum)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span class="text-mute">Sonstiges → ${escapeHtml(vorschlag)}</span></li>`).join('')}
+          </ul>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-fix-kategorie" style="margin-top:8px">Kategorie automatisch übernehmen (${kategorieVerbesserbar.length})</button>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Unvollständige Einträge ohne Betrag (${unvollstaendig.length})</h2>
+        ${unvollstaendig.length === 0 ? '<p class="text-mute">Keine Ausgaben mit Betrag 0 gefunden.</p>' : `
+          <p class="hint">Typisch für lose importierte Belegfotos, bei denen Betrag/Lieferant nicht automatisch erkannt werden konnten – bitte einzeln öffnen und ergänzen. Anklicken zum Bearbeiten.</p>
+          <ul class="cal-event-list">
+            ${unvollstaendig.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}</span><span>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+          </ul>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Ohne Kunde/Projekt-Zuordnung (${ohneZuordnung.length})</h2>
+        ${ohneZuordnung.length === 0 ? '<p class="text-mute">Alle Ausgaben mit Betrag sind einem Kunden/Projekt zugeordnet oder allgemeine Kosten.</p>' : `
+          <p class="hint">Kein Fehler an sich – allgemeine Kosten (Miete, Versicherung, Büromaterial) brauchen keine Zuordnung. Zur gezielten Prüfung, ob einzelne davon eigentlich einem Projekt zugeordnet gehören (z.B. für die Nachkalkulation). Anklicken zum Zuordnen.${ohneZuordnung.length > OHNE_ZUORDNUNG_LIMIT ? ` Zeigt die ersten ${OHNE_ZUORDNUNG_LIMIT} von ${ohneZuordnung.length}.` : ''}</p>
+          <ul class="cal-event-list">
+            ${ohneZuordnung.slice(0, OHNE_ZUORDNUNG_LIMIT).map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.kategorie)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span>${formatCurrency(a.betragBrutto)} ${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+          </ul>
+        `}
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Schließen</button>
+          ${dupGroups.length > 0 ? '<button type="button" class="btn btn-danger" id="btn-ausg-dup-delete">Ausgewählte Duplikate löschen</button>' : ''}
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-fix-kategorie')?.addEventListener('click', async () => {
+      for (const { a, vorschlag } of kategorieVerbesserbar) {
+        const updated = { ...a, kategorie: vorschlag };
+        await put('ausgaben', updated);
+        Object.assign(a, updated);
+      }
+      toast(`${kategorieVerbesserbar.length} Ausgabe(n) neu kategorisiert`, 'success');
+      close();
+      render(container);
+    });
+    body.querySelectorAll('.ausg-unvollst-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        close();
+        openForm(unvollstaendig.find((a) => a.id === row.dataset.id) || ohneZuordnung.find((a) => a.id === row.dataset.id));
+      });
+    });
+    body.querySelectorAll('.ausg-beleg-ansehen').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const a = dupGroups.flat().find((x) => x.id === btn.dataset.id)
+          || unvollstaendig.find((x) => x.id === btn.dataset.id)
+          || ohneZuordnung.find((x) => x.id === btn.dataset.id);
+        if (a) openBelegAnsicht(a.beleg);
+      });
+    });
+    body.querySelector('#btn-ausg-dup-delete')?.addEventListener('click', async () => {
+      const zuLoeschen = [];
+      body.querySelectorAll('.ausg-dup-del:checked').forEach((chk) => {
+        const g = dupGroups[Number(chk.dataset.gi)];
+        const a = g[Number(chk.dataset.ai)];
+        if (a) zuLoeschen.push(a);
+      });
+      if (zuLoeschen.length === 0) { toast('Keine Duplikate ausgewählt', 'info'); return; }
+      if (!confirmDelete(`${zuLoeschen.length} Ausgabe(n) in den Papierkorb verschieben?`)) return;
+      for (const a of zuLoeschen) {
+        await remove('ausgaben', a.id);
+        try { await journal.entferneBuchungFuerAusgabe(a.id); } catch { /* Verbuchung ist ein Komfort-Feature */ }
+      }
+      toast(`${zuLoeschen.length} Ausgabe(n) in den Papierkorb verschoben`, 'success');
+      close();
+      render(container);
+    });
+  }
 
   const belegScanInput = container.querySelector('#beleg-scan-input');
   container.querySelector('#btn-beleg-scan').addEventListener('click', () => belegScanInput.click());
@@ -432,13 +579,7 @@ export async function render(container) {
     if (belegViewLink) {
       belegViewLink.addEventListener('click', (e) => {
         e.preventDefault();
-        if (data.beleg?.url) {
-          window.open(data.beleg.url, '_blank', 'noopener');
-        } else if (data.beleg instanceof Blob) {
-          const url = URL.createObjectURL(data.beleg);
-          window.open(url, '_blank', 'noopener');
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
-        }
+        openBelegAnsicht(data.beleg);
       });
     }
     body.querySelector('#beleg-input').addEventListener('change', async (e) => {
