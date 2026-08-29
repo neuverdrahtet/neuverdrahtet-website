@@ -29,6 +29,12 @@
  *                        (schnell/günstig, für einen öffentlichen Chat-Bot mit
  *                        vielen Anfragen sinnvoll; teurere Alternative z.B.
  *                        claude-opus-4-8 für noch bessere Antworten).
+ *   TWILIO_ACCOUNT_SID,  (Secrets, optional, alle vier zusammen) - für eine
+ *   TWILIO_AUTH_TOKEN,     zusätzliche WhatsApp-Benachrichtigung an den
+ *   TWILIO_WHATSAPP_FROM,  Geschäftsinhaber bei jedem neuen Lead, über Twilio.
+ *   TWILIO_WHATSAPP_TO      FROM/TO im Twilio-Format "whatsapp:+49...".
+ *                        Fehlt eines der vier, wird die Benachrichtigung
+ *                        einfach übersprungen (kein Fehler).
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
@@ -169,6 +175,34 @@ function farbeAusText(text, palette) {
   return palette[hash % palette.length];
 }
 
+/**
+ * Sendet eine Best-Effort-WhatsApp-Benachrichtigung an den Geschäftsinhaber
+ * über Twilio, sobald ein neuer Lead angelegt wurde. Rein informativ - ohne
+ * gesetzte Twilio-Secrets passiert einfach nichts (kein Fehler), und ein
+ * fehlgeschlagener Versand lässt die eigentliche Lead-Anlage unangetastet
+ * (identisch zur selben Funktion in cloudflare-worker-kostenschaetzer/worker.js).
+ */
+async function sendeLeadBenachrichtigung(env, text) {
+  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_WHATSAPP_FROM || !env.TWILIO_WHATSAPP_TO) return;
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ From: env.TWILIO_WHATSAPP_FROM, To: env.TWILIO_WHATSAPP_TO, Body: text }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`Twilio-WhatsApp-Benachrichtigung fehlgeschlagen (${res.status}): ${errText.slice(0, 300)}`);
+    }
+  } catch (err) {
+    console.error('Twilio-WhatsApp-Benachrichtigung: Netzwerkfehler', err);
+  }
+}
+
 /** Legt aus den vom Tool-Aufruf gelieferten Angaben einen Lead (Kunde + Projekt) in Werkora an. */
 async function leadAnlegen({ env, input }) {
   const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -218,6 +252,12 @@ async function leadAnlegen({ env, input }) {
 
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: kunde });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: projekt });
+  await sendeLeadBenachrichtigung(env, [
+    `📩 Neuer Lead: ${kunde.firma}`,
+    projekt.titel,
+    kunde.telefon ? `Tel: ${kunde.telefon}` : '',
+    kunde.email ? `E-Mail: ${kunde.email}` : '',
+  ].filter(Boolean).join('\n'));
 }
 
 // --- Firmenwissen für den System-Prompt. Bewusst kompakt gehalten (Kosten je
