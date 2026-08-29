@@ -183,7 +183,11 @@ function farbeAusText(text, palette) {
  * (identisch zur selben Funktion in cloudflare-worker-kostenschaetzer/worker.js).
  */
 async function sendeLeadBenachrichtigung(env, text) {
-  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_WHATSAPP_FROM || !env.TWILIO_WHATSAPP_TO) return;
+  const fehlendeSecrets = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO'].filter((k) => !env[k]);
+  if (fehlendeSecrets.length) {
+    console.error(`WhatsApp-Benachrichtigung übersprungen - fehlende Secrets: ${fehlendeSecrets.join(', ')}`);
+    return;
+  }
   try {
     const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
     const res = await fetch(url, {
@@ -197,6 +201,8 @@ async function sendeLeadBenachrichtigung(env, text) {
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       console.error(`Twilio-WhatsApp-Benachrichtigung fehlgeschlagen (${res.status}): ${errText.slice(0, 300)}`);
+    } else {
+      console.log('WhatsApp-Benachrichtigung erfolgreich an Twilio übergeben.');
     }
   } catch (err) {
     console.error('Twilio-WhatsApp-Benachrichtigung: Netzwerkfehler', err);
