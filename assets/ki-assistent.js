@@ -178,6 +178,18 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.PLATZHALTER-
     wirdGesendet = true;
     setTyping(true);
 
+    if (KI_ASSISTENT_WORKER_URL.includes('PLATZHALTER-KONTO')) {
+      // Worker noch nicht deployt/URL noch nicht eingetragen (siehe
+      // cloudflare-worker-ki-assistent/README.md) - erst gar nicht gegen
+      // eine garantiert nicht existierende Domain anfragen (unnötiger
+      // Netzwerk-Fehler in der Konsole, sinnlose Wartezeit für den
+      // Besucher). Gleiche Fallback-Nachricht wie bei echtem Fetch-Fehler.
+      setTyping(false);
+      addBubble('assistant', 'Der Assistent ist gerade nicht erreichbar. Sie erreichen uns auch direkt unter 01706398575 oder neuverdrahtet@gmail.com.');
+      wirdGesendet = false;
+      return;
+    }
+
     try {
       const res = await fetch(KI_ASSISTENT_WORKER_URL, {
         method: 'POST',
