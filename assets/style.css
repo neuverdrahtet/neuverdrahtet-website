@@ -890,7 +890,11 @@ section{ padding:88px 0; }
 .contact-fab{
   position:fixed; right:20px; bottom:20px; z-index:70;
   display:flex; flex-direction:column; gap:12px;
+  transition:bottom .2s ease;
 }
+/* Solange der Cookie-Banner sichtbar ist, überdeckt er sonst das unterste
+   Icon (Google Maps) - komplett unklickbar, bis Nutzer ihn wegklicken. */
+body:has(.cookie-banner) .contact-fab{ bottom:110px; }
 .fab{
   width:50px; height:50px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
@@ -907,6 +911,7 @@ section{ padding:88px 0; }
 
 @media (max-width:640px){
   .contact-fab{ right:14px; bottom:14px; gap:10px; }
+  body:has(.cookie-banner) .contact-fab{ bottom:190px; }
   .fab{ width:46px; height:46px; }
 }
 
@@ -1040,5 +1045,6 @@ section{ padding:88px 0; }
 @media (max-width:640px){
   .cookie-banner{ padding:16px; }
   .cookie-banner-inner{ flex-direction:column; align-items:stretch; }
+  .cookie-banner-inner p{ flex-basis:auto; }
   .cookie-banner-actions{ justify-content:flex-end; }
 }
