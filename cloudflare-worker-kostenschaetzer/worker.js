@@ -32,6 +32,13 @@
  *   ALLOWED_ORIGINS      (Variable, optional) – Komma-getrennte Liste
  *                        erlaubter Herkünfte, Standard:
  *                        https://neuverdrahtet.com,https://www.neuverdrahtet.com
+ *   TWILIO_ACCOUNT_SID,  (Secrets, optional, alle vier zusammen) – für eine
+ *   TWILIO_AUTH_TOKEN,     zusätzliche WhatsApp-Benachrichtigung an den
+ *   TWILIO_WHATSAPP_FROM,  Geschäftsinhaber bei jedem neuen Lead, über Twilio.
+ *   TWILIO_WHATSAPP_TO      FROM/TO im Twilio-Format "whatsapp:+49...".
+ *                        Fehlt eines der vier, wird die Benachrichtigung
+ *                        einfach übersprungen (kein Fehler) - die Lead-
+ *                        Anlage selbst hängt nicht daran.
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
@@ -246,6 +253,35 @@ function buildKontaktBeschreibung(payload) {
 }
 
 /**
+ * Sendet eine Best-Effort-WhatsApp-Benachrichtigung an den Geschäftsinhaber
+ * über Twilio, sobald ein neuer Lead angelegt wurde. Rein informativ - ohne
+ * gesetzte Twilio-Secrets passiert einfach nichts (kein Fehler), und ein
+ * fehlgeschlagener Versand lässt die eigentliche Lead-Anlage unangetastet
+ * (dieselbe additive Best-Effort-Philosophie wie sendeWerkoraLead in
+ * assets/script.js für die Formspree/Werkora-Parallelität).
+ */
+async function sendeLeadBenachrichtigung(env, text) {
+  if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_WHATSAPP_FROM || !env.TWILIO_WHATSAPP_TO) return;
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ From: env.TWILIO_WHATSAPP_FROM, To: env.TWILIO_WHATSAPP_TO, Body: text }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`Twilio-WhatsApp-Benachrichtigung fehlgeschlagen (${res.status}): ${errText.slice(0, 300)}`);
+    }
+  } catch (err) {
+    console.error('Twilio-WhatsApp-Benachrichtigung: Netzwerkfehler', err);
+  }
+}
+
+/**
  * Schreibt Kunde + Projekt für einen Lead nach Firestore (gemeinsam für beide
  * Formular-Arten). "kunde" wird ohne "farbe" übergeben - die wird hier aus
  * der frisch vergebenen kundeId berechnet (wie im ursprünglichen
@@ -258,6 +294,12 @@ async function legeLeadAn({ env, kunde, projekt }) {
   const projektId = crypto.randomUUID();
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: { ...projekt, kundeId } });
+  await sendeLeadBenachrichtigung(env, [
+    `📩 Neuer Lead: ${kunde.firma}`,
+    projekt.titel,
+    kunde.telefon ? `Tel: ${kunde.telefon}` : '',
+    kunde.email ? `E-Mail: ${kunde.email}` : '',
+  ].filter(Boolean).join('\n'));
 }
 
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
