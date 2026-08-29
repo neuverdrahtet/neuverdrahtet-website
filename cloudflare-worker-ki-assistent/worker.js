@@ -178,6 +178,17 @@ async function leadAnlegen({ env, input }) {
   const projektId = crypto.randomUUID();
   const name = (input.name || '').trim() || 'Website-Chat (kein Name angegeben)';
 
+  const beschreibung = [
+    `[KI-Assistent] Lead über den Website-Chat (${new Date().toLocaleDateString('de-DE')})`,
+    '',
+    `Leistung/Thema: ${input.leistung || '–'}`,
+    `PLZ/Ort: ${input.plzOrt || '–'}`,
+    `Dringlichkeit: ${input.dringlichkeit || '–'}`,
+    '',
+    `Zusammenfassung des Anliegens:`,
+    input.zusammenfassung || '–',
+  ].join('\n');
+
   const kunde = {
     firma: name,
     ansprechpartner: '',
@@ -185,7 +196,11 @@ async function leadAnlegen({ env, input }) {
     email: input.email || '',
     status: 'lead',
     farbe: farbeAusText(kundeId, KUNDEN_FARBEN),
-    notizen: 'Angelegt über den KI-Assistenten auf der Website',
+    // Dieselbe Beschreibung wie im Projekt auch hier im Kunden-Notizfeld,
+    // damit das Anliegen direkt in der Lead-Pipeline (Kunden-Ansicht)
+    // sichtbar ist, statt nur im separaten Projekte-Board (s. gleicher Fix
+    // im Kostenschätzer-Worker).
+    notizen: beschreibung,
   };
   const projekt = {
     titel: `Website-Chat-Anfrage${input.leistung ? ': ' + input.leistung : ''}`,
@@ -194,16 +209,7 @@ async function leadAnlegen({ env, input }) {
     bereich: 'auftrag',
     kategorieId: 'auftrag-elektroinstallation',
     gewerk: 'elektro',
-    beschreibung: [
-      `[KI-Assistent] Lead über den Website-Chat (${new Date().toLocaleDateString('de-DE')})`,
-      '',
-      `Leistung/Thema: ${input.leistung || '–'}`,
-      `PLZ/Ort: ${input.plzOrt || '–'}`,
-      `Dringlichkeit: ${input.dringlichkeit || '–'}`,
-      '',
-      `Zusammenfassung des Anliegens:`,
-      input.zusammenfassung || '–',
-    ].join('\n'),
+    beschreibung,
     mitarbeiterIds: [],
     farbe: '',
     markeId: '',
