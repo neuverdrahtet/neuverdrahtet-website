@@ -29,6 +29,12 @@
  *                        (schnell/günstig, für einen öffentlichen Chat-Bot mit
  *                        vielen Anfragen sinnvoll; teurere Alternative z.B.
  *                        claude-opus-4-8 für noch bessere Antworten).
+ *   TWILIO_ACCOUNT_SID,  (Secrets, optional, alle vier zusammen) - für eine
+ *   TWILIO_AUTH_TOKEN,     zusätzliche WhatsApp-Benachrichtigung an den
+ *   TWILIO_WHATSAPP_FROM,  Geschäftsinhaber bei jedem neuen Lead, über Twilio.
+ *   TWILIO_WHATSAPP_TO      FROM/TO im Twilio-Format "whatsapp:+49...".
+ *                        Fehlt eines der vier, wird die Benachrichtigung
+ *                        einfach übersprungen (kein Fehler).
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
@@ -169,6 +175,40 @@ function farbeAusText(text, palette) {
   return palette[hash % palette.length];
 }
 
+/**
+ * Sendet eine Best-Effort-WhatsApp-Benachrichtigung an den Geschäftsinhaber
+ * über Twilio, sobald ein neuer Lead angelegt wurde. Rein informativ - ohne
+ * gesetzte Twilio-Secrets passiert einfach nichts (kein Fehler), und ein
+ * fehlgeschlagener Versand lässt die eigentliche Lead-Anlage unangetastet
+ * (identisch zur selben Funktion in cloudflare-worker-kostenschaetzer/worker.js).
+ */
+async function sendeLeadBenachrichtigung(env, text) {
+  const fehlendeSecrets = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO'].filter((k) => !env[k]);
+  if (fehlendeSecrets.length) {
+    console.error(`WhatsApp-Benachrichtigung übersprungen - fehlende Secrets: ${fehlendeSecrets.join(', ')}`);
+    return;
+  }
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ From: env.TWILIO_WHATSAPP_FROM, To: env.TWILIO_WHATSAPP_TO, Body: text }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`Twilio-WhatsApp-Benachrichtigung fehlgeschlagen (${res.status}): ${errText.slice(0, 300)}`);
+    } else {
+      console.log('WhatsApp-Benachrichtigung erfolgreich an Twilio übergeben.');
+    }
+  } catch (err) {
+    console.error('Twilio-WhatsApp-Benachrichtigung: Netzwerkfehler', err);
+  }
+}
+
 /** Legt aus den vom Tool-Aufruf gelieferten Angaben einen Lead (Kunde + Projekt) in Werkora an. */
 async function leadAnlegen({ env, input }) {
   const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
@@ -178,6 +218,17 @@ async function leadAnlegen({ env, input }) {
   const projektId = crypto.randomUUID();
   const name = (input.name || '').trim() || 'Website-Chat (kein Name angegeben)';
 
+  const beschreibung = [
+    `[KI-Assistent] Lead über den Website-Chat (${new Date().toLocaleDateString('de-DE')})`,
+    '',
+    `Leistung/Thema: ${input.leistung || '–'}`,
+    `PLZ/Ort: ${input.plzOrt || '–'}`,
+    `Dringlichkeit: ${input.dringlichkeit || '–'}`,
+    '',
+    `Zusammenfassung des Anliegens:`,
+    input.zusammenfassung || '–',
+  ].join('\n');
+
   const kunde = {
     firma: name,
     ansprechpartner: '',
@@ -185,7 +236,11 @@ async function leadAnlegen({ env, input }) {
     email: input.email || '',
     status: 'lead',
     farbe: farbeAusText(kundeId, KUNDEN_FARBEN),
-    notizen: 'Angelegt über den KI-Assistenten auf der Website',
+    // Dieselbe Beschreibung wie im Projekt auch hier im Kunden-Notizfeld,
+    // damit das Anliegen direkt in der Lead-Pipeline (Kunden-Ansicht)
+    // sichtbar ist, statt nur im separaten Projekte-Board (s. gleicher Fix
+    // im Kostenschätzer-Worker).
+    notizen: beschreibung,
   };
   const projekt = {
     titel: `Website-Chat-Anfrage${input.leistung ? ': ' + input.leistung : ''}`,
@@ -194,16 +249,7 @@ async function leadAnlegen({ env, input }) {
     bereich: 'auftrag',
     kategorieId: 'auftrag-elektroinstallation',
     gewerk: 'elektro',
-    beschreibung: [
-      `[KI-Assistent] Lead über den Website-Chat (${new Date().toLocaleDateString('de-DE')})`,
-      '',
-      `Leistung/Thema: ${input.leistung || '–'}`,
-      `PLZ/Ort: ${input.plzOrt || '–'}`,
-      `Dringlichkeit: ${input.dringlichkeit || '–'}`,
-      '',
-      `Zusammenfassung des Anliegens:`,
-      input.zusammenfassung || '–',
-    ].join('\n'),
+    beschreibung,
     mitarbeiterIds: [],
     farbe: '',
     markeId: '',
@@ -212,6 +258,12 @@ async function leadAnlegen({ env, input }) {
 
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: kunde });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: projekt });
+  await sendeLeadBenachrichtigung(env, [
+    `📩 Neuer Lead: ${kunde.firma}`,
+    projekt.titel,
+    kunde.telefon ? `Tel: ${kunde.telefon}` : '',
+    kunde.email ? `E-Mail: ${kunde.email}` : '',
+  ].filter(Boolean).join('\n'));
 }
 
 // --- Firmenwissen für den System-Prompt. Bewusst kompakt gehalten (Kosten je

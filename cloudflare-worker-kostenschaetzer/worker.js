@@ -32,6 +32,13 @@
  *   ALLOWED_ORIGINS      (Variable, optional) – Komma-getrennte Liste
  *                        erlaubter Herkünfte, Standard:
  *                        https://neuverdrahtet.com,https://www.neuverdrahtet.com
+ *   TWILIO_ACCOUNT_SID,  (Secrets, optional, alle vier zusammen) – für eine
+ *   TWILIO_AUTH_TOKEN,     zusätzliche WhatsApp-Benachrichtigung an den
+ *   TWILIO_WHATSAPP_FROM,  Geschäftsinhaber bei jedem neuen Lead, über Twilio.
+ *   TWILIO_WHATSAPP_TO      FROM/TO im Twilio-Format "whatsapp:+49...".
+ *                        Fehlt eines der vier, wird die Benachrichtigung
+ *                        einfach übersprungen (kein Fehler) - die Lead-
+ *                        Anlage selbst hängt nicht daran.
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
@@ -246,6 +253,41 @@ function buildKontaktBeschreibung(payload) {
 }
 
 /**
+ * Sendet eine Best-Effort-WhatsApp-Benachrichtigung an den Geschäftsinhaber
+ * über Twilio, sobald ein neuer Lead angelegt wurde. Rein informativ - ohne
+ * gesetzte Twilio-Secrets passiert einfach nichts (kein Fehler), und ein
+ * fehlgeschlagener Versand lässt die eigentliche Lead-Anlage unangetastet
+ * (dieselbe additive Best-Effort-Philosophie wie sendeWerkoraLead in
+ * assets/script.js für die Formspree/Werkora-Parallelität).
+ */
+async function sendeLeadBenachrichtigung(env, text) {
+  const fehlendeSecrets = ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_WHATSAPP_FROM', 'TWILIO_WHATSAPP_TO'].filter((k) => !env[k]);
+  if (fehlendeSecrets.length) {
+    console.error(`WhatsApp-Benachrichtigung übersprungen - fehlende Secrets: ${fehlendeSecrets.join(', ')}`);
+    return;
+  }
+  try {
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${env.TWILIO_ACCOUNT_SID}/Messages.json`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${btoa(`${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({ From: env.TWILIO_WHATSAPP_FROM, To: env.TWILIO_WHATSAPP_TO, Body: text }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.error(`Twilio-WhatsApp-Benachrichtigung fehlgeschlagen (${res.status}): ${errText.slice(0, 300)}`);
+    } else {
+      console.log('WhatsApp-Benachrichtigung erfolgreich an Twilio übergeben.');
+    }
+  } catch (err) {
+    console.error('Twilio-WhatsApp-Benachrichtigung: Netzwerkfehler', err);
+  }
+}
+
+/**
  * Schreibt Kunde + Projekt für einen Lead nach Firestore (gemeinsam für beide
  * Formular-Arten). "kunde" wird ohne "farbe" übergeben - die wird hier aus
  * der frisch vergebenen kundeId berechnet (wie im ursprünglichen
@@ -258,6 +300,12 @@ async function legeLeadAn({ env, kunde, projekt }) {
   const projektId = crypto.randomUUID();
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: { ...projekt, kundeId } });
+  await sendeLeadBenachrichtigung(env, [
+    `📩 Neuer Lead: ${kunde.firma}`,
+    projekt.titel,
+    kunde.telefon ? `Tel: ${kunde.telefon}` : '',
+    kunde.email ? `E-Mail: ${kunde.email}` : '',
+  ].filter(Boolean).join('\n'));
 }
 
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
@@ -283,11 +331,22 @@ export default {
       return jsonResponse({ error: 'Ungültiger Request-Body.' }, 400, headers);
     }
 
-    // Anti-Spam: Honeypot-Feld ausgefüllt oder verdächtig schnell abgesendet
-    // (ein Mensch braucht für den 7-Schritte-Assistenten realistisch mehrere
+    // Anti-Spam: verdächtig schnell abgesendet (ein Mensch braucht für den
+    // 7-Schritte-Assistenten bzw. das Kontaktformular realistisch mehrere
     // Sekunden). Bot nicht warnen, dass er erkannt wurde - einfach "ok" ohne
     // wirklich etwas anzulegen.
-    if (body.website || typeof body.ladezeitMs !== 'number' || body.ladezeitMs < 3000) {
+    //
+    // Das Honeypot-Feld (body.website) fließt bewusst NICHT mehr allein in
+    // diese Entscheidung ein: Browser-Autofill befüllt es bei echten Nutzern
+    // gelegentlich fälschlich (beobachtet mit Chrome, das das Feld anhand
+    // des - für Menschen unsichtbaren - Labels "Firma" erkennt und trotz
+    // autocomplete="off" aus dem gespeicherten Profil ausfüllt). Ein allein
+    // darauf gestütztes Verwerfen hätte damit echte Leads stillschweigend
+    // verschluckt. Nur in Kombination mit einer zu schnellen Absendezeit
+    // gilt ein befülltes Honeypot-Feld als zusätzliches Bot-Indiz.
+    const ladezeitMs = typeof body.ladezeitMs === 'number' ? body.ladezeitMs : 0;
+    const zuSchnell = ladezeitMs < 3000;
+    if (zuSchnell || (body.website && ladezeitMs < 10000)) {
       return jsonResponse({ ok: true }, 200, headers);
     }
 
@@ -308,7 +367,10 @@ export default {
             telefon: body.telefon || '',
             email: body.email,
             status: 'lead',
-            notizen: 'Angelegt über das Kontaktformular (Website)',
+            // Dieselbe Beschreibung wie im Projekt auch hier im Kunden-Notizfeld,
+            // damit Leistung + Nachricht direkt in der Lead-Pipeline (Kunden-Ansicht)
+            // sichtbar sind, statt nur im separaten Projekte-Board.
+            notizen: buildKontaktBeschreibung(body),
           },
           projekt: {
             titel: `Kontaktanfrage${body.service ? ': ' + body.service : ''} (Website)`,
@@ -347,7 +409,9 @@ export default {
           telefon: kontakt.telefon || '',
           email: kontakt.email,
           status: 'lead',
-          notizen: 'Angelegt über Wallbox-Kostenschätzer (Website)',
+          // s. Kommentar im "kontakt"-Zweig oben - dieselbe Beschreibung wie im
+          // Projekt auch hier im Kunden-Notizfeld für die Lead-Pipeline-Ansicht.
+          notizen: buildBeschreibung(body),
         },
         projekt: {
           titel: 'Wallbox-Anfrage (Website)',

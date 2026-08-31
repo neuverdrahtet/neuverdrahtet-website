@@ -5,6 +5,11 @@ import { openStatusManager } from '../statusManager.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
+function kuerzeText(text, maxLaenge) {
+  const einzeilig = (text || '').replace(/\s+/g, ' ').trim();
+  return einzeilig.length > maxLaenge ? einzeilig.slice(0, maxLaenge - 1) + '…' : einzeilig;
+}
+
 export async function render(container) {
   let [kunden, spalten] = await Promise.all([getAll('kunden'), getAll('kundenStatus')]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -37,6 +42,7 @@ export async function render(container) {
                 <div class="title">${escapeHtml(k.firma)}</div>
                 ${k.ansprechpartner ? `<div class="meta">${escapeHtml(k.ansprechpartner)}</div>` : ''}
                 ${k.telefon ? `<div class="meta">${escapeHtml(k.telefon)}</div>` : ''}
+                ${k.notizen ? `<div class="meta text-mute" style="white-space:pre-wrap">${escapeHtml(kuerzeText(k.notizen, 140))}</div>` : ''}
                 <select class="card-move" data-id="${k.id}" title="Status wechseln (auch per Ziehen möglich)">
                   ${spalten.map((s2) => `<option value="${s2.id}" ${s2.id === (k.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s2.titel)}</option>`).join('')}
                 </select>
@@ -105,7 +111,7 @@ export async function render(container) {
   function openCardForm(k) {
     const isEdit = !!k;
     const neueId = uid();
-    const data = k || { id: neueId, firma: '', ansprechpartner: '', telefon: '', email: '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
+    const data = k || { id: neueId, firma: '', ansprechpartner: '', telefon: '', email: '', notizen: '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
     const { body, close } = openModal({
       title: isEdit ? 'Lead bearbeiten' : 'Neuer Lead',
       bodyHtml: `
@@ -118,6 +124,7 @@ export async function render(container) {
             </div>
             <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
             <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
+            <div class="field col-span-2"><label>Notizen / Anliegen</label><textarea name="notizen" rows="4">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
@@ -142,7 +149,7 @@ export async function render(container) {
       e.preventDefault();
       const fd = new FormData(e.target);
       const updated = { ...data };
-      for (const key of ['firma', 'ansprechpartner', 'status', 'telefon', 'email']) {
+      for (const key of ['firma', 'ansprechpartner', 'status', 'telefon', 'email', 'notizen']) {
         updated[key] = (fd.get(key) || '').toString().trim();
       }
       if (!updated.firma) return;
