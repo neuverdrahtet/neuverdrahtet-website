@@ -208,9 +208,9 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container, route) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben] = await Promise.all([
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben, emails] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
-    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'),
+    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'), getAll('emails'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -790,6 +790,7 @@ export async function render(container, route) {
       .filter((a) => a.kundeId === kunde.id || projektIds.has(a.projektId))
       .sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const kAusgabenSumme = kAusgaben.reduce((s, a) => s + (a.betragBrutto || 0), 0);
+    const kEmails = emails.filter((e) => e.kundeId === kunde.id).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
 
     const gruppen = [
       ...BEREICHE.map((b) => ({ id: b.id, titel: b.titel, items: kProjekte.filter((p) => p.bereich === b.id) })),
@@ -956,6 +957,20 @@ export async function render(container, route) {
             </div>
 
             <div class="akte-bereich" data-tab="dokumentation">
+              <h2 style="font-size:14px;margin:0 0 8px">E-Mail-Verlauf${kEmails.length ? ` (${kEmails.length})` : ''}</h2>
+              <p class="hint">Automatisch erkannt anhand der hinterlegten E-Mail-Adresse - läuft im Hintergrund beim Öffnen des Postfachs, keine manuelle Zuordnung nötig.</p>
+              ${kEmails.length === 0 ? '<p class="text-mute">Noch keine zugeordneten E-Mails gefunden.</p>' : `
+                <ul class="cal-event-list akte-email-liste">
+                  ${kEmails.slice(0, 25).map((e) => `
+                    <li class="akte-email-row" data-id="${e.id}" style="cursor:pointer">
+                      <span>${e.richtung === 'ausgang' ? '↗' : '↘'} ${escapeHtml(e.subject || '(ohne Betreff)')}</span>
+                      <span class="text-mute">${formatDate(e.date)}</span>
+                    </li>
+                  `).join('')}
+                </ul>
+                ${kEmails.length > 25 ? `<p class="hint">... und ${kEmails.length - 25} weitere. Vollständig im <a href="#/postfach">Postfach</a>.</p>` : ''}
+              `}
+              <div class="divider"></div>
               <div id="akte-kunden-dok-host"></div>
             </div>
           </div>
@@ -966,6 +981,21 @@ export async function render(container, route) {
     const close = () => render(container);
     container.querySelector('#akte-back').addEventListener('click', close);
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(kunde));
+    container.querySelectorAll('.akte-email-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const e = kEmails.find((x) => x.id === row.dataset.id);
+        if (!e) return;
+        openModal({
+          title: e.subject || '(ohne Betreff)',
+          wide: true,
+          bodyHtml: `
+            <p class="text-mute">${e.richtung === 'ausgang' ? 'Gesendet' : 'Empfangen'} · ${formatDate(e.date)}${e.projektId ? ` · Projekt: ${escapeHtml(projekteById2[e.projektId]?.titel || '')}` : ''}</p>
+            <div class="divider"></div>
+            <div style="white-space:pre-wrap">${escapeHtml(e.text || '(kein Textinhalt)')}</div>
+          `,
+        });
+      });
+    });
     // Reiter-Umschalter "Details"/"Dokumentation" - nur auf dem Handy sichtbar
     // (siehe app.css @media 760px), auf dem Desktop bleiben beide Spalten wie
     // gehabt komplett sichtbar und die Reiter-Leiste ist ausgeblendet.

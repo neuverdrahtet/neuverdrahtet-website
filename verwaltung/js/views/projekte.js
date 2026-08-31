@@ -17,11 +17,11 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben, emails] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
     getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'), getAll('subunternehmer'),
-    getAll('termine'), getAll('aufgaben'),
+    getAll('termine'), getAll('aufgaben'), getAll('emails'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -683,11 +683,45 @@ export async function render(container, opts = {}) {
   // verknüpfte Angebote/Auftragsbestätigungen/Rechnungen, Nachkalkulation,
   // Ausgaben, Verwendungen, Teamchat, Fotos und Dokumente an einer Stelle.
   // Stammdaten bearbeiten läuft weiterhin über die schlankere openForm().
+  function renderProjektEmailVerlauf(host, projektEmails) {
+    host.innerHTML = `
+      <h2 style="font-size:14px;margin:0 0 8px">E-Mail-Verlauf${projektEmails.length ? ` (${projektEmails.length})` : ''}</h2>
+      <p class="hint">Automatisch erkannt anhand der E-Mail-Adresse des Kunden - läuft im Hintergrund beim Öffnen des Postfachs.</p>
+      ${projektEmails.length === 0 ? '<p class="text-mute">Noch keine zugeordneten E-Mails gefunden.</p>' : `
+        <ul class="cal-event-list">
+          ${projektEmails.slice(0, 25).map((e) => `
+            <li class="akte-email-row" data-id="${e.id}" style="cursor:pointer">
+              <span>${e.richtung === 'ausgang' ? '↗' : '↘'} ${escapeHtml(e.subject || '(ohne Betreff)')}</span>
+              <span class="text-mute">${formatDate(e.date)}</span>
+            </li>
+          `).join('')}
+        </ul>
+        ${projektEmails.length > 25 ? `<p class="hint">... und ${projektEmails.length - 25} weitere. Vollständig im <a href="#/postfach">Postfach</a>.</p>` : ''}
+      `}
+    `;
+    host.querySelectorAll('.akte-email-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        const e = projektEmails.find((x) => x.id === row.dataset.id);
+        if (!e) return;
+        openModal({
+          title: e.subject || '(ohne Betreff)',
+          wide: true,
+          bodyHtml: `
+            <p class="text-mute">${e.richtung === 'ausgang' ? 'Gesendet' : 'Empfangen'} · ${formatDate(e.date)}</p>
+            <div class="divider"></div>
+            <div style="white-space:pre-wrap">${escapeHtml(e.text || '(kein Textinhalt)')}</div>
+          `,
+        });
+      });
+    });
+  }
+
   function renderProjektAkte(p) {
     const linkedAngebote = angebote.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const linkedAB = auftragsbestaetigungen.filter((a) => a.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const linkedRechnungen = rechnungen.filter((r) => r.projektId === p.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const offeneAbschlaege = linkedRechnungen.filter((r) => r.rechnungstyp === 'abschlag' && r.status !== 'storniert' && !r.verrechnetIn);
+    const linkedEmails = emails.filter((e) => e.projektId === p.id).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
     const heute = todayISO();
     const hatUeberfaelligeRechnung = linkedRechnungen.some((r) => (r.status === 'offen' || r.status === 'teilbezahlt') && r.faelligAm && r.faelligAm < heute);
     const kunde = kundenById[p.kundeId];
@@ -774,6 +808,7 @@ export async function render(container, opts = {}) {
             <div class="akte-bereich" data-tab="details" id="ausgaben-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="verwendung-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="tc-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="email-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="aufmass-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="foto-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="dok-host"></div>
@@ -836,6 +871,7 @@ export async function render(container, opts = {}) {
     renderProjektAusgaben(container.querySelector('#ausgaben-host'), p.id);
     renderVerwendungen(container.querySelector('#verwendung-host'), p.id);
     renderTeamchat(container.querySelector('#tc-host'), p.id, mitarbeiter);
+    renderProjektEmailVerlauf(container.querySelector('#email-host'), linkedEmails);
     renderAufmassSection(container.querySelector('#aufmass-host'), p.id);
     renderFotoSection(container.querySelector('#foto-host'), p.id);
     renderDokumenteSection(container.querySelector('#dok-host'), 'projekt', p.id, {

@@ -50,6 +50,9 @@ function toStoredEmail(full) {
     // Leer bis classifyPendingEmails() sie per KI einsortiert hat (kundenanfrage/
     // rechnung-lieferant/werbung/sonstiges) - läuft automatisch im Hintergrund.
     kategorie: '',
+    // Leer bis verknuepfeEmailsMitKundenUndProjekten() sie per Adressabgleich
+    // automatisch einem Kunden/Projekt zugeordnet hat - ebenfalls automatisch.
+    kundeId: '', projektId: '',
     importedAt: new Date().toISOString(),
   };
 }
@@ -213,6 +216,52 @@ async function autoErstelleTerminAusAnfrage(email, termin, { kundeId, projektId 
     body: `${titel} am ${termin.datum} um ${termin.uhrzeit} Uhr`,
     url: './index.html#/plantafel',
   }).catch(() => { /* Push ist ein Komfort-Feature */ });
+}
+
+const EMAIL_ADRESSE_REGEX = /<([^<>]+@[^<>]+)>|([^\s<>"]+@[^\s<>"]+)/;
+
+/** Extrahiert die reine Adresse aus einem Header-String wie "Max Mustermann <max@example.com>". */
+function extrahiereAdresse(headerText) {
+  const match = EMAIL_ADRESSE_REGEX.exec(headerText || '');
+  return (match?.[1] || match?.[2] || '').trim().toLowerCase();
+}
+
+/**
+ * Verknüpft synchronisierte E-Mails automatisch mit dem passenden Kunden
+ * (per Adressabgleich) und - falls eindeutig genau ein Projekt zum Kunden
+ * gehört - auch direkt mit dem Projekt, damit die Korrespondenz in der
+ * jeweiligen Kunden-/Projektakte auftaucht, ohne dass jemand die E-Mail
+ * manuell zuordnen muss. Läuft rein lokal (kein KI-Aufruf nötig), deshalb
+ * unabhängig von der KI-Kategorisierung bei jedem Postfach-Aufruf erneut
+ * für noch unverknüpfte E-Mails. Gibt die Anzahl neu verknüpfter Mails zurück.
+ */
+export async function verknuepfeEmailsMitKundenUndProjekten() {
+  const [alle, kunden, projekte] = await Promise.all([getAll('emails'), getAll('kunden'), getAll('projekte')]);
+  const offen = alle.filter((e) => !e.kundeId);
+  if (offen.length === 0) return 0;
+  const kundeByEmail = new Map();
+  for (const k of kunden) {
+    const adresse = (k.email || '').trim().toLowerCase();
+    if (adresse && !kundeByEmail.has(adresse)) kundeByEmail.set(adresse, k);
+  }
+  const projekteByKunde = new Map();
+  for (const p of projekte) {
+    if (!p.kundeId) continue;
+    if (!projekteByKunde.has(p.kundeId)) projekteByKunde.set(p.kundeId, []);
+    projekteByKunde.get(p.kundeId).push(p);
+  }
+  let verknuepft = 0;
+  for (const e of offen) {
+    const gegenpartei = extrahiereAdresse(e.richtung === 'ausgang' ? e.to : e.from);
+    if (!gegenpartei) continue;
+    const kunde = kundeByEmail.get(gegenpartei);
+    if (!kunde) continue;
+    const projekteDesKunden = projekteByKunde.get(kunde.id) || [];
+    const updated = { ...e, kundeId: kunde.id, projektId: projekteDesKunden.length === 1 ? projekteDesKunden[0].id : '' };
+    await put('emails', updated);
+    verknuepft++;
+  }
+  return verknuepft;
 }
 
 export async function classifyPendingEmails({ onProgress } = {}) {

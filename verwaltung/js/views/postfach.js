@@ -2,7 +2,7 @@ import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from 
 import { uid, escapeHtml, toast, todayISO, formatDateTime, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
-import { fullImport, incrementalSync, classifyPendingEmails } from '../emailsync.js';
+import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -583,5 +583,17 @@ export async function render(container) {
         },
       }).catch((err) => { if (katStatusEl) katStatusEl.textContent = `· ⚠️ Kategorisierung fehlgeschlagen: ${err.message || err}`; });
     }
+
+    // Rein lokaler Adressabgleich (kein KI-Aufruf nötig) - verknüpft E-Mails
+    // automatisch mit Kunde/Projekt, damit sie in der jeweiligen Akte
+    // auftauchen, sobald ein Kunde mit passender E-Mail-Adresse existiert.
+    verknuepfeEmailsMitKundenUndProjekten().then((anzahl) => {
+      if (anzahl > 0) {
+        getAll('emails').then((fresh) => {
+          allEmails = fresh.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+          renderList();
+        });
+      }
+    }).catch(() => { /* rein lokaler Komfort-Abgleich, Fehler nicht kritisch */ });
   }
 }
