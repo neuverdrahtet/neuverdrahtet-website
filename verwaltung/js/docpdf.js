@@ -169,16 +169,22 @@ export async function buildDocPdfBlob(opts) {
 
   y += 8 + kundeLines.length * 5 + 12;
 
+  // splitTextToSize() statt einzeiligem doc.text(): ein langer Betreff/Projekttitel
+  // (wie "Installation und Inbetriebnahme einer PV-Anlage mit Batteriespeicher -
+  // Angebotserstellung") lief sonst über den rechten Rand hinaus und wurde
+  // abgeschnitten statt umzubrechen.
   if (opts.betreff) {
     doc.setFontSize(baseFont);
     doc.setTextColor(20);
-    doc.text(`Gerne bieten wir Ihnen an: ${opts.betreff}`, marginX, y);
-    y += 5.5;
+    const betreffLines = doc.splitTextToSize(`Gerne bieten wir Ihnen an: ${opts.betreff}`, 174);
+    doc.text(betreffLines, marginX, y);
+    y += betreffLines.length * 5.5;
   }
   if (opts.projekt) {
     doc.setFontSize(baseFont);
-    doc.text(`Für das Projekt: ${opts.projekt}`, marginX, y);
-    y += 5.5;
+    const projektLines = doc.splitTextToSize(`Für das Projekt: ${opts.projekt}`, 174);
+    doc.text(projektLines, marginX, y);
+    y += projektLines.length * 5.5;
   }
   y += 4;
 
@@ -211,16 +217,25 @@ export async function buildDocPdfBlob(opts) {
     y = doc.lastAutoTable.finalY + 8;
   }
 
+  // Ab hier bislang ohne Seitenumbruch-Prüfung - bei einer langen Positionsliste
+  // stand y schon nah an der Fußzeile (279), sodass Summenblock/Hinweise/
+  // Schlusstext sich mit der Fußzeile überlappten statt auf Seite 2 zu rutschen.
+  // Jeder Block prüft deshalb vor dem Zeichnen gegen maxY.
+  const maxY = 270;
+
   if (opts.totals) {
+    if (y > maxY) { doc.addPage(); y = 20; }
     doc.setFontSize(10);
     doc.text(`Netto: ${formatCurrency(opts.totals.netto)}`, rightX, y, { align: 'right' });
     y += 5;
     Object.entries(opts.totals.steuerGruppen || {})
       .filter(([rate]) => Number(rate) > 0)
       .forEach(([rate, netto]) => {
+        if (y > maxY) { doc.addPage(); y = 20; }
         doc.text(`zzgl. ${rate}% USt.: ${formatCurrency(netto * (Number(rate) / 100))}`, rightX, y, { align: 'right' });
         y += 5;
       });
+    if (y > maxY) { doc.addPage(); y = 20; }
     doc.setFont(undefined, 'bold');
     doc.text(`Gesamt: ${formatCurrency(opts.totals.brutto)}`, rightX, y, { align: 'right' });
     doc.setFont(undefined, 'normal');
@@ -229,10 +244,12 @@ export async function buildDocPdfBlob(opts) {
     if (opts.abschlaege && opts.abschlaege.length) {
       doc.setFontSize(9);
       opts.abschlaege.forEach((a) => {
+        if (y > maxY) { doc.addPage(); y = 20; }
         doc.text(`Abzgl. Abschlagsrechnung ${a.nummer}: -${formatCurrency(a.betrag)}`, rightX, y, { align: 'right' });
         y += 4.5;
       });
       const restbetrag = opts.totals.brutto - opts.abschlaege.reduce((s, a) => s + (a.betrag || 0), 0);
+      if (y > maxY) { doc.addPage(); y = 20; }
       doc.setFontSize(11);
       doc.setFont(undefined, 'bold');
       doc.text(`Noch zu zahlen: ${formatCurrency(restbetrag)}`, rightX, y, { align: 'right' });
@@ -246,6 +263,7 @@ export async function buildDocPdfBlob(opts) {
   if (steuerHinweisText) {
     doc.setFontSize(8);
     const hinweisLines = doc.splitTextToSize(steuerHinweisText, 174);
+    if (y + hinweisLines.length * 3.6 > maxY) { doc.addPage(); y = 20; }
     doc.text(hinweisLines, marginX, y);
     y += hinweisLines.length * 3.6 + 4;
   }
@@ -253,6 +271,7 @@ export async function buildDocPdfBlob(opts) {
   if (opts.aufbewahrungsHinweis) {
     doc.setFontSize(8);
     const aufbLines = doc.splitTextToSize(opts.aufbewahrungsHinweis, 174);
+    if (y + aufbLines.length * 3.6 > maxY) { doc.addPage(); y = 20; }
     doc.text(aufbLines, marginX, y);
     y += aufbLines.length * 3.6 + 4;
   }
@@ -260,12 +279,12 @@ export async function buildDocPdfBlob(opts) {
   if (opts.closingText) {
     doc.setFontSize(baseFont);
     const lines = doc.splitTextToSize(opts.closingText, 174);
+    if (y + lines.length * 5 > maxY) { doc.addPage(); y = 20; }
     doc.text(lines, marginX, y);
     y += lines.length * 5 + 4;
   }
 
   if (opts.zeigeUnterschriftsfeld) {
-    const maxY = 270;
     if (y > maxY - 34) { doc.addPage(); y = 20; }
     y += 8;
     doc.setFontSize(9);

@@ -73,6 +73,7 @@ const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#
 const AUFGABEN_STATUS_GESCHLOSSEN = ['erledigt'];
 const KUNDEN_STATUS_GESCHLOSSEN = ['verloren', 'kunde'];
 const RECHNUNG_OFFEN_STATUS = ['offen', 'teilbezahlt'];
+const AUSGABEN_KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -508,6 +509,54 @@ function paymentToApi(b) {
 
 function reminderToApi(m) {
   return { id: m.id, invoice_id: m.rechnungId || '', level: m.stufe || 1, date: m.datum || '', new_due_date: m.neueFrist || '', fee: m.gebuehr || 0, text: m.text || '' };
+}
+
+function expenseToApi(a) {
+  return {
+    id: a.id,
+    date: a.datum || '',
+    category: a.kategorie || '',
+    description: a.beschreibung || '',
+    supplier: a.lieferant || '',
+    amount_net: a.betragNetto || 0,
+    vat_rate: a.steuersatz ?? 19,
+    amount_gross: a.betragBrutto || 0,
+    paid_with: a.bezahltMit || '',
+    customer_id: a.kundeId || '',
+    project_id: a.projektId || '',
+    payment_status: a.bezahlstatus || 'bezahlt',
+    due_date: a.faelligAm || '',
+    // Belege werden weiterhin nur in Werkora selbst hochgeladen/gescannt (Foto/PDF) -
+    // diese API kann einen bereits hochgeladenen Beleg lesen (URL + Dateityp), aber
+    // keinen neuen hochladen.
+    receipt_url: a.beleg?.url || null,
+    receipt_mime: a.beleg?.mime || null,
+    has_receipt: !!a.beleg,
+    created_at: a.createdAt || '',
+  };
+}
+
+// Liefert - wie apiToCustomer() - nur die im Body tatsächlich übergebenen Felder
+// (Konvention für PATCH). Betrag netto/brutto werden dabei konsistent gehalten,
+// falls nur eines von beiden zusammen mit dem Steuersatz mitgeschickt wird.
+function apiToExpenseChanges(body, existing) {
+  const out = {};
+  if (body.date !== undefined) out.datum = body.date;
+  if (body.category !== undefined) out.kategorie = body.category;
+  if (body.description !== undefined) out.beschreibung = body.description;
+  if (body.supplier !== undefined) out.lieferant = body.supplier;
+  if (body.paid_with !== undefined) out.bezahltMit = body.paid_with;
+  if (body.customer_id !== undefined) out.kundeId = body.customer_id;
+  if (body.project_id !== undefined) out.projektId = body.project_id;
+  if (body.vat_rate !== undefined) out.steuersatz = Number(body.vat_rate);
+  if (body.amount_net !== undefined || body.amount_gross !== undefined) {
+    const steuersatz = out.steuersatz ?? existing.steuersatz ?? 19;
+    const netto = body.amount_net !== undefined ? Number(body.amount_net) : Number(existing.betragNetto || 0);
+    const brutto = body.amount_gross !== undefined ? Number(body.amount_gross) : Math.round(netto * (1 + steuersatz / 100) * 100) / 100;
+    out.betragNetto = netto;
+    out.betragBrutto = brutto;
+  }
+  return out;
 }
 
 function articleToApi(k) {
@@ -1195,6 +1244,67 @@ export default {
           return okResponse(zahlungen.map(paymentToApi));
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Zahlungen werden über den Kontoauszug-Abgleich in Werkora gepflegt und können über diese API nur gelesen werden.', 405);
+      }
+
+      // --- Ausgaben/Belege (bisher komplett gefehlt - Belege werden weiterhin nur in
+      // Werkora selbst hochgeladen/gescannt; hier: lesen inkl. Beleg-URL, Betrag/Datum/
+      // Lieferant/MwSt. erfassen und Kategorie zuordnen+speichern) ---
+      if (teile[0] === 'expenses') {
+        if (request.method === 'GET' && !teile[1]) {
+          let ausgaben = await firestoreList({ accessToken, projectId, collection: 'ausgaben' });
+          const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id');
+          const category = q.get('category'); const supplier = q.get('supplier');
+          const dateFrom = q.get('date_from'); const dateTo = q.get('date_to'); const status = q.get('status');
+          if (customerId) ausgaben = ausgaben.filter((a) => a.kundeId === customerId);
+          if (projectIdFilter) ausgaben = ausgaben.filter((a) => a.projektId === projectIdFilter);
+          if (category) ausgaben = ausgaben.filter((a) => a.kategorie === category);
+          if (supplier) ausgaben = ausgaben.filter((a) => (a.lieferant || '').toLowerCase().includes(supplier.toLowerCase()));
+          if (dateFrom) ausgaben = ausgaben.filter((a) => (a.datum || '') >= dateFrom);
+          if (dateTo) ausgaben = ausgaben.filter((a) => (a.datum || '') <= dateTo);
+          if (status) ausgaben = ausgaben.filter((a) => (a.bezahlstatus || 'bezahlt') === status);
+          ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+          await logAction(ctx, { action: 'expenses.search', status: 'success' });
+          if (q.get('count') === 'true') return okResponse({ count: ausgaben.length });
+          const expenseLimit = Math.min(Number(q.get('limit')) || 100, 100);
+          return okResponse(ausgaben.slice(0, expenseLimit).map(expenseToApi));
+        }
+        if (request.method === 'GET' && teile[1]) {
+          const a = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: teile[1] });
+          if (!a) return errorResponse('EXPENSE_NOT_FOUND', 'Ausgabe wurde nicht gefunden.', 404);
+          return okResponse(expenseToApi(a));
+        }
+        if (request.method === 'POST' && !teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          if (!body.date || !body.category) return errorResponse('VALIDATION_ERROR', 'Felder "date" und "category" sind erforderlich.', 400);
+          if (!AUSGABEN_KATEGORIEN.includes(body.category)) return errorResponse('VALIDATION_ERROR', `Feld "category" muss einer von ${AUSGABEN_KATEGORIEN.join(', ')} sein.`, 400);
+          if (body.amount_net === undefined && body.amount_gross === undefined) return errorResponse('VALIDATION_ERROR', 'Feld "amount_net" oder "amount_gross" ist erforderlich.', 400);
+          const steuersatz = body.vat_rate !== undefined ? Number(body.vat_rate) : 19;
+          const betragNetto = body.amount_net !== undefined ? Number(body.amount_net) : Math.round((Number(body.amount_gross) / (1 + steuersatz / 100)) * 100) / 100;
+          const betragBrutto = body.amount_gross !== undefined ? Number(body.amount_gross) : Math.round(betragNetto * (1 + steuersatz / 100) * 100) / 100;
+          const id = crypto.randomUUID();
+          const data = {
+            id, datum: body.date, kategorie: body.category, beschreibung: body.description || '', lieferant: body.supplier || '',
+            betragNetto, steuersatz, betragBrutto, bezahltMit: body.paid_with || 'überweisung',
+            kundeId: body.customer_id || '', projektId: body.project_id || '', beleg: null,
+            bezahlstatus: 'bezahlt', faelligAm: '', bezahltAm: '', istInvestition: false, kalkKategorie: '',
+            createdAt: new Date().toISOString(),
+          };
+          const created = await firestoreCreate({ accessToken, projectId, collection: 'ausgaben', id, data });
+          await logAction(ctx, { action: 'expenses.create', entityType: 'ausgaben', entityId: id, newValue: data, status: 'success' });
+          return okResponse(expenseToApi(created), 201);
+        }
+        if (request.method === 'PATCH' && teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: teile[1] });
+          if (!existing) return errorResponse('EXPENSE_NOT_FOUND', 'Ausgabe wurde nicht gefunden.', 404);
+          if (body.category !== undefined && !AUSGABEN_KATEGORIEN.includes(body.category)) return errorResponse('VALIDATION_ERROR', `Feld "category" muss einer von ${AUSGABEN_KATEGORIEN.join(', ')} sein.`, 400);
+          const changes = apiToExpenseChanges(body, existing);
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'expenses.update', entityType: 'ausgaben', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(expenseToApi(updated));
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
       // --- Mahnungen (Vorgabe Abschnitt 24) ---

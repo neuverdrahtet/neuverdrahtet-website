@@ -1386,6 +1386,253 @@
         }
       }
     },
+    "/expenses": {
+      "get": {
+        "operationId": "searchExpenses",
+        "summary": "Ausgaben/Belege abrufen (inkl. Beleg-URL, falls vorhanden)",
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "supplier",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "description": "z.B. \"bezahlt\" oder \"offen\""
+            }
+          },
+          {
+            "name": "count",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createExpense",
+        "summary": "Ausgabe/Beleg erfassen (Betrag, Datum, Lieferant, MwSt., Kategorie)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "date",
+                  "category"
+                ],
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string",
+                    "description": "Material, Werkzeug/Maschinen, Fahrzeug/Sprit, Miete, Versicherung, Büro/Verwaltung, Werbung/Marketing, Personal, Sonstiges"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "supplier": {
+                    "type": "string"
+                  },
+                  "amount_net": {
+                    "type": "number",
+                    "description": "Nettobetrag - alternativ amount_gross angeben"
+                  },
+                  "amount_gross": {
+                    "type": "number",
+                    "description": "Bruttobetrag - alternativ amount_net angeben"
+                  },
+                  "vat_rate": {
+                    "type": "number",
+                    "description": "USt.-Satz in Prozent, z.B. 19 (Standard, falls nicht angegeben)"
+                  },
+                  "paid_with": {
+                    "type": "string",
+                    "description": "überweisung, karte, bar oder lastschrift"
+                  },
+                  "customer_id": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Angelegte Ausgabe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/expenses/{id}": {
+      "get": {
+        "operationId": "getExpense",
+        "summary": "Eine Ausgabe/einen Beleg abrufen (inkl. Beleg-URL, falls vorhanden)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ausgabe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateExpense",
+        "summary": "Ausgabe aktualisieren, z.B. Kategorie zuordnen",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "date": {
+                    "type": "string"
+                  },
+                  "category": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "supplier": {
+                    "type": "string"
+                  },
+                  "amount_net": {
+                    "type": "number"
+                  },
+                  "amount_gross": {
+                    "type": "number"
+                  },
+                  "vat_rate": {
+                    "type": "number"
+                  },
+                  "paid_with": {
+                    "type": "string"
+                  },
+                  "customer_id": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aktualisierte Ausgabe",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/articles": {
       "get": {
         "operationId": "searchArticles",

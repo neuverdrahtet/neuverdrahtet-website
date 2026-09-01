@@ -145,6 +145,14 @@ GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lese
 GET   /reminders?invoice_id=
 POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? })
 
+GET   /expenses?customer_id=&project_id=&category=&supplier=&date_from=&date_to=&status=
+      (Belege - inkl. Beleg-URL/-Dateityp, falls in Werkora bereits ein Beleg hochgeladen wurde)
+GET   /expenses/{id}
+POST  /expenses                    ({ date, category, description?, supplier?, amount_net oder
+                                       amount_gross, vat_rate?, paid_with?, customer_id?, project_id? } -
+                                       neue Belege selbst werden weiterhin nur in Werkora hochgeladen/gescannt)
+PATCH /expenses/{id}                (u.a. Kategorie nachträglich zuordnen)
+
 GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; low_stock=true filtert auf Bestand <= Mindestbestand)
 GET   /articles/{id}               (Preise/Stammdaten nur lesen, inkl. aktuellem Lagerbestand)
 GET   /services?trade=             (Katalog-Leistungen, nur lesen)
