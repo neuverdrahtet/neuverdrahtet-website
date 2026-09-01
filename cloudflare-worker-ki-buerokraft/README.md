@@ -93,6 +93,24 @@ Alle Antworten im Format `{ "success": true, "data": {...}, "message": null }` b
 `{ "success": false, "error": { "code": "...", "message": "..." } }` – genau wie in
 deiner Vorgabe (Abschnitt 3).
 
+**Wichtig - ChatGPT erlaubt pro Custom-GPT-Action maximal 30 Endpunkte** (Fehlermeldung im
+GPT-Editor: "Bei OpenAPI Spec sind maximal 30 Vorgänge möglich"). Der Worker selbst
+(`worker.js`) unterstützt alle unten aufgeführten Endpunkte weiterhin vollständig - für
+direkte API-Aufrufe (curl, ein anderes Tool, ein zweiter Worker) sind sie alle nutzbar.
+`chatgpt-actions-schema.json` enthält aber bewusst nur eine Auswahl von exakt 30
+Endpunkten für die ChatGPT-Action, priorisiert nach deiner ursprünglichen Vorgabe
+(Abschnitt 39, "erste funktionsfähige Version"): Kunden, Leads, Projekte (lesen), Aufgaben,
+Termine, Angebote, Rechnungen (lesen), Aufträge (lesen), Ausgaben/Belege, Preisliste,
+Lagerbewegungen je Artikel, Mitarbeiter (lesen) und das Dashboard. **Nicht** im
+ChatGPT-Schema enthalten (aber per direktem API-Aufruf weiter erreichbar): einzelne
+Artikel-/Leistungs-Detailabfragen (`/articles`, `/services`, `/articles/{id}` - dafür gibt
+es `/price-list`, das beides kombiniert liefert), `/employees/{id}` (Einzelabruf - die
+Liste über `/employees` reicht meist), der globale `/stock-movements`-Endpunkt (die
+artikelbezogene Variante bleibt erhalten), `/payments`, `/reminders`,
+`/projects/{id}/documents` und `/work-reports`. Falls du eine davon lieber im
+ChatGPT-Zugriff hättest als etwas anderes, sag Bescheid - dann tauschen wir etwas aus
+(muss wegen des 30er-Limits immer 1:1 sein).
+
 ```
 GET   /customers?email=&phone=&name=&postal_code=&city=
 GET   /customers/{id}
