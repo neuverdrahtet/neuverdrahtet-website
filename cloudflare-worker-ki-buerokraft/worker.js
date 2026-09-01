@@ -988,7 +988,27 @@ export default {
           if (!p) return errorResponse('PROJECT_NOT_FOUND', 'Projekt wurde nicht gefunden.', 404);
           return okResponse(projectToApi(p));
         }
-        return errorResponse('METHOD_NOT_ALLOWED', 'Anlegen/Ändern von Projekten ist über diese API noch nicht freigeschaltet (Phase 2).', 405);
+        if (request.method === 'PATCH' && teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'projekte', id: teile[1] });
+          if (!existing) return errorResponse('PROJECT_NOT_FOUND', 'Projekt wurde nicht gefunden.', 404);
+          const changes = {};
+          if (body.title !== undefined) changes.titel = body.title;
+          if (body.description !== undefined) changes.beschreibung = body.description;
+          if (body.bereich !== undefined) changes.bereich = body.bereich;
+          if (body.start_date !== undefined) changes.startDatum = body.start_date;
+          if (body.planned_end_date !== undefined) changes.endDatum = body.planned_end_date;
+          if (body.status !== undefined) {
+            const spalten = await firestoreList({ accessToken, projectId, collection: 'kanbanSpalten' });
+            if (!spalten.some((s) => s.id === body.status)) return errorResponse('VALIDATION_ERROR', `Unbekannter Projekt-Status "${body.status}" - erst mit searchProjects oder in Werkora die gültigen Status-IDs prüfen.`, 400);
+            changes.status = body.status;
+          }
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'projekte', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'projects.update', entityType: 'projekte', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(projectToApi(updated));
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Anlegen neuer Projekte ist über diese API noch nicht freigeschaltet - Projekte entstehen in Werkora aus angenommenen Angeboten.', 405);
       }
 
       // --- Aufgaben (Vorgabe Abschnitt 10) ---
@@ -1090,6 +1110,24 @@ export default {
           await fireWebhook(ctx, 'appointment.created', appointmentToApi(created));
           return okResponse(appointmentToApi(created), 201);
         }
+        if (request.method === 'PATCH' && teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'termine', id: teile[1] });
+          if (!existing) return errorResponse('APPOINTMENT_NOT_FOUND', 'Termin wurde nicht gefunden.', 404);
+          const changes = {};
+          if (body.title !== undefined) changes.titel = body.title;
+          if (body.start !== undefined) changes.start = body.start;
+          if (body.end !== undefined) changes.ende = body.end;
+          if (body.address !== undefined) changes.ort = body.address;
+          if (body.customer_id !== undefined) changes.kundeId = body.customer_id;
+          if (body.project_id !== undefined) changes.projektId = body.project_id;
+          if (body.assigned_employee_ids !== undefined) changes.mitarbeiterIds = Array.isArray(body.assigned_employee_ids) ? body.assigned_employee_ids : [];
+          if (body.notes !== undefined) changes.notizen = body.notes;
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'termine', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'appointments.update', entityType: 'termine', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(appointmentToApi(updated));
+        }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
@@ -1147,6 +1185,32 @@ export default {
           await logAction(ctx, { action: 'quotes.create', entityType: 'angebote', entityId: id, newValue: data, status: 'success' });
           await fireWebhook(ctx, 'quote.created', quoteToApi(created));
           return okResponse(quoteToApi(created), 201);
+        }
+        if (request.method === 'PATCH' && teile[1]) {
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: teile[1] });
+          if (!existing) return errorResponse('QUOTE_NOT_FOUND', 'Angebot wurde nicht gefunden.', 404);
+          // Nur Entwürfe sind bearbeitbar - ein versendetes/angenommenes Angebot nachträglich
+          // per KI zu ändern würde vom Kunden nicht mehr abgeglichen werden können.
+          if (existing.status !== 'entwurf') return errorResponse('QUOTE_NOT_EDITABLE', 'Nur Angebote im Status Entwurf können bearbeitet werden - dieses wurde bereits versendet/beantwortet.', 409);
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const changes = {};
+          if (body.title !== undefined) changes.betreff = body.title;
+          if (body.project_id !== undefined) changes.projektId = body.project_id;
+          if (Array.isArray(body.items)) {
+            const positionen = body.items.map((it) => ({
+              id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '',
+              einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19,
+            }));
+            const totals = calcTotals(positionen);
+            changes.positionen = positionen;
+            changes.netto = totals.netto;
+            changes.steuer = totals.steuer;
+            changes.brutto = totals.brutto;
+          }
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'angebote', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'quotes.update', entityType: 'angebote', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(quoteToApi(updated));
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
@@ -1376,7 +1440,45 @@ export default {
 
       // --- Artikel/Leistungen/Preisliste (Vorgabe Abschnitt 25-26 - Preise/Stammdaten nur Lesen, Bestand siehe stock-movements oben) ---
       if (teile[0] === 'articles' || teile[0] === 'services' || teile[0] === 'price-list') {
-        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Der Katalog wird nur in Werkora selbst gepflegt - diese API kann ihn nur lesen.', 405);
+        if (request.method === 'POST' && !teile[1]) {
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          if (!body.name) return errorResponse('VALIDATION_ERROR', 'Feld "name" ist erforderlich.', 400);
+          const typ = body.type === 'service' ? 'leistung' : 'artikel';
+          const id = crypto.randomUUID();
+          const data = {
+            id, typ, bezeichnung: body.name, beschreibung: body.description || '', einheit: body.unit || 'Stk.',
+            einkaufspreis: Number(body.purchase_price) || 0, aufschlagProzent: Number(body.markup_percent) || 0,
+            preis: Number(body.sales_price) || 0, steuersatz: body.vat_rate ?? 19, gewerk: body.trade || '',
+            bestandTracking: false, bestand: 0, mindestbestand: Number(body.min_stock) || 0, createdAt: new Date().toISOString(),
+          };
+          const created = await firestoreCreate({ accessToken, projectId, collection: 'katalog', id, data });
+          await logAction(ctx, { action: 'articles.create', entityType: 'katalog', entityId: id, newValue: data, status: 'success' });
+          return okResponse(articleToApi(created), 201);
+        }
+        if (request.method === 'PATCH' && teile[1]) {
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
+          if (!existing) return errorResponse('ARTICLE_NOT_FOUND', 'Artikel/Leistung wurde nicht gefunden.', 404);
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          const changes = {};
+          if (body.name !== undefined) changes.bezeichnung = body.name;
+          if (body.description !== undefined) changes.beschreibung = body.description;
+          if (body.unit !== undefined) changes.einheit = body.unit;
+          if (body.purchase_price !== undefined) changes.einkaufspreis = Number(body.purchase_price);
+          if (body.markup_percent !== undefined) changes.aufschlagProzent = Number(body.markup_percent);
+          if (body.sales_price !== undefined) changes.preis = Number(body.sales_price);
+          if (body.vat_rate !== undefined) changes.steuersatz = Number(body.vat_rate);
+          if (body.trade !== undefined) changes.gewerk = body.trade;
+          if (body.min_stock !== undefined) changes.mindestbestand = Number(body.min_stock);
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben.', 400);
+          // bestand/bestandTracking bewusst nicht über diesen generischen Katalog-PATCH
+          // änderbar - Bestandsänderungen laufen ausschließlich über den eigenen
+          // stock-movements-Endpunkt, damit jede Änderung eine nachvollziehbare
+          // Lagerbewegung erzeugt statt den Bestand kommentarlos zu überschreiben.
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'katalog', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'articles.update', entityType: 'katalog', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(articleToApi(updated));
+        }
+        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
         if (teile[1]) {
           const artikel = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: teile[1] });
           if (!artikel) return errorResponse('ARTICLE_NOT_FOUND', 'Artikel/Leistung wurde nicht gefunden.', 404);
@@ -1401,7 +1503,23 @@ export default {
 
       // --- Mitarbeiter (Vorgabe Abschnitt 27 - eingeschränkte Felder, keine sensiblen Personaldaten) ---
       if (teile[0] === 'employees') {
-        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Mitarbeiterdaten werden über diese API nur gelesen, nicht verändert.', 405);
+        if (request.method === 'PATCH' && teile[1]) {
+          const existing = await firestoreGet({ accessToken, projectId, collection: 'mitarbeiter', id: teile[1] });
+          if (!existing) return errorResponse('EMPLOYEE_NOT_FOUND', 'Mitarbeiter wurde nicht gefunden.', 404);
+          let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
+          // Bewusst nur unkritische Stammdaten - keine Gehalts-/Steuer-/SV-Felder, keine
+          // Zugriffsrolle (Berechtigungen bleiben Admin-Sache, nicht per KI änderbar).
+          const changes = {};
+          if (body.name !== undefined) changes.name = body.name;
+          if (body.trade !== undefined) changes.rolle = body.trade;
+          if (body.phone !== undefined) changes.telefon = body.phone;
+          if (body.email !== undefined) changes.email = body.email;
+          if (Object.keys(changes).length === 0) return errorResponse('VALIDATION_ERROR', 'Keine bekannten Felder zum Aktualisieren übergeben (erlaubt: name, trade, phone, email).', 400);
+          const updated = await firestoreUpdate({ accessToken, projectId, collection: 'mitarbeiter', id: teile[1], data: changes });
+          await logAction(ctx, { action: 'employees.update', entityType: 'mitarbeiter', entityId: teile[1], oldValue: existing, newValue: changes, status: 'success' });
+          return okResponse(employeeToApi(updated, false));
+        }
+        if (request.method !== 'GET') return errorResponse('METHOD_NOT_ALLOWED', 'Nur unkritische Stammdaten (name, trade, phone, email) sind änderbar - Gehalts-/Steuer-/SV-Daten und Berechtigungen nur direkt in Werkora.', 405);
         const [mitarbeiter, termine] = await Promise.all([
           firestoreList({ accessToken, projectId, collection: 'mitarbeiter' }),
           firestoreList({ accessToken, projectId, collection: 'termine' }),

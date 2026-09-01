@@ -174,32 +174,6 @@
       }
     },
     "/customers/{id}": {
-      "get": {
-        "operationId": "getCustomer",
-        "summary": "Einen Kunden abrufen",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Kunde",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "patch": {
         "operationId": "updateCustomer",
         "summary": "Kunde aktualisieren",
@@ -440,9 +414,9 @@
       }
     },
     "/projects/{id}": {
-      "get": {
-        "operationId": "getProject",
-        "summary": "Ein Projekt abrufen",
+      "patch": {
+        "operationId": "updateProject",
+        "summary": "Projekt aktualisieren (Titel, Beschreibung, Status, Bereich, Termine)",
         "parameters": [
           {
             "name": "id",
@@ -453,9 +427,40 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "description": "Muss eine gültige Werkora-Status-Spalten-ID sein - vorher mit searchProjects prüfen, welche Status-Werte bei bestehenden Projekten vorkommen."
+                  },
+                  "bereich": {
+                    "type": "string"
+                  },
+                  "start_date": {
+                    "type": "string"
+                  },
+                  "planned_end_date": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Projekt",
+            "description": "Aktualisiertes Projekt",
             "content": {
               "application/json": {
                 "schema": {
@@ -601,32 +606,6 @@
       }
     },
     "/tasks/{id}": {
-      "get": {
-        "operationId": "getTask",
-        "summary": "Eine Aufgabe abrufen",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Aufgabe",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "patch": {
         "operationId": "updateTask",
         "summary": "Aufgabe aktualisieren oder abschließen",
@@ -793,6 +772,73 @@
         }
       }
     },
+    "/appointments/{id}": {
+      "patch": {
+        "operationId": "updateAppointment",
+        "summary": "Termin aktualisieren/verschieben",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "start": {
+                    "type": "string"
+                  },
+                  "end": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "customer_id": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "string"
+                  },
+                  "assigned_employee_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "notes": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aktualisierter Termin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/quotes": {
       "get": {
         "operationId": "searchQuotes",
@@ -933,9 +979,9 @@
       }
     },
     "/quotes/{id}": {
-      "get": {
-        "operationId": "getQuote",
-        "summary": "Ein Angebot abrufen",
+      "patch": {
+        "operationId": "updateQuote",
+        "summary": "Angebotsentwurf bearbeiten (nur solange Status 'draft' - danach 409)",
         "parameters": [
           {
             "name": "id",
@@ -946,9 +992,54 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "string"
+                  },
+                  "items": {
+                    "type": "array",
+                    "description": "Wenn angegeben, ersetzt das die komplette bisherige Positionsliste (keine Teil-Änderung einzelner Positionen).",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "quantity": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        },
+                        "unit_price_net": {
+                          "type": "number"
+                        },
+                        "vat_rate": {
+                          "type": "number"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Angebot",
+            "description": "Aktualisierter Angebotsentwurf",
             "content": {
               "application/json": {
                 "schema": {
@@ -1032,38 +1123,10 @@
         }
       }
     },
-    "/invoices/{id}": {
+    "/work-reports": {
       "get": {
-        "operationId": "getInvoice",
-        "summary": "Eine Rechnung abrufen",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Rechnung",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/orders": {
-      "get": {
-        "operationId": "searchOrders",
-        "summary": "Aufträge (angenommene Angebote) abrufen",
+        "operationId": "searchWorkReports",
+        "summary": "Arbeitsberichte abrufen",
         "parameters": [
           {
             "name": "customer_id",
@@ -1080,7 +1143,7 @@
             }
           },
           {
-            "name": "status",
+            "name": "employee_id",
             "in": "query",
             "schema": {
               "type": "string"
@@ -1090,6 +1153,128 @@
         "responses": {
           "200": {
             "description": "Liste",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWorkReport",
+        "summary": "Arbeitsbericht anlegen",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "customer_id": {
+                    "type": "string"
+                  },
+                  "project_id": {
+                    "type": "string"
+                  },
+                  "employee_id": {
+                    "type": "string"
+                  },
+                  "date": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "type": "string"
+                  },
+                  "end_time": {
+                    "type": "string"
+                  },
+                  "work_minutes": {
+                    "type": "number"
+                  },
+                  "travel_minutes": {
+                    "type": "number"
+                  },
+                  "work_done": {
+                    "type": "string"
+                  },
+                  "material_used": {
+                    "type": "string"
+                  },
+                  "additional_work": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Angelegter Arbeitsbericht",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/work-reports/{id}": {
+      "patch": {
+        "operationId": "updateWorkReport",
+        "summary": "Arbeitsbericht bearbeiten",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "work_done": {
+                    "type": "string"
+                  },
+                  "material_used": {
+                    "type": "string"
+                  },
+                  "additional_work": {
+                    "type": "string"
+                  },
+                  "start_time": {
+                    "type": "string"
+                  },
+                  "end_time": {
+                    "type": "string"
+                  },
+                  "work_minutes": {
+                    "type": "number"
+                  },
+                  "travel_minutes": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aktualisierter Arbeitsbericht",
             "content": {
               "application/json": {
                 "schema": {
@@ -1253,32 +1438,6 @@
       }
     },
     "/expenses/{id}": {
-      "get": {
-        "operationId": "getExpense",
-        "summary": "Eine Ausgabe/einen Beleg abrufen (inkl. Beleg-URL, falls vorhanden)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Ausgabe",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "patch": {
         "operationId": "updateExpense",
         "summary": "Ausgabe aktualisieren, z.B. Kategorie zuordnen",
@@ -1399,6 +1558,73 @@
         }
       }
     },
+    "/articles/{id}": {
+      "patch": {
+        "operationId": "updateArticle",
+        "summary": "Katalog-Artikel/Leistung aktualisieren, z.B. Preis anpassen",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "purchase_price": {
+                    "type": "number"
+                  },
+                  "markup_percent": {
+                    "type": "number"
+                  },
+                  "sales_price": {
+                    "type": "number"
+                  },
+                  "vat_rate": {
+                    "type": "number"
+                  },
+                  "trade": {
+                    "type": "string"
+                  },
+                  "min_stock": {
+                    "type": "number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aktualisierter Artikel/Leistung",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/employees": {
       "get": {
         "operationId": "searchEmployees",
@@ -1406,6 +1632,58 @@
         "responses": {
           "200": {
             "description": "Liste",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/employees/{id}": {
+      "patch": {
+        "operationId": "updateEmployee",
+        "summary": "Mitarbeiter-Stammdaten aktualisieren (nur name/trade/phone/email - keine Gehalts-/Steuerdaten, keine Berechtigungen)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "trade": {
+                    "type": "string"
+                  },
+                  "phone": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aktualisierter Mitarbeiter",
             "content": {
               "application/json": {
                 "schema": {
@@ -1436,33 +1714,6 @@
       }
     },
     "/articles/{id}/stock-movements": {
-      "get": {
-        "operationId": "searchStockMovements",
-        "summary": "Lagerbewegungen eines Artikels abrufen (nur lesen)",
-        "description": "Historie der Zu-/Abgänge, neueste zuerst.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Liste der Lagerbewegungen",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "post": {
         "operationId": "createStockMovement",
         "summary": "Materialentnahme oder Wareneingang buchen",

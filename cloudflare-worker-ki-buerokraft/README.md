@@ -98,23 +98,22 @@ GPT-Editor: "Bei OpenAPI Spec sind maximal 30 Vorgänge möglich"). Der Worker s
 (`worker.js`) unterstützt alle unten aufgeführten Endpunkte weiterhin vollständig - für
 direkte API-Aufrufe (curl, ein anderes Tool, ein zweiter Worker) sind sie alle nutzbar.
 `chatgpt-actions-schema.json` enthält aber bewusst nur eine Auswahl von exakt 30
-Endpunkten für die ChatGPT-Action, priorisiert nach deiner ursprünglichen Vorgabe
-(Abschnitt 39, "erste funktionsfähige Version"): Kunden, Leads, Projekte (lesen), Aufgaben,
-Termine, Angebote, Rechnungen (lesen), Aufträge (lesen), Ausgaben/Belege, Preisliste,
-Lagerbewegungen je Artikel, Mitarbeiter (lesen) und das Dashboard. **Nicht** im
-ChatGPT-Schema enthalten (aber per direktem API-Aufruf weiter erreichbar): einzelne
-Artikel-/Leistungs-Detailabfragen (`/articles`, `/services`, `/articles/{id}` - dafür gibt
-es `/price-list`, das beides kombiniert liefert), `/employees/{id}` (Einzelabruf - die
-Liste über `/employees` reicht meist), der globale `/stock-movements`-Endpunkt (die
-artikelbezogene Variante bleibt erhalten), `/payments`, `/reminders`,
-`/projects/{id}/documents` und `/work-reports`. Falls du eine davon lieber im
-ChatGPT-Zugriff hättest als etwas anderes, sag Bescheid - dann tauschen wir etwas aus
-(muss wegen des 30er-Limits immer 1:1 sein).
+Operationen für die ChatGPT-Action. Danny hat sich bewusst dagegen entschieden, Löschen,
+Rechnungen-anlegen oder automatischen Versand freizuschalten (bleibt gesperrt, siehe
+Abweichungs-Hinweis oben) - dafür wurde das Bearbeiten auf mehr Bereiche ausgeweitet
+(Projekte, Termine, Angebots-**Entwürfe**, Arbeitsberichte, Katalog/Preise, unkritische
+Mitarbeiter-Stammdaten). Um im 30er-Limit zu bleiben, wurden dafür einzelne
+Detail-Abrufe per ID gestrichen, wo die Liste+Filter denselben Zweck erfüllt (z.B.
+`GET /customers/{id}`, `GET /tasks/{id}`, `GET /invoices/{id}`) sowie `/orders` und die
+Lagerbewegungs-Historie (`GET /articles/{id}/stock-movements`) - all das bleibt über
+den Worker direkt erreichbar, ist nur nicht Teil der ChatGPT-Action. Sag Bescheid, falls
+du eine davon lieber drin hättest als etwas anderes (muss wegen des 30er-Limits immer 1:1
+getauscht werden).
 
 ```
 GET   /customers?email=&phone=&name=&postal_code=&city=
-GET   /customers/{id}
 POST  /customers
+GET   /customers/{id}              (nur direkt per Worker-API, nicht in der ChatGPT-Action)
 PATCH /customers/{id}
 
 GET   /leads?status=
@@ -122,22 +121,28 @@ POST  /leads
 PATCH /leads/{id}
 
 GET   /projects?customer_id=&status=
-GET   /projects/{id}
-GET   /projects/{id}/documents
+GET   /projects/{id}               (nur direkt per Worker-API)
+PATCH /projects/{id}               ({ title?, description?, status?, bereich?, start_date?, planned_end_date? } -
+                                     status muss eine gültige Werkora-Kanban-Spalten-ID sein)
+GET   /projects/{id}/documents     (nur direkt per Worker-API)
 POST  /projects/{id}/documents     ({ type, title, note } - type siehe Vorgabe Abschnitt 19)
 
 GET   /tasks?status=&priority=&due_date=&customer_id=&project_id=&assigned_to=
-GET   /tasks/{id}
+GET   /tasks/{id}                  (nur direkt per Worker-API)
 POST  /tasks
 PATCH /tasks/{id}                  (u.a. { "status": "completed" })
 
 GET   /appointments?customer_id=&project_id=&date_from=&date_to=
-GET   /appointments/{id}
+GET   /appointments/{id}           (nur direkt per Worker-API)
 POST  /appointments
+PATCH /appointments/{id}           ({ title?, start?, end?, address?, customer_id?, project_id?,
+                                       assigned_employee_ids?, notes? } - z.B. verschieben)
 
 GET   /quotes?customer_id=&project_id=&status=&date_from=&date_to=
-GET   /quotes/{id}
+GET   /quotes/{id}                 (nur direkt per Worker-API)
 POST  /quotes                      (immer status "draft")
+PATCH /quotes/{id}                 ({ title?, project_id?, items? } - NUR solange Status "draft",
+                                     danach 409; items ersetzt die komplette Positionsliste)
 POST  /quotes/{id}/send            -> 403 (gesperrt)
 POST  /quotes/{id}/approve         -> 403 (gesperrt)
 POST  /quotes/{id}/convert-to-order -> 403 (noch nicht gebaut)
@@ -145,43 +150,50 @@ POST  /quotes/{id}/convert-to-order -> 403 (noch nicht gebaut)
 GET   /invoices?status=&customer_id=&project_id=&date_from=&date_to=
       (status "overdue" wird serverseitig aus offen/teilbezahlt + überschrittenem
        Fälligkeitsdatum berechnet, ist kein echtes Feld in Werkora)
-GET   /invoices/{id}
+GET   /invoices/{id}               (nur direkt per Worker-API)
 POST  /invoices                    -> 403 (gesperrt, GoBD - siehe oben)
 POST  /invoices/{id}/send          -> 403 (gesperrt)
 POST  /invoices/{id}/approve       -> 403 (gesperrt)
 
-GET   /orders?customer_id=&project_id=&status=     (Auftragsbestätigungen, nur lesen)
-GET   /orders/{id}
+GET   /orders?customer_id=&project_id=&status=     (Auftragsbestätigungen, nur lesen; nur direkt per Worker-API)
+GET   /orders/{id}                 (nur direkt per Worker-API)
 
 GET   /work-reports?customer_id=&project_id=&employee_id=
-GET   /work-reports/{id}
 POST  /work-reports
-PATCH /work-reports/{id}
+PATCH /work-reports/{id}           ({ work_done?, material_used?, additional_work?, start_time?,
+                                       end_time?, work_minutes?, travel_minutes? })
 
-GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lesen)
+GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lesen; nur direkt per Worker-API -
+                                     nicht in der ChatGPT-Action, da es keine sinnvolle "Bearbeiten"-Aktion gibt)
 
-GET   /reminders?invoice_id=
-POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? })
+GET   /reminders?invoice_id=       (nur direkt per Worker-API)
+POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? } - nur direkt per Worker-API)
 
 GET   /expenses?customer_id=&project_id=&category=&supplier=&date_from=&date_to=&status=
       (Belege - inkl. Beleg-URL/-Dateityp, falls in Werkora bereits ein Beleg hochgeladen wurde)
-GET   /expenses/{id}
+GET   /expenses/{id}               (nur direkt per Worker-API)
 POST  /expenses                    ({ date, category, description?, supplier?, amount_net oder
                                        amount_gross, vat_rate?, paid_with?, customer_id?, project_id? } -
                                        neue Belege selbst werden weiterhin nur in Werkora hochgeladen/gescannt)
 PATCH /expenses/{id}                (u.a. Kategorie nachträglich zuordnen)
 
-GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; low_stock=true filtert auf Bestand <= Mindestbestand)
-GET   /articles/{id}               (Preise/Stammdaten nur lesen, inkl. aktuellem Lagerbestand)
-GET   /services?trade=             (Katalog-Leistungen, nur lesen)
-GET   /price-list?trade=           (Artikel+Leistungen zusammen, nur lesen)
+GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; nur direkt per Worker-API)
+GET   /articles/{id}               (nur direkt per Worker-API)
+GET   /services?trade=             (Katalog-Leistungen, nur lesen; nur direkt per Worker-API)
+GET   /price-list?trade=&low_stock=  (Artikel+Leistungen zusammen, nur lesen)
+POST  /articles                    ({ name, type?, description?, unit?, purchase_price?, markup_percent?,
+                                       sales_price?, vat_rate?, trade?, min_stock? } - type: article/service;
+                                       nur direkt per Worker-API, nicht in der ChatGPT-Action)
+PATCH /articles/{id}               (dieselben Felder wie POST, ohne type; bestand/bestandTracking bewusst NICHT
+                                     hierüber änderbar - Bestand läuft nur über stock-movements, siehe unten)
 
-GET   /articles/{id}/stock-movements   (Lagerbewegungs-Historie, nur lesen)
+GET   /articles/{id}/stock-movements   (Lagerbewegungs-Historie, nur lesen; nur direkt per Worker-API)
 POST  /articles/{id}/stock-movements   ({ delta, reason? } - bucht Zugang/Entnahme, ändert den Bestand sofort;
                                          409, wenn für den Artikel keine Bestandsführung aktiviert ist)
 
 GET   /employees                   (eingeschränkte Felder, keine Gehaltsdaten)
-GET   /employees/{id}
+PATCH /employees/{id}              ({ name?, trade?, phone?, email? } - bewusst NUR unkritische Stammdaten,
+                                     keine Gehalts-/Steuer-/SV-Felder, keine Zugriffsrolle/Berechtigungen)
 
 GET   /assistant/dashboard
 
