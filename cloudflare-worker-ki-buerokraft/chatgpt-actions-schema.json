@@ -1717,7 +1717,7 @@
       "post": {
         "operationId": "createStockMovement",
         "summary": "Materialentnahme oder Wareneingang buchen",
-        "description": "Bucht einen Lagerbestand-Zu- oder -Abgang und aktualisiert den Bestand des Artikels sofort. delta positiv = Zugang (Wareneingang), delta negativ = Entnahme/Verbrauch. Funktioniert nur bei Artikeln mit aktivierter Bestandsführung (stock != null bei searchArticles/getArticle). Der Bestand wird bei einer Entnahme über den vorhandenen Bestand hinaus auf 0 begrenzt, nie negativ.",
+        "description": "Bucht einen Lagerbestand-Zu- oder -Abgang, aktualisiert den Bestand sofort. delta positiv = Zugang, negativ = Entnahme. Nur bei Artikeln mit aktivierter Bestandsführung (stock != null). Bestand wird bei Entnahme über den Bestand hinaus auf 0 begrenzt, nie negativ.",
         "parameters": [
           {
             "name": "id",
