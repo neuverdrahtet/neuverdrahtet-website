@@ -1347,11 +1347,15 @@ export default {
           // Zwei Cloudflare-Worker dürfen sich NICHT direkt über ihre workers.dev-Adresse
           // gegenseitig per fetch() aufrufen (Cloudflare blockiert das mit Fehler 1042,
           // schon bevor die Anfrage den Ziel-Worker erreicht) - deshalb läuft dieser Aufruf
-          // über eine Service-Bindung (env.AI_WORKER), die in den Worker-Einstellungen bei
-          // Cloudflare eingerichtet werden muss (siehe README.md). Ohne diese Bindung ist
-          // dieser Endpunkt technisch nicht nutzbar, unabhängig vom Code hier.
-          if (!env.AI_WORKER) {
-            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung "AI_WORKER" fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409);
+          // über eine Service-Bindung, die in den Worker-Einstellungen bei Cloudflare
+          // eingerichtet werden muss (siehe README.md). Cloudflares Dashboard übersetzt den
+          // eingetragenen Variablennamen an manchen Stellen der Oberfläche (z.B. "AI_WORKER"
+          // wird dort als "KI-ARBEITER" angezeigt) - der tatsächlich im Code ankommende
+          // env-Schlüssel bleibt aber der eingetragene Variablenname. Beide Schreibweisen
+          // werden hier akzeptiert, damit es unabhängig von der Anzeige funktioniert.
+          const aiWorkerBinding = env.AI_WORKER || env['KI-ARBEITER'] || env.KI_ARBEITER;
+          if (!aiWorkerBinding) {
+            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung zum KI-Worker fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409);
           }
           let imageDataUrl;
           try {
@@ -1364,7 +1368,7 @@ export default {
           }
           let analyse;
           try {
-            const aiRes = await env.AI_WORKER.fetch('https://ai-worker.internal/', {
+            const aiRes = await aiWorkerBinding.fetch('https://ai-worker.internal/', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
