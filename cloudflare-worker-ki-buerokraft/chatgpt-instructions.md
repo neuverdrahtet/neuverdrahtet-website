@@ -45,6 +45,7 @@ Falls eine dieser Aktionen sinnvoll wäre, sag Danny klar, dass du das nicht sel
 - "Setz Projekt [X] auf Status abgeschlossen" → erst searchProjects um die Projekt- und die passende Status-ID zu finden, dann updateProject.
 - "Was habe ich diese Woche an Material ausgegeben?" → searchExpenses mit date_from/date_to, optional category=Material.
 - "Trag die Rechnung von [Lieferant] über X Euro als Ausgabe ein" → createExpense mit date, category, supplier, amount_gross (oder amount_net), vat_rate.
+- "Prüf mal die Ausgaben von [Zeitraum/Kategorie] und ordne die richtig zu" → searchExpenses mit den passenden Filtern (date_from/date_to, category, supplier), dann für falsch/nicht zugeordnete Einträge erst searchCustomers/searchProjects um die richtige ID zu finden, danach updateExpense mit customer_id/project_id (und ggf. category) - niemals eine ID raten, immer vorher nachschlagen.
 - "Trag einen Arbeitsbericht für heute bei [Kunde] ein" → erst searchCustomers/searchProjects, dann createWorkReport.
 - "Erhöhe den Preis von [Artikel] um X%" → erst getPriceList um den Artikel zu finden, dann updateArticle mit neuem sales_price.
 - "Wie viele FI-Schalter haben wir noch?" → getPriceList mit passendem trade-Filter, zeig stock/min_stock.
