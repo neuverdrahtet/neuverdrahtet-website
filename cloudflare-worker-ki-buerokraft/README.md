@@ -322,6 +322,36 @@ drei weitere Cron-Trigger manuell eingetragen werden: `0 6 * * 1-5`, `0 10 * * 1
 5. Die im Dashboard angezeigte Worker-URL (endet auf `.workers.dev`) ist die Basis-URL für
    die KI-Bürokraft, z.B. `https://neuverdrahtet-ki-buerokraft.<dein-konto>.workers.dev`.
 
+## Beleg-Analyse einrichten (analyze-receipt, Service-Bindung erforderlich)
+
+`POST /expenses/{id}/analyze-receipt` liest ein Belegfoto per KI aus, indem dieser Worker
+den bestehenden KI-Worker `neuverdrahtet-ki-angebote` aufruft (dieselbe KI, die auch
+"Beleg scannen" in Werkora selbst nutzt). **Zwei Cloudflare-Worker dürfen sich aber nicht
+direkt über ihre `.workers.dev`-Adresse gegenseitig per `fetch()` aufrufen** - Cloudflare
+blockiert das mit Fehler 1042 ("Restricted"), bevor die Anfrage überhaupt ankommt. Dafür
+gibt es **Service-Bindungen**: eine interne Verbindung zwischen zwei eigenen Workern, die
+dieses Limit umgeht.
+
+**Einmalig einrichten (Cloudflare Dashboard):**
+
+1. **Workers & Pages** → `neuverdrahtet-ki-buerokraft` öffnen.
+2. **Einstellungen** → runterscrollen zu **Bindungen** (bzw. "Bindings" - manchmal auch
+   unter "Variablen und Geheimnisse" gelistet) → **Bindung hinzufügen**.
+3. Typ: **Service-Bindung** (Service binding).
+4. **Variablenname**: `AI_WORKER` (muss exakt so heißen, groß geschrieben, mit Unterstrich).
+5. **Service**: `neuverdrahtet-ki-angebote` auswählen (der bestehende KI-Worker).
+6. **Umgebung**: `production`.
+7. Speichern und den Worker einmal neu bereitstellen (Einsetzen/Deploy), damit die neue
+   Bindung aktiv wird.
+
+Ohne diese Bindung gibt `analyze-receipt` den Fehler `AI_WORKER_NOT_BOUND` zurück (nicht
+den kryptischen Cloudflare-1042-Fehler) - das ist dann das Zeichen, dass Schritt 1-7 noch
+fehlen oder der Worker nach dem Einrichten noch nicht neu bereitgestellt wurde.
+
+Außerdem muss in Werkora selbst unter **Einstellungen → KI-Angebotserstellung** die
+KI-Belegerkennung bereits eingerichtet sein (`aiWorkerUrl` + `aiAppSecret` gesetzt) - das
+ist normalerweise schon der Fall, wenn "Beleg scannen" in der App funktioniert.
+
 ## Test von Hand (z.B. mit curl oder Postman)
 
 ```bash

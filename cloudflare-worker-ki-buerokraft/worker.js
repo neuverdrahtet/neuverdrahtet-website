@@ -1341,8 +1341,18 @@ export default {
             return errorResponse('UNSUPPORTED_RECEIPT_FORMAT', `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - nur fotografierte Belege (JPEG/PNG/WebP) werden unterstützt, keine PDFs.`, 422);
           }
           const einstellungen = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
-          const aiWorkerUrl = einstellungen?.aiWorkerUrl;
-          if (!aiWorkerUrl) return errorResponse('AI_NOT_CONFIGURED', 'Die KI-Belegerkennung ist in Werkora nicht eingerichtet (Einstellungen → KI-Angebotserstellung).', 409);
+          if (!einstellungen?.aiWorkerUrl || !einstellungen?.aiAppSecret) {
+            return errorResponse('AI_NOT_CONFIGURED', 'Die KI-Belegerkennung ist in Werkora nicht eingerichtet (Einstellungen → KI-Angebotserstellung).', 409);
+          }
+          // Zwei Cloudflare-Worker dürfen sich NICHT direkt über ihre workers.dev-Adresse
+          // gegenseitig per fetch() aufrufen (Cloudflare blockiert das mit Fehler 1042,
+          // schon bevor die Anfrage den Ziel-Worker erreicht) - deshalb läuft dieser Aufruf
+          // über eine Service-Bindung (env.AI_WORKER), die in den Worker-Einstellungen bei
+          // Cloudflare eingerichtet werden muss (siehe README.md). Ohne diese Bindung ist
+          // dieser Endpunkt technisch nicht nutzbar, unabhängig vom Code hier.
+          if (!env.AI_WORKER) {
+            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung "AI_WORKER" fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409);
+          }
           let imageDataUrl;
           try {
             const imgRes = await fetch(ausgabe.beleg.url);
@@ -1354,9 +1364,16 @@ export default {
           }
           let analyse;
           try {
-            const aiRes = await fetch(aiWorkerUrl, {
+            const aiRes = await env.AI_WORKER.fetch('https://ai-worker.internal/', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-App-Secret': einstellungen?.aiAppSecret || '' },
+              headers: {
+                'Content-Type': 'application/json',
+                'X-App-Secret': einstellungen.aiAppSecret,
+                // Der KI-Worker prüft den Origin-Header gegen ALLOWED_ORIGINS (normalerweise
+                // nur für Aufrufe aus dem Browser gedacht) - bei einem Worker-zu-Worker-Aufruf
+                // gibt es keinen echten Origin, deshalb hier explizit einen erlaubten setzen.
+                Origin: 'https://neuverdrahtet.com',
+              },
               body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, kategorien: AUSGABEN_KATEGORIEN }),
             });
             if (!aiRes.ok) {
