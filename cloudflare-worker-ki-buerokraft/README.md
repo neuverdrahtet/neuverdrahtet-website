@@ -176,13 +176,13 @@ POST  /expenses                    ({ date, category, description?, supplier?, a
                                        amount_gross, vat_rate?, paid_with?, customer_id?, project_id? } -
                                        neue Belege selbst werden weiterhin nur in Werkora hochgeladen/gescannt)
 PATCH /expenses/{id}                (u.a. Kategorie nachträglich zuordnen)
-POST  /expenses/{id}/analyze-receipt  (liest den echten Belegbild-Inhalt per KI aus - dieselbe
+POST  /expenses/{id}/analyze-receipt  (liest den echten Beleginhalt per KI aus - dieselbe
                                      Erkennung wie "Beleg scannen" in Werkora selbst, siehe
                                      Einstellungen -> KI-Angebotserstellung -> aiWorkerUrl/aiAppSecret.
                                      Liefert { current, detected } zum Vergleich zurück, ändert nichts
-                                     automatisch. Nur JPEG/PNG/WebP-Fotobelege, keine PDFs - liefert bei
-                                     PDF/fehlendem Beleg/nicht eingerichteter KI einen klaren Fehler
-                                     statt zu raten)
+                                     automatisch. Unterstützt JPEG/PNG/WebP-Fotos UND PDF - liefert bei
+                                     fehlendem Beleg/nicht unterstütztem Format/nicht eingerichteter KI
+                                     einen klaren Fehler statt zu raten)
 
 GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; nur direkt per Worker-API)
 GET   /articles/{id}               (nur direkt per Worker-API)

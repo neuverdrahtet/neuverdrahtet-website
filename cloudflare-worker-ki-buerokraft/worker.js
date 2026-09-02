@@ -1337,8 +1337,8 @@ export default {
           if (!ausgabe) return errorResponse('EXPENSE_NOT_FOUND', 'Ausgabe wurde nicht gefunden.', 404);
           if (!ausgabe.beleg?.url) return errorResponse('NO_RECEIPT', 'Zu dieser Ausgabe ist kein Beleg (Foto/PDF) hinterlegt.', 404);
           const mime = ausgabe.beleg.mime || '';
-          if (!/^image\/(png|jpe?g|webp)$/i.test(mime)) {
-            return errorResponse('UNSUPPORTED_RECEIPT_FORMAT', `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - nur fotografierte Belege (JPEG/PNG/WebP) werden unterstützt, keine PDFs.`, 422);
+          if (!/^(image\/(png|jpe?g|webp)|application\/pdf)$/i.test(mime)) {
+            return errorResponse('UNSUPPORTED_RECEIPT_FORMAT', `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - unterstützt werden JPEG/PNG/WebP-Fotos und PDF.`, 422);
           }
           const einstellungen = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
           if (!einstellungen?.aiWorkerUrl || !einstellungen?.aiAppSecret) {
