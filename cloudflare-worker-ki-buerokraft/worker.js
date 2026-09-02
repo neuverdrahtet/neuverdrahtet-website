@@ -1353,9 +1353,16 @@ export default {
           // wird dort als "KI-ARBEITER" angezeigt) - der tatsächlich im Code ankommende
           // env-Schlüssel bleibt aber der eingetragene Variablenname. Beide Schreibweisen
           // werden hier akzeptiert, damit es unabhängig von der Anzeige funktioniert.
-          const aiWorkerBinding = env.AI_WORKER || env['KI-ARBEITER'] || env.KI_ARBEITER;
+          // Statt auf einen exakten Bindungsnamen zu bestehen (das Cloudflare-Dashboard zeigt
+          // ihn an manchen Stellen übersetzt/anders an, z.B. "AI_WORKER" als "KI-ARBEITER"):
+          // eine Service-Bindung ist im env-Objekt ein Wert mit einer eigenen .fetch()-Methode
+          // (ein "Fetcher") - das reicht als Erkennungsmerkmal, unabhängig vom gewählten Namen.
+          const aiWorkerBinding = env.AI_WORKER || env['KI-ARBEITER'] || env.KI_ARBEITER
+            || Object.values(env || {}).find((v) => v && typeof v.fetch === 'function');
           if (!aiWorkerBinding) {
-            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung zum KI-Worker fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409);
+            // Diagnose-Info mitgeben (nur Namen der vorhandenen env-Bindings, keine Werte/
+            // Geheimnisse), damit sich das ohne weitere Rateversuche direkt einordnen lässt.
+            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung zum KI-Worker fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409, { vorhandene_env_schluessel: Object.keys(env || {}) });
           }
           let imageDataUrl;
           try {
