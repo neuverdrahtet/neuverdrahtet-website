@@ -1507,6 +1507,35 @@
         }
       }
     },
+    "/expenses/{id}/analyze-receipt": {
+      "post": {
+        "operationId": "analyzeReceipt",
+        "summary": "Beleg-Foto per KI auslesen und mit dem gespeicherten Datensatz vergleichen",
+        "description": "Liest den echten Bildinhalt des Belegs aus (nicht nur gespeicherte Felder). Liefert current (DB-Stand) und detected (aus Foto erkannt) zum Vergleich, ändert nichts automatisch. Nur Foto-Belege (JPEG/PNG/WebP), keine PDFs. Bei Abweichung danach updateExpense aufrufen.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Vergleich aktueller Datensatz vs. erkannter Beleginhalt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/price-list": {
       "get": {
         "operationId": "getPriceList",
@@ -1632,58 +1661,6 @@
         "responses": {
           "200": {
             "description": "Liste",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/employees/{id}": {
-      "patch": {
-        "operationId": "updateEmployee",
-        "summary": "Mitarbeiter-Stammdaten aktualisieren (nur name/trade/phone/email - keine Gehalts-/Steuerdaten, keine Berechtigungen)",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "trade": {
-                    "type": "string"
-                  },
-                  "phone": {
-                    "type": "string"
-                  },
-                  "email": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Aktualisierter Mitarbeiter",
             "content": {
               "application/json": {
                 "schema": {

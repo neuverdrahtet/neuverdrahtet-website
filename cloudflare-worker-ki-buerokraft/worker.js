@@ -108,6 +108,17 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Wandelt einen ArrayBuffer in Base64 um, in Chunks damit String.fromCharCode(...) bei größeren Fotos nicht am Call-Stack-Limit scheitert. */
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
 function addDaysISO(iso, delta) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + delta);
@@ -1314,6 +1325,65 @@ export default {
       // Werkora selbst hochgeladen/gescannt; hier: lesen inkl. Beleg-URL, Betrag/Datum/
       // Lieferant/MwSt. erfassen und Kategorie zuordnen+speichern) ---
       if (teile[0] === 'expenses') {
+        // --- Beleg wirklich auslesen (Foto/PDF-Inhalt, nicht nur die gespeicherten Felder) ---
+        // Nutzt dieselbe KI-Belegerkennung wie "Beleg scannen" in Werkora selbst
+        // (Einstellungen -> KI-Angebotserstellung -> aiWorkerUrl), damit die KI-Bürokraft
+        // fehlerhaft importierte Belege (0-Euro-Beträge, falsches Datum, "Sonstiges" statt
+        // echter Kategorie) gegen den tatsächlichen Belegbild-Inhalt prüfen kann, statt auf
+        // Verdacht zu raten. Ändert NICHTS automatisch - liefert nur den erkannten Inhalt
+        // zurück, die eigentliche Korrektur läuft weiterhin über updateExpense.
+        if (teile[1] && teile[2] === 'analyze-receipt' && request.method === 'POST') {
+          const ausgabe = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: teile[1] });
+          if (!ausgabe) return errorResponse('EXPENSE_NOT_FOUND', 'Ausgabe wurde nicht gefunden.', 404);
+          if (!ausgabe.beleg?.url) return errorResponse('NO_RECEIPT', 'Zu dieser Ausgabe ist kein Beleg (Foto/PDF) hinterlegt.', 404);
+          const mime = ausgabe.beleg.mime || '';
+          if (!/^image\/(png|jpe?g|webp)$/i.test(mime)) {
+            return errorResponse('UNSUPPORTED_RECEIPT_FORMAT', `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - nur fotografierte Belege (JPEG/PNG/WebP) werden unterstützt, keine PDFs.`, 422);
+          }
+          const einstellungen = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
+          const aiWorkerUrl = einstellungen?.aiWorkerUrl;
+          if (!aiWorkerUrl) return errorResponse('AI_NOT_CONFIGURED', 'Die KI-Belegerkennung ist in Werkora nicht eingerichtet (Einstellungen → KI-Angebotserstellung).', 409);
+          let imageDataUrl;
+          try {
+            const imgRes = await fetch(ausgabe.beleg.url);
+            if (!imgRes.ok) throw new Error(`Beleg-Download fehlgeschlagen (${imgRes.status}).`);
+            const buffer = await imgRes.arrayBuffer();
+            imageDataUrl = `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
+          } catch (err) {
+            return errorResponse('RECEIPT_DOWNLOAD_FAILED', err.message || 'Beleg konnte nicht geladen werden.', 502);
+          }
+          let analyse;
+          try {
+            const aiRes = await fetch(aiWorkerUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-App-Secret': einstellungen?.aiAppSecret || '' },
+              body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, kategorien: AUSGABEN_KATEGORIEN }),
+            });
+            if (!aiRes.ok) {
+              const t = await aiRes.text().catch(() => '');
+              throw new Error(`KI-Worker-Fehler (${aiRes.status}): ${t.slice(0, 200)}`);
+            }
+            analyse = await aiRes.json();
+            if (analyse.error) throw new Error(analyse.error);
+          } catch (err) {
+            return errorResponse('AI_ANALYSIS_FAILED', err.message || 'Beleg-Analyse fehlgeschlagen.', 502);
+          }
+          await logAction(ctx, { action: 'expenses.analyze_receipt', entityType: 'ausgaben', entityId: teile[1], newValue: analyse, status: 'success' });
+          return okResponse({
+            current: expenseToApi(ausgabe),
+            detected: {
+              supplier: analyse.haendler || '',
+              date: analyse.datum || '',
+              amount_net: analyse.betragNetto ?? null,
+              amount_gross: analyse.betragBrutto ?? null,
+              vat_rate: analyse.steuersatz ?? null,
+              category: AUSGABEN_KATEGORIEN.includes(analyse.kategorie) ? analyse.kategorie : 'Sonstiges',
+              description: analyse.beschreibung || '',
+              readable: !!analyse.lesbar,
+              category_confident: !!analyse.kategorieSicher,
+            },
+          });
+        }
         if (request.method === 'GET' && !teile[1]) {
           let ausgaben = await firestoreList({ accessToken, projectId, collection: 'ausgaben' });
           const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id');
