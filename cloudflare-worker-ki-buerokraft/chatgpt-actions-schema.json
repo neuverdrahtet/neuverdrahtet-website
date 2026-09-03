@@ -1569,6 +1569,41 @@
         }
       }
     },
+    "/expenses/bulk-fix-receipts": {
+      "post": {
+        "operationId": "bulkFixReceipts",
+        "summary": "Mehrere 0-Euro-Belege in einem Aufruf per KI auslesen und direkt korrigieren",
+        "description": "Verarbeitet bis zu limit Belege ohne Betrag serverseitig: liest jeden per KI aus, übernimmt bei sicher lesbaren Belegen Betrag/Datum/Lieferant sofort (Kategorie nur bei hoher Sicherheit). Für viele Belege statt analyzeReceipt einzeln nutzen - mit has_more wiederholen, bis fertig.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "limit": {
+                    "type": "integer",
+                    "description": "Wie viele Belege in diesem Aufruf verarbeitet werden (1-25, Default 10). Kleinere Werte sind zuverlässiger, größere schneller fertig."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "{ processed, updated, needs_manual_review, remaining_incomplete, has_more }",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/price-list": {
       "get": {
         "operationId": "getPriceList",
@@ -1609,73 +1644,6 @@
         "responses": {
           "200": {
             "description": "Liste",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/articles/{id}": {
-      "patch": {
-        "operationId": "updateArticle",
-        "summary": "Katalog-Artikel/Leistung aktualisieren, z.B. Preis anpassen",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "description": {
-                    "type": "string"
-                  },
-                  "unit": {
-                    "type": "string"
-                  },
-                  "purchase_price": {
-                    "type": "number"
-                  },
-                  "markup_percent": {
-                    "type": "number"
-                  },
-                  "sales_price": {
-                    "type": "number"
-                  },
-                  "vat_rate": {
-                    "type": "number"
-                  },
-                  "trade": {
-                    "type": "string"
-                  },
-                  "min_stock": {
-                    "type": "number"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Aktualisierter Artikel/Leistung",
             "content": {
               "application/json": {
                 "schema": {

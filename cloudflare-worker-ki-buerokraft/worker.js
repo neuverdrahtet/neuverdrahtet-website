@@ -119,6 +119,84 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+/**
+ * Lädt den Beleg einer Ausgabe herunter und lässt ihn per KI auslesen (Foto
+ * oder PDF) - dieselbe Erkennung wie "Beleg scannen" in Werkora selbst.
+ * Wird sowohl vom Einzel-Endpunkt (analyze-receipt) als auch vom
+ * Batch-Endpunkt (bulk-fix-receipts) genutzt, damit die Logik nur einmal
+ * gepflegt werden muss. Ändert NICHTS an der Ausgabe - liefert nur das
+ * Analyse-Ergebnis (oder einen strukturierten Fehler) zurück.
+ */
+async function analysiereBeleg({ ausgabe, accessToken, projectId, env }) {
+  if (!ausgabe.beleg?.url) return { ok: false, code: 'NO_RECEIPT', message: 'Zu dieser Ausgabe ist kein Beleg (Foto/PDF) hinterlegt.', status: 404 };
+  const mime = ausgabe.beleg.mime || '';
+  if (!/^(image\/(png|jpe?g|webp)|application\/pdf)$/i.test(mime)) {
+    return { ok: false, code: 'UNSUPPORTED_RECEIPT_FORMAT', message: `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - unterstützt werden JPEG/PNG/WebP-Fotos und PDF.`, status: 422 };
+  }
+  const einstellungen = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
+  if (!einstellungen?.aiWorkerUrl || !einstellungen?.aiAppSecret) {
+    return { ok: false, code: 'AI_NOT_CONFIGURED', message: 'Die KI-Belegerkennung ist in Werkora nicht eingerichtet (Einstellungen → KI-Angebotserstellung).', status: 409 };
+  }
+  // Zwei Cloudflare-Worker dürfen sich NICHT direkt über ihre workers.dev-Adresse
+  // gegenseitig per fetch() aufrufen (Cloudflare blockiert das mit Fehler 1042) -
+  // deshalb läuft das über eine Service-Bindung. Statt auf einen exakten
+  // Bindungsnamen zu bestehen (das Cloudflare-Dashboard zeigt ihn an manchen
+  // Stellen übersetzt an, z.B. "AI_WORKER" als "KI-ARBEITER"): eine
+  // Service-Bindung ist im env-Objekt ein Wert mit eigener .fetch()-Methode -
+  // das reicht als Erkennungsmerkmal, unabhängig vom gewählten Namen.
+  const aiWorkerBinding = env.AI_WORKER || env['KI-ARBEITER'] || env.KI_ARBEITER
+    || Object.values(env || {}).find((v) => v && typeof v.fetch === 'function');
+  if (!aiWorkerBinding) {
+    return { ok: false, code: 'AI_WORKER_NOT_BOUND', message: 'Service-Bindung zum KI-Worker fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', status: 409, details: { vorhandene_env_schluessel: Object.keys(env || {}) } };
+  }
+  let imageDataUrl;
+  try {
+    const imgRes = await fetch(ausgabe.beleg.url);
+    if (!imgRes.ok) throw new Error(`Beleg-Download fehlgeschlagen (${imgRes.status}).`);
+    const buffer = await imgRes.arrayBuffer();
+    imageDataUrl = `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
+  } catch (err) {
+    return { ok: false, code: 'RECEIPT_DOWNLOAD_FAILED', message: err.message || 'Beleg konnte nicht geladen werden.', status: 502 };
+  }
+  let analyse;
+  try {
+    const aiRes = await aiWorkerBinding.fetch('https://ai-worker.internal/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Secret': einstellungen.aiAppSecret,
+        // Der KI-Worker prüft den Origin-Header gegen ALLOWED_ORIGINS (normalerweise
+        // nur für Aufrufe aus dem Browser gedacht) - bei einem Worker-zu-Worker-Aufruf
+        // gibt es keinen echten Origin, deshalb hier explizit einen erlaubten setzen.
+        Origin: 'https://neuverdrahtet.com',
+      },
+      body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, kategorien: AUSGABEN_KATEGORIEN }),
+    });
+    if (!aiRes.ok) {
+      const t = await aiRes.text().catch(() => '');
+      throw new Error(`KI-Worker-Fehler (${aiRes.status}): ${t.slice(0, 200)}`);
+    }
+    analyse = await aiRes.json();
+    if (analyse.error) throw new Error(analyse.error);
+  } catch (err) {
+    return { ok: false, code: 'AI_ANALYSIS_FAILED', message: err.message || 'Beleg-Analyse fehlgeschlagen.', status: 502 };
+  }
+  return {
+    ok: true,
+    detected: {
+      supplier: analyse.haendler || '',
+      date: analyse.datum || '',
+      amount_net: analyse.betragNetto ?? null,
+      amount_gross: analyse.betragBrutto ?? null,
+      vat_rate: analyse.steuersatz ?? null,
+      category: AUSGABEN_KATEGORIEN.includes(analyse.kategorie) ? analyse.kategorie : 'Sonstiges',
+      description: analyse.beschreibung || '',
+      readable: !!analyse.lesbar,
+      category_confident: !!analyse.kategorieSicher,
+    },
+  };
+}
+
 function addDaysISO(iso, delta) {
   const d = new Date(iso + 'T00:00:00Z');
   d.setUTCDate(d.getUTCDate() + delta);
@@ -1333,90 +1411,73 @@ export default {
       // Lieferant/MwSt. erfassen und Kategorie zuordnen+speichern) ---
       if (teile[0] === 'expenses') {
         // --- Beleg wirklich auslesen (Foto/PDF-Inhalt, nicht nur die gespeicherten Felder) ---
-        // Nutzt dieselbe KI-Belegerkennung wie "Beleg scannen" in Werkora selbst
-        // (Einstellungen -> KI-Angebotserstellung -> aiWorkerUrl), damit die KI-Bürokraft
-        // fehlerhaft importierte Belege (0-Euro-Beträge, falsches Datum, "Sonstiges" statt
-        // echter Kategorie) gegen den tatsächlichen Belegbild-Inhalt prüfen kann, statt auf
-        // Verdacht zu raten. Ändert NICHTS automatisch - liefert nur den erkannten Inhalt
-        // zurück, die eigentliche Korrektur läuft weiterhin über updateExpense.
+        // Nutzt dieselbe KI-Belegerkennung wie "Beleg scannen" in Werkora selbst, damit die
+        // KI-Bürokraft fehlerhaft importierte Belege (0-Euro-Beträge, falsches Datum,
+        // "Sonstiges" statt echter Kategorie) gegen den tatsächlichen Belegbild-Inhalt prüfen
+        // kann, statt auf Verdacht zu raten. Ändert NICHTS automatisch - liefert nur den
+        // erkannten Inhalt zurück, die eigentliche Korrektur läuft über updateExpense.
         if (teile[1] && teile[2] === 'analyze-receipt' && request.method === 'POST') {
           const ausgabe = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: teile[1] });
           if (!ausgabe) return errorResponse('EXPENSE_NOT_FOUND', 'Ausgabe wurde nicht gefunden.', 404);
-          if (!ausgabe.beleg?.url) return errorResponse('NO_RECEIPT', 'Zu dieser Ausgabe ist kein Beleg (Foto/PDF) hinterlegt.', 404);
-          const mime = ausgabe.beleg.mime || '';
-          if (!/^(image\/(png|jpe?g|webp)|application\/pdf)$/i.test(mime)) {
-            return errorResponse('UNSUPPORTED_RECEIPT_FORMAT', `Dieser Beleg (${mime || 'unbekanntes Format'}) kann automatisch nicht ausgelesen werden - unterstützt werden JPEG/PNG/WebP-Fotos und PDF.`, 422);
+          const ergebnis = await analysiereBeleg({ ausgabe, accessToken, projectId, env });
+          if (!ergebnis.ok) return errorResponse(ergebnis.code, ergebnis.message, ergebnis.status, ergebnis.details);
+          await logAction(ctx, { action: 'expenses.analyze_receipt', entityType: 'ausgaben', entityId: teile[1], newValue: ergebnis.detected, status: 'success' });
+          return okResponse({ current: expenseToApi(ausgabe), detected: ergebnis.detected });
+        }
+
+        // --- Mehrere 0-Euro-Belege in EINEM Aufruf abarbeiten (statt einzeln je Beleg
+        // analyze-receipt + updateExpense aufzurufen) - bei hunderten fehlerhaft
+        // importierten Belegen lässt sich das sonst in einer einzelnen ChatGPT-Antwort
+        // technisch nicht zuverlässig zu Ende bringen. Läuft serverseitig in einer
+        // Schleife über bis zu "limit" unvollständige Ausgaben, wendet bei lesbaren
+        // Belegen die erkannten Werte SOFORT an (Kategorie nur bei kategorieSicher=true,
+        // sonst bleibt sie unverändert) und meldet unsichere/nicht lesbare Fälle separat
+        // zur manuellen Prüfung zurück, statt sie zu raten.
+        if (teile[1] === 'bulk-fix-receipts' && request.method === 'POST') {
+          let body; try { body = await request.json(); } catch { body = {}; }
+          const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 25);
+          let ausgaben = await firestoreList({ accessToken, projectId, collection: 'ausgaben' });
+          // kiAnalyseUnsicher=true schließt Belege aus, die in einem früheren Aufruf schon
+          // als nicht sicher automatisch lösbar markiert wurden - sonst würde derselbe
+          // "hängende" Beleg bei jedem weiteren Aufruf erneut den ganzen Batch blockieren,
+          // ohne dass die dahinterliegenden Belege je an die Reihe kommen.
+          ausgaben = ausgaben.filter((a) => !Number(a.betragBrutto) && a.beleg?.url && !a.kiAnalyseUnsicher).sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+          const restAnzahlVorher = ausgaben.length;
+          const batch = ausgaben.slice(0, limit);
+          const aktualisiert = [];
+          const manuellePruefung = [];
+          for (const ausgabe of batch) {
+            const ergebnis = await analysiereBeleg({ ausgabe, accessToken, projectId, env });
+            const alsUnsicherMarkieren = async (reason) => {
+              manuellePruefung.push({ id: ausgabe.id, date: ausgabe.datum || '', supplier: ausgabe.lieferant || '', reason });
+              await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: ausgabe.id, data: { kiAnalyseUnsicher: true, kiAnalyseGrund: reason } });
+            };
+            if (!ergebnis.ok) { await alsUnsicherMarkieren(`${ergebnis.code}: ${ergebnis.message}`); continue; }
+            const d = ergebnis.detected;
+            if (!d.readable || !d.amount_gross) { await alsUnsicherMarkieren('Beleg nicht sicher lesbar oder kein Betrag erkannt.'); continue; }
+            const changes = {
+              betragBrutto: d.amount_gross,
+              betragNetto: d.amount_net ?? Math.round((d.amount_gross / (1 + (d.vat_rate ?? 19) / 100)) * 100) / 100,
+              steuersatz: d.vat_rate ?? 19,
+            };
+            if (d.date) changes.datum = d.date;
+            if (d.supplier) changes.lieferant = d.supplier;
+            // Kategorie nur übernehmen, wenn die KI sich wirklich sicher war - sonst
+            // bleibt die bisherige (meist "Sonstiges") stehen, damit keine falsche
+            // Kategorie unbemerkt durchrutscht.
+            if (d.category_confident && d.category) changes.kategorie = d.category;
+            const updated = { ...ausgabe, ...changes };
+            await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: ausgabe.id, data: changes });
+            await logAction(ctx, { action: 'expenses.bulk_fix_receipt', entityType: 'ausgaben', entityId: ausgabe.id, oldValue: ausgabe, newValue: changes, status: 'success' });
+            aktualisiert.push(expenseToApi(updated));
           }
-          const einstellungen = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
-          if (!einstellungen?.aiWorkerUrl || !einstellungen?.aiAppSecret) {
-            return errorResponse('AI_NOT_CONFIGURED', 'Die KI-Belegerkennung ist in Werkora nicht eingerichtet (Einstellungen → KI-Angebotserstellung).', 409);
-          }
-          // Zwei Cloudflare-Worker dürfen sich NICHT direkt über ihre workers.dev-Adresse
-          // gegenseitig per fetch() aufrufen (Cloudflare blockiert das mit Fehler 1042,
-          // schon bevor die Anfrage den Ziel-Worker erreicht) - deshalb läuft dieser Aufruf
-          // über eine Service-Bindung, die in den Worker-Einstellungen bei Cloudflare
-          // eingerichtet werden muss (siehe README.md). Cloudflares Dashboard übersetzt den
-          // eingetragenen Variablennamen an manchen Stellen der Oberfläche (z.B. "AI_WORKER"
-          // wird dort als "KI-ARBEITER" angezeigt) - der tatsächlich im Code ankommende
-          // env-Schlüssel bleibt aber der eingetragene Variablenname. Beide Schreibweisen
-          // werden hier akzeptiert, damit es unabhängig von der Anzeige funktioniert.
-          // Statt auf einen exakten Bindungsnamen zu bestehen (das Cloudflare-Dashboard zeigt
-          // ihn an manchen Stellen übersetzt/anders an, z.B. "AI_WORKER" als "KI-ARBEITER"):
-          // eine Service-Bindung ist im env-Objekt ein Wert mit einer eigenen .fetch()-Methode
-          // (ein "Fetcher") - das reicht als Erkennungsmerkmal, unabhängig vom gewählten Namen.
-          const aiWorkerBinding = env.AI_WORKER || env['KI-ARBEITER'] || env.KI_ARBEITER
-            || Object.values(env || {}).find((v) => v && typeof v.fetch === 'function');
-          if (!aiWorkerBinding) {
-            // Diagnose-Info mitgeben (nur Namen der vorhandenen env-Bindings, keine Werte/
-            // Geheimnisse), damit sich das ohne weitere Rateversuche direkt einordnen lässt.
-            return errorResponse('AI_WORKER_NOT_BOUND', 'Service-Bindung zum KI-Worker fehlt in den Cloudflare-Worker-Einstellungen - siehe README.md, Abschnitt "Beleg-Analyse einrichten".', 409, { vorhandene_env_schluessel: Object.keys(env || {}) });
-          }
-          let imageDataUrl;
-          try {
-            const imgRes = await fetch(ausgabe.beleg.url);
-            if (!imgRes.ok) throw new Error(`Beleg-Download fehlgeschlagen (${imgRes.status}).`);
-            const buffer = await imgRes.arrayBuffer();
-            imageDataUrl = `data:${mime};base64,${arrayBufferToBase64(buffer)}`;
-          } catch (err) {
-            return errorResponse('RECEIPT_DOWNLOAD_FAILED', err.message || 'Beleg konnte nicht geladen werden.', 502);
-          }
-          let analyse;
-          try {
-            const aiRes = await aiWorkerBinding.fetch('https://ai-worker.internal/', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-App-Secret': einstellungen.aiAppSecret,
-                // Der KI-Worker prüft den Origin-Header gegen ALLOWED_ORIGINS (normalerweise
-                // nur für Aufrufe aus dem Browser gedacht) - bei einem Worker-zu-Worker-Aufruf
-                // gibt es keinen echten Origin, deshalb hier explizit einen erlaubten setzen.
-                Origin: 'https://neuverdrahtet.com',
-              },
-              body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, kategorien: AUSGABEN_KATEGORIEN }),
-            });
-            if (!aiRes.ok) {
-              const t = await aiRes.text().catch(() => '');
-              throw new Error(`KI-Worker-Fehler (${aiRes.status}): ${t.slice(0, 200)}`);
-            }
-            analyse = await aiRes.json();
-            if (analyse.error) throw new Error(analyse.error);
-          } catch (err) {
-            return errorResponse('AI_ANALYSIS_FAILED', err.message || 'Beleg-Analyse fehlgeschlagen.', 502);
-          }
-          await logAction(ctx, { action: 'expenses.analyze_receipt', entityType: 'ausgaben', entityId: teile[1], newValue: analyse, status: 'success' });
+          const restAnzahlNachher = restAnzahlVorher - batch.length;
           return okResponse({
-            current: expenseToApi(ausgabe),
-            detected: {
-              supplier: analyse.haendler || '',
-              date: analyse.datum || '',
-              amount_net: analyse.betragNetto ?? null,
-              amount_gross: analyse.betragBrutto ?? null,
-              vat_rate: analyse.steuersatz ?? null,
-              category: AUSGABEN_KATEGORIEN.includes(analyse.kategorie) ? analyse.kategorie : 'Sonstiges',
-              description: analyse.beschreibung || '',
-              readable: !!analyse.lesbar,
-              category_confident: !!analyse.kategorieSicher,
-            },
+            processed: batch.length,
+            updated: aktualisiert,
+            needs_manual_review: manuellePruefung,
+            remaining_incomplete: restAnzahlNachher,
+            has_more: restAnzahlNachher > 0,
           });
         }
         if (request.method === 'GET' && !teile[1]) {

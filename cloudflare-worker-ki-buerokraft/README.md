@@ -190,6 +190,20 @@ POST  /expenses/{id}/analyze-receipt  (liest den echten Beleginhalt per KI aus -
                                      automatisch. Unterstützt JPEG/PNG/WebP-Fotos UND PDF - liefert bei
                                      fehlendem Beleg/nicht unterstütztem Format/nicht eingerichteter KI
                                      einen klaren Fehler statt zu raten)
+POST  /expenses/bulk-fix-receipts  ({ limit? } - verarbeitet bis zu limit (Default 10, max. 25)
+                                     Ausgaben ohne Betrag SERVERSEITIG in einem Aufruf: liest jeden
+                                     Beleg per KI aus und übernimmt bei sicher lesbaren Belegen
+                                     Betrag/Datum/Lieferant sofort (Kategorie nur bei hoher KI-
+                                     Sicherheit, sonst bleibt sie unverändert). Nicht sicher lösbare
+                                     Belege werden mit kiAnalyseUnsicher=true markiert (verschwinden
+                                     dadurch aus dem Kandidatenkreis künftiger Aufrufe, bleiben aber
+                                     als unvollständig erkennbar) und im Feld needs_manual_review
+                                     gemeldet. Antwort: { processed, updated, needs_manual_review,
+                                     remaining_incomplete, has_more } - bei has_more=true erneut
+                                     aufrufen, bis alle abgearbeitet sind. Für die Massenbearbeitung
+                                     hunderter fehlerhaft importierter Belege gedacht, da hunderte
+                                     einzelne analyze-receipt-Aufrufe in einer einzigen ChatGPT-Antwort
+                                     technisch nicht zuverlässig durchlaufen)
 
 GET   /articles?trade=&low_stock=  (Katalog-Artikel, nur lesen; nur direkt per Worker-API)
 GET   /articles/{id}               (nur direkt per Worker-API)
@@ -199,7 +213,9 @@ POST  /articles                    ({ name, type?, description?, unit?, purchase
                                        sales_price?, vat_rate?, trade?, min_stock? } - type: article/service;
                                        nur direkt per Worker-API, nicht in der ChatGPT-Action)
 PATCH /articles/{id}               (dieselben Felder wie POST, ohne type; bestand/bestandTracking bewusst NICHT
-                                     hierüber änderbar - Bestand läuft nur über stock-movements, siehe unten)
+                                     hierüber änderbar - Bestand läuft nur über stock-movements, siehe unten;
+                                     nur direkt per Worker-API - wurde aus der ChatGPT-Action wieder entfernt,
+                                     um im 30er-Limit Platz für bulk-fix-receipts zu schaffen)
 
 GET   /articles/{id}/stock-movements   (Lagerbewegungs-Historie, nur lesen; nur direkt per Worker-API)
 POST  /articles/{id}/stock-movements   ({ delta, reason? } - bucht Zugang/Entnahme, ändert den Bestand sofort;
