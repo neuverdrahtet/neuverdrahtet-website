@@ -1054,7 +1054,7 @@
     "/invoices": {
       "get": {
         "operationId": "searchInvoices",
-        "summary": "Rechnungen abrufen, inkl. überfällige (status=overdue)",
+        "summary": "Rechnungen abrufen, inkl. überfällige (status=overdue). status=paid + paid_date_from/paid_date_to = Einnahmen im Zeitraum.",
         "parameters": [
           {
             "name": "status",
@@ -1087,6 +1087,21 @@
           },
           {
             "name": "date_to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "paid_date_from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filtert nach tatsächlichem Zahlungseingang (bezahltAm), nicht Rechnungsdatum - für 'Einnahmen im Zeitraum X' entscheidend."
+          },
+          {
+            "name": "paid_date_to",
             "in": "query",
             "schema": {
               "type": "string"
@@ -1290,6 +1305,7 @@
       "get": {
         "operationId": "searchExpenses",
         "summary": "Ausgaben/Belege abrufen (inkl. Beleg-URL, falls vorhanden)",
+        "description": "Antwort ist { items, total, offset, limit, has_more }, nicht nur eine Liste. Bei vielen Ausgaben mit offset in Schritten von limit weiterblättern, bis has_more false ist, statt nur die erste Seite auszuwerten.",
         "parameters": [
           {
             "name": "customer_id",
@@ -1342,6 +1358,14 @@
             }
           },
           {
+            "name": "incomplete",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true = nur Ausgaben ohne Brutto-Betrag (0 oder fehlend) - typisch für fehlerhaft importierte Belege."
+          },
+          {
             "name": "count",
             "in": "query",
             "schema": {
@@ -1353,12 +1377,21 @@
             "in": "query",
             "schema": {
               "type": "integer"
-            }
+            },
+            "description": "Max. Ergebnisse pro Seite (Default und Obergrenze: 100)."
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Für die nächste Seite: offset um limit erhöhen (0, dann limit, dann 2*limit, ...), bis has_more in der Antwort false ist."
           }
         ],
         "responses": {
           "200": {
-            "description": "Liste",
+            "description": "{ items, total, offset, limit, has_more }",
             "content": {
               "application/json": {
                 "schema": {

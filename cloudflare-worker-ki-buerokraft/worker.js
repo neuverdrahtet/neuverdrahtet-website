@@ -1237,11 +1237,18 @@ export default {
           let rechnungen = await firestoreList({ accessToken, projectId, collection: 'rechnungen' });
           const status = q.get('status'); const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id');
           const dateFrom = q.get('date_from'); const dateTo = q.get('date_to');
+          // paid_date_from/paid_date_to filtern nach dem tatsächlichen Zahlungseingang
+          // (bezahltAm) statt dem Rechnungsdatum - für "was kam im Zeitraum X als
+          // Einnahme rein" ist das Zahlungsdatum entscheidend, nicht das Rechnungsdatum
+          // (dieselbe Logik wie in der EÜR-Auswertung in Werkora selbst).
+          const paidFrom = q.get('paid_date_from'); const paidTo = q.get('paid_date_to');
           if (status) rechnungen = rechnungen.filter((r) => quoteToApiInvoiceStatus(r) === status);
           if (customerId) rechnungen = rechnungen.filter((r) => r.kundeId === customerId);
           if (projectIdFilter) rechnungen = rechnungen.filter((r) => r.projektId === projectIdFilter);
           if (dateFrom) rechnungen = rechnungen.filter((r) => (r.datum || '') >= dateFrom);
           if (dateTo) rechnungen = rechnungen.filter((r) => (r.datum || '') <= dateTo);
+          if (paidFrom) rechnungen = rechnungen.filter((r) => (r.bezahltAm || '') >= paidFrom);
+          if (paidTo) rechnungen = rechnungen.filter((r) => (r.bezahltAm || '') <= paidTo);
           await logAction(ctx, { action: 'invoices.search', status: 'success' });
           if (q.get('count') === 'true') return okResponse({ count: rechnungen.length });
           const invoiceLimit = Math.min(Number(q.get('limit')) || 100, 100);
@@ -1417,6 +1424,10 @@ export default {
           const customerId = q.get('customer_id'); const projectIdFilter = q.get('project_id');
           const category = q.get('category'); const supplier = q.get('supplier');
           const dateFrom = q.get('date_from'); const dateTo = q.get('date_to'); const status = q.get('status');
+          // incomplete=true: Kurzform für "Brutto-Betrag fehlt/ist 0" - der
+          // häufigste Fall bei fehlerhaft importierten Belegen, damit nicht
+          // jedes Mal alle Ausgaben durchsucht werden müssen, um diese zu finden.
+          const incomplete = q.get('incomplete') === 'true';
           if (customerId) ausgaben = ausgaben.filter((a) => a.kundeId === customerId);
           if (projectIdFilter) ausgaben = ausgaben.filter((a) => a.projektId === projectIdFilter);
           if (category) ausgaben = ausgaben.filter((a) => a.kategorie === category);
@@ -1424,11 +1435,24 @@ export default {
           if (dateFrom) ausgaben = ausgaben.filter((a) => (a.datum || '') >= dateFrom);
           if (dateTo) ausgaben = ausgaben.filter((a) => (a.datum || '') <= dateTo);
           if (status) ausgaben = ausgaben.filter((a) => (a.bezahlstatus || 'bezahlt') === status);
+          if (incomplete) ausgaben = ausgaben.filter((a) => !Number(a.betragBrutto));
           ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
           await logAction(ctx, { action: 'expenses.search', status: 'success' });
           if (q.get('count') === 'true') return okResponse({ count: ausgaben.length });
+          // offset+limit statt nur limit: bei 500+ Ausgaben reicht eine einzelne
+          // Seite von max. 100 nicht, um wirklich ALLE durchzugehen - offset
+          // erlaubt der KI, systematisch weiterzublättern (has_more zeigt an,
+          // ob noch mehr Seiten folgen).
+          const offset = Math.max(0, Number(q.get('offset')) || 0);
           const expenseLimit = Math.min(Number(q.get('limit')) || 100, 100);
-          return okResponse(ausgaben.slice(0, expenseLimit).map(expenseToApi));
+          const seite = ausgaben.slice(offset, offset + expenseLimit);
+          return okResponse({
+            items: seite.map(expenseToApi),
+            total: ausgaben.length,
+            offset,
+            limit: expenseLimit,
+            has_more: offset + expenseLimit < ausgaben.length,
+          });
         }
         if (request.method === 'GET' && teile[1]) {
           const a = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: teile[1] });

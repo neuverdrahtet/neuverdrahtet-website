@@ -147,9 +147,12 @@ POST  /quotes/{id}/send            -> 403 (gesperrt)
 POST  /quotes/{id}/approve         -> 403 (gesperrt)
 POST  /quotes/{id}/convert-to-order -> 403 (noch nicht gebaut)
 
-GET   /invoices?status=&customer_id=&project_id=&date_from=&date_to=
+GET   /invoices?status=&customer_id=&project_id=&date_from=&date_to=&paid_date_from=&paid_date_to=
       (status "overdue" wird serverseitig aus offen/teilbezahlt + überschrittenem
-       Fälligkeitsdatum berechnet, ist kein echtes Feld in Werkora)
+       Fälligkeitsdatum berechnet, ist kein echtes Feld in Werkora. Werkora kennt keine
+       eigene "Einnahmen"-Tabelle - Einnahmen sind bezahlte Rechnungen: status=paid
+       filtert dafür, paid_date_from/paid_date_to nach echtem Zahlungseingang
+       (bezahltAm) statt Rechnungsdatum, für korrekte Zeitraum-Auswertungen)
 GET   /invoices/{id}               (nur direkt per Worker-API)
 POST  /invoices                    -> 403 (gesperrt, GoBD - siehe oben)
 POST  /invoices/{id}/send          -> 403 (gesperrt)
@@ -170,7 +173,11 @@ GET   /reminders?invoice_id=       (nur direkt per Worker-API)
 POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? } - nur direkt per Worker-API)
 
 GET   /expenses?customer_id=&project_id=&category=&supplier=&date_from=&date_to=&status=
-      (Belege - inkl. Beleg-URL/-Dateityp, falls in Werkora bereits ein Beleg hochgeladen wurde)
+      &incomplete=&offset=&limit=
+      (Belege - inkl. Beleg-URL/-Dateityp, falls in Werkora bereits ein Beleg hochgeladen wurde.
+       incomplete=true filtert auf 0-Euro-/fehlende Beträge. Antwort ist { items, total, offset,
+       limit, has_more } statt einer reinen Liste - offset erhöhen, bis has_more false ist, um
+       wirklich ALLE Ausgaben durchzugehen statt nur die erste Seite)
 GET   /expenses/{id}               (nur direkt per Worker-API)
 POST  /expenses                    ({ date, category, description?, supplier?, amount_net oder
                                        amount_gross, vat_rate?, paid_with?, customer_id?, project_id? } -
