@@ -526,8 +526,12 @@ export async function render(container, route, { autoSync = true } = {}) {
 
   // Kommt der Nutzer über den "+ Termin"-Schnellknopf aus Projekt-Akte/Kanban,
   // liegt hier eine Vorbelegung bereit - Formular direkt vorausgefüllt öffnen.
+  // openForm() ersetzt container.innerHTML komplett durch das ganzseitige
+  // Formular - der ganze Kalender-Aufbau weiter unten (Monat/Tag/Karte-Tabs
+  // usw.) darf dann nicht mehr laufen, sonst greifen dessen querySelector()-
+  // Aufrufe ins Leere ("Cannot read properties of null").
   const terminVorbelegung = nimmPlantafelVorbelegung();
-  if (terminVorbelegung) openForm(null, terminVorbelegung);
+  if (terminVorbelegung) { openForm(null, terminVorbelegung); return; }
 
   // ---------- Monat ----------
 

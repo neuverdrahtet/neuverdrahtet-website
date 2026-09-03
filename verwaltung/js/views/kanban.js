@@ -1,9 +1,28 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText } from '../utils.js';
+import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 
 const SPALTEN_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
+
+// Sammlungen, die ein Projekt per projektId referenzieren - beim Zusammenlegen
+// zweier Projekte müssen diese Verweise auf das behaltene Projekt umgehängt
+// werden, sonst würden z.B. Termine/Angebote am gelöschten Duplikat "hängen
+// bleiben" und aus der Akte verschwinden.
+const PROJEKT_REFERENZ_STORES = [
+  'termine', 'aufgaben', 'emails', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
+  'mahnungen', 'ausgaben', 'zeiterfassung', 'dokumente', 'fotos', 'aufmasse', 'nachrichten',
+];
+
+async function verschiebeProjektReferenzen(alteProjektId, neueProjektId) {
+  for (const store of PROJEKT_REFERENZ_STORES) {
+    const rows = await getAll(store);
+    const betroffen = rows.filter((r) => r.projektId === alteProjektId);
+    for (const row of betroffen) {
+      await put(store, { ...row, projektId: neueProjektId });
+    }
+  }
+}
 
 export async function render(container) {
   let [projekte, kunden, mitarbeiter, spalten, marken] = await Promise.all([
@@ -18,6 +37,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Kanban</h1>
       <div class="actions">
+        <button class="btn" id="btn-duplikate-pruefen">🔍 Doppelte Anfragen prüfen</button>
         <button class="btn" id="btn-status-manage">⚙️ Status verwalten</button>
         <button class="btn" id="btn-new-col">+ Spalte</button>
         <button class="btn btn-primary" id="btn-new-card">+ Neues Projekt</button>
@@ -159,6 +179,82 @@ export async function render(container) {
       onChange: () => render(container),
     });
   });
+  container.querySelector('#btn-duplikate-pruefen').addEventListener('click', openDuplikatePruefenModal);
+
+  function openDuplikatePruefenModal() {
+    const gruppenMap = new Map();
+    for (const p of projekte) {
+      if (!p.kundeId) continue;
+      if (!gruppenMap.has(p.kundeId)) gruppenMap.set(p.kundeId, []);
+      gruppenMap.get(p.kundeId).push(p);
+    }
+    const gruppen = [...gruppenMap.entries()]
+      .filter(([, liste]) => liste.length > 1)
+      .map(([kundeId, liste]) => ({ kundeId, liste: liste.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')) }));
+
+    const { body, close } = openModal({
+      title: `Mögliche doppelte Projekte (${gruppen.length} Kunde${gruppen.length === 1 ? '' : 'n'} mit mehreren Projekten)`,
+      wide: true,
+      bodyHtml: `
+        <p class="hint">Häufigste Ursache: derselbe Kunde schreibt mehrfach zum selben Anliegen, wodurch bei jeder Anfrage ein neues Projekt entsteht. Prüfe pro Gruppe, ob es sich wirklich um dasselbe Anliegen handelt, bevor du zusammenlegst - unterschiedliche Aufträge desselben Kunden sollten getrennt bleiben.</p>
+        ${gruppen.length === 0 ? '<p class="text-mute">Keine Kunden mit mehreren Projekten gefunden.</p>' : gruppen.map((g, gi) => `
+          <div class="card" style="margin-bottom:12px">
+            <strong>${escapeHtml(kundenById[g.kundeId]?.firma || '(unbekannter Kunde)')}</strong>
+            <span class="text-mute"> · ${g.liste.length} Projekte</span>
+            <ul class="cal-event-list" style="margin-top:8px">
+              ${g.liste.map((p, pi) => `
+                <li>
+                  <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+                    <input type="radio" name="keep-${gi}" value="${p.id}" ${pi === 0 ? 'checked' : ''} style="margin-top:3px">
+                    <span>
+                      <strong>${escapeHtml(p.titel)}</strong> <span class="text-mute">(angelegt ${p.createdAt ? formatDate(p.createdAt) : 'unbekannt'})</span><br>
+                      <span class="text-mute" style="white-space:pre-wrap">${escapeHtml((p.beschreibung || '').slice(0, 200))}</span>
+                    </span>
+                  </label>
+                </li>
+              `).join('')}
+            </ul>
+            <p class="hint" style="margin:4px 0 8px">Ausgewähltes Projekt (Radiobutton) bleibt bestehen, alle anderen dieser Gruppe werden hineingelegt (Beschreibungen zusammengeführt, Termine/Aufgaben/Angebote/Rechnungen/etc. umgehängt) und danach in den Papierkorb verschoben.</p>
+            <button type="button" class="btn btn-sm btn-primary btn-merge-gruppe" data-gi="${gi}">In ausgewähltes Projekt zusammenlegen</button>
+          </div>
+        `).join('')}
+      `,
+    });
+
+    body.querySelectorAll('.btn-merge-gruppe').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const gi = Number(btn.dataset.gi);
+        const gruppe = gruppen[gi];
+        const behaltenId = body.querySelector(`input[name="keep-${gi}"]:checked`)?.value;
+        if (!behaltenId) return;
+        const behalten = gruppe.liste.find((p) => p.id === behaltenId);
+        const rest = gruppe.liste.filter((p) => p.id !== behaltenId);
+        if (rest.length === 0) return;
+        if (!confirmDelete(`${rest.length} Projekt(e) in "${behalten.titel}" zusammenlegen? Alle zugehörigen Termine/Aufgaben/Angebote/Rechnungen/Ausgaben/Dokumente werden umgehängt, die übrigen Projekte danach in den Papierkorb verschoben.`)) return;
+        btn.disabled = true;
+        btn.textContent = 'Wird zusammengelegt …';
+        try {
+          let aktuellBehalten = behalten;
+          for (const p of rest) {
+            await verschiebeProjektReferenzen(p.id, behaltenId);
+            aktuellBehalten = {
+              ...aktuellBehalten,
+              beschreibung: [aktuellBehalten.beschreibung, `--- Zusammengelegt aus "${p.titel}" ---\n${p.beschreibung || ''}`.trim()].filter(Boolean).join('\n\n'),
+            };
+            await put('projekte', aktuellBehalten);
+            await remove('projekte', p.id);
+          }
+          toast(`${rest.length} Projekt(e) zusammengelegt`, 'success');
+          close();
+          render(container);
+        } catch (err) {
+          toast(err.message || 'Zusammenlegen fehlgeschlagen', 'danger');
+          btn.disabled = false;
+          btn.textContent = 'In ausgewähltes Projekt zusammenlegen';
+        }
+      });
+    });
+  }
 
   function openCardForm(p) {
     const isEdit = !!p;

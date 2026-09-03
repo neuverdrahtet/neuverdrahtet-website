@@ -1,7 +1,7 @@
 import { getAll, put, getSettings, setSettings } from './db.js';
 import * as google from './google.js';
 import { classifyEmails } from './ai.js';
-import { uid, nextDailyNummer } from './utils.js';
+import { uid, nextDailyNummer, todayISO, formatDate } from './utils.js';
 import * as push from './push.js';
 
 // Wie viele E-Mails pro KI-Aufruf zur Kategorisierung geschickt werden - ein
@@ -142,7 +142,7 @@ const LEERER_KONTAKT = { name: '', email: '', telefon: '', anliegen: '' };
 async function autoErstelleKundeAusAnfrage(email) {
   const kontakt = email.kontakt;
   if (!kontakt?.email) return;
-  const [kunden, kanbanSpalten, settings] = await Promise.all([getAll('kunden'), getAll('kanbanSpalten'), getSettings()]);
+  const [kunden, projekte, kanbanSpalten, settings] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getSettings()]);
   kanbanSpalten.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const bestehenderKunde = kunden.find((k) => (k.email || '').toLowerCase() === kontakt.email.toLowerCase());
 
@@ -150,6 +150,33 @@ async function autoErstelleKundeAusAnfrage(email) {
   if (bestehenderKunde) {
     kundeId = bestehenderKunde.id;
     kundeName = bestehenderKunde.firma;
+
+    // Schreibt derselbe (bereits bekannte) Kunde mehrfach zum selben Anliegen,
+    // entstand bisher bei JEDER E-Mail ein weiteres, dupliziertes Projekt. Hat
+    // der Kunde bereits genau EIN Projekt, wird diese Anfrage dort als weitere
+    // Notiz angehängt statt ein neues Duplikat anzulegen. Bei 0 oder 2+
+    // bestehenden Projekten ist nicht eindeutig, welches gemeint ist - dort
+    // bleibt es beim bisherigen Verhalten (neues Projekt anlegen).
+    const bestehendeProjekte = projekte.filter((p) => p.kundeId === kundeId);
+    if (bestehendeProjekte.length === 1) {
+      const projekt = bestehendeProjekte[0];
+      const titel = kontakt.anliegen || email.subject || 'Anfrage';
+      const updatedProjekt = {
+        ...projekt,
+        beschreibung: [
+          projekt.beschreibung,
+          `--- Weitere Anfrage per E-Mail (${formatDate(todayISO())}) ---\nBetreff: ${email.subject || ''}${kontakt.anliegen ? '\n' + kontakt.anliegen : ''}`,
+        ].filter(Boolean).join('\n\n'),
+      };
+      await put('projekte', updatedProjekt);
+      await put('emails', { ...email, kundeAngelegtId: projekt.id, projektId: projekt.id });
+      push.notifyRoles(['admin', 'buero'], {
+        title: 'Weitere Anfrage zu bestehendem Projekt',
+        body: `${kundeName}: ${titel}`,
+        url: './index.html#/projekte',
+      }).catch(() => { /* Push ist ein Komfort-Feature */ });
+      return { kundeId, projektId: projekt.id };
+    }
   } else {
     const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
       '', { datum: settings.kundeNummerDatum, zaehler: settings.kundeNummerZaehler }
