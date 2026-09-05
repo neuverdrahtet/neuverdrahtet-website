@@ -1,25 +1,31 @@
 /**
  * neuverdrahtet WhatsApp-KI-Assistent (Cloudflare Worker)
  *
- * Webhook für eingehende WhatsApp-Nachrichten über Twilio (WhatsApp-Sandbox
- * oder ein freigegebener WhatsApp-Business-Absender). Beantwortet Fragen von
- * Kunden/Interessenten per Claude (Anthropic) - inhaltlich derselbe
- * Assistent wie das Chat-Widget auf der Website
+ * Webhook für eingehende WhatsApp-Nachrichten über die WhatsApp Cloud API
+ * von Meta (direkt, kein Vermittler wie Twilio dazwischen). Beantwortet
+ * Fragen von Kunden/Interessenten per Claude (Anthropic) - inhaltlich
+ * derselbe Assistent wie das Chat-Widget auf der Website
  * (cloudflare-worker-ki-assistent/) - und kann nach Zustimmung automatisch
  * einen Lead (Kunde + Projekt) in der Werkora-Lead-Pipeline anlegen.
  *
  * WICHTIG - was DU noch selbst einrichten musst (kann dieser Worker nicht
  * für dich tun):
- *   1. Ein Twilio-Konto (twilio.com) - kostenlos anlegbar, Nutzung ist
- *      kostenpflichtig (pro WhatsApp-Nachricht, siehe twilio.com/pricing).
- *   2. Entweder die kostenlose "WhatsApp Sandbox" für Tests (Twilio Console
- *      -> Messaging -> Try it out -> Send a WhatsApp message) oder einen
- *      echten, für WhatsApp Business freigegebenen Absender (dauert je nach
- *      Meta-Prüfung mehrere Tage, siehe Twilio-Doku "WhatsApp Business API").
- *   3. In der Twilio Console unter dem WhatsApp-Absender das Feld
- *      "WHEN A MESSAGE COMES IN" auf diese Worker-URL setzen (HTTP POST).
+ *   1. Ein Meta-Geschäftskonto (business.facebook.com) und darin eine
+ *      "App" mit dem Produkt "WhatsApp" (developers.facebook.com -> Meine
+ *      Apps -> App erstellen -> Produkt "WhatsApp" hinzufügen). Kostenlos,
+ *      Nutzung wird direkt von Meta abgerechnet (erste ca. 1000 Service-
+ *      Konversationen/Monat kostenlos, siehe developers.facebook.com/docs/whatsapp/pricing).
+ *   2. In der App unter "WhatsApp -> Konfiguration": die "Telefonnummer-ID"
+ *      (META_PHONE_NUMBER_ID) und einen dauerhaften Zugriffstoken
+ *      (META_ACCESS_TOKEN, unter "Systembenutzer" ein permanentes Token
+ *      erzeugen - das temporäre 24-Stunden-Token aus der Schnellstart-
+ *      Ansicht reicht NICHT für den Dauerbetrieb).
+ *   3. Unter "WhatsApp -> Konfiguration -> Webhook": die Worker-URL dieses
+ *      Projekts eintragen ("Rückruf-URL") sowie einen von dir frei
+ *      gewählten "Verify Token" (muss identisch mit META_VERIFY_TOKEN
+ *      unten sein), danach das Feld "messages" abonnieren.
  * Ohne diese drei Schritte empfängt dieser Worker nie eine Anfrage - er
- * kann selbst keine Telefonnummer/Absender bei WhatsApp/Meta beantragen.
+ * kann selbst keine Telefonnummer bei Meta beantragen.
  *
  * Konversationsverlauf wird - anders als beim Website-Widget - serverseitig
  * in Firestore gespeichert (Collection "whatsapp_chats", Dokument-ID = die
@@ -33,14 +39,24 @@
  *   FIREBASE_SERVICE_ACCOUNT_JSON (Secret, erforderlich) - komplettes JSON einer
  *                        Firebase-Service-Account-Datei, als einzeiliger String.
  *                        Dasselbe Firebase-Projekt wie die Verwaltungs-Software.
- *   TWILIO_AUTH_TOKEN   (Secret, empfohlen) - der "Auth Token" aus der
- *                        Twilio Console (Account-Übersicht). Wenn gesetzt,
- *                        prüft der Worker die Twilio-Signatur jeder Anfrage
- *                        (X-Twilio-Signature) und lehnt gefälschte Anfragen ab.
- *                        Ohne dieses Secret läuft der Worker trotzdem, aber
- *                        JEDER könnte vorgetäuschte WhatsApp-Nachrichten
- *                        einschicken (Kosten-/Missbrauchsrisiko) - siehe
- *                        Sicherheitshinweis in der README.
+ *   META_ACCESS_TOKEN    (Secret, erforderlich) - permanentes Zugriffstoken der
+ *                        Meta-App (siehe Schritt 2 oben), zum Versenden von
+ *                        Antworten über die Graph API.
+ *   META_PHONE_NUMBER_ID (Variable, erforderlich) - die "Telefonnummer-ID" aus
+ *                        der App-Konfiguration (nicht die Telefonnummer selbst).
+ *   META_VERIFY_TOKEN    (Secret, erforderlich) - ein von dir frei gewählter
+ *                        Code (z.B. ein langes Zufallswort), den du 1:1 auch
+ *                        beim Einrichten des Webhooks in der Meta-App einträgst.
+ *                        Dient nur der einmaligen Webhook-Verifizierung.
+ *   META_APP_SECRET      (Secret, empfohlen) - "App-Geheimcode" aus der
+ *                        Meta-App (Einstellungen -> Grundlegendes). Wenn
+ *                        gesetzt, prüft der Worker die Signatur jeder
+ *                        Anfrage (X-Hub-Signature-256) und lehnt gefälschte
+ *                        Anfragen ab. Ohne dieses Secret läuft der Worker
+ *                        trotzdem, aber JEDER könnte vorgetäuschte
+ *                        WhatsApp-Nachrichten einschicken (Kosten-/
+ *                        Missbrauchsrisiko) - siehe Sicherheitshinweis in
+ *                        der README.
  *   MODEL_ID             (Variable, optional) - Standard: claude-haiku-4-5
  *   CALENDLY_API_TOKEN   (Secret, optional) - "Personal Access Token" aus
  *                        Calendly (calendly.com -> Konto-Einstellungen ->
@@ -410,85 +426,128 @@ async function chatMitClaude({ env, messages, telefon }) {
   return 'Entschuldigung, das dauert gerade zu lange. Bitte rufen Sie uns direkt an: 01706398575.';
 }
 
-// --- Twilio-Signaturprüfung (siehe twilio.com/docs/usage/security#validating-requests) ---
+// --- Meta-Webhook-Signaturprüfung (siehe developers.facebook.com/docs/graph-api/webhooks/getting-started#validate-payloads) ---
 
-async function validateTwilioSignature({ authToken, url, params, signature }) {
-  if (!signature) return false;
-  const sortedKeys = Object.keys(params).sort();
-  let data = url;
-  for (const key of sortedKeys) data += key + params[key];
+async function validateMetaSignature({ appSecret, rawBody, signature }) {
+  if (!signature || !signature.startsWith('sha256=')) return false;
+  const erwarteterHex = signature.slice('sha256='.length);
 
-  const keyData = new TextEncoder().encode(authToken);
-  const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-  const mac = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
-  const expected = btoa(String.fromCharCode(...new Uint8Array(mac)));
-  return expected === signature;
+  const keyData = new TextEncoder().encode(appSecret);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(rawBody));
+  const macHex = [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  return macHex === erwarteterHex;
 }
 
-function twiml(text) {
-  const escaped = String(text)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${escaped}</Message></Response>`;
+/** Extrahiert die eingehende Text-Nachricht aus einem Meta-Webhook-Payload, oder null bei anderen Ereignissen (Status-Updates etc.). */
+function extrahiereEingehendeNachricht(payload) {
+  try {
+    const value = payload.entry?.[0]?.changes?.[0]?.value;
+    const nachricht = value?.messages?.[0];
+    if (!nachricht || nachricht.type !== 'text') return null;
+    return {
+      von: nachricht.from, // Ziffernfolge ohne "+", z.B. "4915888620339"
+      text: (nachricht.text?.body || '').trim(),
+      profilName: value.contacts?.[0]?.profile?.name || '',
+    };
+  } catch {
+    return null;
+  }
 }
 
-function xmlResponse(text, status = 200) {
-  return new Response(text, { status, headers: { 'Content-Type': 'text/xml; charset=utf-8' } });
+/** Sendet eine Textantwort über die WhatsApp Cloud API (Graph API) an die angegebene Nummer. */
+async function sendeWhatsAppNachricht({ env, an, text }) {
+  const res = await fetch(`https://graph.facebook.com/v21.0/${env.META_PHONE_NUMBER_ID}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.META_ACCESS_TOKEN}` },
+    body: JSON.stringify({ messaging_product: 'whatsapp', to: an, type: 'text', text: { body: text } }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => '');
+    throw new Error(`WhatsApp-Senden fehlgeschlagen (${res.status}): ${t.slice(0, 300)}`);
+  }
+}
+
+/** Verarbeitet eine eingehende Nachricht komplett (Verlauf laden, Claude fragen, Verlauf speichern, Antwort senden). Läuft asynchron über ctx.waitUntil, damit der Webhook selbst sofort mit 200 antworten kann. */
+async function verarbeiteEingehendeNachricht({ env, von, text, profilName }) {
+  const telefonAnzeige = `+${von}`;
+  const chatId = von.replace(/[^a-zA-Z0-9+]/g, '_');
+
+  try {
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+
+    const bestehend = await firestoreGetDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'whatsapp_chats', id: chatId });
+    const verlauf = (bestehend && Array.isArray(bestehend.verlauf)) ? bestehend.verlauf : [];
+
+    const conversation = [...verlauf, { role: 'user', content: text }];
+    let antwort = await chatMitClaude({ env, messages: conversation, telefon: telefonAnzeige });
+    if (antwort.length > MAX_ANTWORT_LAENGE) antwort = antwort.slice(0, MAX_ANTWORT_LAENGE - 1) + '…';
+
+    const neuerVerlauf = [...conversation, { role: 'assistant', content: antwort }].slice(-MAX_VERLAUF_LAENGE);
+    await firestoreWriteDoc({
+      accessToken, projectId: serviceAccount.project_id, collection: 'whatsapp_chats', id: chatId,
+      data: { verlauf: neuerVerlauf, telefon: telefonAnzeige, profilName: profilName || '', updatedAt: new Date().toISOString() },
+    });
+
+    await sendeWhatsAppNachricht({ env, an: von, text: antwort });
+  } catch (err) {
+    // Genaue Fehlerursache landet im Worker-Log (npx wrangler tail), nicht in der
+    // Kunden-Antwort - dort nur ein freundlicher, generischer Hinweis.
+    console.error('ki-assistent-whatsapp Fehler:', err);
+    try {
+      await sendeWhatsAppNachricht({ env, an: von, text: 'Es ist ein technisches Problem aufgetreten. Bitte rufen Sie uns direkt an: 01706398575.' });
+    } catch (sendeErr) {
+      console.error('ki-assistent-whatsapp Fehler beim Senden der Fehlermeldung:', sendeErr);
+    }
+  }
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // Einmalige Webhook-Verifizierung durch Meta beim Einrichten (GET mit hub.challenge).
+    if (request.method === 'GET') {
+      const mode = url.searchParams.get('hub.mode');
+      const token = url.searchParams.get('hub.verify_token');
+      const challenge = url.searchParams.get('hub.challenge');
+      if (mode === 'subscribe' && env.META_VERIFY_TOKEN && token === env.META_VERIFY_TOKEN) {
+        return new Response(challenge || '', { status: 200 });
+      }
+      return new Response('Verifizierung fehlgeschlagen.', { status: 403 });
+    }
+
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
     const rawBody = await request.text();
-    const params = Object.fromEntries(new URLSearchParams(rawBody));
 
-    if (env.TWILIO_AUTH_TOKEN) {
-      const signature = request.headers.get('X-Twilio-Signature');
-      const gueltig = await validateTwilioSignature({
-        authToken: env.TWILIO_AUTH_TOKEN,
-        url: request.url,
-        params,
-        signature,
-      });
+    if (env.META_APP_SECRET) {
+      const signature = request.headers.get('X-Hub-Signature-256');
+      const gueltig = await validateMetaSignature({ appSecret: env.META_APP_SECRET, rawBody, signature });
       if (!gueltig) return new Response('Ungültige Signatur.', { status: 403 });
     }
 
-    const von = params.From || '';
-    const nachricht = (params.Body || '').trim();
-    if (!von || !nachricht) return xmlResponse(twiml('Nachricht nicht verstanden.'));
-
-    if (!env.ANTHROPIC_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-      return xmlResponse(twiml('Der Assistent ist gerade nicht verfügbar. Bitte rufen Sie uns an: 01706398575.'));
-    }
-
-    // Firestore-Dokument-ID: nur alphanumerisch/+ - (WhatsApp-Präfix "whatsapp:" enthält
-    // ein für Firestore-IDs problematisches Zeichen ":", daher ersetzt).
-    const chatId = von.replace(/[^a-zA-Z0-9+]/g, '_');
-    const telefonAnzeige = von.replace(/^whatsapp:/, '');
-
+    let payload;
     try {
-      const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
-      const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
-
-      const bestehend = await firestoreGetDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'whatsapp_chats', id: chatId });
-      const verlauf = (bestehend && Array.isArray(bestehend.verlauf)) ? bestehend.verlauf : [];
-
-      const conversation = [...verlauf, { role: 'user', content: nachricht }];
-      let antwort = await chatMitClaude({ env, messages: conversation, telefon: telefonAnzeige });
-      if (antwort.length > MAX_ANTWORT_LAENGE) antwort = antwort.slice(0, MAX_ANTWORT_LAENGE - 1) + '…';
-
-      const neuerVerlauf = [...conversation, { role: 'assistant', content: antwort }].slice(-MAX_VERLAUF_LAENGE);
-      await firestoreWriteDoc({
-        accessToken, projectId: serviceAccount.project_id, collection: 'whatsapp_chats', id: chatId,
-        data: { verlauf: neuerVerlauf, telefon: telefonAnzeige, profilName: params.ProfileName || '', updatedAt: new Date().toISOString() },
-      });
-
-      return xmlResponse(twiml(antwort));
-    } catch (err) {
-      // Genaue Fehlerursache landet im Worker-Log (npx wrangler tail), nicht in der
-      // Kunden-Antwort - dort nur ein freundlicher, generischer Hinweis.
-      console.error('ki-assistent-whatsapp Fehler:', err);
-      return xmlResponse(twiml('Es ist ein technisches Problem aufgetreten. Bitte rufen Sie uns direkt an: 01706398575.'));
+      payload = JSON.parse(rawBody);
+    } catch {
+      return new Response('OK', { status: 200 });
     }
+
+    const eingehend = extrahiereEingehendeNachricht(payload);
+    // Kein Text-Nachrichten-Ereignis (z.B. Zustellstatus "delivered"/"read") - trotzdem
+    // mit 200 bestätigen, sonst wiederholt Meta den Webhook-Aufruf unnötig.
+    if (!eingehend || !eingehend.text) return new Response('OK', { status: 200 });
+
+    if (!env.ANTHROPIC_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT_JSON || !env.META_ACCESS_TOKEN || !env.META_PHONE_NUMBER_ID) {
+      console.error('ki-assistent-whatsapp: erforderliche Secrets/Variablen fehlen.');
+      return new Response('OK', { status: 200 });
+    }
+
+    // Sofort mit 200 antworten (Meta erwartet eine schnelle Bestätigung), die eigentliche
+    // Verarbeitung (Claude-Aufruf, Firestore, Antwort senden) läuft im Hintergrund weiter.
+    ctx.waitUntil(verarbeiteEingehendeNachricht({ env, ...eingehend }));
+    return new Response('OK', { status: 200 });
   },
 };

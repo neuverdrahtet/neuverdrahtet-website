@@ -1,40 +1,50 @@
 # neuverdrahtet-ki-assistent-whatsapp (Cloudflare Worker)
 
-Nimmt eingehende WhatsApp-Nachrichten über Twilio entgegen und beantwortet
-sie per Claude (Anthropic) - inhaltlich derselbe Assistent wie das
-Chat-Widget auf der Website (`cloudflare-worker-ki-assistent/`), nur über
-einen anderen Kanal. Kann nach Zustimmung des Gesprächspartners automatisch
-einen Lead (Kunde + Projekt) in der Werkora-Lead-Pipeline anlegen, und kann
-bei Terminwunsch echte freie Zeiten aus Calendly vorschlagen (siehe Abschnitt
-"Termin-Vorschläge über Calendly" unten).
+Nimmt eingehende WhatsApp-Nachrichten über die **WhatsApp Cloud API von
+Meta** (direkt, kein Vermittler wie Twilio dazwischen) entgegen und
+beantwortet sie per Claude (Anthropic) - inhaltlich derselbe Assistent wie
+das Chat-Widget auf der Website (`cloudflare-worker-ki-assistent/`), nur
+über einen anderen Kanal. Kann nach Zustimmung des Gesprächspartners
+automatisch einen Lead (Kunde + Projekt) in der Werkora-Lead-Pipeline
+anlegen, und kann bei Terminwunsch echte freie Zeiten aus Calendly
+vorschlagen (siehe Abschnitt "Termin-Vorschläge über Calendly" unten).
 
 ## Wichtig: das musst du selbst einrichten (kein Bestandteil dieses Workers)
 
 Ein Cloudflare Worker kann keine WhatsApp-Telefonnummer bei Meta beantragen
-oder Nachrichten direkt an WhatsApp senden - dafür braucht es einen
-zugelassenen Vermittler. Dieses Projekt ist auf **Twilio** ausgelegt (der
-gängigste Anbieter dafür), das musst du zusätzlich einrichten:
+- das geht nur über ein eigenes Meta-Geschäftskonto:
 
-1. **Twilio-Konto erstellen**: [twilio.com](https://www.twilio.com) -
-   Registrierung kostenlos, Nutzung ist kostenpflichtig (pro gesendeter/
-   empfangener WhatsApp-Nachricht, siehe [twilio.com/pricing](https://www.twilio.com/pricing)).
-2. **Für den Einstieg: die kostenlose WhatsApp-Sandbox** nutzen (Twilio
-   Console → Messaging → Try it out → Send a WhatsApp message). Du bekommst
-   eine Sandbox-Nummer und einen Beitrittscode, den Testnutzer per WhatsApp
-   an diese Nummer schicken müssen, um im Sandbox-Modus mit dir chatten zu
-   können - gut zum Ausprobieren, aber nicht für echte Kunden gedacht (die
-   müssten erst selbst dem Sandbox-Code beitreten).
-3. **Für den echten Einsatz: einen eigenen WhatsApp-Business-Absender**
-   beantragen (Twilio Console → Messaging → Senders → WhatsApp senders).
-   Das durchläuft eine Prüfung durch Meta und kann mehrere Tage dauern.
-   Danach läuft eure eigene Geschäfts-Telefonnummer über WhatsApp, ohne
-   Beitrittscode für Kunden.
-4. **Webhook eintragen**: beim jeweiligen Absender (Sandbox oder eigene
-   Nummer) das Feld **"WHEN A MESSAGE COMES IN"** auf die Worker-URL dieses
-   Projekts setzen, Methode `HTTP POST`.
+1. **Meta-Geschäftskonto**: falls noch nicht vorhanden, auf
+   [business.facebook.com](https://business.facebook.com) kostenlos
+   anlegen.
+2. **Meta-App mit WhatsApp-Produkt erstellen**:
+   [developers.facebook.com](https://developers.facebook.com) → "Meine
+   Apps" → "App erstellen" → Typ "Unternehmen" → in der neuen App unter
+   "Produkt hinzufügen" das Produkt **WhatsApp** auswählen. Meta legt dabei
+   automatisch eine kostenlose **Test-Telefonnummer** an, mit der du sofort
+   loslegen kannst (später gegen eure echte Geschäftsnummer austauschbar).
+3. **Zugangsdaten einsammeln** (App → WhatsApp → Konfiguration):
+   - Die **"Telefonnummer-ID"** (eine lange Zahl, nicht die Telefonnummer
+     selbst) → wird `META_PHONE_NUMBER_ID`.
+   - Ein **dauerhaftes Zugriffstoken**: App → Einstellungen →
+     "Systembenutzer" → einen Systembenutzer mit Rolle "Admin" anlegen →
+     Token erzeugen mit Berechtigung `whatsapp_business_messaging`. (Das
+     kurzlebige 24-Stunden-Token aus der Schnellstart-Ansicht reicht **nicht**
+     für den Dauerbetrieb!) → wird `META_ACCESS_TOKEN`.
+   - Den **App-Geheimcode**: App → Einstellungen → Grundlegendes → "App-
+     Geheimcode anzeigen" → wird `META_APP_SECRET`.
+4. **Webhook eintragen** (App → WhatsApp → Konfiguration → Webhook):
+   - Als "Rückruf-URL" die Worker-URL dieses Projekts eintragen.
+   - Als "Verifizierungstoken" einen von dir frei erfundenen, langen Code
+     eintragen (z.B. per Passwort-Generator) → wird `META_VERIFY_TOKEN`
+     (muss in Meta und in Cloudflare identisch sein).
+   - Auf "Überprüfen und speichern" klicken - Meta ruft dabei die
+     Worker-URL testweise auf; das klappt erst, wenn der Worker mit den
+     Secrets (siehe unten) bereits deployt ist.
+   - Danach unter "Webhook-Felder" das Feld **"messages"** abonnieren.
 
-Ohne diese vier Schritte bekommt dieser Worker nie eine Anfrage - er ist nur
-die Antwort-Logik, nicht die WhatsApp-Anbindung selbst.
+Ohne diese Schritte bekommt dieser Worker nie eine Anfrage - er ist nur die
+Antwort-Logik, nicht die WhatsApp-Anbindung selbst.
 
 ## Einmaliges Setup (dieser Worker)
 
@@ -53,12 +63,16 @@ die Antwort-Logik, nicht die WhatsApp-Anbindung selbst.
    Variablen und Geheimnisse):
    - `ANTHROPIC_API_KEY` (Secret, erforderlich)
    - `FIREBASE_SERVICE_ACCOUNT_JSON` (Secret, erforderlich)
-   - `TWILIO_AUTH_TOKEN` (Secret, **dringend empfohlen** - siehe
-     Sicherheitshinweis unten) - findest du in der Twilio Console auf der
-     Account-Übersichtsseite ("Auth Token", auf Klick sichtbar).
+   - `META_ACCESS_TOKEN` (Secret, erforderlich) - siehe Schritt 3 oben.
+   - `META_PHONE_NUMBER_ID` (Variable, erforderlich) - siehe Schritt 3 oben.
+   - `META_VERIFY_TOKEN` (Secret, erforderlich) - dein selbst gewählter Code,
+     siehe Schritt 4 oben.
+   - `META_APP_SECRET` (Secret, **dringend empfohlen** - siehe
+     Sicherheitshinweis unten) - siehe Schritt 3 oben.
 5. Die entstandene Worker-URL (z.B.
    `https://neuverdrahtet-ki-assistent-whatsapp.<dein-konto>.workers.dev`)
-   bei Twilio als Webhook eintragen (siehe Schritt 4 oben).
+   bei Meta als Webhook eintragen (siehe Schritt 4 oben) - erst danach lässt
+   sich die Webhook-Verifizierung in der Meta-App erfolgreich abschließen.
 
 ## Termin-Vorschläge über Calendly (optional)
 
@@ -88,28 +102,35 @@ den Buchungslink, ohne konkrete Uhrzeiten):
 
 ## Danach einmal live testen
 
-- Der WhatsApp-Sandbox beitreten (Code an die Sandbox-Nummer schicken) und
-  eine Testfrage schreiben, z.B. "Was kostet ein E-Check ungefähr?".
+- In der Meta-App unter "WhatsApp → Konfiguration → Von" die kostenlose
+  Test-Telefonnummer eintragen und eure eigene Handynummer als Empfänger
+  hinzufügen ("Nachricht senden" → eigene Nummer bestätigen per Code).
+- Von eurem Handy aus die Test-Nummer per WhatsApp anschreiben, z.B. "Was
+  kostet ein E-Check ungefähr?" - die Antwort kommt über diesen Worker.
 - Ein Test-Anliegen mit Namen durchspielen und der Weiterleitung zustimmen -
   danach in Werkora unter **Lead-Pipeline** prüfen, ob ein neuer Lead
   erscheint (Telefonnummer sollte automatisch die WhatsApp-Nummer sein).
-- Bei Problemen: `npx wrangler tail` zeigt den genauen Fehler; Twilio zeigt
-  in der Console unter **Monitor → Logs → Errors** ebenfalls an, wenn der
-  Webhook-Aufruf fehlschlägt (z.B. Timeout, falsche URL).
+- Bei Problemen: `npx wrangler tail` zeigt den genauen Fehler; in der
+  Meta-App unter "WhatsApp → Konfiguration → Webhook" zeigt ein rotes
+  Ausrufezeichen an, wenn der Webhook-Aufruf fehlschlägt.
 
-## Sicherheitshinweis: unbedingt `TWILIO_AUTH_TOKEN` setzen
+## Sicherheitshinweis: unbedingt `META_APP_SECRET` setzen
 
 Ohne dieses Secret prüft der Worker nicht, ob eine eingehende Anfrage
-wirklich von Twilio stammt - jeder, der die Worker-URL kennt, könnte
+wirklich von Meta stammt - jeder, der die Worker-URL kennt, könnte
 vorgetäuschte "WhatsApp-Nachrichten" einschicken und damit unnötige
 Anthropic-API-Kosten verursachen oder Leads mit Fantasiedaten anlegen. Mit
-gesetztem `TWILIO_AUTH_TOKEN` prüft der Worker die Twilio-Signatur
-(`X-Twilio-Signature`-Header) nach dem offiziellen Twilio-Verfahren
-([twilio.com/docs/usage/security](https://www.twilio.com/docs/usage/security#validating-requests))
+gesetztem `META_APP_SECRET` prüft der Worker die Signatur
+(`X-Hub-Signature-256`-Header) nach dem offiziellen Meta-Verfahren
+([developers.facebook.com/docs/graph-api/webhooks/getting-started](https://developers.facebook.com/docs/graph-api/webhooks/getting-started#validate-payloads))
 und lehnt gefälschte Anfragen mit HTTP 403 ab.
 
 ## Wichtige Design-Entscheidungen
 
+- **Webhook antwortet sofort mit 200, Verarbeitung läuft im Hintergrund**
+  (`ctx.waitUntil(...)`) - Meta erwartet eine schnelle Bestätigung und
+  wiederholt den Aufruf sonst unnötig; die eigentliche Antwort wird separat
+  über die Graph API verschickt, sobald Claude fertig ist.
 - **Gesprächsverlauf wird serverseitig gespeichert** (Collection
   `whatsapp_chats` in Firestore, Dokument-ID = WhatsApp-Nummer), anders als
   beim Website-Widget - ein Webhook pro Nachricht ist zustandslos, der
@@ -129,15 +150,17 @@ und lehnt gefälschte Anfragen mit HTTP 403 ab.
 - Automatisches Aufräumen alter `whatsapp_chats`-Dokumente (z.B. per
   täglichem Cron-Job, ähnlich dem in `cloudflare-worker-ki-buerokraft/`),
   falls die Sammlung mit der Zeit sehr groß wird.
-- Unterstützung für eingehende Bilder (`NumMedia`/`MediaUrl0` aus dem
-  Twilio-Webhook) - aktuell wird nur reiner Text verarbeitet.
+- Unterstützung für eingehende Bilder (`type: "image"` im Meta-Webhook,
+  Bild-URL per Graph-API-Aufruf abrufen) - aktuell wird nur reiner Text
+  verarbeitet.
 - Eskalation an einen echten Mitarbeiter (z.B. Push-Benachrichtigung wie in
   `cloudflare-worker-ki-buerokraft/`), wenn der Assistent selbst nicht
   weiterweiß.
 - **Proaktive Erstkontakte per WhatsApp** (der Assistent schreibt Leads von
   sich aus an, statt nur auf eingehende Nachrichten zu antworten): technisch
-  nicht möglich, bevor bei Twilio/Meta ein **genehmigtes WhatsApp-
-  Nachrichtenvorlage-Template** vorliegt (Twilio Console → Messaging →
-  Content Editor/Content Template Builder) - das ist eine Plattform-Regel
-  von WhatsApp, kein Bestandteil dieses Codes. Sobald ein Template den
-  Status "Approved" hat, kann diese Funktion ergänzt werden.
+  nicht möglich, bevor bei Meta ein **genehmigtes WhatsApp-
+  Nachrichtenvorlage-Template** vorliegt (Meta-App → WhatsApp → Nachrichten-
+  Vorlagen-Verwaltung, oder business.facebook.com) - das ist eine
+  Plattform-Regel von WhatsApp selbst, unabhängig vom gewählten Anbieter,
+  kein Bestandteil dieses Codes. Sobald ein Template den Status "Genehmigt"
+  hat, kann diese Funktion ergänzt werden.
