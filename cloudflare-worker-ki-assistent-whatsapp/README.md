@@ -4,7 +4,9 @@ Nimmt eingehende WhatsApp-Nachrichten über Twilio entgegen und beantwortet
 sie per Claude (Anthropic) - inhaltlich derselbe Assistent wie das
 Chat-Widget auf der Website (`cloudflare-worker-ki-assistent/`), nur über
 einen anderen Kanal. Kann nach Zustimmung des Gesprächspartners automatisch
-einen Lead (Kunde + Projekt) in der Werkora-Lead-Pipeline anlegen.
+einen Lead (Kunde + Projekt) in der Werkora-Lead-Pipeline anlegen, und kann
+bei Terminwunsch echte freie Zeiten aus Calendly vorschlagen (siehe Abschnitt
+"Termin-Vorschläge über Calendly" unten).
 
 ## Wichtig: das musst du selbst einrichten (kein Bestandteil dieses Workers)
 
@@ -58,6 +60,32 @@ die Antwort-Logik, nicht die WhatsApp-Anbindung selbst.
    `https://neuverdrahtet-ki-assistent-whatsapp.<dein-konto>.workers.dev`)
    bei Twilio als Webhook eintragen (siehe Schritt 4 oben).
 
+## Termin-Vorschläge über Calendly (optional)
+
+Wenn ein Gesprächspartner per WhatsApp einen Termin möchte, kann der
+Assistent echte freie Uhrzeiten aus Calendly nennen und den Buchungslink
+mitschicken. **Wichtig:** Calendly kann Termine über die API nicht
+automatisch fest buchen (das ist eine Plattform-Grenze, kein Bug hier) - der
+Kunde muss den vorgeschlagenen Termin am Ende immer selbst über den Link
+bestätigen. Der Assistent ist im System-Prompt entsprechend angewiesen, so
+etwas nie als "fest gebucht" darzustellen.
+
+Setup (optional - ohne das folgende nennt der Assistent bei Terminwunsch nur
+den Buchungslink, ohne konkrete Uhrzeiten):
+
+1. In Calendly einloggen → oben rechts auf das Profilbild → **Integrations**
+   → **API and Webhooks** → **"Get a token now"** (Personal Access Token
+   erzeugen).
+2. Diesen Token als Secret `CALENDLY_API_TOKEN` im Cloudflare-Dashboard
+   dieses Workers eintragen (Einstellungen → Variablen und Geheimnisse →
+   Verschlüsselt).
+3. Optional: `CALENDLY_EVENT_TYPE_URI` (Variable, nicht verschlüsselt) und
+   `CALENDLY_SCHEDULING_URL` (Variable) setzen, falls ein anderer
+   Termin-Typ als der Standard-Typ des Kontos `calendly.com/neuverdrahtet`
+   verwendet werden soll. Ohne diese beiden Variablen wird automatisch der
+   vorhandene Termin-Typ "30 Minute Meeting"
+   (`calendly.com/neuverdrahtet/30min`) verwendet.
+
 ## Danach einmal live testen
 
 - Der WhatsApp-Sandbox beitreten (Code an die Sandbox-Nummer schicken) und
@@ -106,3 +134,10 @@ und lehnt gefälschte Anfragen mit HTTP 403 ab.
 - Eskalation an einen echten Mitarbeiter (z.B. Push-Benachrichtigung wie in
   `cloudflare-worker-ki-buerokraft/`), wenn der Assistent selbst nicht
   weiterweiß.
+- **Proaktive Erstkontakte per WhatsApp** (der Assistent schreibt Leads von
+  sich aus an, statt nur auf eingehende Nachrichten zu antworten): technisch
+  nicht möglich, bevor bei Twilio/Meta ein **genehmigtes WhatsApp-
+  Nachrichtenvorlage-Template** vorliegt (Twilio Console → Messaging →
+  Content Editor/Content Template Builder) - das ist eine Plattform-Regel
+  von WhatsApp, kein Bestandteil dieses Codes. Sobald ein Template den
+  Status "Approved" hat, kann diese Funktion ergänzt werden.

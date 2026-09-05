@@ -42,9 +42,31 @@
  *                        einschicken (Kosten-/Missbrauchsrisiko) - siehe
  *                        Sicherheitshinweis in der README.
  *   MODEL_ID             (Variable, optional) - Standard: claude-haiku-4-5
+ *   CALENDLY_API_TOKEN   (Secret, optional) - "Personal Access Token" aus
+ *                        Calendly (calendly.com -> Konto-Einstellungen ->
+ *                        Integrations -> API and Webhooks -> "Get a token
+ *                        now"). Ohne dieses Secret schlägt das Terminvorschlag-
+ *                        Tool nicht fehl, sondern nennt dem Kunden direkt nur
+ *                        den Buchungslink (CALENDLY_SCHEDULING_URL) ohne
+ *                        konkrete Uhrzeiten.
+ *   CALENDLY_EVENT_TYPE_URI (Variable, optional) - die "uri" des Calendly-
+ *                        Termin-Typs, für den Zeiten vorgeschlagen werden
+ *                        sollen. Standard: der Termin-Typ "30 Minute Meeting"
+ *                        des Kontos calendly.com/neuverdrahtet.
+ *   CALENDLY_SCHEDULING_URL (Variable, optional) - der öffentliche Buchungs-
+ *                        link, den der Assistent dem Kunden zum finalen
+ *                        Bestätigen schickt. Standard: calendly.com/neuverdrahtet/30min.
+ *                        WICHTIG: Calendly kann Termine über die API nicht
+ *                        automatisch fest buchen - der Assistent kann nur
+ *                        freie Uhrzeiten VORSCHLAGEN, der Kunde muss den
+ *                        Termin am Ende immer selbst über diesen Link
+ *                        bestätigen.
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
+
+const CALENDLY_STANDARD_EVENT_TYPE_URI = 'https://api.calendly.com/event_types/6f6a26b4-6f92-40b9-a784-1cd549c8b094';
+const CALENDLY_STANDARD_SCHEDULING_URL = 'https://calendly.com/neuverdrahtet/30min';
 
 const MAX_VERLAUF_LAENGE = 20; // gespeicherte Nachrichten pro Nummer (Firestore-Dokument)
 const MAX_ANTWORT_LAENGE = 1500; // grobe WhatsApp-Lesbarkeitsgrenze
@@ -235,6 +257,53 @@ async function leadAnlegen({ env, input, telefon }) {
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: projekt });
 }
 
+/** Fragt bei Calendly freie Zeiten für den konfigurierten Termin-Typ ab (max. 6-Tage-Fenster, siehe Calendly-API-Doku). */
+async function getCalendlyAvailableTimes({ apiToken, eventTypeUri, startTime, endTime }) {
+  const url = `https://api.calendly.com/event_type_available_times?event_type=${encodeURIComponent(eventTypeUri)}&start_time=${encodeURIComponent(startTime)}&end_time=${encodeURIComponent(endTime)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Calendly-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return data.collection || [];
+}
+
+/**
+ * Liefert dem Assistenten ein paar echte freie Uhrzeiten plus den Buchungslink.
+ * Bucht NICHTS fest - Calendly erlaubt Endkunden-Buchungen über die API auf
+ * Standard-/Professional-Plänen nicht, der Kunde muss immer selbst über den
+ * Link final bestätigen.
+ */
+async function termineVorschlagen({ env }) {
+  const schedulingUrl = env.CALENDLY_SCHEDULING_URL || CALENDLY_STANDARD_SCHEDULING_URL;
+  if (!env.CALENDLY_API_TOKEN) {
+    return `Bitte hier direkt einen freien Termin auswählen und bestätigen: ${schedulingUrl}`;
+  }
+
+  const eventTypeUri = env.CALENDLY_EVENT_TYPE_URI || CALENDLY_STANDARD_EVENT_TYPE_URI;
+  const start = new Date(Date.now() + 60 * 60 * 1000); // Calendly verlangt start_time in der Zukunft
+  const end = new Date(start.getTime() + 6 * 24 * 60 * 60 * 1000); // Calendly erlaubt max. 1 Woche Zeitraum je Abfrage
+
+  const slots = await getCalendlyAvailableTimes({
+    apiToken: env.CALENDLY_API_TOKEN,
+    eventTypeUri,
+    startTime: start.toISOString(),
+    endTime: end.toISOString(),
+  });
+
+  if (!slots.length) {
+    return `In den nächsten Tagen sind laut Kalender keine freien Termine mehr frei. Bitte hier weitere Termine ansehen: ${schedulingUrl}`;
+  }
+
+  const formatter = new Intl.DateTimeFormat('de-DE', {
+    weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin',
+  });
+  const auswahl = slots.slice(0, 5).map((s) => `- ${formatter.format(new Date(s.start_time))} Uhr`);
+
+  return `Diese Termine sind aktuell frei:\n${auswahl.join('\n')}\n\nBitte hier den gewünschten Termin final auswählen und bestätigen: ${schedulingUrl}`;
+}
+
 function buildSystemPrompt(telefon) {
   return `Du bist der KI-Assistent der Firma neuverdrahtet, einem Elektro-Fachbetrieb in Essen (Nordrhein-Westfalen), und antwortest gerade per WhatsApp. Geschäftsführer: Danny Berger. Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
 
@@ -250,9 +319,16 @@ Deine Aufgabe:
 - Nenne keine verbindlichen Festpreise, sondern grobe Richtwerte falls gefragt, und verweise für eine genaue Einschätzung auf ein persönliches Gespräch bzw. die Kosten-Konfiguratoren auf neuverdrahtet.com.
 - Bei akuten Elektro-Gefahren (Brandgeruch, Funkenflug, Stromschlag, sichtbar beschädigte Leitungen) rätst du sofort zur Sicherheitsabschaltung (Sicherung/FI raus) und zum Anruf beim Notdienst/der Feuerwehr.
 - Wenn erkennbares Interesse an einem Auftrag besteht, frage nach Name und kurz worum es geht, und danach ausdrücklich, ob du die Anfrage ans Team weiterleiten darfst. Erst NACH dieser Zustimmung rufst du das Tool "lead_anlegen" auf (genau einmal pro Gespräch) - die Telefonnummer ergänzt das System automatisch, du musst nur Name und Anliegen erfragen.
-- Erfinde keine Fakten, Preise, Verfügbarkeiten oder Termine.
+- Wenn der Gesprächspartner einen Beratungstermin/Rückruf-Termin möchte, rufe das Tool "termine_vorschlagen" auf, um echte freie Uhrzeiten aus dem Kalender zu bekommen, und nenne davon ein paar zur Auswahl sowie den mitgelieferten Buchungslink. Der Termin ist erst final gebucht, wenn der Kunde ihn selbst über diesen Link bestätigt hat - sage niemals, ein Termin sei "fest gebucht" oder "eingetragen", bevor das geschehen ist.
+- Erfinde keine Fakten, Preise, Verfügbarkeiten oder Termine - Uhrzeiten kommen ausschließlich aus dem Tool "termine_vorschlagen", niemals frei erfunden.
 - Du bist ausschließlich für neuverdrahtet-Themen da.`;
 }
+
+const TERMIN_TOOL = {
+  name: 'termine_vorschlagen',
+  description: 'Ruft echte freie Termin-Slots aus dem Kalender ab und liefert eine Auswahl an Uhrzeiten plus den Buchungslink. Bucht NICHTS automatisch fest - der Kunde muss den Termin am Ende selbst über den Link bestätigen. Nur aufrufen, wenn der Gesprächspartner erkennbar einen Termin/Beratungsgespräch möchte.',
+  input_schema: { type: 'object', properties: {}, additionalProperties: false },
+};
 
 const LEAD_TOOL = {
   name: 'lead_anlegen',
@@ -287,7 +363,7 @@ async function chatMitClaude({ env, messages, telefon }) {
         max_tokens: 1024,
         system: buildSystemPrompt(telefon),
         messages: conversation,
-        tools: [LEAD_TOOL],
+        tools: [LEAD_TOOL, TERMIN_TOOL],
       }),
     });
 
@@ -317,6 +393,14 @@ async function chatMitClaude({ env, messages, telefon }) {
           toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: 'Lead wurde erfolgreich angelegt. Bedanke dich und bestätige, dass sich das Team meldet.' });
         } catch (err) {
           toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Fehler beim Anlegen: ${err.message}. Bitte den Gesprächspartner bitten, stattdessen direkt anzurufen.`, is_error: true });
+        }
+      } else if (toolUse.name === 'termine_vorschlagen') {
+        try {
+          const antwortText = await termineVorschlagen({ env });
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: antwortText });
+        } catch (err) {
+          const schedulingUrl = env.CALENDLY_SCHEDULING_URL || CALENDLY_STANDARD_SCHEDULING_URL;
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Kalender-Abruf fehlgeschlagen: ${err.message}. Nenne dem Gesprächspartner stattdessen nur den Buchungslink ${schedulingUrl}.`, is_error: true });
         }
       }
     }
