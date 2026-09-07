@@ -294,6 +294,7 @@ async function getCalendlyAvailableTimes({ apiToken, eventTypeUri, startTime, en
 async function termineVorschlagen({ env }) {
   const schedulingUrl = env.CALENDLY_SCHEDULING_URL || CALENDLY_STANDARD_SCHEDULING_URL;
   if (!env.CALENDLY_API_TOKEN) {
+    console.log('termineVorschlagen: kein CALENDLY_API_TOKEN gesetzt, gebe nur Link zurück.');
     return `Bitte hier direkt einen freien Termin auswählen und bestätigen: ${schedulingUrl}`;
   }
 
@@ -307,6 +308,7 @@ async function termineVorschlagen({ env }) {
     startTime: start.toISOString(),
     endTime: end.toISOString(),
   });
+  console.log(`termineVorschlagen: ${slots.length} freie Slots von Calendly erhalten (eventTypeUri=${eventTypeUri}).`);
 
   if (!slots.length) {
     return `In den nächsten Tagen sind laut Kalender keine freien Termine mehr frei. Bitte hier weitere Termine ansehen: ${schedulingUrl}`;
@@ -411,10 +413,12 @@ async function chatMitClaude({ env, messages, telefon }) {
           toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Fehler beim Anlegen: ${err.message}. Bitte den Gesprächspartner bitten, stattdessen direkt anzurufen.`, is_error: true });
         }
       } else if (toolUse.name === 'termine_vorschlagen') {
+        console.log('chatMitClaude: Tool termine_vorschlagen wurde aufgerufen.');
         try {
           const antwortText = await termineVorschlagen({ env });
           toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: antwortText });
         } catch (err) {
+          console.error('termine_vorschlagen Fehler:', err);
           const schedulingUrl = env.CALENDLY_SCHEDULING_URL || CALENDLY_STANDARD_SCHEDULING_URL;
           toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Kalender-Abruf fehlgeschlagen: ${err.message}. Nenne dem Gesprächspartner stattdessen nur den Buchungslink ${schedulingUrl}.`, is_error: true });
         }
