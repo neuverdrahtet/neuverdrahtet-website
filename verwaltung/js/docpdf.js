@@ -13,7 +13,12 @@ const LOGO_SIZES = {
   gross: { maxW: 86, maxH: 42 },
 };
 
-/** Zeichnet das Logo (oder ersatzweise den Firmennamen) an der eingestellten Position im Kopfbereich. */
+/**
+ * Zeichnet das Logo (oder ersatzweise den Firmennamen) an der eingestellten
+ * Position im Kopfbereich. Gibt die tatsächlich erreichte untere Y-Kante
+ * zurück, damit nachfolgende Elemente (Absender-Zeile etc.) bei hohen/breiten
+ * Logo-Bildern nicht darüber gezeichnet werden und sich überlappen.
+ */
 function drawHeaderLogo(doc, settings, marginX, rightX, y) {
   const position = settings.dokLogoPosition || 'links';
   const { maxW, maxH } = LOGO_SIZES[settings.dokLogoGroesse] || LOGO_SIZES.mittel;
@@ -26,7 +31,7 @@ function drawHeaderLogo(doc, settings, marginX, rightX, y) {
     else if (position === 'mittig') doc.text(settings.firmenname || '', (marginX + rightX) / 2, y + 4, { align: 'center' });
     else doc.text(settings.firmenname || '', marginX, y + 4, { align: 'left' });
     doc.setFont(undefined, 'normal');
-    return;
+    return y + 8;
   }
   try {
     const props = doc.getImageProperties(settings.logoDataUrl);
@@ -37,8 +42,12 @@ function drawHeaderLogo(doc, settings, marginX, rightX, y) {
     if (position === 'rechts') logoX = rightX - drawW;
     else if (position === 'mittig') logoX = marginX + ((rightX - marginX) - drawW) / 2;
     else logoX = marginX;
-    doc.addImage(settings.logoDataUrl, fmt, logoX, y - 4, drawW, drawH);
-  } catch (err) { /* ignore broken logo data */ }
+    const logoY = y - 4;
+    doc.addImage(settings.logoDataUrl, fmt, logoX, logoY, drawW, drawH);
+    return logoY + drawH;
+  } catch (err) {
+    return y + 8; /* ignore broken logo data */
+  }
 }
 
 /** Titel/Datum im Kopfbereich weichen bei rechts positioniertem Logo auf die linke Seite aus, damit nichts überlappt. */
@@ -114,7 +123,7 @@ export async function buildDocPdfBlob(opts) {
   const baseFont = Number(opts.settings.dokSchriftgroesse) || 10;
 
   // --- Header: logo (an eingestellter Position) + Titel & Meta-Box (Gegenposition) ---
-  drawHeaderLogo(doc, opts.settings, marginX, rightX, y);
+  const logoBottomY = drawHeaderLogo(doc, opts.settings, marginX, rightX, y);
 
   const { x: titleX, align: titleAlign } = headerCounterpart(opts.settings, marginX, rightX);
   doc.setFontSize(15);
@@ -150,6 +159,10 @@ export async function buildDocPdfBlob(opts) {
   });
 
   y += 6 + metaRows.length * 4.6 + 6;
+  // Absender-Zeile erst NACH dem Logo beginnen lassen - sonst überlappt sie bei
+  // hohen/breiten Logo-Bildern (die weiter runterreichen als die paar Meta-Zeilen
+  // rechts) mit dem unteren Rand des Logos.
+  y = Math.max(y, logoBottomY + 6);
 
   // --- Sender line + recipient ---
   const absender = [opts.settings.firmenname, opts.settings.strasse, opts.settings.plzOrt].filter(Boolean).join(' · ');
@@ -489,14 +502,16 @@ export async function buildBerichtPdfBlob({
   const accentRgb = hexToRgb(settings.dokAkzentfarbe);
   const baseFont = Number(settings.dokSchriftgroesse) || 10;
 
-  drawHeaderLogo(doc, settings, marginX, rightX, y);
+  const logoBottomY = drawHeaderLogo(doc, settings, marginX, rightX, y);
 
   const { x: dateX, align: dateAlign } = headerCounterpart(settings, marginX, rightX);
   doc.setFontSize(8);
   doc.setTextColor(110);
   doc.text(formatDateTime(datum || new Date().toISOString()), dateX, y, { align: dateAlign });
 
-  y += 24;
+  // Siehe buildDocPdfBlob: der feste Abstand reicht bei hohen/breiten
+  // Logo-Bildern nicht aus, darum zusätzlich gegen die tatsächliche Logo-Höhe absichern.
+  y = Math.max(y + 24, logoBottomY + 6);
   doc.setDrawColor(180);
   doc.line(marginX, y, rightX, y);
   y += 10;
