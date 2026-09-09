@@ -288,7 +288,17 @@ export async function render(container) {
       }, new Map()).values()
     ).filter((g) => g.length > 1);
 
+    // Aufgeteilt nach dem Grund, warum noch kein Betrag drinsteht - sonst
+    // wirkt die Gesamtzahl wie ein "die KI hat nichts gemacht", obwohl z.B.
+    // Einträge ganz ohne Beleg-Foto von keiner automatischen Erkennung (auch
+    // nicht der KI-Bürokraft-Schnittstelle, siehe kiAnalyseUnsicher-Feld
+    // dort) je gelöst werden können und Einträge mit kiAnalyseUnsicher=true
+    // von ihr bereits bewusst übersprungen werden, weil ein früherer
+    // Automatik-Versuch den Betrag nicht sicher lesen konnte.
     const unvollstaendig = ausgaben.filter((a) => !Number(a.betragBrutto));
+    const unvollstaendigOhneBeleg = unvollstaendig.filter((a) => !a.beleg?.url);
+    const unvollstaendigKiUnsicher = unvollstaendig.filter((a) => a.beleg?.url && a.kiAnalyseUnsicher);
+    const unvollstaendigOffen = unvollstaendig.filter((a) => a.beleg?.url && !a.kiAnalyseUnsicher);
     const kategorieVerbesserbar = ausgaben
       .filter((a) => a.kategorie === 'Sonstiges')
       .map((a) => ({ a, vorschlag: guessAusgabenKategorie(`${a.lieferant || ''} ${a.beschreibung || ''}`) }))
@@ -340,10 +350,25 @@ export async function render(container) {
         <div class="divider"></div>
         <h2 style="font-size:14px;margin:0 0 8px">Unvollständige Einträge ohne Betrag (${unvollstaendig.length})</h2>
         ${unvollstaendig.length === 0 ? '<p class="text-mute">Keine Ausgaben mit Betrag 0 gefunden.</p>' : `
-          <p class="hint">Typisch für lose importierte Belegfotos, bei denen Betrag/Lieferant nicht automatisch erkannt werden konnten – bitte einzeln öffnen und ergänzen. Anklicken zum Bearbeiten.</p>
-          <ul class="cal-event-list">
-            ${unvollstaendig.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}</span><span>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
-          </ul>
+          <p class="hint">Aufgeteilt nach dem Grund - Belege ohne Foto/PDF und von der KI als unsicher markierte Belege werden von der automatischen Erkennung (auch über die KI-Bürokraft-Anbindung) nicht (mehr) angefasst und brauchen manuelle Prüfung. Anklicken zum Bearbeiten.</p>
+          ${unvollstaendigOffen.length > 0 ? `
+            <p style="font-weight:600;margin:10px 0 4px">Noch nicht automatisch geprüft (${unvollstaendigOffen.length})</p>
+            <ul class="cal-event-list">
+              ${unvollstaendigOffen.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}</span><span>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+            </ul>
+          ` : ''}
+          ${unvollstaendigKiUnsicher.length > 0 ? `
+            <p style="font-weight:600;margin:10px 0 4px">KI konnte den Betrag nicht sicher lesen (${unvollstaendigKiUnsicher.length})</p>
+            <ul class="cal-event-list">
+              ${unvollstaendigKiUnsicher.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}${a.kiAnalyseGrund ? ` <span class="text-mute">– ${escapeHtml(a.kiAnalyseGrund)}</span>` : ''}</span><span>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+            </ul>
+          ` : ''}
+          ${unvollstaendigOhneBeleg.length > 0 ? `
+            <p style="font-weight:600;margin:10px 0 4px">Kein Beleg-Foto/PDF hinterlegt (${unvollstaendigOhneBeleg.length})</p>
+            <ul class="cal-event-list">
+              ${unvollstaendigOhneBeleg.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}</span></li>`).join('')}
+            </ul>
+          ` : ''}
         `}
         <div class="divider"></div>
         <h2 style="font-size:14px;margin:0 0 8px">Ohne Kunde/Projekt-Zuordnung (${ohneZuordnung.length})</h2>
