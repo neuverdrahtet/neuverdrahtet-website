@@ -4,6 +4,16 @@ import { firebaseConfig } from './js/firebase-config.js';
 
 const CACHE_NAME = 'nv-verwaltung-v3';
 
+// Dritte-Parteien-Bibliotheken unter js/vendor/ (Firebase-SDK, jsPDF, xlsx,
+// ZXing, Leaflet - zusammen mehrere MB) ändern sich nur, wenn jemand die
+// Datei im Projekt austauscht, nie durch normale App-Updates. Sie trotzdem
+// bei JEDEM Seitenaufruf per "cache: no-store" komplett neu herunterzuladen
+// (wie unten für den restlichen Code) macht besonders auf mobilen
+// Baustellen-Verbindungen jeden App-Start spürbar langsam. Für genau diesen
+// Ordner daher cache-first: bekannt langsame, aber praktisch unveränderliche
+// Dateien kommen aus dem Cache, alles andere bleibt network-first.
+const VENDOR_PATH = '/js/vendor/';
+
 self.addEventListener('install', () => {
   self.skipWaiting();
 });
@@ -24,6 +34,19 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
+
+  if (url.pathname.includes(VENDOR_PATH)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        const res = await fetch(event.request);
+        cache.put(event.request, res.clone());
+        return res;
+      })
+    );
+    return;
+  }
 
   // cache: 'no-store' erzwingt eine echte Netzwerkanfrage statt einer
   // stillen Auslieferung aus dem normalen HTTP-Cache des Browsers - sonst
