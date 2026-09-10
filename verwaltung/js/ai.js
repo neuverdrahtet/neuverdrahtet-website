@@ -30,6 +30,31 @@ export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, k
   return res.json();
 }
 
+/** Liest ein hochgeladenes fremdes Angebot (PDF/Foto, z.B. von einem Mitbewerber) per KI aus und übernimmt dessen Positionen. */
+export async function extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersatz }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const res = await fetch(settings.aiWorkerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Secret': settings.aiAppSecret || '',
+    },
+    body: JSON.stringify({ action: 'angebot-pdf-import', fileDataUrl, standardSteuersatz: standardSteuersatz || settings.standardSteuersatz }),
+  });
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 /** Ordnet eine Charge von E-Mails per KI in Kategorien ein (kundenanfrage/rechnung-lieferant/werbung/sonstiges). */
 export async function classifyEmails({ emails }) {
   const settings = await getSettings();

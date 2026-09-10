@@ -6,7 +6,7 @@ import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
-import { generateAngebotFromStichpunkte, rechercherePreiseFuerPositionen, chatMitAssistent } from '../ai.js';
+import { generateAngebotFromStichpunkte, extractAngebotFromFremdPdf, rechercherePreiseFuerPositionen, chatMitAssistent } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
@@ -150,6 +150,7 @@ export async function render(container, route) {
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Angebote importieren</button>
         <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
+        <button class="btn" id="btn-fremdangebot-import">🤖 Fremdes Angebot importieren (KI)</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn" id="btn-new-privat">⚡ Privatkunden-Angebot</button>
@@ -282,6 +283,7 @@ export async function render(container, route) {
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-new-privat').addEventListener('click', () => openPrivatkundenSchnellstart());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
+  container.querySelector('#btn-fremdangebot-import').addEventListener('click', () => openFremdangebotImport());
   container.querySelector('#btn-import').addEventListener('click', () => openAngeboteImport());
 
   const KUNDEN_FARBEN_QUICK = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
@@ -448,6 +450,58 @@ export async function render(container, route) {
       }
       close();
       openForm(null, { positionen, betreff: projektName ? `Leistungsverzeichnis: ${projektName}` : '' });
+    });
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Fremdes Angebot (z.B. von einem Mitbewerber) als PDF/Foto hochladen und
+  // per KI die Positionen 1:1 übernehmen - anders als der GAEB-Import bleiben
+  // hier die im Dokument sichtbaren Preise erhalten, da es sich um ein
+  // fertiges Angebot mit Preisen handelt, nicht um eine Ausschreibung.
+  function openFremdangebotImport() {
+    const { body, close } = openModal({
+      title: 'Fremdes Angebot importieren',
+      bodyHtml: `
+        <p class="hint">PDF oder Foto eines fremden Angebots (z.B. von einem Mitbewerber) hochladen - die KI liest die Positionen (Bezeichnung, Menge, Einheit, Preis) aus und übernimmt sie als neues Angebot, das du danach noch anpassen kannst.</p>
+        <div class="field"><label>Datei</label><input type="file" id="fremdangebot-file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#fremdangebot-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const input = e.target;
+      input.disabled = true;
+      try {
+        const fileDataUrl = await fileToDataUrl(file);
+        const result = await extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersatz: settings.standardSteuersatz });
+        if (!result.positionen || result.positionen.length === 0) {
+          toast('Keine Positionen in diesem Dokument gefunden.', 'danger');
+          input.disabled = false;
+          return;
+        }
+        close();
+        openForm(null, {
+          positionen: mitLieferantenpraeferenz(result.positionen).map((p) => ({ ...p, id: uid() })),
+          betreff: result.betreff || '',
+        });
+        toast(`${result.positionen.length} Positionen übernommen - Preise bitte prüfen.`, 'success');
+      } catch (err) {
+        toast(err.message, 'danger');
+        input.disabled = false;
+      }
     });
   }
 

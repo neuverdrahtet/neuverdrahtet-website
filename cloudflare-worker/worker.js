@@ -1,13 +1,15 @@
 /**
- * neuverdrahtet Verwaltung – KI-Angebotserstellung + Beleg-Scan + Push-Versand + GAEB-Preisrecherche + Social-Media-Post + KI-Assistent-Chat (Cloudflare Worker)
+ * neuverdrahtet Verwaltung – KI-Angebotserstellung + Fremdangebot-Import + Beleg-Scan + Push-Versand + GAEB-Preisrecherche + Social-Media-Post + KI-Assistent-Chat (Cloudflare Worker)
  *
  * Nimmt Stichpunkte entgegen und lässt Claude daraus strukturierte
- * Angebotspositionen erzeugen, analysiert ein fotografiertes Beleg-Bild und
- * liefert Händler/Datum/Betrag/Kategorie zurück, recherchiert für
- * unbepreiste GAEB-Positionen per Web-Search-Tool marktübliche Preise,
- * erzeugt aus einem Baustellen-/Projektfoto passende Social-Media-Texte je
- * Kanal (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), beantwortet
- * als interner KI-Assistent (Chat) Fragen zu den echten Firmendaten per
+ * Angebotspositionen erzeugen, liest wahlweise ein hochgeladenes fremdes
+ * Angebot (PDF/Foto, z.B. von einem Mitbewerber) aus und übernimmt dessen
+ * Positionen 1:1, analysiert ein fotografiertes Beleg-Bild und liefert
+ * Händler/Datum/Betrag/Kategorie zurück, recherchiert für unbepreiste
+ * GAEB-Positionen per Web-Search-Tool marktübliche Preise, erzeugt aus
+ * einem Baustellen-/Projektfoto passende Social-Media-Texte je Kanal
+ * (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), beantwortet als
+ * interner KI-Assistent (Chat) Fragen zu den echten Firmendaten per
  * Tool-Use-Loop gegen die KI-Bürokraft-API, oder löst eine Firebase-Cloud-
  * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Die
  * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
@@ -140,6 +142,72 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
       max_tokens: 4096,
       system: buildSystemPrompt(standardSteuersatz || 19),
       messages: [{ role: 'user', content: userText }],
+      output_config: {
+        format: { type: 'json_schema', schema: POSITIONEN_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
+function buildAngebotImportSystemPrompt(standardSteuersatz) {
+  return `Du liest ein fremdes Angebot/einen Kostenvoranschlag (von einem anderen Handwerksbetrieb, z.B. einem Mitbewerber) aus einem hochgeladenen PDF oder Foto aus und übernimmst dessen Positionen 1:1 in das gleiche strukturierte Format wie eigene Angebote.
+
+Regeln:
+- Antworte ausschließlich auf Deutsch.
+- Übernimm NUR die Positionen, die im Dokument tatsächlich als einzelne Leistungs-/Materialzeilen aufgeführt sind - erfinde KEINE zusätzlichen Positionen und lasse keine sichtbare Position weg.
+- "bezeichnung": kurzer Titel der Position, wie im Dokument.
+- "beschreibung": ggf. vorhandener Zusatztext/Detailbeschreibung zur Position, sonst leer lassen.
+- "einheit" ist z.B. "Std.", "Stk.", "m", "pauschal" - wie im Dokument angegeben oder sinngemäß übertragen.
+- "menge" und "einzelpreis" (netto, ohne Währungssymbol) exakt wie im Dokument übernehmen. Ist nur ein Bruttopreis sichtbar, rechne mit dem erkannten bzw. dem Standard-Steuersatz (${standardSteuersatz}%) auf netto um.
+- "steuersatz" wie im Dokument erkennbar, sonst ${standardSteuersatz} annehmen.
+- "betreff": eine kurze Überschrift, die das Angebot beschreibt (z.B. aus einer Betreffzeile oder Projektbezeichnung im Dokument), sonst leer lassen.
+- "einleitung": leer lassen (wird bei einem Import nicht benötigt).
+- Ist das Dokument kein erkennbares Angebot mit Positionen (z.B. eine private Rechnung, ein unleserliches Foto), liefere eine leere "positionen"-Liste statt zu raten.`;
+}
+
+async function callClaudeAngebotImport({ apiKey, model, fileDataUrl, standardSteuersatz }) {
+  const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(fileDataUrl || '');
+  if (!match) {
+    throw new Error('Ungültiges Dateiformat (unterstützt: JPEG/PNG/WebP-Fotos oder PDF).');
+  }
+  const [, mediaType, base64Data] = match;
+  const fileBlock = mediaType === 'application/pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64Data } }
+    : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } };
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      system: buildAngebotImportSystemPrompt(standardSteuersatz || 19),
+      messages: [{
+        role: 'user',
+        content: [
+          fileBlock,
+          { type: 'text', text: 'Übernimm die Positionen aus diesem fremden Angebot in das vorgegebene Format.' },
+        ],
+      }],
       output_config: {
         format: { type: 'json_schema', schema: POSITIONEN_SCHEMA },
       },
@@ -1110,6 +1178,29 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           imageDataUrl: body.imageDataUrl,
           kategorien: body.kategorien,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'angebot-pdf-import') {
+      if (!body.fileDataUrl || typeof body.fileDataUrl !== 'string') {
+        return new Response(JSON.stringify({ error: 'Feld "fileDataUrl" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeAngebotImport({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          fileDataUrl: body.fileDataUrl,
+          standardSteuersatz: body.standardSteuersatz,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
