@@ -7,7 +7,7 @@ import { buildDocPdfBlob } from '../docpdf.js';
 import { buildXRechnungBlob, xRechnungFilename } from '../xrechnung.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
-import { generateAngebotFromStichpunkte } from '../ai.js';
+import { generateAngebotFromStichpunkte, extractAngebotFromFremdPdf } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
@@ -186,6 +186,7 @@ export async function render(container, route) {
       <h1>Rechnungen</h1>
       <div class="actions">
         <button class="btn" id="btn-import">⇪ Rechnungen importieren</button>
+        <button class="btn" id="btn-fremdangebot-import">🤖 Fremdes Angebot importieren (KI)</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn btn-primary" id="btn-new">+ Neue Rechnung</button>
@@ -416,6 +417,7 @@ export async function render(container, route) {
   container.querySelector('#btn-export-pdf-alle').addEventListener('click', () => exportPdf(filtered, 'Rechnungen-Export.zip'));
   container.querySelector('#btn-export-csv-alle').addEventListener('click', () => exportCsv(filtered));
   container.querySelector('#btn-import').addEventListener('click', () => openRechnungenImport());
+  container.querySelector('#btn-fremdangebot-import').addEventListener('click', () => openFremdangebotImport());
 
   function openRechnungenImport() {
     const { body, close } = openModal({
@@ -503,6 +505,58 @@ export async function render(container, route) {
       toast(`${gueltigeRows.length} Rechnung(en) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
       close();
       applyFilter();
+    });
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Fremdes Angebot (z.B. von einem Mitbewerber, oder ein bereits vom Kunden
+  // akzeptiertes fremdes Angebot) als PDF/Foto hochladen und per KI die
+  // Positionen 1:1 als neue Rechnung übernehmen - siehe dieselbe Funktion
+  // bei den Angeboten für den GAEB-Import-Kontrast (dort bewusst ohne Preise).
+  function openFremdangebotImport() {
+    const { body, close } = openModal({
+      title: 'Fremdes Angebot importieren',
+      bodyHtml: `
+        <p class="hint">PDF oder Foto eines fremden Angebots hochladen - die KI liest die Positionen (Bezeichnung, Menge, Einheit, Preis) aus und übernimmt sie als neue Rechnung, die du danach noch anpassen kannst.</p>
+        <div class="field"><label>Datei</label><input type="file" id="fremdangebot-file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#fremdangebot-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const input = e.target;
+      input.disabled = true;
+      try {
+        const fileDataUrl = await fileToDataUrl(file);
+        const result = await extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersatz: settings.standardSteuersatz });
+        if (!result.positionen || result.positionen.length === 0) {
+          toast('Keine Positionen in diesem Dokument gefunden.', 'danger');
+          input.disabled = false;
+          return;
+        }
+        close();
+        openForm(null, {
+          positionen: result.positionen.map((p) => ({ ...p, id: uid() })),
+          betreff: result.betreff || '',
+        });
+        toast(`${result.positionen.length} Positionen übernommen - Preise bitte prüfen.`, 'success');
+      } catch (err) {
+        toast(err.message, 'danger');
+        input.disabled = false;
+      }
     });
   }
 
