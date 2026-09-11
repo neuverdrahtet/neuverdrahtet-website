@@ -43,6 +43,7 @@ const routeLoaders = {
   ausgaben: () => import('./views/ausgaben.js'),
   postfach: () => import('./views/postfach.js'),
   buchhaltung: () => import('./views/buchhaltung.js'),
+  zahlungsabgleich: () => import('./views/zahlungsabgleich.js'),
   auswertungen: () => import('./views/auswertungen.js'),
   aufgaben: () => import('./views/aufgaben.js'),
   urlaubsantraege: () => import('./views/urlaubsantraege.js'),

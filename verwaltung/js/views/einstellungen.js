@@ -52,6 +52,7 @@ const NAV = [
     { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
     { id: 'kibuerokraft', icon: '🤖', label: 'KI-Bürokraft-API' },
     { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
+    { id: 'qonto', icon: '🏦', label: 'Qonto-Zahlungsabgleich' },
     { id: 'push', icon: '🔔', label: 'Benachrichtigungen' },
   ] },
   { group: 'Daten & Sicherheit', items: [
@@ -390,6 +391,20 @@ export async function render(container) {
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-lexoffice-arbeitsstunde-choose">Artikel wählen ...</button>
           </div>
+        </div>
+
+        <div class="card settings-panel" data-panel="qonto" hidden>
+          <h2>Qonto-Zahlungsabgleich</h2>
+          <p class="hint">
+            Ruft eingehende Kontobewegungen von eurem Qonto-Geschäftskonto ab und schlägt unter <a href="#/zahlungsabgleich">Zahlungsabgleich</a> passende offene Rechnungen zum Abhaken vor - gebucht wird nie automatisch, du bestätigst jeden Treffer selbst. Dafür wird ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt, der den Qonto-API-Schlüssel sicher verwahrt. Details/Einrichtung: Ordner <code>cloudflare-worker-qonto-sync/</code> im Projekt bzw. frag im Chat nach.
+          </p>
+          <form id="qonto-form">
+            <div class="form-grid">
+              <div class="field col-span-2"><label>Worker-URL</label><input name="qontoWorkerUrl" placeholder="https://neuverdrahtet-qonto-sync.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.qontoWorkerUrl || '')}"></div>
+              <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="qontoAppSecret" value="${escapeHtml(settings.qontoAppSecret || '')}"></div>
+            </div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
         </div>
 
         <div class="card settings-panel" data-panel="push" hidden>
@@ -867,6 +882,17 @@ export async function render(container) {
     const fd = new FormData(e.target);
     await setSettings({ lexofficeApiKey: (fd.get('lexofficeApiKey') || '').toString().trim() });
     toast('lexoffice-Einstellungen gespeichert', 'success');
+    render(container);
+  });
+
+  container.querySelector('#qonto-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      qontoWorkerUrl: (fd.get('qontoWorkerUrl') || '').toString().trim(),
+      qontoAppSecret: (fd.get('qontoAppSecret') || '').toString().trim(),
+    });
+    toast('Qonto-Einstellungen gespeichert', 'success');
     render(container);
   });
 

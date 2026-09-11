@@ -1,0 +1,7 @@
+name = "neuverdrahtet-qonto-sync"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secrets (QONTO_LOGIN, QONTO_SECRET_KEY, APP_SECRET) werden NICHT hier
+# eingetragen, sondern per "wrangler secret put" bzw. im Cloudflare-
+# Dashboard gesetzt.
