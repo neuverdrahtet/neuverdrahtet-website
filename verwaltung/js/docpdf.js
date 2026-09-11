@@ -217,7 +217,14 @@ export async function buildDocPdfBlob(opts) {
         ? [{ content: p.bezeichnung || '', colSpan: 6, styles: { fontStyle: 'bold' } }]
         : [
           p.posNr || String(i + 1),
-          p.bezeichnung || '',
+          // Die Detailbeschreibung einer Position (z.B. Leistungsumfang,
+          // Vorbehalte) wurde hier bisher stillschweigend weggelassen, obwohl
+          // sie in der Browser-Druckvorschau (siehe pdf.js buildDocHtml)
+          // gezeigt wird - dadurch fehlten diese Angaben im tatsächlichen
+          // PDF (Download/E-Mail/WhatsApp-Versand), inkl. bei Rechnungen, die
+          // ihre Positionen aus einem Angebot/einer Auftragsbestätigung
+          // übernommen haben.
+          p.beschreibung ? `${p.bezeichnung || ''}\n${p.beschreibung}` : (p.bezeichnung || ''),
           String(p.menge ?? ''),
           p.einheit || '',
           formatCurrency(p.einzelpreis),
