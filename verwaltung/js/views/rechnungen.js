@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
@@ -79,6 +79,10 @@ function openStornoGrundDialog(nummer, onConfirm) {
           <select name="stornoGrund">${GRUENDE_STORNO.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}</select>
         </div>
         <div class="field"><label>Notiz (optional)</label><input type="text" name="stornoGrundText"></div>
+        <div class="field field-checkbox">
+          <input type="checkbox" name="korrigierteErsatzrechnung" id="storno-korrektur" checked>
+          <label for="storno-korrektur">Danach sofort eine korrigierte Ersatzrechnung mit denselben Positionen zum Anpassen öffnen</label>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn" id="btn-storno-abbrechen">Abbrechen</button>
           <button type="submit" class="btn btn-danger">Stornorechnung erstellen</button>
@@ -92,8 +96,9 @@ function openStornoGrundDialog(nummer, onConfirm) {
     const fd = new FormData(e.target);
     const grund = fd.get('stornoGrund') || '';
     const grundText = (fd.get('stornoGrundText') || '').toString().trim();
+    const korrigierteErsatzrechnung = fd.get('korrigierteErsatzrechnung') === 'on';
     dClose();
-    onConfirm(grund, grundText);
+    onConfirm(grund, grundText, korrigierteErsatzrechnung);
   });
 }
 
@@ -582,6 +587,10 @@ export async function render(container, route) {
       (data.verrechneteAbschlaege || []).map((a) => a.rechnungId)
       .concat(!isEdit ? (prefill?.abschlagIds || []) : [])
     );
+    // Manuelle Abschlagszahlungen (z.B. eine bar erhaltene Anzahlung, für die
+    // keine eigene Abschlagsrechnung im System existiert) - eigene Liste
+    // parallel zu den oben angehakten echten Abschlagsrechnungen.
+    let manuelleAbschlaege = (data.verrechneteAbschlaege || []).filter((a) => a.manuell).map((a) => ({ ...a }));
     const suggestedNummer = !isEdit
       ? nextDailyNummer(settings.rechnungPrefix, { datum: settings.rechnungNummerDatum, zaehler: settings.rechnungNummerZaehler }).nummer
       : '';
@@ -735,17 +744,28 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           r.rechnungstyp === 'abschlag' && r.id !== data.id && r.status !== 'storniert' &&
           (!projektId || r.projektId === projektId) && (!r.verrechnetIn || r.verrechnetIn === data.nummer)
         );
-        if (kandidaten.length === 0) { host.innerHTML = ''; return; }
         host.innerHTML = `
           <div class="divider"></div>
           <h2 style="font-size:13px;margin:0 0 8px">Abschlagszahlungen berücksichtigen (Schlussrechnung)</h2>
-          <div class="tag-list">
-            ${kandidaten.map((r) => `
-              <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
-                <input type="checkbox" class="abschlag-check" value="${r.id}" ${abschlaegeChecked.has(r.id) ? 'checked' : ''}>
-                ${escapeHtml(r.nummer)} · ${formatCurrency(r.brutto)}
-              </label>
-            `).join('')}
+          ${kandidaten.length === 0 ? '' : `
+            <div class="tag-list" style="margin-bottom:8px">
+              ${kandidaten.map((r) => `
+                <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                  <input type="checkbox" class="abschlag-check" value="${r.id}" ${abschlaegeChecked.has(r.id) ? 'checked' : ''}>
+                  ${escapeHtml(r.nummer)} · ${formatCurrency(r.brutto)}
+                </label>
+              `).join('')}
+            </div>
+          `}
+          ${manuelleAbschlaege.length ? `
+            <ul class="cal-event-list" style="margin-bottom:8px">
+              ${manuelleAbschlaege.map((a, i) => `<li><span>${escapeHtml(a.nummer)}</span><span>${formatCurrency(a.betrag)} <button type="button" class="btn btn-sm abschlag-manuell-entfernen" data-i="${i}" title="Entfernen">✕</button></span></li>`).join('')}
+            </ul>
+          ` : ''}
+          <div class="flex-row" style="gap:8px;align-items:flex-end;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:180px"><label>Bezeichnung (z.B. "Anzahlung bar 1.9.")</label><input type="text" id="abschlag-manuell-bez"></div>
+            <div class="field" style="width:130px"><label>Betrag (brutto)</label><input type="number" step="0.01" min="0" id="abschlag-manuell-betrag"></div>
+            <button type="button" class="btn btn-sm" id="btn-abschlag-manuell-add" style="margin-bottom:2px">+ Hinzufügen</button>
           </div>
         `;
         host.querySelectorAll('.abschlag-check').forEach((chk) => {
@@ -754,11 +774,25 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             else abschlaegeChecked.delete(chk.value);
           });
         });
+        host.querySelectorAll('.abschlag-manuell-entfernen').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            manuelleAbschlaege.splice(Number(btn.dataset.i), 1);
+            renderAbschlaegeHost();
+          });
+        });
+        host.querySelector('#btn-abschlag-manuell-add').addEventListener('click', () => {
+          const bezeichnung = host.querySelector('#abschlag-manuell-bez').value.trim();
+          const betrag = Number(host.querySelector('#abschlag-manuell-betrag').value);
+          if (!bezeichnung || !(betrag > 0)) { toast('Bitte Bezeichnung und einen Betrag größer 0 angeben.', 'danger'); return; }
+          manuelleAbschlaege.push({ rechnungId: null, nummer: bezeichnung, betrag, manuell: true });
+          renderAbschlaegeHost();
+        });
       }
       renderAbschlaegeHost();
       body.querySelector('#f-rechnungstyp').addEventListener('change', renderAbschlaegeHost);
       body.querySelector('[name="projektId"]').addEventListener('change', renderAbschlaegeHost);
       body._getAbschlaegeChecked = () => Array.from(abschlaegeChecked);
+      body._getManuelleAbschlaege = () => manuelleAbschlaege;
     }
 
     let uebernommeneZeitIds = [];
@@ -827,7 +861,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       const stornoBtn = body.querySelector('#btn-storno');
       if (stornoBtn) {
         stornoBtn.addEventListener('click', () => {
-          openStornoGrundDialog(data.nummer, async (stornoGrund, stornoGrundText) => {
+          openStornoGrundDialog(data.nummer, async (stornoGrund, stornoGrundText, korrigierteErsatzrechnung) => {
             const currentSettings = await getSettings();
             const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
               currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
@@ -850,6 +884,20 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             await syncBuchung(stornierteOriginal);
             toast(`Stornorechnung ${stornoNummer} angelegt`, 'success');
             close();
+            // GoBD verbietet, eine versendete Rechnung nachträglich zu ändern -
+            // die einzig zulässige Korrektur ist Stornieren + eine neue,
+            // eigenständige Ersatzrechnung. Damit das nicht bedeutet, alle
+            // Positionen von Hand neu abzutippen, wird optional direkt eine
+            // vorausgefüllte neue Rechnung mit denselben Positionen geöffnet -
+            // der Nutzer korrigiert dort nur noch den eigentlichen Fehler.
+            if (korrigierteErsatzrechnung) {
+              openDokumentMitVorbelegung('rechnungen', {
+                kundeId: data.kundeId, projektId: data.projektId, angebotId: data.angebotId,
+                auftragsbestaetigungId: data.auftragsbestaetigungId, betreff: data.betreff,
+                steuerart: data.steuerart, rechnungstyp: data.rechnungstyp,
+                positionen: data.positionen.map((p) => ({ ...p, id: uid() })),
+              });
+            }
             render(container);
           });
         });
@@ -1008,10 +1056,14 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         const previousIds = (data.verrechneteAbschlaege || []).map((a) => a.rechnungId);
         if (updated.rechnungstyp === 'rechnung') {
           const checkedIds = body._getAbschlaegeChecked ? body._getAbschlaegeChecked() : [];
-          updated.verrechneteAbschlaege = checkedIds.map((id) => {
-            const ar = rechnungen.find((r) => r.id === id);
-            return { rechnungId: id, nummer: ar?.nummer || '', betrag: ar?.brutto || 0 };
-          });
+          const manuell = body._getManuelleAbschlaege ? body._getManuelleAbschlaege() : [];
+          updated.verrechneteAbschlaege = [
+            ...checkedIds.map((id) => {
+              const ar = rechnungen.find((r) => r.id === id);
+              return { rechnungId: id, nummer: ar?.nummer || '', betrag: ar?.brutto || 0 };
+            }),
+            ...manuell,
+          ];
           for (const id of checkedIds) {
             if (previousIds.includes(id)) continue;
             const ar = rechnungen.find((r) => r.id === id);

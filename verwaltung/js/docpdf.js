@@ -265,7 +265,7 @@ export async function buildDocPdfBlob(opts) {
       doc.setFontSize(9);
       opts.abschlaege.forEach((a) => {
         if (y > maxY) { doc.addPage(); y = 20; }
-        doc.text(`Abzgl. Abschlagsrechnung ${a.nummer}: -${formatCurrency(a.betrag)}`, rightX, y, { align: 'right' });
+        doc.text(`Abzgl. ${a.manuell ? a.nummer : `Abschlagsrechnung ${a.nummer}`}: -${formatCurrency(a.betrag)}`, rightX, y, { align: 'right' });
         y += 4.5;
       });
       const restbetrag = opts.totals.brutto - opts.abschlaege.reduce((s, a) => s + (a.betrag || 0), 0);

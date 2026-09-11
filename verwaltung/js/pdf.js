@@ -128,7 +128,7 @@ export function buildDocHtml({
       .map(([rate, netto]) => `<div class="row"><span>zzgl. ${rate}% USt.</span><span>${formatCurrency(netto * (Number(rate) / 100))}</span></div>`)
       .join('');
     const abschlagRows = (abschlaege || [])
-      .map((a) => `<div class="row"><span>Abzgl. Abschlagsrechnung ${escapeHtml(a.nummer)}</span><span>-${formatCurrency(a.betrag)}</span></div>`)
+      .map((a) => `<div class="row"><span>Abzgl. ${a.manuell ? escapeHtml(a.nummer) : `Abschlagsrechnung ${escapeHtml(a.nummer)}`}</span><span>-${formatCurrency(a.betrag)}</span></div>`)
       .join('');
     const restbetragRow = abschlaege && abschlaege.length
       ? `<div class="row grand"><span>Noch zu zahlen</span><span>${formatCurrency(totals.brutto - abschlaege.reduce((s, a) => s + (a.betrag || 0), 0))}</span></div>`
