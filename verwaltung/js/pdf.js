@@ -79,6 +79,7 @@ export function buildDocHtml({
   steuerHinweis,
   showPositions = true,
   abschlaege,
+  skonto,
   leistungsdatum,
   aufbewahrungsHinweis,
   zeigeUnterschriftsfeld,
@@ -133,10 +134,14 @@ export function buildDocHtml({
     const restbetragRow = abschlaege && abschlaege.length
       ? `<div class="row grand"><span>Noch zu zahlen</span><span>${formatCurrency(totals.brutto - abschlaege.reduce((s, a) => s + (a.betrag || 0), 0))}</span></div>`
       : '';
+    const skontoRow = skonto && skonto.prozent > 0
+      ? `<div class="row" style="color:#666"><span>Bei Zahlung bis ${formatDate(skonto.faelligBis)} (${skonto.prozent}% Skonto = -${formatCurrency(skonto.betrag)})</span><span>${formatCurrency(skonto.zahlbetrag)}</span></div>`
+      : '';
     totalsHtml = `<div class="print-totals">
       <div class="row"><span>Netto</span><span>${formatCurrency(totals.netto)}</span></div>
       ${steuerRows}
       <div class="row grand"><span>Gesamt</span><span>${formatCurrency(totals.brutto)}</span></div>
+      ${skontoRow}
       ${abschlagRows}
       ${restbetragRow}
     </div>`;

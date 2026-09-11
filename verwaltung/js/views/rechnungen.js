@@ -934,6 +934,12 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
               : '') +
             `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
           abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
+          skonto: !istAbschlag && data.skontoProzent > 0 ? {
+            prozent: data.skontoProzent,
+            faelligBis: addDays(data.datum, data.skontoTage || 0),
+            betrag: Math.round(totals.brutto * data.skontoProzent) / 100,
+            zahlbetrag: totals.brutto - Math.round(totals.brutto * data.skontoProzent) / 100,
+          } : undefined,
           faelligAm: data.faelligAm, steuerart: data.steuerart || 'regel',
           zeigeUnterschriftsfeld: istBar,
           unterschriftKunde: sigKunde.getDataUrl() || null,
@@ -1036,6 +1042,24 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       updated.netto = totals.netto;
       updated.steuer = totals.steuer;
       updated.brutto = totals.brutto;
+
+      // Wird die Rechnung gerade erst auf "bezahlt" gesetzt und die Zahlung
+      // kam innerhalb der Skonto-Frist an, nachfragen, ob der Kunde den
+      // Skonto-Betrag tatsächlich abgezogen hat - das bestimmt, welcher
+      // (reduzierte) Betrag in der Buchhaltung als Zahlungseingang verbucht
+      // wird (siehe journal.js erzeugeBuchungenFuerRechnung).
+      if (isEdit && data.status !== 'bezahlt' && updated.status === 'bezahlt' && updated.skontoProzent > 0 && updated.bezahltAm) {
+        const skontoFristBis = addDays(updated.datum, updated.skontoTage || 0);
+        if (updated.bezahltAm <= skontoFristBis) {
+          const skontoBetrag = Math.round(totals.brutto * updated.skontoProzent) / 100;
+          const zahlbetrag = totals.brutto - skontoBetrag;
+          updated.skontoGenutzt = confirmDelete(
+            `Die Zahlung kam innerhalb der Skonto-Frist (bis ${formatDate(skontoFristBis)}) an. Hat der Kunde ${updated.skontoProzent}% Skonto (${formatCurrency(skontoBetrag)}) abgezogen und nur ${formatCurrency(zahlbetrag)} statt ${formatCurrency(totals.brutto)} überwiesen?`
+          );
+        } else {
+          updated.skontoGenutzt = false;
+        }
+      }
 
       if (!isEdit) {
         const currentSettings = await getSettings();

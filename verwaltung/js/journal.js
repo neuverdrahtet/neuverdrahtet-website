@@ -35,23 +35,36 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
   const quelle = { typ: 'rechnung', id: r.id };
   const buchungen = [];
 
+  // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage anteilig
+  // (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag - Netto/USt.
+  // deshalb hier anteilig kürzen, sodass die Soll-Buchung aufs Geldkonto
+  // exakt dem tatsächlich eingegangenen (reduzierten) Betrag entspricht.
+  let netto = r.netto;
+  let steuer = r.steuer;
+  if (r.skontoGenutzt && r.skontoProzent > 0) {
+    const faktor = 1 - r.skontoProzent / 100;
+    netto = Math.round(r.netto * faktor * 100) / 100;
+    steuer = Math.round(r.steuer * faktor * 100) / 100;
+  }
+
   const steuerfrei = r.steuerart && r.steuerart !== 'regel';
   const satz = effektiverSteuersatz(r.netto, r.steuer);
   const erloesKonto = steuerfrei
     ? findKonto(konten, 'konto-8125', '8125')
     : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
-  if (erloesKonto && r.netto) {
+  if (erloesKonto && netto) {
     buchungen.push({
-      id: uid(), datum, text: belegtext, sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
-      betrag: Math.round(r.netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+      id: uid(), datum, text: r.skontoGenutzt ? `${belegtext} (abzgl. ${r.skontoProzent}% Skonto)` : belegtext,
+      sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
+      betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
     });
   }
-  if (r.steuer) {
+  if (steuer) {
     const ustKonto = findKonto(konten, satz === 7 ? 'konto-1771' : 'konto-1776', satz === 7 ? '1771' : '1776');
     if (ustKonto) {
       buchungen.push({
         id: uid(), datum, text: `${belegtext} (USt.)`, sollKontoId: geldKonto.id, habenKontoId: ustKonto.id,
-        betrag: Math.round(r.steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+        betrag: Math.round(steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
       });
     }
   }

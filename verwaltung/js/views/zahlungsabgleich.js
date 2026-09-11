@@ -18,6 +18,10 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const rechnungenById = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
   const offenNichtStorniert = (r) => (r.status === 'offen' || r.status === 'teilbezahlt');
+  // Betrag, den der Kunde bei Ausnutzung des angebotenen Skontos tatsächlich
+  // überweist - eine Zahlung, die exakt auf diesen (kleineren) Betrag statt
+  // auf den vollen Rechnungsbetrag lautet, ist ebenfalls ein gültiger Treffer.
+  const betragBeiSkonto = (r) => (r.skontoProzent > 0 ? r.brutto - Math.round(r.brutto * r.skontoProzent) / 100 : null);
 
   function renderList() {
     const offen = abgleiche.filter((a) => a.status === 'offen').sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -26,7 +30,11 @@ export async function render(container) {
     const offeneRechnungenOptions = (kandidatenIds) => rechnungen
       .filter(offenNichtStorniert)
       .sort((a, b) => (kandidatenIds.includes(b.id) ? 1 : 0) - (kandidatenIds.includes(a.id) ? 1 : 0))
-      .map((r) => `<option value="${r.id}" ${kandidatenIds.includes(r.id) ? 'selected' : ''}>${escapeHtml(r.nummer)} · ${escapeHtml(kundenById[r.kundeId]?.firma || '– kein Kunde –')} · ${formatCurrency(r.brutto)}</option>`)
+      .map((r) => {
+        const skontoBetrag = betragBeiSkonto(r);
+        const betragText = skontoBetrag != null ? `${formatCurrency(r.brutto)} (bei Skonto: ${formatCurrency(skontoBetrag)})` : formatCurrency(r.brutto);
+        return `<option value="${r.id}" ${kandidatenIds.includes(r.id) ? 'selected' : ''}>${escapeHtml(r.nummer)} · ${escapeHtml(kundenById[r.kundeId]?.firma || '– kein Kunde –')} · ${betragText}</option>`;
+      })
       .join('');
 
     container.querySelector('#zag-liste').innerHTML = offen.length === 0
@@ -74,7 +82,13 @@ export async function render(container) {
       const abgleich = abgleiche.find((a) => a.id === id);
       btn.disabled = true;
       try {
-        const aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm: (abgleich.datum || '').slice(0, 10) || rechnung.bezahltAm };
+        // Entspricht der eingegangene Betrag genau dem Skonto-reduzierten
+        // Betrag (statt dem vollen Rechnungsbetrag), hat der Kunde das
+        // angebotene Skonto offensichtlich genutzt - dann auch so verbuchen
+        // (siehe journal.js erzeugeBuchungenFuerRechnung).
+        const skontoBetrag = betragBeiSkonto(rechnung);
+        const skontoGenutzt = skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(Number(abgleich.betrag) * 100);
+        const aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm: (abgleich.datum || '').slice(0, 10) || rechnung.bezahltAm, skontoGenutzt };
         await put('rechnungen', aktualisiert);
         await journal.syncBuchungFuerRechnung(aktualisiert, settings);
         rechnungenById[rechnungId] = aktualisiert;
@@ -135,7 +149,12 @@ export async function render(container) {
         if (!t.transactionId || bekannteIds.has(t.transactionId)) continue;
         const kandidatenRechnungIds = rechnungen
           .filter(offenNichtStorniert)
-          .filter((r) => Math.round(Number(r.brutto) * 100) === Math.round(Number(t.betrag) * 100))
+          .filter((r) => {
+            const voll = Math.round(Number(r.brutto) * 100) === Math.round(Number(t.betrag) * 100);
+            const skontoBetrag = betragBeiSkonto(r);
+            const mitSkonto = skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(Number(t.betrag) * 100);
+            return voll || mitSkonto;
+          })
           .map((r) => r.id);
         const abgleichDoc = {
           id: t.transactionId, betrag: t.betrag, datum: t.datum, gegenpart: t.gegenpart, referenz: t.referenz,

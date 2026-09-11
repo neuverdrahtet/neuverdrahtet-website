@@ -261,6 +261,18 @@ export async function buildDocPdfBlob(opts) {
     doc.setFont(undefined, 'normal');
     y += 8;
 
+    if (opts.skonto && opts.skonto.prozent > 0) {
+      if (y > maxY) { doc.addPage(); y = 20; }
+      doc.setFontSize(9.5);
+      doc.setTextColor(90);
+      doc.text(
+        `Bei Zahlung bis ${formatDate(opts.skonto.faelligBis)} (${opts.skonto.prozent}% Skonto = -${formatCurrency(opts.skonto.betrag)}): ${formatCurrency(opts.skonto.zahlbetrag)}`,
+        rightX, y, { align: 'right' }
+      );
+      doc.setTextColor(20);
+      y += 6;
+    }
+
     if (opts.abschlaege && opts.abschlaege.length) {
       doc.setFontSize(9);
       opts.abschlaege.forEach((a) => {
