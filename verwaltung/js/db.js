@@ -510,6 +510,7 @@ const DEFAULT_SETTINGS = {
   skontoTageStandard: 0,
   autoKundeAusAnfrage: true,
   autoTerminAusAnfrage: true,
+  autoBelegAusRechnungLieferant: true,
   // Standardmäßig AUS: löst beim Setzen auf "Versendet" einen echten E-Mail-
   // Versand an den Kunden aus, ohne Rückfrage - bewusst kein automatischer
   // Default, das soll der Nutzer selbst aktivieren.

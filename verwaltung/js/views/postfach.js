@@ -597,5 +597,34 @@ export async function render(container) {
         });
       }
     }).catch(() => { /* rein lokaler Komfort-Abgleich, Fehler nicht kritisch */ });
+
+    // Als "Rechnung/Lieferant" einsortierte Mails mit Anhang automatisch als
+    // Ausgabe übernehmen (statt bei jeder einzelnen manuell auf "Als Beleg
+    // übernehmen" klicken zu müssen) - läuft wie die Kategorisierung selbst
+    // still im Hintergrund bei jedem Öffnen des Postfachs, wird aber pro Mail
+    // nur einmal ausgeführt (belegUebernommen-Flag). Abschaltbar über
+    // Einstellungen → Postfach, falls unerwünscht.
+    async function autoUebernehmeLieferantenrechnungen() {
+      const kandidaten = allEmails.filter((m) => m.kategorie === 'rechnung-lieferant' && !m.belegUebernommen && (m.attachments || []).length > 0);
+      if (kandidaten.length === 0) return;
+      let erledigt = 0;
+      for (const m of kandidaten) {
+        const anhang = (m.attachments || []).find((a) => a.mimeType === 'application/pdf') || (m.attachments || []).find((a) => (a.mimeType || '').startsWith('image/'));
+        if (!anhang) { await put('emails', { ...m, belegUebernommen: true }); continue; }
+        try {
+          await uebernehmeAlsBeleg(m, anhang);
+          await put('emails', { ...m, belegUebernommen: true });
+          erledigt++;
+        } catch { /* einzelne fehlgeschlagene Übernahme blockiert die anderen nicht - Mail bleibt unmarkiert, nächster Versuch beim nächsten Öffnen */ }
+      }
+      if (erledigt > 0) {
+        toast(`${erledigt} Lieferantenrechnung(en) aus dem Postfach automatisch als Ausgabe übernommen - bitte in Ausgaben prüfen`, 'success');
+        allEmails = (await getAll('emails')).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+        renderList();
+      }
+    }
+    if (settings.autoBelegAusRechnungLieferant) {
+      autoUebernehmeLieferantenrechnungen();
+    }
   }
 }

@@ -359,6 +359,7 @@ export async function render(container) {
               <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="aiAppSecret" value="${escapeHtml(settings.aiAppSecret || '')}"></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="autoKundeAusAnfrage" id="auto-kunde" ${settings.autoKundeAusAnfrage !== false ? 'checked' : ''}><label for="auto-kunde">Kundenanfragen (z.B. vom Kontaktformular der Webseite) automatisch als Kunde/Projekt anlegen</label></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="autoTerminAusAnfrage" id="auto-termin" ${settings.autoTerminAusAnfrage !== false ? 'checked' : ''}><label for="auto-termin">Bei eindeutigem Terminwunsch in der E-Mail (Datum + Uhrzeit) automatisch einen Termin in der Plantafel anlegen</label></div>
+              <div class="field field-checkbox col-span-2"><input type="checkbox" name="autoBelegAusRechnungLieferant" id="auto-beleg-rechnung" ${settings.autoBelegAusRechnungLieferant !== false ? 'checked' : ''}><label for="auto-beleg-rechnung">Als "Rechnung/Lieferant" einsortierte E-Mails mit Anhang automatisch als Ausgabe übernehmen und verbuchen (statt manuell "Als Beleg übernehmen" klicken) - Ergebnis danach in Ausgaben prüfen</label></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="angebotAutoVersandBeiFreigabe" id="auto-angebot-versand" ${settings.angebotAutoVersandBeiFreigabe ? 'checked' : ''}><label for="auto-angebot-versand">Angebot beim Umschalten auf "Versendet" automatisch per E-Mail an den Kunden schicken (ohne Rückfrage - erfordert verbundenes Gmail-Konto und hinterlegte Kunden-E-Mail)</label></div>
               <div class="field field-checkbox col-span-2"><input type="checkbox" name="mahnungenAutoVersand" id="auto-mahnung-versand" ${settings.mahnungenAutoVersand ? 'checked' : ''}><label for="auto-mahnung-versand">Fällige Mahnungen automatisch per E-Mail versenden, sobald die App geöffnet wird (kein eigener Server-Cron - läuft beim nächsten Öffnen der Buchhaltung/Mahnungen)</label></div>
             </div>
@@ -807,6 +808,7 @@ export async function render(container) {
       aiAppSecret: (fd.get('aiAppSecret') || '').toString().trim(),
       autoKundeAusAnfrage: fd.get('autoKundeAusAnfrage') === 'on',
       autoTerminAusAnfrage: fd.get('autoTerminAusAnfrage') === 'on',
+      autoBelegAusRechnungLieferant: fd.get('autoBelegAusRechnungLieferant') === 'on',
       angebotAutoVersandBeiFreigabe: fd.get('angebotAutoVersandBeiFreigabe') === 'on',
       mahnungenAutoVersand: fd.get('mahnungenAutoVersand') === 'on',
     });
