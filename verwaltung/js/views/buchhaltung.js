@@ -4,6 +4,7 @@ import { openModal, confirmDelete } from '../ui.js';
 import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } from '../bankimport.js';
 import * as bankabgleich from '../bankabgleich.js';
 import * as journal from '../journal.js';
+import { openKontenImport } from '../kontenimport.js';
 import { berechneJahresAfa, aktuellerRestbuchwert } from '../abschreibung.js';
 import { berechnePersonalkosten, berechneBetriebskosten, berechneAbschreibungenGesamt, berechneProduktiveStunden, berechneStundensatz } from '../stundensatz.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
@@ -148,6 +149,7 @@ export async function render(container) {
             <div class="actions">
               <select id="journal-jahr-select">${jahrOptions.map((j) => `<option value="${j}">${j}</option>`).join('')}</select>
               <select id="journal-konto-select"><option value="">Alle Konten</option></select>
+              <button type="button" class="btn" id="btn-kontenexport-import">⇪ Kontenexport importieren</button>
               <button type="button" class="btn btn-primary" id="btn-buchung-neu">+ Manuelle Buchung</button>
             </div>
           </div>
@@ -591,6 +593,9 @@ export async function render(container) {
 
   container.querySelector('#journal-jahr-select').addEventListener('change', renderJournal);
   container.querySelector('#journal-konto-select').addEventListener('change', renderJournal);
+  container.querySelector('#btn-kontenexport-import').addEventListener('click', () => {
+    openKontenImport({ onImported: renderJournal });
+  });
   container.querySelector('#btn-buchung-neu').addEventListener('click', async () => {
     const konten = await getAll('konten');
     konten.sort((a, b) => a.nummer.localeCompare(b.nummer));
