@@ -1,9 +1,10 @@
 import { getAll, put, getSettings } from './db.js';
-import { uid, escapeHtml, formatDate, toast, farbeAusText, todayISO } from './utils.js';
+import { uid, escapeHtml, formatDate, toast, farbeAusText, todayISO, addDays, calcTotals } from './utils.js';
 import { openModal } from './ui.js';
 import { saveDokument } from './dokumente.js';
 import { readZipEntries } from './zipreader.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from './blobstore.js';
+import * as journal from './journal.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
@@ -115,7 +116,7 @@ export function openBelegImport({ onImported } = {}) {
     title: 'Belege importieren (ZIP)',
     wide: true,
     bodyHtml: `
-      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden), DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen) sowie lose Belegfotos/-scans (JPG/PNG/HEIC/PDF ohne erkennbare Namenskonvention, z.B. Kamera-Fotos) - diese werden als Entwurf angelegt (Betrag 0, Datum aus dem Foto-Zeitstempel geschätzt) und müssen danach geprüft werden. Belege vom Typ "Einnahme" (eigene Rechnungen, bei DATEV/lexoffice) werden - sofern ein PDF dabei ist - dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Bereits vorhandene Ausgaben mit gleichem Datum/Betrag/Lieferant werden übersprungen (keine Duplikate).</p>
+      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden), DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen) sowie lose Belegfotos/-scans (JPG/PNG/HEIC/PDF ohne erkennbare Namenskonvention, z.B. Kamera-Fotos) - diese werden als Entwurf angelegt (Betrag 0, Datum aus dem Foto-Zeitstempel geschätzt) und müssen danach geprüft werden. Belege vom Typ "Einnahme" (eigene Rechnungen) werden als echte Rechnung angelegt und - sofern ein PDF dabei ist - zusätzlich dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Beim DATEV/Lexware-Format ist der Betrag bekannt - die Rechnung wird direkt als bezahlt verbucht (Umsatz + USt. in der Buchhaltung); beim lexoffice-Format fehlt der Betrag im Dateinamen, die Rechnung wird deshalb als offener Entwurf mit 0&nbsp;€ angelegt und muss vor dem Verbuchen noch ergänzt werden. Bereits vorhandene Ausgaben/Rechnungen mit gleichem Datum/Betrag/Lieferant bzw. gleicher Belegnummer werden übersprungen (keine Duplikate).</p>
       <div class="field" style="margin-bottom:10px">
         <label>ZIP-Datei</label>
         <input type="file" id="beleg-zip-input" accept=".zip,application/zip">
@@ -146,11 +147,15 @@ export function openBelegImport({ onImported } = {}) {
     importBtn.textContent = 'Importiere ...';
     resultHost.innerHTML = '';
     try {
-      const [kunden, ausgabenBestehend, settings, entries] = await Promise.all([
-        getAll('kunden'), getAll('ausgaben'), getSettings(), readZipEntries(selectedFile),
+      const [kunden, ausgabenBestehend, rechnungenBestehend, settings, entries] = await Promise.all([
+        getAll('kunden'), getAll('ausgaben'), getAll('rechnungen'), getSettings(), readZipEntries(selectedFile),
       ]);
       const dupKey = (datum, betrag, lieferant) => `${datum}|${Number(betrag).toFixed(2)}|${(lieferant || '').trim().toLowerCase()}`;
       const bestehendeSchluessel = new Set(ausgabenBestehend.map((a) => dupKey(a.datum, a.betragBrutto, a.lieferant)));
+      // Für Einnahmen-Belege wird die Belegnummer als Rechnungsnummer übernommen
+      // (siehe unten) - Duplikaterkennung deshalb über die Nummer statt über
+      // Datum/Betrag/Lieferant wie bei Ausgaben.
+      const rechnungenNummernSet = new Set(rechnungenBestehend.map((r) => (r.nummer || '').trim().toLowerCase()).filter(Boolean));
 
       const xmlEntriesByBasename = new Map();
       for (const e of entries) {
@@ -168,6 +173,8 @@ export function openBelegImport({ onImported } = {}) {
       let kundenAngelegtCount = 0;
       let loseBelegeCount = 0;
       let duplikateUebersprungen = 0;
+      let einnahmenCount = 0;
+      let einnahmenEntwurfCount = 0;
       const unzugeordnet = [];
       // Dateinamen, die zu einem der drei Formate gehören (erkannt oder als
       // Duplikat/Foto-Entwurf verarbeitet) - alles, was am Ende hier nicht
@@ -185,15 +192,22 @@ export function openBelegImport({ onImported } = {}) {
         const pdfEntry = pdfEntriesByBasename.get(basename);
 
         if (parsed.typ === 'einnahme') {
-          // Einnahmen-Beleg (Kundenrechnung): keine Ausgabe, sondern - falls ein
-          // PDF dabei ist - als Dokument in der Kundenakte ablegen. Ohne PDF
-          // gibt es nichts abzulegen. Existiert der Kunde noch nicht, wird er
-          // mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu
-          // angelegt statt den Beleg unzugeordnet zu lassen - dabei in der
-          // lokalen kunden-Liste ergänzen, damit weitere Belege desselben
-          // (neuen) Kunden in diesem Importlauf ihn ebenfalls finden, statt
-          // ihn mehrfach anzulegen.
-          if (!pdfEntry) continue;
+          // Einnahmen-Beleg (Kundenrechnung): keine Ausgabe, sondern eine echte
+          // Rechnung - Betrag/Steuersatz stehen strukturiert im XML, deshalb
+          // wird sie direkt als bezahlt angelegt und über
+          // journal.syncBuchungFuerRechnung korrekt verbucht (Umsatz + USt.).
+          // Ist ein PDF dabei, wird es zusätzlich als Dokument in der
+          // Kundenakte abgelegt (Belegnachweis). Existiert der Kunde noch
+          // nicht, wird er mit den im Beleg vorhandenen Daten (Name/Ort/
+          // Kundennummer) neu angelegt statt den Beleg unzugeordnet zu lassen
+          // - dabei in der lokalen kunden-Liste ergänzen, damit weitere Belege
+          // desselben (neuen) Kunden in diesem Importlauf ihn ebenfalls
+          // finden, statt ihn mehrfach anzulegen.
+          const belegnummerNorm = (parsed.belegnummer || '').trim().toLowerCase();
+          if (belegnummerNorm && rechnungenNummernSet.has(belegnummerNorm)) {
+            duplikateUebersprungen++;
+            continue;
+          }
           let kunde = findMatchingKunde(kunden, parsed.gegenpartei);
           if (!kunde && parsed.gegenpartei) {
             kunde = {
@@ -208,13 +222,40 @@ export function openBelegImport({ onImported } = {}) {
             kundenAngelegtCount++;
           }
           if (!kunde) { unzugeordnet.push(`${parsed.gegenpartei || basename} (${basename}.pdf)`); continue; }
-          const blob = await pdfEntry.getBlob('application/pdf');
-          await saveDokument({
-            bezugTyp: 'kunde', bezugId: kunde.id, kategorie: 'rechnung',
-            name: `Rechnung ${parsed.belegnummer || basename} - ${formatDate(parsed.datum)}.pdf`,
-            mime: 'application/pdf', blob,
-          });
-          zugeordnetCount++;
+          if (pdfEntry) {
+            const blob = await pdfEntry.getBlob('application/pdf');
+            await saveDokument({
+              bezugTyp: 'kunde', bezugId: kunde.id, kategorie: 'rechnung',
+              name: `Rechnung ${parsed.belegnummer || basename} - ${formatDate(parsed.datum)}.pdf`,
+              mime: 'application/pdf', blob,
+            });
+            zugeordnetCount++;
+          }
+          if (parsed.belegnummer && parsed.betrag) {
+            const betragNetto = parsed.steuersatz ? Math.round((parsed.betrag / (1 + parsed.steuersatz / 100)) * 100) / 100 : parsed.betrag;
+            const positionen = [{
+              id: uid(), bezeichnung: parsed.beschreibung || `Beleg ${parsed.belegnummer}`, beschreibung: '',
+              menge: 1, einheit: 'Psch.', einzelpreis: betragNetto, steuersatz: parsed.steuersatz || (settings.standardSteuersatz ?? 19),
+            }];
+            const totals = calcTotals(positionen);
+            const rechnung = {
+              id: uid(), nummer: parsed.belegnummer, kundeId: kunde.id, projektId: '', angebotId: null, auftragsbestaetigungId: null,
+              datum: parsed.datum, leistungsdatum: parsed.datum, faelligAm: parsed.datum,
+              status: 'bezahlt', bezahltAm: parsed.datum,
+              betreff: parsed.beschreibung || `Rechnung ${parsed.belegnummer}`,
+              notizen: 'Automatisch importiert und verbucht aus Belege-Import (DATEV/Lexware).',
+              positionen, netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+              createdAt: new Date().toISOString(), versendet: true, versendetAm: parsed.datum,
+              stornoVonNummer: '', storniertDurchNummer: '',
+              steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
+              verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0,
+              zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
+            };
+            await put('rechnungen', rechnung);
+            rechnungenNummernSet.add(belegnummerNorm);
+            try { await journal.syncBuchungFuerRechnung(rechnung, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
+            einnahmenCount++;
+          }
           continue;
         }
 
@@ -269,6 +310,35 @@ export function openBelegImport({ onImported } = {}) {
               mime: 'application/pdf', blob,
             });
             zugeordnetCount++;
+            // lexoffice kodiert den Betrag nicht im Dateinamen - anders als beim
+            // DATEV-Format kann die Rechnung deshalb nicht sofort korrekt
+            // verbucht werden. Sie wird stattdessen als offener, unverbuchter
+            // Entwurf angelegt (0 €, nicht versendet/gesperrt), damit sie nach
+            // Ergänzung der echten Position/Summe ganz normal fertiggestellt
+            // und dann bezahlt/verbucht werden kann.
+            const belegnummerNorm = (parsed.belegnummer || '').trim().toLowerCase();
+            if (!belegnummerNorm || !rechnungenNummernSet.has(belegnummerNorm)) {
+              const positionen = [{
+                id: uid(), bezeichnung: `Beleg ${parsed.belegnummer} – Betrag bitte prüfen (aus Import, nicht automatisch erkannt)`,
+                beschreibung: '', menge: 1, einheit: 'Psch.', einzelpreis: 0, steuersatz: settings.standardSteuersatz ?? 19,
+              }];
+              const rechnung = {
+                id: uid(), nummer: parsed.belegnummer, kundeId: kunde.id, projektId: '', angebotId: null, auftragsbestaetigungId: null,
+                datum: parsed.datum, leistungsdatum: parsed.datum, faelligAm: addDays(parsed.datum, settings.zahlungszielTage || 14),
+                status: 'offen', bezahltAm: '',
+                betreff: `Rechnung ${parsed.belegnummer} (Import)`,
+                notizen: 'Aus Belege-Import (lexoffice) angelegt - Betrag/Positionen bitte prüfen und ergänzen, danach normal als bezahlt verbuchen.',
+                positionen, netto: 0, steuer: 0, brutto: 0,
+                createdAt: new Date().toISOString(), versendet: false, versendetAm: '',
+                stornoVonNummer: '', storniertDurchNummer: '',
+                steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
+                verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0,
+                zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
+              };
+              await put('rechnungen', rechnung);
+              if (belegnummerNorm) rechnungenNummernSet.add(belegnummerNorm);
+              einnahmenEntwurfCount++;
+            }
           } else {
             unzugeordnet.push(`${parsed.name} (${entry.name})`);
           }
@@ -310,7 +380,9 @@ export function openBelegImport({ onImported } = {}) {
         <div class="card">
           <p>✅ ${ausgabenCount} Ausgabe(n) importiert</p>
           ${loseBelegeCount ? `<p>✅ ${loseBelegeCount} Beleg(e) als Entwurf angelegt (Foto/Scan ohne erkennbares Datum/Betrag - bitte prüfen)</p>` : ''}
-          <p>✅ ${zugeordnetCount} Rechnung(en) passenden Kunden zugeordnet</p>
+          ${einnahmenCount ? `<p>✅ ${einnahmenCount} Einnahme(n) als bezahlte Rechnung angelegt und verbucht</p>` : ''}
+          ${einnahmenEntwurfCount ? `<p>✅ ${einnahmenEntwurfCount} Einnahme(n) als offener Entwurf angelegt (Betrag unbekannt - bitte ergänzen und verbuchen)</p>` : ''}
+          <p>✅ ${zugeordnetCount} Rechnung(en)-PDF passenden Kunden als Dokument zugeordnet</p>
           ${kundenAngelegtCount ? `<p>✅ ${kundenAngelegtCount} neue(r) Kunde(n) automatisch angelegt (Name/Ort/Kundennummer aus dem Beleg)</p>` : ''}
           ${duplikateUebersprungen ? `<p class="text-mute">${duplikateUebersprungen} Beleg(e) übersprungen (bereits vorhanden bzw. Datum/Betrag/Lieferant stimmt mit bestehender Ausgabe überein).</p>` : ''}
           ${unzugeordnet.length ? `<p>⚠️ ${unzugeordnet.length} Rechnung(en) ohne passenden Kunden gefunden:</p><ul class="cal-event-list">${unzugeordnet.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : ''}
