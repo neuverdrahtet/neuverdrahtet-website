@@ -1,9 +1,19 @@
 # neuverdrahtet-kostenschaetzer (Cloudflare Worker)
 
-Nimmt abgeschlossene Anfragen aus dem öffentlichen Wallbox-Kostenschätzer
-(`wallbox-kostenschaetzer.html`) entgegen und legt daraus automatisch einen
-Kunden (Status "Lead") + ein Projekt in der Werkora-Lead-Pipeline an
-(dieselbe Firebase-Datenbank wie die Verwaltungs-Software).
+Nimmt abgeschlossene Anfragen aus zwei öffentlichen Kostenrechnern entgegen
+und legt daraus automatisch einen Kunden (Status "Lead") + ein Projekt in
+der Werkora-Lead-Pipeline an (dieselbe Firebase-Datenbank wie die
+Verwaltungs-Software):
+
+- **`elektro-kostenrechner.html`** (aktuell, empfohlen) - großer
+  Projekt-Konfigurator über mehrere Themen-Schritte (Basisdaten,
+  Beleuchtung, Energie & Technik/PV/Speicher/Wärmepumpe/Klima,
+  E-Mobilität/Wallbox, Netzwerk/Sicherheit/Außen), erkennbar an
+  `"modul":"elektro-komplett"` im Request-Body. Ersetzt den älteren,
+  wallbox-only Fragebogen unten (`wallbox-kostenschaetzer.html` leitet
+  automatisch dorthin weiter).
+- **Wallbox-Fragebogen** (Altbestand, kein `modul`-Feld im Body) - bleibt
+  aus Kompatibilitätsgründen im selben Worker unterstützt.
 
 Ein eigener, dedizierter Worker - **getrennt** vom bestehenden
 `cloudflare-worker/` (der für die interne Admin-Software mit `X-App-Secret`
@@ -31,11 +41,16 @@ aufgerufen wird.
 
 3. **Die entstandene Worker-URL notieren** (z.B.
    `https://neuverdrahtet-kostenschaetzer.<dein-account>.workers.dev`) und an
-   **zwei Stellen** im Repo eintragen (beide müssen exakt übereinstimmen):
-   - `assets/kostenschaetzer.js` → Konstante `KS_WORKER_URL` ganz oben.
-   - `wallbox-kostenschaetzer.html` → CSP-Meta-Tag im `<head>`, im
-     `connect-src`-Teil (aktuell steht dort ein Platzhalter mit demselben
-     Muster, der ersetzt werden muss).
+   **vier Stellen** im Repo eintragen (alle müssen exakt übereinstimmen):
+   - `assets/elektro-konfigurator.js` → Konstante `EK_WORKER_URL` ganz oben.
+   - `elektro-kostenrechner.html` → CSP-Meta-Tag im `<head>`, im
+     `connect-src`-Teil.
+   - `assets/kostenschaetzer.js` → Konstante `KS_WORKER_URL` ganz oben
+     (nur noch relevant, falls der alte Wallbox-Fragebogen irgendwo verlinkt
+     bleibt).
+   - `wallbox-kostenschaetzer.html` → CSP-Meta-Tag im `<head>` (die Seite
+     selbst leitet inzwischen nur noch weiter, lädt das Script aber
+     technisch nicht mehr aktiv aus).
 
    Falls stattdessen eine eigene Domain/Route für den Worker eingerichtet
    wird (z.B. `kostenschaetzer-api.neuverdrahtet.com`), dann dort statt der
@@ -43,13 +58,13 @@ aufgerufen wird.
 
 ## Danach einmal live testen
 
-- Den Kostenschätzer auf der Live-Seite einmal komplett durchklicken und
-  eine Test-Anfrage absenden.
+- Den **Elektro-Kostenrechner** (`elektro-kostenrechner.html`) auf der
+  Live-Seite einmal komplett durchklicken und eine Test-Anfrage absenden.
 - In Werkora unter **Lead-Pipeline** prüfen, ob ein neuer Lead mit der
   Test-E-Mail-Adresse erscheint, und in **Projekte** das dazugehörige
-  Projekt "Wallbox-Anfrage (Website)" mit der ausformulierten
-  Zusammenfassung in der Beschreibung.
-- Bei einem Fehler zeigt die Kostenschätzer-Seite eine Fehlermeldung mit
+  Projekt "Elektro-Kostenrechner-Anfrage (Website)" mit der
+  ausformulierten Positions-Zusammenfassung in der Beschreibung.
+- Bei einem Fehler zeigt die Kostenrechner-Seite eine Fehlermeldung mit
   Ausweich-Hinweis auf E-Mail/Telefon; die genaue Fehlerursache steht im
   Cloudflare-Worker-Log (`npx wrangler tail`).
 
@@ -60,5 +75,9 @@ aufgerufen wird.
 - Foto-Upload (z.B. Zählerschrank-Foto) - aktuell bewusst nicht enthalten,
   da es weder ein öffentliches Firebase-Storage-Schreibrecht noch eine
   fertige Upload-UI auf der Website gibt.
-- Weitere Module aus dem Gesamtkonzept (Elektrosanierung, Photovoltaik,
-  Zählerschrank, ...) nach demselben Muster wie dieses Wallbox-Modul.
+- Die Preise je Baustein im Elektro-Kostenrechner (siehe Kopfkommentar in
+  `assets/elektro-konfigurator.js`) sind teils aus den bereits
+  veröffentlichten Leistungsseiten übernommen, teils (Klimaanlage,
+  Türkommunikation, Sicherheit, Außenanlagen, Netzwerk-Mengenannahmen) neu
+  grob geschätzt - bei Gelegenheit gegen echte Kalkulationen/Erfahrungswerte
+  gegenprüfen und anpassen.

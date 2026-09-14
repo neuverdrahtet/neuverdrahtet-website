@@ -238,6 +238,45 @@ function buildBeschreibung(payload) {
   return zeilen.join('\n');
 }
 
+// --- Elektro-Kostenrechner (elektro-kostenrechner.html, modul: "elektro-komplett") ---
+// Anders als der einzelne Wallbox-Fragebogen deckt dieser Konfigurator viele
+// Themen gleichzeitig ab - statt für jedes einzelne Antwortfeld ein eigenes
+// Label zu pflegen (wie bei LABELS/buildBeschreibung oben für Wallbox), nutzt
+// dieser Zweig die vom Frontend mitgesendete "positionen"-Liste (Label +
+// Kostenspanne je Baustein, siehe assets/elektro-konfigurator.js
+// berechnePositionen()) - die ist ohnehin für die Anzeige im Browser gedacht
+// und eignet sich 1:1 auch für die lesbare Zusammenfassung hier.
+function klassifiziereElektroKomplettLead(payload) {
+  const a = payload.antworten || {};
+  const grossprojekt = (payload.kostenspanne?.bis || 0) >= 15000;
+  const klar = a.gebaeudeart === 'neubau' && (a.pvGewuenscht !== 'ja' || a.dachzugang === 'gut');
+  if (grossprojekt && klar) return 'A';
+  if (grossprojekt || klar) return 'B';
+  return 'C';
+}
+
+function buildElektroKomplettBeschreibung(payload) {
+  const a = payload.antworten || {};
+  const ks = payload.kostenspanne || {};
+  const positionen = Array.isArray(payload.positionen) ? payload.positionen : [];
+  const leadKlasse = klassifiziereElektroKomplettLead(payload);
+  const zeilen = [
+    `[Lead ${leadKlasse}] Elektro-Kostenrechner-Anfrage (${new Date().toLocaleDateString('de-DE')})`,
+    '',
+    `Geschätzte Gesamtinvestition: ${fmtEUR(ks.von)} – ${fmtEUR(ks.bis)}`,
+    '',
+    'Positionen:',
+    ...positionen.map((p) => `- ${p.label}: ${fmtEUR(p.von)} – ${fmtEUR(p.bis)}`),
+    '',
+    `Gebäudeart: ${a.gebaeudeart === 'neubau' ? 'Neubau' : 'Bestand / Sanierung'}`,
+    `Wohnfläche: ${a.wohnflaeche ?? '–'} m² · ${a.geschosse ?? '–'} Geschoss(e)`,
+    `Ausstattungsniveau: ${a.ausstattung ?? '–'}`,
+    `PLZ/Ort: ${[payload.kontakt?.plz, payload.kontakt?.ort].filter(Boolean).join(' ') || '–'}`,
+  ];
+  if (payload.kontakt?.nachricht) zeilen.push('', `Nachricht: ${payload.kontakt.nachricht}`);
+  return zeilen.join('\n');
+}
+
 // --- Allgemeines Kontaktformular (index.html) ---
 
 function buildKontaktBeschreibung(payload) {
@@ -311,7 +350,7 @@ async function legeLeadAn({ env, kunde, projekt }) {
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
 // ohne Netzwerkzugriff) - der Cloudflare-Worker-Laufzeit stört das nicht,
 // die Plattform ruft ausschließlich den default-Export auf.
-export { toFirestoreValue, toFirestoreFields, buildBeschreibung, klassifiziereLead, farbeAusText };
+export { toFirestoreValue, toFirestoreFields, buildBeschreibung, klassifiziereLead, farbeAusText, buildElektroKomplettBeschreibung, klassifiziereElektroKomplettLead };
 
 export default {
   async fetch(request, env) {
@@ -399,6 +438,15 @@ export default {
       return jsonResponse({ error: 'Einwilligung zur Datenverarbeitung erforderlich.' }, 400, headers);
     }
 
+    // Zwei Module teilen sich diesen Zweig: der ältere, schmale
+    // Wallbox-Fragebogen (kein "modul"-Feld, Altbestand) und der neue, breite
+    // Elektro-Kostenrechner (modul: "elektro-komplett", deckt Beleuchtung,
+    // Energie/PV/Speicher/Wärmepumpe/Klima, Wallbox und Netzwerk/Sicherheit/
+    // Außen in einem Assistenten ab, siehe elektro-kostenrechner.html).
+    const istElektroKomplett = body.modul === 'elektro-komplett';
+    const beschreibung = istElektroKomplett ? buildElektroKomplettBeschreibung(body) : buildBeschreibung(body);
+    const titel = istElektroKomplett ? 'Elektro-Kostenrechner-Anfrage (Website)' : 'Wallbox-Anfrage (Website)';
+
     try {
       const vollerName = `${kontakt.vorname} ${kontakt.nachname}`.trim();
       await legeLeadAn({
@@ -411,15 +459,15 @@ export default {
           status: 'lead',
           // s. Kommentar im "kontakt"-Zweig oben - dieselbe Beschreibung wie im
           // Projekt auch hier im Kunden-Notizfeld für die Lead-Pipeline-Ansicht.
-          notizen: buildBeschreibung(body),
+          notizen: beschreibung,
         },
         projekt: {
-          titel: 'Wallbox-Anfrage (Website)',
+          titel,
           status: 'neue-anfrage',
           bereich: 'auftrag',
           kategorieId: 'auftrag-elektroinstallation',
           gewerk: 'elektro',
-          beschreibung: buildBeschreibung(body),
+          beschreibung,
           mitarbeiterIds: [],
           farbe: '',
           markeId: '',
