@@ -8,6 +8,7 @@ import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as push from '../push.js';
+import * as journal from '../journal.js';
 
 const LISTE_STANDARD_LIMIT = 200;
 
@@ -329,6 +330,7 @@ export async function render(container) {
         } catch { /* KI-Erkennung ist optional – Anhang wird trotzdem als Beleg gespeichert */ }
       }
       await put('ausgaben', prefill);
+      try { await journal.syncBuchungFuerAusgabe(prefill, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
       toast('Anhang als Ausgabe/Beleg gespeichert – bitte in Ausgaben prüfen', 'success');
     }
 

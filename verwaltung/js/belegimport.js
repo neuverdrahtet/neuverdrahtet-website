@@ -276,6 +276,7 @@ export function openBelegImport({ onImported } = {}) {
         };
         await put('ausgaben', ausgabe);
         bestehendeSchluessel.add(dupKey(ausgabe.datum, ausgabe.betragBrutto, ausgabe.lieferant));
+        try { await journal.syncBuchungFuerAusgabe(ausgabe, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
         ausgabenCount++;
       }
 
@@ -300,6 +301,7 @@ export function openBelegImport({ onImported } = {}) {
             projektId: '', kalkKategorie: '',
           };
           await put('ausgaben', ausgabe);
+          try { await journal.syncBuchungFuerAusgabe(ausgabe, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
           ausgabenCount++;
         } else {
           const kunde = findMatchingKunde(kunden, parsed.name);
@@ -370,6 +372,7 @@ export function openBelegImport({ onImported } = {}) {
           importDateiname: entry.name,
         };
         await put('ausgaben', ausgabe);
+        try { await journal.syncBuchungFuerAusgabe(ausgabe, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
         bereitsImportierteDateien.add(entry.name);
         loseBelegeCount++;
       }

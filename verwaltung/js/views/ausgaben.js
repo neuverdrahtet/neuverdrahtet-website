@@ -43,7 +43,7 @@ function blobToDataUrl(blob) {
 }
 
 export async function render(container) {
-  let [ausgaben, settings, projekte, kunden] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden')]);
+  let [ausgaben, settings, projekte, kunden, buchungen] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen')]);
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -312,6 +312,14 @@ export async function render(container) {
     const ohneZuordnung = ausgaben.filter((a) => Number(a.betragBrutto) > 0 && !a.kundeId && !a.projektId);
     const OHNE_ZUORDNUNG_LIMIT = 30;
 
+    // Ausgaben, die direkt per put() angelegt wurden statt über das normale
+    // Formular (v.a. der ZIP-Belegimport und die "Anhang als Beleg
+    // übernehmen"-Funktion im Postfach, siehe belegimport.js/postfach.js),
+    // riefen früher nie journal.syncBuchungFuerAusgabe() auf - solche
+    // Altfälle haben trotz Betrag keinen Buchungssatz in der Buchhaltung.
+    const gebuchteAusgabenIds = new Set(buchungen.filter((b) => b.quelle?.typ === 'ausgabe').map((b) => b.quelle.id));
+    const fehltBuchung = ausgaben.filter((a) => !a.istInvestition && Number(a.betragBrutto) > 0 && !gebuchteAusgabenIds.has(a.id));
+
     const { body, close } = openModal({
       title: 'Ausgaben prüfen',
       wide: true,
@@ -346,6 +354,16 @@ export async function render(container) {
             ${kategorieVerbesserbar.map(({ a, vorschlag }) => `<li><span>${formatDate(a.datum)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span class="text-mute">Sonstiges → ${escapeHtml(vorschlag)}</span></li>`).join('')}
           </ul>
           <button type="button" class="btn btn-sm btn-primary" id="btn-fix-kategorie" style="margin-top:8px">Kategorie automatisch übernehmen (${kategorieVerbesserbar.length})</button>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Ohne Buchungssatz in der Buchhaltung (${fehltBuchung.length})</h2>
+        ${fehltBuchung.length === 0 ? '<p class="text-mute">Alle Ausgaben mit Betrag sind verbucht.</p>' : `
+          <p class="hint">Diese Ausgaben haben trotz Betrag noch keinen Buchungssatz - meist Altfälle aus dem ZIP-Belegimport oder aus "Anhang als Beleg übernehmen" im Postfach (beide verbuchen seit Kurzem automatisch, ältere Einträge davor nicht mehr rückwirkend).</p>
+          <ul class="cal-event-list">
+            ${fehltBuchung.slice(0, 30).map((a) => `<li><span>${formatDate(a.datum)} · ${escapeHtml(a.kategorie)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span class="text-mute">${formatCurrency(a.betragBrutto)}</span></li>`).join('')}
+            ${fehltBuchung.length > 30 ? `<li><span class="text-mute">… und ${fehltBuchung.length - 30} weitere</span></li>` : ''}
+          </ul>
+          <button type="button" class="btn btn-sm btn-primary" id="btn-fix-buchung" style="margin-top:8px">Fehlende Buchungen nachholen (${fehltBuchung.length})</button>
         `}
         <div class="divider"></div>
         <h2 style="font-size:14px;margin:0 0 8px">Unvollständige Einträge ohne Betrag (${unvollstaendig.length})</h2>
@@ -393,6 +411,19 @@ export async function render(container) {
         Object.assign(a, updated);
       }
       toast(`${kategorieVerbesserbar.length} Ausgabe(n) neu kategorisiert`, 'success');
+      close();
+      render(container);
+    });
+    body.querySelector('#btn-fix-buchung')?.addEventListener('click', async (e) => {
+      e.target.disabled = true;
+      e.target.textContent = 'Verbuche ...';
+      let fehler = 0;
+      for (const a of fehltBuchung) {
+        try { await journal.syncBuchungFuerAusgabe(a, settings); } catch { fehler++; }
+      }
+      toast(fehler === 0
+        ? `${fehltBuchung.length} Ausgabe(n) nachträglich verbucht`
+        : `${fehltBuchung.length - fehler} Ausgabe(n) verbucht, ${fehler} fehlgeschlagen`, fehler === 0 ? 'success' : 'danger');
       close();
       render(container);
     });
