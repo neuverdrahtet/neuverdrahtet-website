@@ -2457,14 +2457,28 @@ export async function ensureSeeded() {
   // ausgeführt (wie zuvor) summierten sich zwölf solcher Umläufe zu einer
   // spürbaren Wartezeit direkt beim App-Start, da die Oberfläche erst nach
   // ensureSeeded() sichtbar wird (siehe main.js boot()).
+  //
+  // rechnungen/kunden bewusst NICHT in diesem blockierenden Promise.all: das
+  // sind mit Abstand die am schnellsten wachsenden Collections (potenziell
+  // hunderte Dokumente) und werden hier nur für zwei seltene Einmal-
+  // Migrationen gebraucht (siehe unten) - nicht für die Seed-Logik selbst.
+  // Auf dem Handy, wo Außendienstler beim allerersten Aufruf ohne Hash direkt
+  // in der Zeiterfassung landen (die weder rechnungen noch kunden braucht,
+  // siehe main.js boot()), kostete das Warten auf den vollen Firestore-
+  // Snapshot dieser beiden großen Collections spürbar Zeit bis zur ersten
+  // sichtbaren Seite. Ihr getAll() läuft trotzdem sofort im Hintergrund an
+  // (ensureListening() ist pro Collection nur ein einziges Mal aktiv) - eine
+  // Route, die sie tatsächlich braucht, wartet einfach auf denselben, dann
+  // meist schon laufenden Listener statt einen neuen zu starten.
   const [
     settingsRows, spalten, kategorien, terminStatus, vorlagen, textbausteine,
-    aufgabenStatus, rechnungen, konten, kundenStatus, kunden, lieferanten,
+    aufgabenStatus, konten, kundenStatus, lieferanten,
   ] = await Promise.all([
     getAll('einstellungen'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('terminStatus'),
-    getAll('vorlagen'), getAll('textbausteine'), getAll('aufgabenStatus'), getAll('rechnungen'),
-    getAll('konten'), getAll('kundenStatus'), getAll('kunden'), getAll('lieferanten'),
+    getAll('vorlagen'), getAll('textbausteine'), getAll('aufgabenStatus'),
+    getAll('konten'), getAll('kundenStatus'), getAll('lieferanten'),
   ]);
+  ensureSeededRechnungenKundenMigration();
 
   if (settingsRows.length === 0) {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
@@ -2525,15 +2539,6 @@ export async function ensureSeeded() {
       await put('aufgabenStatus', s);
     }
   }
-  // Einmalige Korrektur: Stornorechnungen wurden früher mit status:'bezahlt'
-  // angelegt statt 'storniert' - dadurch verfälschte ihr negativer Betrag
-  // Auswertungen/Dashboard (z.B. "Bezahlt"-Summe, Umsatz nach Marke), obwohl
-  // die stornierte Original-Rechnung dort bereits korrekt ausgeschlossen wird.
-  for (const r of rechnungen) {
-    if (r.stornoVonNummer && r.status !== 'storniert') {
-      await put('rechnungen', { ...r, status: 'storniert', bezahltAm: '' });
-    }
-  }
   const kontenIds = new Set(konten.map((k) => k.id));
   const missingKonten = DEFAULT_KONTEN.filter((k) => !kontenIds.has(k.id));
   for (const k of missingKonten) {
@@ -2544,14 +2549,6 @@ export async function ensureSeeded() {
   for (const s of missingKundenStatus) {
     await put('kundenStatus', s);
   }
-  // Bestehende Kunden aus der Zeit vor der Lead-Pipeline haben noch kein
-  // status-Feld - sie haben i.d.R. bereits eine Historie und werden daher
-  // nicht rückwirkend zu "Lead" degradiert, sondern direkt als "Kunde" geführt.
-  for (const k of kunden) {
-    if (!k.status) {
-      await put('kunden', { ...k, status: 'kunde' });
-    }
-  }
   if (lieferanten.length === 0) {
     await put('lieferanten', {
       id: 'lieferant-rexel', firma: 'Rexel', ansprechpartner: '', telefon: '', email: '',
@@ -2561,6 +2558,30 @@ export async function ensureSeeded() {
       farbe: '#2b7fd6',
     });
   }
+}
+
+// Läuft absichtlich unabhängig von ensureSeeded() im Hintergrund weiter,
+// statt den App-Start zu blockieren (siehe Kommentar in ensureSeeded()).
+function ensureSeededRechnungenKundenMigration() {
+  Promise.all([getAll('rechnungen'), getAll('kunden')]).then(async ([rechnungen, kunden]) => {
+    // Einmalige Korrektur: Stornorechnungen wurden früher mit status:'bezahlt'
+    // angelegt statt 'storniert' - dadurch verfälschte ihr negativer Betrag
+    // Auswertungen/Dashboard (z.B. "Bezahlt"-Summe, Umsatz nach Marke), obwohl
+    // die stornierte Original-Rechnung dort bereits korrekt ausgeschlossen wird.
+    for (const r of rechnungen) {
+      if (r.stornoVonNummer && r.status !== 'storniert') {
+        await put('rechnungen', { ...r, status: 'storniert', bezahltAm: '' });
+      }
+    }
+    // Bestehende Kunden aus der Zeit vor der Lead-Pipeline haben noch kein
+    // status-Feld - sie haben i.d.R. bereits eine Historie und werden daher
+    // nicht rückwirkend zu "Lead" degradiert, sondern direkt als "Kunde" geführt.
+    for (const k of kunden) {
+      if (!k.status) {
+        await put('kunden', { ...k, status: 'kunde' });
+      }
+    }
+  }).catch((err) => console.warn('Hintergrund-Migration (rechnungen/kunden) übersprungen:', err));
 }
 
 export async function getSettings() {
