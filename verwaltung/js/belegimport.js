@@ -5,6 +5,16 @@ import { saveDokument } from './dokumente.js';
 import { readZipEntries } from './zipreader.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from './blobstore.js';
 import * as journal from './journal.js';
+import { extractAngebotFromFremdPdf } from './ai.js';
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
@@ -116,7 +126,7 @@ export function openBelegImport({ onImported } = {}) {
     title: 'Belege importieren (ZIP)',
     wide: true,
     bodyHtml: `
-      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden), DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen) sowie lose Belegfotos/-scans (JPG/PNG/HEIC/PDF ohne erkennbare Namenskonvention, z.B. Kamera-Fotos) - diese werden als Entwurf angelegt (Betrag 0, Datum aus dem Foto-Zeitstempel geschätzt) und müssen danach geprüft werden. Belege vom Typ "Einnahme" (eigene Rechnungen) werden als echte Rechnung angelegt und - sofern ein PDF dabei ist - zusätzlich dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Beim DATEV/Lexware-Format ist der Betrag bekannt - die Rechnung wird direkt als bezahlt verbucht (Umsatz + USt. in der Buchhaltung); beim lexoffice-Format fehlt der Betrag im Dateinamen, die Rechnung wird deshalb als offener Entwurf mit 0&nbsp;€ angelegt und muss vor dem Verbuchen noch ergänzt werden. Bereits vorhandene Ausgaben/Rechnungen mit gleichem Datum/Betrag/Lieferant bzw. gleicher Belegnummer werden übersprungen (keine Duplikate).</p>
+      <p class="hint">Importiert einen Belege-Export im ZIP-Format - erkennt automatisch: lexoffice-Export (PDF-Dateinamen wie "2025-01-01_Ausgabe_123_Lieferant.pdf"; Betrag muss danach geprüft/eingetragen werden), DATEV/Lexware "Belege Online" (XML+PDF je Beleg; Datum/Betrag/Kategorie werden direkt aus dem XML übernommen) sowie lose Belegfotos/-scans (JPG/PNG/HEIC/PDF ohne erkennbare Namenskonvention, z.B. Kamera-Fotos) - diese werden als Entwurf angelegt (Betrag 0, Datum aus dem Foto-Zeitstempel geschätzt) und müssen danach geprüft werden. Belege vom Typ "Einnahme" (eigene Rechnungen) werden als echte Rechnung angelegt und - sofern ein PDF dabei ist - zusätzlich dem passenden Kunden als Dokument zugeordnet; existiert noch kein Kunde mit diesem Namen, wird er beim DATEV-Format automatisch mit den im Beleg vorhandenen Daten (Name/Ort/Kundennummer) neu angelegt. Beim DATEV/Lexware-Format ist der Betrag bekannt - die Rechnung wird direkt als bezahlt verbucht (Umsatz + USt. in der Buchhaltung); beim lexoffice-Format fehlt der Betrag im Dateinamen - ist die KI-Angebotserstellung eingerichtet (Einstellungen → KI-Angebotserstellung), liest dieselbe KI wie beim "Fremdes Angebot importieren" die echten Positionen/Beträge direkt aus dem PDF und verbucht dann genauso; sonst wird ein offener Entwurf mit 0&nbsp;€ angelegt, der vor dem Verbuchen noch ergänzt werden muss. Bereits vorhandene Ausgaben/Rechnungen mit gleichem Datum/Betrag/Lieferant bzw. gleicher Belegnummer werden übersprungen (keine Duplikate).</p>
       <div class="field" style="margin-bottom:10px">
         <label>ZIP-Datei</label>
         <input type="file" id="beleg-zip-input" accept=".zip,application/zip">
@@ -313,25 +323,45 @@ export function openBelegImport({ onImported } = {}) {
             });
             zugeordnetCount++;
             // lexoffice kodiert den Betrag nicht im Dateinamen - anders als beim
-            // DATEV-Format kann die Rechnung deshalb nicht sofort korrekt
-            // verbucht werden. Sie wird stattdessen als offener, unverbuchter
-            // Entwurf angelegt (0 €, nicht versendet/gesperrt), damit sie nach
-            // Ergänzung der echten Position/Summe ganz normal fertiggestellt
-            // und dann bezahlt/verbucht werden kann.
+            // DATEV-Format lässt er sich nicht direkt aus dem Import auslesen.
+            // Ist die KI-Angebotserstellung eingerichtet, liest dieselbe Technik
+            // wie beim manuellen "Fremdes Angebot importieren" die tatsächlichen
+            // Positionen/Beträge aus dem PDF selbst - damit kann die Rechnung
+            // genau wie beim DATEV-Format sofort korrekt verbucht werden. Klappt
+            // das nicht (KI nicht eingerichtet, PDF nicht lesbar/kein Text), wird
+            // wie bisher ein offener 0-€-Entwurf angelegt, der manuell ergänzt
+            // und dann normal bezahlt/verbucht werden kann.
             const belegnummerNorm = (parsed.belegnummer || '').trim().toLowerCase();
             if (!belegnummerNorm || !rechnungenNummernSet.has(belegnummerNorm)) {
-              const positionen = [{
-                id: uid(), bezeichnung: `Beleg ${parsed.belegnummer} – Betrag bitte prüfen (aus Import, nicht automatisch erkannt)`,
-                beschreibung: '', menge: 1, einheit: 'Psch.', einzelpreis: 0, steuersatz: settings.standardSteuersatz ?? 19,
-              }];
+              let positionen = null;
+              if (settings.aiWorkerUrl) {
+                try {
+                  const fileDataUrl = await blobToDataUrl(blob);
+                  const result = await extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersatz: settings.standardSteuersatz });
+                  if (result.positionen && result.positionen.length > 0) {
+                    positionen = result.positionen.map((p) => ({ ...p, id: uid() }));
+                  }
+                } catch { /* KI-Erkennung ist optional - Rechnung fällt auf den Entwurf zurück */ }
+              }
+              const erkanntPerKi = !!positionen;
+              if (!positionen) {
+                positionen = [{
+                  id: uid(), bezeichnung: `Beleg ${parsed.belegnummer} – Betrag bitte prüfen (aus Import, nicht automatisch erkannt)`,
+                  beschreibung: '', menge: 1, einheit: 'Psch.', einzelpreis: 0, steuersatz: settings.standardSteuersatz ?? 19,
+                }];
+              }
+              const totals = calcTotals(positionen);
               const rechnung = {
                 id: uid(), nummer: parsed.belegnummer, kundeId: kunde.id, projektId: '', angebotId: null, auftragsbestaetigungId: null,
-                datum: parsed.datum, leistungsdatum: parsed.datum, faelligAm: addDays(parsed.datum, settings.zahlungszielTage || 14),
-                status: 'offen', bezahltAm: '',
+                datum: parsed.datum, leistungsdatum: parsed.datum,
+                faelligAm: erkanntPerKi ? parsed.datum : addDays(parsed.datum, settings.zahlungszielTage || 14),
+                status: erkanntPerKi ? 'bezahlt' : 'offen', bezahltAm: erkanntPerKi ? parsed.datum : '',
                 betreff: `Rechnung ${parsed.belegnummer} (Import)`,
-                notizen: 'Aus Belege-Import (lexoffice) angelegt - Betrag/Positionen bitte prüfen und ergänzen, danach normal als bezahlt verbuchen.',
-                positionen, netto: 0, steuer: 0, brutto: 0,
-                createdAt: new Date().toISOString(), versendet: false, versendetAm: '',
+                notizen: erkanntPerKi
+                  ? 'Automatisch importiert und verbucht aus Belege-Import (lexoffice, Positionen per KI aus dem PDF erkannt).'
+                  : 'Aus Belege-Import (lexoffice) angelegt - Betrag/Positionen bitte prüfen und ergänzen, danach normal als bezahlt verbuchen.',
+                positionen, netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+                createdAt: new Date().toISOString(), versendet: erkanntPerKi, versendetAm: erkanntPerKi ? parsed.datum : '',
                 stornoVonNummer: '', storniertDurchNummer: '',
                 steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
                 verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0,
@@ -339,7 +369,12 @@ export function openBelegImport({ onImported } = {}) {
               };
               await put('rechnungen', rechnung);
               if (belegnummerNorm) rechnungenNummernSet.add(belegnummerNorm);
-              einnahmenEntwurfCount++;
+              if (erkanntPerKi) {
+                try { await journal.syncBuchungFuerRechnung(rechnung, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
+                einnahmenCount++;
+              } else {
+                einnahmenEntwurfCount++;
+              }
             }
           } else {
             unzugeordnet.push(`${parsed.name} (${entry.name})`);
