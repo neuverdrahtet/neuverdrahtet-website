@@ -27,8 +27,35 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   let current = 1;
   const totalSteps = steps.length;
 
+  // Feste Raumtypen (siehe Schritt 2) mit angenommener Durchschnittsfläche -
+  // ersetzt eine reine Wohnflächen-Schätzung durch eine echte Raumliste wie
+  // bei vergleichbaren Konfiguratoren, ohne dass der Nutzer selbst m² pro
+  // Raum eintragen muss.
+  const ROOM_TYPES = [
+    { id: 'wohnzimmer', label: 'Wohnzimmer', avgM2: 28, defaultCount: 1 },
+    { id: 'kueche', label: 'Küche', avgM2: 14, defaultCount: 1 },
+    { id: 'essbereich', label: 'Essbereich', avgM2: 12, defaultCount: 1 },
+    { id: 'schlafzimmer', label: 'Schlafzimmer', avgM2: 16, defaultCount: 1 },
+    { id: 'kinderzimmer', label: 'Kinderzimmer', avgM2: 13, defaultCount: 2 },
+    { id: 'arbeitszimmer', label: 'Arbeitszimmer', avgM2: 12, defaultCount: 1 },
+    { id: 'bad', label: 'Badezimmer', avgM2: 8, defaultCount: 1 },
+    { id: 'gaeste_wc', label: 'Gäste-WC', avgM2: 3, defaultCount: 1 },
+    { id: 'flur', label: 'Flur / Diele', avgM2: 10, defaultCount: 1 },
+    { id: 'hwr', label: 'HWR / Tech', avgM2: 8, defaultCount: 1 },
+    { id: 'keller', label: 'Kellerraum', avgM2: 20, defaultCount: 0 },
+  ];
+  const CUSTOM_ROOM_AVG_M2 = 15;
+  const ROOM_TIER_OPTIONS = [
+    { value: 'standard', label: 'Standard' },
+    { value: 'smart', label: 'Smart' },
+    { value: 'komplett', label: 'Komplett' },
+  ];
+
   const state = {
-    gebaeudeart: 'neubau', wohnflaeche: 130, geschosse: '2', ausstattung: 'smart',
+    projektart: 'neubau', gebaeudeart: 'efh', wohnflaeche: 130,
+    geschosseListe: ['eg', 'og1'], keller: 'keiner', garage: 'keine', aussenflaechen: [],
+    rooms: Object.fromEntries(ROOM_TYPES.map((rt) => [rt.id, { count: rt.defaultCount, tier: 'smart' }])),
+    customRooms: [], // { id, name, count, tier }
     beleuchtung: 'klassisch',
     pvGewuenscht: 'ja', dachflaeche: 45, dachausrichtung: 'sued', dachzugang: 'gut', speicher: 'keine', notstrom: 'nein',
     waermepumpe: 'nein', klima: 'nein',
@@ -113,6 +140,82 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   wireSlider('ek-wohnflaeche', 'ek-wohnflaeche-val', 'wohnflaeche', 'm²');
   wireSlider('ek-dachflaeche', 'ek-dachflaeche-val', 'dachflaeche', 'm²');
 
+  /* ---------- Räume & Ausstattung (Schritt 2): dynamische Raumliste ---------- */
+  function escHtml(s) { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function escAttr(s) { return escHtml(s).replace(/"/g, '&quot;'); }
+
+  function roomDataFor(id) {
+    return state.rooms[id] || state.customRooms.find((c) => c.id === id);
+  }
+
+  function roomRowHtml(id, label, data, isCustom) {
+    const nameHtml = isCustom
+      ? `<div class="calc-room-name"><input type="text" data-room-name="${id}" value="${escAttr(label)}" placeholder="Raumname"></div>`
+      : `<div class="calc-room-name">${escHtml(label)}</div>`;
+    return `
+      <div class="calc-room-row ${data.count > 0 ? 'has-count' : ''}" data-room-row="${id}">
+        <div class="calc-room-head">
+          ${nameHtml}
+          <div class="calc-stepper">
+            <button type="button" data-room-dec="${id}" aria-label="Weniger">−</button>
+            <span class="count">${data.count}</span>
+            <button type="button" data-room-inc="${id}" aria-label="Mehr">+</button>
+          </div>
+          ${isCustom ? `<button type="button" class="calc-room-remove" data-room-remove="${id}" aria-label="Raum entfernen">✕</button>` : ''}
+        </div>
+        ${data.count > 0 ? `<div class="calc-room-tier" data-room-tier-group="${id}">
+          ${ROOM_TIER_OPTIONS.map((t) => `<button type="button" data-value="${t.value}" class="${data.tier === t.value ? 'is-active' : ''}">${t.label}</button>`).join('')}
+        </div>` : ''}
+      </div>
+    `;
+  }
+
+  function renderRoomList() {
+    const host = document.getElementById('ek-room-list');
+    const rows = ROOM_TYPES.map((rt) => roomRowHtml(rt.id, rt.label, state.rooms[rt.id], false))
+      .concat(state.customRooms.map((cr) => roomRowHtml(cr.id, cr.name, cr, true)));
+    host.innerHTML = rows.join('');
+    wireRoomRows();
+  }
+
+  function wireRoomRows() {
+    const host = document.getElementById('ek-room-list');
+    host.querySelectorAll('[data-room-inc]').forEach((btn) => btn.addEventListener('click', () => {
+      roomDataFor(btn.dataset.roomInc).count++;
+      renderRoomList(); updatePreis();
+    }));
+    host.querySelectorAll('[data-room-dec]').forEach((btn) => btn.addEventListener('click', () => {
+      const d = roomDataFor(btn.dataset.roomDec);
+      d.count = Math.max(0, d.count - 1);
+      renderRoomList(); updatePreis();
+    }));
+    host.querySelectorAll('[data-room-remove]').forEach((btn) => btn.addEventListener('click', () => {
+      state.customRooms = state.customRooms.filter((c) => c.id !== btn.dataset.roomRemove);
+      renderRoomList(); updatePreis();
+    }));
+    host.querySelectorAll('[data-room-name]').forEach((input) => input.addEventListener('input', () => {
+      const c = state.customRooms.find((c) => c.id === input.dataset.roomName);
+      if (c) c.name = input.value;
+      updatePreis(); // kein renderRoomList() hier - würde Cursor/Fokus im Textfeld unterbrechen
+    }));
+    host.querySelectorAll('[data-room-tier-group]').forEach((group) => {
+      const id = group.dataset.roomTierGroup;
+      group.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => {
+        roomDataFor(id).tier = btn.dataset.value;
+        group.querySelectorAll('button').forEach((b) => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+        updatePreis();
+      }));
+    });
+  }
+
+  document.getElementById('ekBtnAddRoom').addEventListener('click', () => {
+    state.customRooms.push({ id: `custom-${Date.now()}`, name: 'Eigener Raum', count: 1, tier: 'smart' });
+    renderRoomList(); updatePreis();
+  });
+
+  renderRoomList();
+
   function updatePvBlockVisibility() {
     document.getElementById('ek-pv-block').hidden = state.pvGewuenscht !== 'ja';
   }
@@ -120,8 +223,12 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
 
   /* ---------- Preistabellen (siehe Kopfkommentar: aus den Leistungsseiten übernommen) ---------- */
   const AUSSTATTUNG_PRO_M2 = { standard: { low: 70, high: 100 }, smart: { low: 100, high: 140 }, komplett: { low: 140, high: 200 } };
-  const GESCHOSS_FAKTOR = { '1': 1.0, '2': 1.08, '3': 1.15 };
   const AUSSTATTUNG_LABEL = { standard: 'Standard', smart: 'Smart', komplett: 'Komplett' };
+  const PROJEKTART_LABEL = { neubau: 'Neubau', kernsanierung: 'Kernsanierung', teilsanierung: 'Teilsanierung', anbau: 'Anbau & Aufstockung', einzelne: 'Einzelne Bereiche' };
+  const GEBAEUDEART_LABEL = { efh: 'Einfamilienhaus', dhh: 'Doppelhaushälfte', rh: 'Reihenhaus', mfh: 'Mehrfamilienhaus', wohnung: 'Wohnung', gewerbe: 'Gewerbeeinheit' };
+  const GARAGE_ADDON = { low: 250, high: 500, label: 'Garage / Carport – Elektroanschluss' };
+  const POOL_ADDON = { low: 300, high: 700, label: 'Pool – Potentialausgleich & Absicherung' };
+  const SAUNA_ADDON = { low: 300, high: 600, label: 'Sauna – eigener Stromkreis' };
 
   const BELEUCHTUNG_TIER = {
     klassisch: { low: 45, high: 90, menge: 0.7, label: 'Klassische Deckenanschlüsse' },
@@ -170,27 +277,71 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     kameravorb: { low: 150, high: 350, label: 'Kamera-Vorbereitung' },
   };
 
-  function anzahlLeuchten() { return Math.max(4, Math.round(state.wohnflaeche / 15)); }
-  function anzahlDatenpunkte() { return Math.max(3, Math.round(state.wohnflaeche / 20)); }
-  function anzahlRauchwarnmelder() { return Math.max(3, Math.round(state.wohnflaeche / 25)); }
+  // Gesamtzahl erfasster Räume (feste Typen + eigene) - Grundlage für
+  // Beleuchtung/Netzwerk/Rauchwarnmelder-Mengen statt einer groben
+  // Wohnflächen-Faustformel, da jetzt eine echte Raumliste vorliegt.
+  function gesamtRaumAnzahl() {
+    let n = 0;
+    ROOM_TYPES.forEach((rt) => { n += state.rooms[rt.id].count; });
+    state.customRooms.forEach((c) => { n += c.count; });
+    return Math.max(1, n);
+  }
+  function anzahlLeuchten() { return gesamtRaumAnzahl(); }
+  function anzahlDatenpunkte() { return gesamtRaumAnzahl(); }
+  function anzahlRauchwarnmelder() { return gesamtRaumAnzahl(); }
   function geschaetzteKwp() { return Math.round(state.dachflaeche * 0.15 * 10) / 10; }
+  // Mehr Vollgeschosse bedeuten mehr Steigleitungen/Verteiler-Strecken -
+  // kleiner Aufschlag pro zusätzlichem Geschoss über dem ersten, gedeckelt.
+  function geschossFaktor() {
+    const n = Math.max(1, state.geschosseListe.length);
+    return 1 + Math.min(n - 1, 3) * 0.08;
+  }
+
+  // Kosten der eigentlichen Elektroinstallation: Summe über alle erfassten
+  // Räume (feste Typen + eigene), je Raum mit individuell wählbarem Niveau
+  // (Standard/Smart/Komplett) und einer angenommenen Durchschnittsfläche -
+  // ersetzt eine pauschale "Wohnfläche × ein Niveau fürs ganze Haus"-Rechnung.
+  function berechneRaumKosten() {
+    let low = 0, high = 0;
+    ROOM_TYPES.forEach((rt) => {
+      const d = state.rooms[rt.id];
+      if (d.count <= 0) return;
+      const tier = AUSSTATTUNG_PRO_M2[d.tier];
+      const m2 = rt.avgM2 * d.count;
+      low += tier.low * m2; high += tier.high * m2;
+    });
+    state.customRooms.forEach((c) => {
+      if (c.count <= 0) return;
+      const tier = AUSSTATTUNG_PRO_M2[c.tier];
+      const m2 = CUSTOM_ROOM_AVG_M2 * c.count;
+      low += tier.low * m2; high += tier.high * m2;
+    });
+    return { low, high };
+  }
 
   /* ---------- Preisberechnung: liefert Positionen (low/high/label) + Summe ---------- */
   function berechnePositionen() {
     const positionen = [];
-    const geschossFaktor = GESCHOSS_FAKTOR[state.geschosse] || 1;
-    const bestandZuschlag = state.gebaeudeart === 'bestand' ? 1.1 : 1;
+    const bestandZuschlag = ['kernsanierung', 'teilsanierung', 'einzelne'].includes(state.projektart) ? 1.1 : 1;
 
-    // Elektroinstallation Wohnbereiche
-    const ausst = AUSSTATTUNG_PRO_M2[state.ausstattung];
+    // Elektroinstallation Wohnbereiche (Summe aus der Raumliste, siehe Schritt 2)
+    const raum = berechneRaumKosten();
     positionen.push({
       label: 'Elektroinstallation Wohnbereiche',
-      low: ausst.low * state.wohnflaeche * geschossFaktor * bestandZuschlag,
-      high: ausst.high * state.wohnflaeche * geschossFaktor * bestandZuschlag,
+      low: raum.low * geschossFaktor() * bestandZuschlag,
+      high: raum.high * geschossFaktor() * bestandZuschlag,
     });
 
     // Zählerschrank / Hauptverteilung – Grunderneuerung ist bei jedem Projekt realistisch einzuplanen
     positionen.push({ label: 'Zählerschrank / Hauptverteilung erneuern', low: 1200, high: 2200 });
+
+    // Garage / Carport
+    if (state.garage !== 'keine') {
+      positionen.push({ label: GARAGE_ADDON.label, low: GARAGE_ADDON.low, high: GARAGE_ADDON.high });
+    }
+    // Pool / Sauna (aus den zusätzlichen Außenflächen in Schritt 1)
+    if (state.aussenflaechen.includes('pool')) positionen.push({ label: POOL_ADDON.label, low: POOL_ADDON.low, high: POOL_ADDON.high });
+    if (state.aussenflaechen.includes('sauna')) positionen.push({ label: SAUNA_ADDON.label, low: SAUNA_ADDON.low, high: SAUNA_ADDON.high });
 
     // Beleuchtung
     const bel = BELEUCHTUNG_TIER[state.beleuchtung];
@@ -291,21 +442,22 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
 
     // "Bereits berücksichtigt"
     const annahmen = [
-      `${state.gebaeudeart === 'neubau' ? 'Neubau' : 'Bestand / Sanierung'}`,
-      `${state.wohnflaeche} m² Wohnfläche · ${state.geschosse} Geschoss(e)`,
-      `Ausstattung: ${AUSSTATTUNG_LABEL[state.ausstattung]}`,
+      `${PROJEKTART_LABEL[state.projektart]} · ${GEBAEUDEART_LABEL[state.gebaeudeart]}`,
+      `${state.wohnflaeche} m² Wohnfläche · ${state.geschosseListe.length} Vollgeschoss(e)`,
+      `${gesamtRaumAnzahl()} Räume erfasst`,
       `Beleuchtung: ${BELEUCHTUNG_TIER[state.beleuchtung].label}`,
     ];
     if (state.pvGewuenscht === 'ja') annahmen.push(`Photovoltaik (ca. ${geschaetzteKwp()} kWp)${state.speicher !== 'keine' ? ' mit Speicher' : ''}`);
     if (state.waermepumpe !== 'nein') annahmen.push('Wärmepumpen-Anschluss');
     if (state.klima !== 'nein') annahmen.push('Klimaanlagen-Anschluss');
     if (state.wallbox !== 'keine') annahmen.push(`Wallbox: ${state.wallbox === 'vorbereitung' ? 'Vorbereitung' : (state.wallbox === 'eine' ? '1 Stück' : '2 Stück')}`);
+    if (state.garage !== 'keine') annahmen.push('Garage/Carport-Anschluss');
     document.getElementById('ekAssumptions').innerHTML = annahmen.map((a) => `<li>${a}</li>`).join('');
 
     document.getElementById('ekOffenDach').hidden = state.pvGewuenscht !== 'ja';
 
     // Unsicherheits-Badge/Hinweistext je nach offenen Punkten
-    const unsicher = state.gebaeudeart === 'bestand' || (state.pvGewuenscht === 'ja' && state.dachzugang !== 'gut');
+    const unsicher = state.projektart !== 'neubau' || (state.pvGewuenscht === 'ja' && state.dachzugang !== 'gut');
     const noteEl = document.getElementById('ekAmpelNote');
     noteEl.textContent = unsicher
       ? 'Grober Richtwert mit größerer Spanne, da einige Angaben (z.B. Bestandsinstallation oder Dachzugang) erst vor Ort final geklärt werden können.'

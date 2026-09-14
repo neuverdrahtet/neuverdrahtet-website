@@ -249,10 +249,20 @@ function buildBeschreibung(payload) {
 function klassifiziereElektroKomplettLead(payload) {
   const a = payload.antworten || {};
   const grossprojekt = (payload.kostenspanne?.bis || 0) >= 15000;
-  const klar = a.gebaeudeart === 'neubau' && (a.pvGewuenscht !== 'ja' || a.dachzugang === 'gut');
+  const klar = a.projektart === 'neubau' && (a.pvGewuenscht !== 'ja' || a.dachzugang === 'gut');
   if (grossprojekt && klar) return 'A';
   if (grossprojekt || klar) return 'B';
   return 'C';
+}
+
+const PROJEKTART_LABEL = { neubau: 'Neubau', kernsanierung: 'Kernsanierung', teilsanierung: 'Teilsanierung', anbau: 'Anbau & Aufstockung', einzelne: 'Einzelne Bereiche' };
+const GEBAEUDEART_LABEL = { efh: 'Einfamilienhaus', dhh: 'Doppelhaushälfte', rh: 'Reihenhaus', mfh: 'Mehrfamilienhaus', wohnung: 'Wohnung', gewerbe: 'Gewerbeeinheit' };
+
+/** Zählt erfasste Räume (feste Typen + eigene, siehe assets/elektro-konfigurator.js state.rooms/customRooms) für die Lead-Zusammenfassung. */
+function zaehleRaeume(a) {
+  const feste = Object.values(a.rooms || {}).reduce((s, r) => s + (r.count || 0), 0);
+  const eigene = (a.customRooms || []).reduce((s, r) => s + (r.count || 0), 0);
+  return feste + eigene;
 }
 
 function buildElektroKomplettBeschreibung(payload) {
@@ -268,9 +278,10 @@ function buildElektroKomplettBeschreibung(payload) {
     'Positionen:',
     ...positionen.map((p) => `- ${p.label}: ${fmtEUR(p.von)} – ${fmtEUR(p.bis)}`),
     '',
-    `Gebäudeart: ${a.gebaeudeart === 'neubau' ? 'Neubau' : 'Bestand / Sanierung'}`,
-    `Wohnfläche: ${a.wohnflaeche ?? '–'} m² · ${a.geschosse ?? '–'} Geschoss(e)`,
-    `Ausstattungsniveau: ${a.ausstattung ?? '–'}`,
+    `Projektart: ${PROJEKTART_LABEL[a.projektart] || a.projektart || '–'}`,
+    `Gebäudeart: ${GEBAEUDEART_LABEL[a.gebaeudeart] || a.gebaeudeart || '–'}`,
+    `Wohnfläche: ${a.wohnflaeche ?? '–'} m² · ${(a.geschosseListe || []).length || '–'} Vollgeschoss(e) · ${zaehleRaeume(a)} Räume erfasst`,
+    `Keller: ${a.keller ?? '–'} · Garage/Carport: ${a.garage ?? '–'}`,
     `PLZ/Ort: ${[payload.kontakt?.plz, payload.kontakt?.ort].filter(Boolean).join(' ') || '–'}`,
   ];
   if (payload.kontakt?.nachricht) zeilen.push('', `Nachricht: ${payload.kontakt.nachricht}`);

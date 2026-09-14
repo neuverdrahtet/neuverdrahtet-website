@@ -127,14 +127,29 @@
 
       <form id="ekForm" class="calc-panel wizard">
 
-        <!-- Schritt 1: Basisdaten -->
+        <!-- Schritt 1: Projekt & Gebäude -->
         <div class="wizard-step is-active" data-step="1">
-          <h2 class="wizard-step-title">Ihr Objekt</h2>
+          <h2 class="wizard-step-title">Projekt &amp; Gebäude</h2>
+          <p class="form-note" style="margin-top:-10px">Erzählen Sie uns kurz, worum es geht.</p>
+          <div class="calc-field">
+            <label>Projektart</label>
+            <div class="calc-toggle" data-field="projektart">
+              <button type="button" data-value="neubau" class="is-active">Neubau <span class="calc-toggle-sub">Alles neu</span></button>
+              <button type="button" data-value="kernsanierung">Kernsanierung <span class="calc-toggle-sub">Alles raus, neu auf</span></button>
+              <button type="button" data-value="teilsanierung">Teilsanierung <span class="calc-toggle-sub">Bestehende Teile bleiben</span></button>
+              <button type="button" data-value="anbau">Anbau &amp; Aufstockung</button>
+              <button type="button" data-value="einzelne">Einzelne Bereiche</button>
+            </div>
+          </div>
           <div class="calc-field">
             <label>Gebäudeart</label>
             <div class="calc-toggle" data-field="gebaeudeart">
-              <button type="button" data-value="neubau" class="is-active">Neubau</button>
-              <button type="button" data-value="bestand">Bestand / Sanierung</button>
+              <button type="button" data-value="efh" class="is-active">Einfamilienhaus</button>
+              <button type="button" data-value="dhh">Doppelhaushälfte</button>
+              <button type="button" data-value="rh">Reihenhaus</button>
+              <button type="button" data-value="mfh">Mehrfamilienhaus</button>
+              <button type="button" data-value="wohnung">Wohnung</button>
+              <button type="button" data-value="gewerbe">Gewerbeeinheit</button>
             </div>
           </div>
           <div class="calc-field">
@@ -145,25 +160,60 @@
             </div>
           </div>
           <div class="calc-field">
-            <label>Geschosse</label>
-            <div class="calc-toggle" data-field="geschosse">
-              <button type="button" data-value="1">1 Geschoss</button>
-              <button type="button" data-value="2" class="is-active">2 Geschosse</button>
-              <button type="button" data-value="3">3+ Geschosse</button>
+            <label>Vollgeschosse <span class="calc-floors-hint">(alle zutreffenden wählen)</span></label>
+            <div class="calc-checkgrid" data-checkgroup="geschosseListe">
+              <label class="ks-checkbox-inline"><input type="checkbox" value="eg" checked> Erdgeschoss</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="og1" checked> Obergeschoss</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="og2"> Weiteres OG</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="dgausgebaut"> Dachgeschoss ausgebaut</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="dgroh"> Dachgeschoss roh</label>
             </div>
           </div>
           <div class="calc-field">
-            <label>Ausstattungsniveau</label>
-            <div class="calc-toggle calc-tier" data-field="ausstattung">
-              <button type="button" data-value="standard" data-low="70" data-high="100">Standard <span class="calc-toggle-sub">Zeitgemäße Elektroinstallation</span></button>
-              <button type="button" data-value="smart" data-low="100" data-high="140" class="is-active">Smart <span class="calc-toggle-sub">Mehr Steckdosen, Netzwerk-Vorbereitung</span></button>
-              <button type="button" data-value="komplett" data-low="140" data-high="200">Komplett <span class="calc-toggle-sub">Individuelles Lichtkonzept, volle Vernetzung</span></button>
+            <label>Keller</label>
+            <div class="calc-toggle" data-field="keller">
+              <button type="button" data-value="keiner" class="is-active">Kein Keller</button>
+              <button type="button" data-value="lager">Keller (Lager)</button>
+              <button type="button" data-value="technik">Mit Technik (HWR)</button>
+              <button type="button" data-value="wohnraum">Wohn-/Hobbyräume</button>
+            </div>
+          </div>
+          <div class="calc-field">
+            <label>Garage / Carport</label>
+            <div class="calc-toggle" data-field="garage">
+              <button type="button" data-value="keine" class="is-active">Keine</button>
+              <button type="button" data-value="garage-haus">Garage am Haus</button>
+              <button type="button" data-value="garage-separat">Separate Garage</button>
+              <button type="button" data-value="carport-haus">Carport am Haus</button>
+              <button type="button" data-value="carport-separat">Separater Carport</button>
+            </div>
+          </div>
+          <div class="calc-field">
+            <label>Zusätzliche Außenflächen</label>
+            <div class="calc-checkgrid" data-checkgroup="aussenflaechen">
+              <label class="ks-checkbox-inline"><input type="checkbox" value="terrasse"> Terrasse</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="balkon"> Balkon</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="garten"> Garten</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="einfahrt"> Einfahrt</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="stellplaetze"> Außenstellplätze</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="gartenhaus"> Gartenhaus</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="werkstatt"> Werkstatt</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="pool"> Pool</label>
+              <label class="ks-checkbox-inline"><input type="checkbox" value="sauna"> Sauna</label>
             </div>
           </div>
         </div>
 
-        <!-- Schritt 2: Beleuchtung -->
+        <!-- Schritt 2: Räume & Ausstattung -->
         <div class="wizard-step" data-step="2">
+          <h2 class="wizard-step-title">Räume &amp; Ausstattung</h2>
+          <p class="form-note" style="margin-top:-10px">Wählen Sie ein Niveau je Raum — Sie müssen keine Steckdosen zählen.</p>
+          <div id="ek-room-list" class="calc-room-list"></div>
+          <button type="button" class="btn btn-outline btn-sm" id="ekBtnAddRoom" style="margin-top:16px">+ Eigenen Raum hinzufügen</button>
+        </div>
+
+        <!-- Schritt 3: Beleuchtung -->
+        <div class="wizard-step" data-step="3">
           <h2 class="wizard-step-title">Beleuchtung</h2>
           <p class="form-note" style="margin-top:-10px">Vom einfachen Deckenauslass bis zum Lichtkonzept.</p>
           <div class="calc-field">
@@ -177,8 +227,8 @@
           </div>
         </div>
 
-        <!-- Schritt 3: Energie & Technik -->
-        <div class="wizard-step" data-step="3">
+        <!-- Schritt 4: Energie & Technik -->
+        <div class="wizard-step" data-step="4">
           <h2 class="wizard-step-title">Energie &amp; Technik</h2>
           <p class="form-note" style="margin-top:-10px">Photovoltaik, Speicher, Wärmepumpe &amp; große Verbraucher.</p>
           <div class="calc-field">
@@ -252,8 +302,8 @@
           </div>
         </div>
 
-        <!-- Schritt 4: E-Mobilität -->
-        <div class="wizard-step" data-step="4">
+        <!-- Schritt 5: E-Mobilität -->
+        <div class="wizard-step" data-step="5">
           <h2 class="wizard-step-title">E-Mobilität</h2>
           <p class="form-note" style="margin-top:-10px">Ladelösung für heute und morgen.</p>
           <div class="calc-field">
@@ -267,8 +317,8 @@
           </div>
         </div>
 
-        <!-- Schritt 5: Netzwerk, Sicherheit & Außen -->
-        <div class="wizard-step" data-step="5">
+        <!-- Schritt 6: Netzwerk, Sicherheit & Außen -->
+        <div class="wizard-step" data-step="6">
           <h2 class="wizard-step-title">Netzwerk, Sicherheit &amp; Außen</h2>
           <p class="form-note" style="margin-top:-10px">Kommunikation, Türkommunikation und Außenanlagen.</p>
           <div class="calc-field">
@@ -313,8 +363,8 @@
           </div>
         </div>
 
-        <!-- Schritt 6: Zusammenfassung + Kostenspanne -->
-        <div class="wizard-step" data-step="6">
+        <!-- Schritt 7: Zusammenfassung + Kostenspanne -->
+        <div class="wizard-step" data-step="7">
           <h2 class="wizard-step-title">Ihre Orientierungssumme</h2>
           <div class="calc-result calc-grand-total" id="ekResultBox">
             <div class="label" id="ekAmpelLabel">Geschätzte Gesamtinvestition</div>
@@ -365,8 +415,8 @@
           </div>
         </div>
 
-        <!-- Schritt 7: Kontakt + Absenden -->
-        <div class="wizard-step" data-step="7">
+        <!-- Schritt 8: Kontakt + Absenden -->
+        <div class="wizard-step" data-step="8">
           <h2 class="wizard-step-title">Ihre Kontaktdaten</h2>
           <div class="form-row">
             <div class="field"><label for="ek-vorname">Vorname *</label><input type="text" id="ek-vorname" required></div>
