@@ -1,0 +1,9 @@
+name = "neuverdrahtet-ki-check"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Secret (ANTHROPIC_API_KEY) wird NICHT hier eingetragen, sondern per
+# "wrangler secret put" bzw. im Cloudflare-Dashboard gesetzt.
+
+[vars]
+ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
