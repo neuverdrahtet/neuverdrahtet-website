@@ -319,6 +319,73 @@
               <button type="button" data-value="zwei">Zwei Wallboxen</button>
             </div>
           </div>
+          <div id="ek-wallbox-block">
+            <div class="calc-field">
+              <label>Stellplatz</label>
+              <div class="calc-toggle" data-field="stellplatz">
+                <button type="button" data-value="garage" class="is-active">Garage</button>
+                <button type="button" data-value="carport">Carport</button>
+                <button type="button" data-value="aussen">Außenstellplatz</button>
+                <button type="button" data-value="tiefgarage">Tiefgarage</button>
+                <button type="button" data-value="mfh">Mehrfamilienhaus</button>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label for="ek-wallbox-entfernung">Entfernung zum Zählerschrank</label>
+              <div class="calc-slider">
+                <input type="range" id="ek-wallbox-entfernung" min="2" max="50" step="1" value="10">
+                <span class="val" id="ek-wallbox-entfernung-val">10 m</span>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label>Ladeleistung</label>
+              <div class="calc-toggle" data-field="wallboxLeistung">
+                <button type="button" data-value="11kw" class="is-active">11 kW</button>
+                <button type="button" data-value="22kw">22 kW</button>
+                <button type="button" data-value="offen">Noch offen</button>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label>Tiefbauarbeiten nötig? <span class="calc-floors-hint">(Kabelweg im Freien/unter Pflaster)</span></label>
+              <div class="calc-toggle" data-field="wallboxErdarbeiten">
+                <button type="button" data-value="unbekannt" class="is-active">Weiß nicht</button>
+                <button type="button" data-value="ja">Ja</button>
+                <button type="button" data-value="nein">Nein</button>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label>Leitung vom Zählerschrank bereits vorhanden?</label>
+              <div class="calc-toggle" data-field="wallboxLeitungVorhanden">
+                <button type="button" data-value="unbekannt" class="is-active">Weiß nicht</button>
+                <button type="button" data-value="ja">Ja</button>
+                <button type="button" data-value="nein">Nein</button>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label>Zusätzliche Anforderungen</label>
+              <div class="calc-checkgrid" data-checkgroup="wallboxAnforderungen">
+                <label><input type="checkbox" value="lastmanagement"> Lastmanagement gewünscht</label>
+                <label><input type="checkbox" value="pv_ueberschuss"> PV-Überschussladen gewünscht</label>
+                <label><input type="checkbox" value="zugriffskontrolle"> Zugriffskontrolle (RFID/App)</label>
+                <label><input type="checkbox" value="mid_zaehler"> MID-Zähler nötig (z.B. Vermietung/Gewerbe)</label>
+                <label><input type="checkbox" value="energiemanagement"> Energiemanagement-Integration</label>
+              </div>
+            </div>
+            <div class="calc-field">
+              <label>Erdungssystem <span class="calc-floors-hint">(falls bekannt)</span></label>
+              <div class="calc-toggle" data-field="erdungssystem">
+                <button type="button" data-value="unbekannt" class="is-active">Weiß nicht</button>
+                <button type="button" data-value="tn-c-s">TN-C-S</button>
+                <button type="button" data-value="tn-s">TN-S</button>
+                <button type="button" data-value="tt">TT</button>
+              </div>
+              <p class="calc-service-note">Relevant für einen eventuell nötigen PEN-Ausfallschutz — wird vor Ort final geprüft.</p>
+            </div>
+            <div class="calc-field">
+              <label for="ek-wallbox-wunsch">Bevorzugtes Wallbox-Modell (optional)</label>
+              <input type="text" id="ek-wallbox-wunsch" placeholder="z.B. Tesla Wall Connector, ABL eMH1 ...">
+            </div>
+          </div>
         </div>
 
         <!-- Schritt 6: Netzwerk, Sicherheit & Außen -->

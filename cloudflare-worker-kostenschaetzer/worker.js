@@ -284,6 +284,17 @@ function buildElektroKomplettBeschreibung(payload) {
     `Keller: ${a.keller ?? '–'} · Garage/Carport: ${a.garage ?? '–'}`,
     `PLZ/Ort: ${[payload.kontakt?.plz, payload.kontakt?.ort].filter(Boolean).join(' ') || '–'}`,
   ];
+  if (a.wallbox && a.wallbox !== 'keine') {
+    const anf = Array.isArray(a.wallboxAnforderungen) ? a.wallboxAnforderungen.join(', ') : '';
+    zeilen.push(
+      '',
+      'Wallbox-Details:',
+      `- Stellplatz: ${a.stellplatz || '–'} · Entfernung Zählerschrank: ${a.wallboxEntfernungM ?? '–'} m · Ladeleistung: ${a.wallboxLeistung || '–'}`,
+      `- Tiefbauarbeiten nötig: ${a.wallboxErdarbeiten || '–'} · Leitung vorhanden: ${a.wallboxLeitungVorhanden || '–'} · Erdungssystem: ${a.erdungssystem || '–'}`,
+      `- Zusatzanforderungen: ${anf || 'keine'}`,
+    );
+    if (a.wallboxWunschmodell) zeilen.push(`- Wunschmodell: ${a.wallboxWunschmodell}`);
+  }
   if (payload.kontakt?.nachricht) zeilen.push('', `Nachricht: ${payload.kontakt.nachricht}`);
   return zeilen.join('\n');
 }

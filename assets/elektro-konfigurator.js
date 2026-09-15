@@ -60,6 +60,9 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     pvGewuenscht: 'ja', dachflaeche: 45, dachausrichtung: 'sued', dachzugang: 'gut', speicher: 'keine', notstrom: 'nein',
     waermepumpe: 'nein', klima: 'nein',
     wallbox: 'keine',
+    stellplatz: 'garage', wallboxEntfernungM: 10, wallboxLeistung: '11kw',
+    wallboxErdarbeiten: 'unbekannt', wallboxLeitungVorhanden: 'unbekannt',
+    wallboxAnforderungen: [], erdungssystem: 'unbekannt',
     netzwerk: 'basis', tuerkommunikation: 'keine', sicherheit: [], aussen: [],
   };
 
@@ -124,6 +127,7 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
         btn.classList.add('is-active');
         state[field] = btn.dataset.value;
         if (field === 'pvGewuenscht') updatePvBlockVisibility();
+        if (field === 'wallbox') updateWallboxBlockVisibility();
         updatePreis();
       });
     });
@@ -232,6 +236,12 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   }
   updatePvBlockVisibility();
 
+  function updateWallboxBlockVisibility() {
+    document.getElementById('ek-wallbox-block').hidden = state.wallbox === 'keine' || state.wallbox === 'vorbereitung';
+  }
+  updateWallboxBlockVisibility();
+  wireSlider('ek-wallbox-entfernung', 'ek-wallbox-entfernung-val', 'wallboxEntfernungM', 'm');
+
   /* ---------- Preistabellen (siehe Kopfkommentar: aus den Leistungsseiten übernommen) ---------- */
   const AUSSTATTUNG_PRO_M2 = { standard: { low: 70, high: 100 }, smart: { low: 100, high: 140 }, komplett: { low: 140, high: 200 } };
   const AUSSTATTUNG_LABEL = { standard: 'Standard', smart: 'Smart', komplett: 'Komplett' };
@@ -258,7 +268,17 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   };
 
   const WALLBOX_VORBEREITUNG = { low: 400, high: 800 };
-  const WALLBOX_TIER = { einzel: { low: 1200, high: 2200 }, last: { low: 1800, high: 2800 }, pv: { low: 2500, high: 4000 } };
+  const WALLBOX_EINZEL = { low: 1200, high: 2200 };
+  const WALLBOX_ADDON = {
+    lastmanagement: { low: 500, high: 800, label: 'Lastmanagement' },
+    pv_ueberschuss: { low: 500, high: 900, label: 'PV-Überschussladen' },
+    zugriffskontrolle: { low: 150, high: 300, label: 'Zugriffskontrolle (RFID/App)' },
+    mid_zaehler: { low: 150, high: 300, label: 'MID-Zähler' },
+    energiemanagement: { low: 400, high: 800, label: 'Energiemanagement-Integration' },
+  };
+  const WALLBOX_ERDARBEITEN = { low: 400, high: 900 };
+  const WALLBOX_ENTFERNUNG_FREI_M = 10; // im Grundpreis enthalten
+  const WALLBOX_ENTFERNUNG_PRO_M = { low: 15, high: 25 };
 
   const NETZWERK_TIER = {
     basis: { low: 300, high: 600, label: 'Netzwerk / Datenverkabelung – Basis' },
@@ -384,12 +404,27 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     // Wallbox
     if (state.wallbox === 'vorbereitung') {
       positionen.push({ label: 'Wallbox – Vorbereitung (Leerrohr)', low: WALLBOX_VORBEREITUNG.low, high: WALLBOX_VORBEREITUNG.high });
-    } else if (state.wallbox === 'eine') {
-      const tier = WALLBOX_TIER[state.pvGewuenscht === 'ja' ? 'pv' : 'einzel'];
-      positionen.push({ label: 'Wallbox (1 Stück)', low: tier.low, high: tier.high });
-    } else if (state.wallbox === 'zwei') {
-      const tier = WALLBOX_TIER[state.pvGewuenscht === 'ja' ? 'pv' : 'last'];
-      positionen.push({ label: 'Wallbox (2 Stück, mit Lastmanagement)', low: tier.low * 2, high: tier.high * 2 });
+    } else if (state.wallbox === 'eine' || state.wallbox === 'zwei') {
+      const anzahl = state.wallbox === 'zwei' ? 2 : 1;
+      let low = WALLBOX_EINZEL.low * anzahl;
+      let high = WALLBOX_EINZEL.high * anzahl;
+      // Bei zwei Wallboxen an einem Hausanschluss ist Lastmanagement in der
+      // Praxis so gut wie immer vorgeschrieben (Anschlussleistung) - daher
+      // hier unabhängig vom Häkchen mit eingerechnet.
+      const anforderungen = new Set(state.wallboxAnforderungen);
+      if (anzahl === 2) anforderungen.add('lastmanagement');
+      if (state.pvGewuenscht === 'ja') anforderungen.add('pv_ueberschuss');
+      anforderungen.forEach((key) => {
+        const addon = WALLBOX_ADDON[key];
+        if (addon) { low += addon.low; high += addon.high; }
+      });
+      if (state.wallboxErdarbeiten === 'ja') { low += WALLBOX_ERDARBEITEN.low; high += WALLBOX_ERDARBEITEN.high; }
+      const mehrDistanz = Math.max(0, state.wallboxEntfernungM - WALLBOX_ENTFERNUNG_FREI_M);
+      if (mehrDistanz > 0) {
+        low += mehrDistanz * WALLBOX_ENTFERNUNG_PRO_M.low;
+        high += mehrDistanz * WALLBOX_ENTFERNUNG_PRO_M.high;
+      }
+      positionen.push({ label: `Wallbox (${anzahl} Stück)`, low, high });
     }
 
     // Netzwerk / Datenverkabelung
@@ -461,14 +496,21 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     if (state.pvGewuenscht === 'ja') annahmen.push(`Photovoltaik (ca. ${geschaetzteKwp()} kWp)${state.speicher !== 'keine' ? ' mit Speicher' : ''}`);
     if (state.waermepumpe !== 'nein') annahmen.push('Wärmepumpen-Anschluss');
     if (state.klima !== 'nein') annahmen.push('Klimaanlagen-Anschluss');
-    if (state.wallbox !== 'keine') annahmen.push(`Wallbox: ${state.wallbox === 'vorbereitung' ? 'Vorbereitung' : (state.wallbox === 'eine' ? '1 Stück' : '2 Stück')}`);
+    if (state.wallbox === 'vorbereitung') {
+      annahmen.push('Wallbox: Vorbereitung (Leerrohr)');
+    } else if (state.wallbox !== 'keine') {
+      const anzahlWb = state.wallbox === 'eine' ? '1 Stück' : '2 Stück';
+      const zusatz = state.wallboxAnforderungen.length ? ` (${state.wallboxAnforderungen.map((k) => WALLBOX_ADDON[k]?.label).filter(Boolean).join(', ')})` : '';
+      annahmen.push(`Wallbox: ${anzahlWb}${zusatz} · ${state.wallboxEntfernungM} m zum Zählerschrank`);
+    }
     if (state.garage !== 'keine') annahmen.push('Garage/Carport-Anschluss');
     document.getElementById('ekAssumptions').innerHTML = annahmen.map((a) => `<li>${a}</li>`).join('');
 
     document.getElementById('ekOffenDach').hidden = state.pvGewuenscht !== 'ja';
 
     // Unsicherheits-Badge/Hinweistext je nach offenen Punkten
-    const unsicher = state.projektart !== 'neubau' || (state.pvGewuenscht === 'ja' && state.dachzugang !== 'gut');
+    const wallboxUnklar = state.wallbox !== 'keine' && (state.wallboxErdarbeiten === 'unbekannt' || state.wallboxLeitungVorhanden === 'unbekannt');
+    const unsicher = state.projektart !== 'neubau' || (state.pvGewuenscht === 'ja' && state.dachzugang !== 'gut') || wallboxUnklar;
     const noteEl = document.getElementById('ekAmpelNote');
     noteEl.textContent = unsicher
       ? 'Grober Richtwert mit größerer Spanne, da einige Angaben (z.B. Bestandsinstallation oder Dachzugang) erst vor Ort final geklärt werden können.'
@@ -493,7 +535,11 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     const { grandLow, grandHigh, positionen } = updatePreis();
     const payload = {
       modul: 'elektro-komplett',
-      antworten: { ...state, geschaetzteKwp: state.pvGewuenscht === 'ja' ? geschaetzteKwp() : null },
+      antworten: {
+        ...state,
+        geschaetzteKwp: state.pvGewuenscht === 'ja' ? geschaetzteKwp() : null,
+        wallboxWunschmodell: document.getElementById('ek-wallbox-wunsch').value.trim(),
+      },
       positionen: positionen.map((p) => ({ label: p.label, von: Math.round(p.low), bis: Math.round(p.high) })),
       kostenspanne: { von: Math.round(grandLow), bis: Math.round(grandHigh) },
       kontakt: {
