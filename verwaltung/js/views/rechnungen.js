@@ -18,6 +18,7 @@ import * as journal from '../journal.js';
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
 const RECHNUNGSTYP_LABEL = { rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung' };
+const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const ZAHLUNGSARTEN = [
   { id: 'ueberweisung', titel: 'Überweisung' },
   { id: 'bar', titel: 'Barzahlung' },
@@ -185,6 +186,7 @@ export async function render(container, route) {
   const kpiUeberfaellig = kpiOffen.filter((r) => r.faelligAm && r.faelligAm < today);
   const kpiBezahlt = nichtStorniert.filter((r) => r.status === 'bezahlt');
   const summe = (list) => list.reduce((s, r) => s + (r.brutto || 0), 0);
+  const jahresOptionen = [...new Set(rechnungen.map((r) => (r.datum || '').slice(0, 4)).filter(Boolean))].sort((a, b) => b.localeCompare(a));
 
   container.innerHTML = `
     <div class="view-header">
@@ -223,6 +225,14 @@ export async function render(container, route) {
         <option value="ueberfaellig">Überfällig</option>
         ${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}
       </select>
+      <select id="jahr-filter">
+        <option value="">Alle Jahre</option>
+        ${jahresOptionen.map((j) => `<option value="${j}">${j}</option>`).join('')}
+      </select>
+      <select id="monat-filter">
+        <option value="">Alle Monate</option>
+        ${MONATE.map((m, i) => `<option value="${String(i + 1).padStart(2, '0')}">${m}</option>`).join('')}
+      </select>
     </div>
     <div id="table-host"></div>
   `;
@@ -231,11 +241,15 @@ export async function render(container, route) {
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();
     const status = container.querySelector('#status-filter').value;
+    const jahr = container.querySelector('#jahr-filter').value;
+    const monat = container.querySelector('#monat-filter').value;
     filtered = rechnungen.filter((r) => {
       const istOffen = r.status === 'offen' || r.status === 'teilbezahlt';
       if (status === 'offen-alle' && !istOffen) return false;
       else if (status === 'ueberfaellig' && !(istOffen && r.faelligAm && r.faelligAm < today)) return false;
       else if (status && status !== 'offen-alle' && status !== 'ueberfaellig' && r.status !== status) return false;
+      if (jahr && (r.datum || '').slice(0, 4) !== jahr) return false;
+      if (monat && (r.datum || '').slice(5, 7) !== monat) return false;
       if (!q) return true;
       return [r.nummer, kundenById[r.kundeId]?.firma].filter(Boolean).join(' ').toLowerCase().includes(q);
     });
@@ -403,6 +417,8 @@ export async function render(container, route) {
 
   container.querySelector('#search').addEventListener('input', applyFilter);
   container.querySelector('#status-filter').addEventListener('change', () => { markActiveKpi(); applyFilter(); });
+  container.querySelector('#jahr-filter').addEventListener('change', applyFilter);
+  container.querySelector('#monat-filter').addEventListener('change', applyFilter);
   container.querySelector('#kpi-offen').addEventListener('click', () => { container.querySelector('#status-filter').value = 'offen-alle'; markActiveKpi(); applyFilter(); });
   container.querySelector('#kpi-ueberfaellig').addEventListener('click', () => { container.querySelector('#status-filter').value = 'ueberfaellig'; markActiveKpi(); applyFilter(); });
   container.querySelector('#kpi-bezahlt').addEventListener('click', () => { container.querySelector('#status-filter').value = 'bezahlt'; markActiveKpi(); applyFilter(); });
