@@ -13,6 +13,7 @@ import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
 import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 import * as google from '../google.js';
+import { openAngebotsrechner } from '../angebotsrechner.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -559,6 +560,7 @@ export async function render(container, route) {
           </div>
           <div class="divider"></div>
           <div class="flex-row" style="margin-bottom:10px">
+            <button type="button" class="btn btn-sm" id="btn-angebotsrechner" title="Projekt strukturiert erfassen (Räume, Beleuchtung, PV, Wallbox, Netzwerk ...) und als Positionen übernehmen">🧮 Angebotsrechner</button>
             <button type="button" class="btn btn-sm" id="btn-ki-erstellen" title="Erstellt NEUE Positionen aus frei diktierten Stichpunkten">✨ Neue Positionen aus Stichpunkten (KI)</button>
             <button type="button" class="btn btn-sm" id="btn-ki-preise" title="Füllt fehlende Preise bei bereits VORHANDENEN Positionen (z.B. aus GAEB-Import)">🔍 Fehlende Preise recherchieren (KI)</button>
           </div>
@@ -645,6 +647,19 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         for (const p of editor.getPositionen()) p.steuersatz = 0;
         editor.refresh();
       }
+    });
+
+    body.querySelector('#btn-angebotsrechner').addEventListener('click', () => {
+      openAngebotsrechner({
+        defaultSteuersatz: settings.standardSteuersatz,
+        onUebernehmen: (neuePositionen) => {
+          const alle = [...editor.getPositionen(), ...neuePositionen];
+          editor = createPositionsEditor({
+            host: body.querySelector('#pos-host'), katalog, positionen: alle,
+            defaultSteuersatz: settings.standardSteuersatz, vorlagen,
+          });
+        },
+      });
     });
 
     body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
