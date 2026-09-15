@@ -505,6 +505,9 @@ export async function render(container) {
   function calcBrutto(netto, steuersatz) {
     return Math.round(Number(netto) * (1 + Number(steuersatz) / 100) * 100) / 100;
   }
+  function calcNetto(brutto, steuersatz) {
+    return Math.round((Number(brutto) / (1 + Number(steuersatz) / 100)) * 100) / 100;
+  }
 
   function openForm(a, { prefill } = {}) {
     const isEdit = !!a;
@@ -535,9 +538,18 @@ export async function render(container) {
                 <option value="lastschrift" ${data.bezahltMit === 'lastschrift' ? 'selected' : ''}>Lastschrift</option>
               </select>
             </div>
-            <div class="field"><label>Betrag netto (€)</label><input type="number" step="0.01" min="0" name="betragNetto" value="${data.betragNetto}"></div>
+            <div class="field">
+              <label>Betrag (€)</label>
+              <input type="number" step="0.01" min="0" name="betrag" id="ausgabe-betrag" value="${data.betragNetto}">
+              <div class="toggle-group" id="ausgabe-betrag-typ" style="margin-top:6px">
+                <button type="button" data-val="netto" class="active">Netto</button>
+                <button type="button" data-val="brutto">Brutto (inkl. MwSt.)</button>
+              </div>
+              <input type="hidden" name="betragTyp" id="ausgabe-betrag-typ-val" value="netto">
+              <span class="hint mb-0" id="ausgabe-betrag-hint"></span>
+            </div>
             <div class="field"><label>USt.-Satz (%)</label>
-              <select name="steuersatz">
+              <select name="steuersatz" id="ausgabe-steuersatz">
                 ${USTSAETZE.map((s) => `<option value="${s.wert}" ${Number(data.steuersatz) === s.wert ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
               </select>
             </div>
@@ -600,6 +612,40 @@ export async function render(container) {
         render(container);
       });
     }
+
+    // Betrag netto oder brutto (inkl. MwSt.) eingeben - viele Belege/Kassenzettel
+    // zeigen nur den Bruttobetrag prominent an, der Nutzer müsste sonst immer
+    // erst selbst den Nettobetrag zurückrechnen. Die Umschaltung ändert nur,
+    // wie die eingegebene Zahl interpretiert wird - gespeichert wird wie
+    // bisher immer betragNetto + betragBrutto (siehe Submit-Handler unten).
+    const betragInput = body.querySelector('#ausgabe-betrag');
+    const betragTypGroup = body.querySelector('#ausgabe-betrag-typ');
+    const betragTypVal = body.querySelector('#ausgabe-betrag-typ-val');
+    const betragHint = body.querySelector('#ausgabe-betrag-hint');
+    const steuersatzSelect = body.querySelector('#ausgabe-steuersatz');
+    function updateBetragHint() {
+      const betrag = Number(betragInput.value) || 0;
+      const steuersatz = Number(steuersatzSelect.value) || 0;
+      if (betrag <= 0) { betragHint.textContent = ''; return; }
+      if (betragTypVal.value === 'brutto') {
+        const netto = calcNetto(betrag, steuersatz);
+        betragHint.textContent = `Netto: ${formatCurrency(netto)} · USt.: ${formatCurrency(betrag - netto)}`;
+      } else {
+        const brutto = calcBrutto(betrag, steuersatz);
+        betragHint.textContent = `Brutto: ${formatCurrency(brutto)} · USt.: ${formatCurrency(brutto - betrag)}`;
+      }
+    }
+    betragTypGroup.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        betragTypGroup.querySelectorAll('button').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        betragTypVal.value = btn.dataset.val;
+        updateBetragHint();
+      });
+    });
+    betragInput.addEventListener('input', updateBetragHint);
+    steuersatzSelect.addEventListener('change', updateBetragHint);
+    updateBetragHint();
 
     body.querySelector('#ausgabe-projekt').addEventListener('change', (e) => {
       body.querySelector('#ausgabe-kalkkategorie').disabled = !e.target.value;
@@ -669,9 +715,15 @@ export async function render(container) {
       updated.beschreibung = (fd.get('beschreibung') || '').toString().trim();
       updated.lieferant = (fd.get('lieferant') || '').toString().trim();
       updated.bezahltMit = fd.get('bezahltMit') || 'überweisung';
-      updated.betragNetto = Number(fd.get('betragNetto')) || 0;
+      const betragEingegeben = Number(fd.get('betrag')) || 0;
       updated.steuersatz = Number(fd.get('steuersatz')) || 0;
-      updated.betragBrutto = calcBrutto(updated.betragNetto, updated.steuersatz);
+      if (fd.get('betragTyp') === 'brutto') {
+        updated.betragBrutto = betragEingegeben;
+        updated.betragNetto = calcNetto(betragEingegeben, updated.steuersatz);
+      } else {
+        updated.betragNetto = betragEingegeben;
+        updated.betragBrutto = calcBrutto(betragEingegeben, updated.steuersatz);
+      }
       if (newBelegBlob) {
         updated.beleg = FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${data.id}`, newBelegBlob) : newBelegBlob;
       } else {
