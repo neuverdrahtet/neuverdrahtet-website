@@ -16,7 +16,8 @@
 - [Smart Home](https://neuverdrahtet.com/smart-home.html): Licht-, Heizungs- und Sicherheitssteuerung vernetzt. (inkl. Kosten-Konfigurator)
 - [Photovoltaik](https://neuverdrahtet.com/photovoltaik.html): Elektro-seitiger Anschluss für Ihre PV-Anlage. (inkl. Kosten-Konfigurator)
 - [Wallbox](https://neuverdrahtet.com/wallbox.html): Wallbox-Installation privat und gewerblich. (inkl. Kosten-Konfigurator)
-- [Wallbox-Kostenschätzer](https://neuverdrahtet.com/wallbox-kostenschaetzer.html): Ausführlicher interaktiver Kostenschätzer für die Wallbox-Installation mit direkter Anfrage.
+- [Elektro-Kostenrechner](https://neuverdrahtet.com/elektro-kostenrechner.html): Umfangreicher interaktiver Konfigurator für alle Elektro-Gewerke (Beleuchtung, Energie & Technik, E-Mobilität, Netzwerk/Sicherheit/Außen) mit direkter Anfrage.
+- [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check-unterverteilung.html): Kostenloser KI-gestützter Foto-Check der Unterverteilung mit unverbindlicher Ersteinschätzung.
 - [Wärmepumpe](https://neuverdrahtet.com/waermepumpe.html): Elektroanschluss für Ihre Wärmepumpe. (inkl. Kosten-Konfigurator)
 - [E-Check](https://neuverdrahtet.com/e-check.html): Prüfung ortsveränderlicher Geräte nach VDE 0701-0702. (inkl. Kosten-Konfigurator)
 - [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
