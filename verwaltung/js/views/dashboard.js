@@ -156,10 +156,14 @@ export async function render(container, _route, { autoSync = true } = {}) {
     .filter((a) => a.status === 'versendet' && a.datum && (a.nachfassGesendetAm || a.datum) <= nachfassGrenze)
     .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
 
-  // --- Cashflow-Score ---
-  const imMahnverfahren = offen.filter((r) => mahnungen.some((m) => m.rechnungId === r.id));
-  const imZahlungsziel = offen.filter((r) => !imMahnverfahren.includes(r) && (!r.faelligAm || r.faelligAm >= today));
-  const alleAktuell = rechnungen.filter((r) => r.status === 'bezahlt');
+  // --- Cashflow-Score (immer nur aktuelles Jahr, unabhängig vom wählbaren
+  // Zahlen-Board-Jahr weiter unten - Vorjahres-Rechnungen sollen die
+  // laufende Einschätzung nicht verwässern) ---
+  const cashflowJahr = String(new Date().getFullYear());
+  const offenDiesesJahr = offen.filter((r) => (r.datum || '').slice(0, 4) === cashflowJahr);
+  const imMahnverfahren = offenDiesesJahr.filter((r) => mahnungen.some((m) => m.rechnungId === r.id));
+  const imZahlungsziel = offenDiesesJahr.filter((r) => !imMahnverfahren.includes(r) && (!r.faelligAm || r.faelligAm >= today));
+  const alleAktuell = rechnungen.filter((r) => r.status === 'bezahlt' && (r.bezahltAm || r.datum || '').slice(0, 4) === cashflowJahr);
   const scoreBase = imZahlungsziel.length + imMahnverfahren.length;
   const score = scoreBase === 0 ? 100 : Math.round((imZahlungsziel.length / scoreBase) * 100);
   const scoreColor = score >= 80 ? 'var(--success)' : score >= 50 ? 'var(--warn)' : 'var(--danger)';
@@ -263,7 +267,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
         <div class="card">
           <div class="dash-score-row">
             <div>
-              <div class="text-mute" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">Zahlungseingang</div>
+              <div class="text-mute" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">Zahlungseingang (${cashflowJahr})</div>
               <h2 style="margin:2px 0 2px">Cashflow: ${scoreLabel}</h2>
               <p class="text-mute" style="margin:0;font-size:12.5px">Anteil Rechnungen im Zahlungsziel ohne Mahnverfahren</p>
             </div>
