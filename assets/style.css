@@ -908,6 +908,8 @@ section{ padding:88px 0; }
   min-height:420px;
 }
 .hero-video video{ width:100%; height:auto; display:block; }
+.hero-video.has-image{ min-height:0; }
+.hero-video img{ width:100%; height:auto; display:block; }
 
 .photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 @media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
