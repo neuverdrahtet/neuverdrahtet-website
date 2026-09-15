@@ -99,6 +99,17 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   });
   btnBack.addEventListener('click', () => { if (current > 1) showStep(current - 1); });
 
+  /** Erlaubt Einzel-Leistungsseiten (z.B. wallbox.html), direkt beim
+   *  passenden Schritt zu starten statt immer bei Schritt 1, per
+   *  ?schritt=N in der verlinkten URL (siehe href in den jeweiligen
+   *  "Jetzt kostenlos kalkulieren"-CTAs). "Zurück" bleibt trotzdem
+   *  nutzbar, um vorherige Schritte alle mit sinnvollen Standardwerten
+   *  zu sehen/anzupassen. */
+  function initialStepFromUrl() {
+    const n = Number(new URLSearchParams(location.search).get('schritt'));
+    return Number.isInteger(n) && n >= 1 && n <= totalSteps ? n : 1;
+  }
+
   function toastHinweis(msg) {
     const status = document.getElementById('ekFormStatus');
     if (status) { status.textContent = msg; status.className = 'form-status err'; }
@@ -524,5 +535,5 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
     }
   });
 
-  showStep(1);
+  showStep(initialStepFromUrl());
 })();
