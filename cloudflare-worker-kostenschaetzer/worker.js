@@ -234,6 +234,14 @@ function buildBeschreibung(payload) {
     `Gewünschter Zeitraum: ${LABELS.zeitraum[a.zeitraum] || a.zeitraum || '–'}`,
     `PLZ/Ort: ${[a.plz, a.ort].filter(Boolean).join(' ') || '–'}`,
   ];
+  // Zusatzfelder aus dem eigenständigen Wallbox-Kostenschätzer
+  // (wallbox-kostenschaetzer.html) - im älteren, schmaleren Fragebogen
+  // (falls dieser noch irgendwo verlinkt ist) einfach nicht vorhanden und
+  // werden dann übersprungen.
+  if (a.leitungVorhanden) zeilen.push(`Leitung vom Zählerschrank vorhanden: ${LABELS.erdarbeiten[a.leitungVorhanden] || a.leitungVorhanden}`);
+  if (a.erdungssystem && a.erdungssystem !== 'unbekannt') zeilen.push(`Erdungssystem: ${a.erdungssystem}`);
+  if (Array.isArray(a.wallboxAnforderungen) && a.wallboxAnforderungen.length) zeilen.push(`Weitere Anforderungen: ${a.wallboxAnforderungen.join(', ')}`);
+  if (a.wallboxWunschmodell) zeilen.push(`Wunschmodell: ${a.wallboxWunschmodell}`);
   if (payload.kontakt?.nachricht) zeilen.push('', `Nachricht: ${payload.kontakt.nachricht}`);
   return zeilen.join('\n');
 }
