@@ -911,6 +911,34 @@ section{ padding:88px 0; }
 .hero-video.has-image{ min-height:0; }
 .hero-video img{ width:100%; height:auto; display:block; }
 
+.hero.hero-full .wrap{ display:block; }
+.hero-banner-full{
+  border-radius:var(--radius);
+  overflow:hidden;
+  box-shadow:0 30px 60px -20px rgba(0,0,0,0.55);
+  margin-bottom:44px;
+}
+.hero-banner-full img{ width:100%; height:auto; display:block; }
+.hero-full-content{ max-width:760px; margin:0 auto; text-align:center; }
+.hero-full-content .hero-lede{ margin-left:auto; margin-right:auto; }
+.hero-full-content .hero-actions{ justify-content:center; }
+.hero-full-content .pill-row{ justify-content:center; }
+@media (max-width:900px){
+  /* Auf Mobile stapelt der Banner sonst über der Überschrift - die landet
+     dadurch genau in der Höhe des schwebenden Kontakt-Icon-Stacks
+     (.contact-fab, position:fixed rechts) und wird davon verdeckt. Text
+     daher wieder wie ursprünglich zuerst, Bild danach. */
+  .hero.hero-full .wrap{ display:flex; flex-direction:column; }
+  .hero-banner-full{ order:2; }
+  .hero-full-content{ order:1; }
+}
+@media (max-width:640px){
+  .hero-full-content{ text-align:left; }
+  .hero-full-content .hero-lede{ margin-left:0; margin-right:0; }
+  .hero-full-content .hero-actions{ justify-content:flex-start; }
+  .hero-full-content .pill-row{ justify-content:flex-start; }
+}
+
 .photo-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
 @media (max-width:780px){ .photo-grid{ grid-template-columns:1fr; } }
 .photo-grid figure{ margin:0; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--surface); }
