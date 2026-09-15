@@ -112,8 +112,17 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
   // Modal (oder mit dem Finger knapp daneben) die Hintergrundseite sichtbar
   // "durchscheint" (gemeldeter Bug: Formular + darunterliegende Liste
   // gleichzeitig lesbar). Stack statt einfachem Flag, da Modals
-  // verschachtelt geöffnet werden (z.B. der Kalkulator im Katalog-Formular).
+  // verschachtelt geöffnet werden (z.B. der Kalkulator im Katalog-Formular,
+  // oder der Angebotsrechner im Angebot-Formular).
   if (openModals.length === 0) document.body.classList.add('modal-open');
+
+  // Zwei gestapelte position:fixed-Backdrops mit jeweils eigenem Scroll
+  // (overflow-y:auto) können sich sonst beim Scrollen im obersten Modal
+  // sichtbar überlagern/durchmischen (derselbe Effekt wie oben, hier
+  // zwischen zwei Modals statt Modal+Basisseite) - das vorherige Backdrop
+  // deshalb ausblenden, solange dieses hier offen ist.
+  const previous = openModals[openModals.length - 1];
+  if (previous) previous.backdrop.style.display = 'none';
 
   let closed = false;
   function close() {
@@ -121,11 +130,12 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
     closed = true;
     backdrop.remove();
     document.removeEventListener('keydown', onKey);
-    openModals = openModals.filter((c) => c !== close);
+    openModals = openModals.filter((m) => m.close !== close);
+    if (previous) previous.backdrop.style.display = '';
     if (openModals.length === 0) document.body.classList.remove('modal-open');
     if (onClose) onClose();
   }
-  openModals.push(close);
+  openModals.push({ close, backdrop });
   function onKey(e) {
     if (e.key === 'Escape') close();
   }
@@ -144,7 +154,7 @@ export function openModal({ title, bodyHtml, wide = false, onClose } = {}) {
 // nächsten Ansicht hängen bleibt, wenn man während der Bearbeitung z.B.
 // über die Seitenleiste wegnavigiert.
 export function closeAllModals() {
-  [...openModals].forEach((close) => close());
+  [...openModals].forEach((m) => m.close());
 }
 
 export function confirmDelete(msg = 'Wirklich löschen?') {
