@@ -42,7 +42,10 @@ const AUSSTATTUNG_PRO_M2 = { standard: { low: 70, high: 100 }, smart: { low: 100
 const GARAGE_ADDON = { low: 250, high: 500 };
 const POOL_ADDON = { low: 300, high: 700 };
 const SAUNA_ADDON = { low: 300, high: 600 };
-const ZAEHLERSCHRANK = { low: 1200, high: 2200 };
+// Preis an marktübliche Zählerschrank-Erneuerungskosten 2026 angepasst
+// (vorher 1.200-2.200 € - lag unter dem üblichen Marktrahmen für eine
+// Standard-Erneuerung im EFH), synchron mit assets/elektro-konfigurator.js.
+const ZAEHLERSCHRANK = { low: 1800, high: 3500 };
 const BELEUCHTUNG_TIER = {
   klassisch: { low: 45, high: 70, label: 'Beleuchtung – klassische Deckenanschlüsse' },
   zusatz: { low: 70, high: 100, label: 'Beleuchtung – Decke + Zusatzleuchten' },

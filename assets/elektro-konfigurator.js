@@ -363,8 +363,11 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
       high: raum.high * geschossFaktor() * bestandZuschlag,
     });
 
-    // Zählerschrank / Hauptverteilung – Grunderneuerung ist bei jedem Projekt realistisch einzuplanen
-    positionen.push({ label: 'Zählerschrank / Hauptverteilung erneuern', low: 1200, high: 2200 });
+    // Zählerschrank / Hauptverteilung – Grunderneuerung ist bei jedem Projekt realistisch einzuplanen.
+    // Preis an marktübliche Zählerschrank-Erneuerungskosten 2026 angepasst
+    // (vorher 1.200-2.200 € - lag unter dem üblichen Marktrahmen für eine
+    // Standard-Erneuerung im EFH).
+    positionen.push({ label: 'Zählerschrank / Hauptverteilung erneuern', low: 1800, high: 3500 });
 
     // Garage / Carport
     if (state.garage !== 'keine') {
