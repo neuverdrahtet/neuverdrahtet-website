@@ -55,6 +55,37 @@ export async function extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersa
   return res.json();
 }
 
+/**
+ * Baut per KI ein Formular (Name/Beschreibung/Felder) für den freien
+ * Formular-Baukasten (verwaltung/js/views/formulare.js) nach - entweder aus
+ * einer hochgeladenen Vorlage (PDF/Foto eines bestehenden Formulars) oder aus
+ * frei diktierten Stichpunkten, was erfasst werden soll. Mindestens eines der
+ * beiden Felder muss gesetzt sein.
+ */
+export async function generateFormularFelder({ stichpunkte, fileDataUrl }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const res = await fetch(settings.aiWorkerUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-App-Secret': settings.aiAppSecret || '',
+    },
+    body: JSON.stringify({ action: 'formular-generieren', stichpunkte, fileDataUrl }),
+  });
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 /** Ordnet eine Charge von E-Mails per KI in Kategorien ein (kundenanfrage/rechnung-lieferant/werbung/sonstiges). */
 export async function classifyEmails({ emails }) {
   const settings = await getSettings();

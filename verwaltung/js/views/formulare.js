@@ -2,6 +2,7 @@ import { getAll, get, put, remove } from '../db.js';
 import { uid, escapeHtml, toast, formatDateTime } from '../utils.js';
 import { getSession } from '../auth.js';
 import { openModal, confirmDelete } from '../ui.js';
+import { generateFormularFelder } from '../ai.js';
 
 // Freier Formular-Generator: für alles, was NICHT in den strukturierten
 // Berichte-Baukasten (vorlagen.js, PDF-Bericht an einem Projekt) passt -
@@ -47,7 +48,10 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
           <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung" rows="2">${escapeHtml(data.beschreibung || '')}</textarea></div>
           <label class="field-checkbox col-span-2"><input type="checkbox" name="aktiv" ${data.aktiv !== false ? 'checked' : ''}> Aktiv (für alle sichtbar, sonst nur für Admin/Büro)</label>
         </div>
-        <h3 style="margin-top:16px">Felder</h3>
+        <div class="flex-row" style="justify-content:space-between;align-items:center;margin-top:16px">
+          <h3 style="margin:0">Felder</h3>
+          <button type="button" class="btn btn-sm" id="feld-ki-btn">✨ Mit KI erstellen</button>
+        </div>
         <div id="feld-list" style="margin-bottom:10px"></div>
         <div class="flex-row">
           <select id="feld-add-typ">
@@ -105,6 +109,71 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
     const typ = body.querySelector('#feld-add-typ').value;
     feldState.push({ id: uid(), typ, label: '', pflicht: false, optionen: typ === 'auswahl' ? [] : undefined });
     renderFeldList();
+  });
+
+  function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  body.querySelector('#feld-ki-btn').addEventListener('click', () => {
+    const ki = openModal({
+      title: 'Formular mit KI erstellen',
+      bodyHtml: `
+        <form id="feld-ki-form">
+          <p class="hint">Entweder eine bestehende Vorlage (PDF/Foto einer Checkliste oder eines Formulars) hochladen, Stichpunkte eingeben, was das Formular erfassen soll, oder beides zusammen - die KI schlägt daraus passende Felder vor, die zu den vorhandenen hinzugefügt werden.</p>
+          <div class="field"><label>Vorlage hochladen (optional)</label><input type="file" id="feld-ki-file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"></div>
+          <div class="field"><label>Stichpunkte (optional)</label><textarea id="feld-ki-stichpunkte" rows="4" placeholder="z.B. Name des Prüfers, Datum, Zustand der Anlage (i.O./n.i.O.), Mängel, Unterschrift"></textarea></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="feld-ki-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary" id="feld-ki-submit">Formular generieren</button>
+          </div>
+        </form>
+      `,
+    });
+    ki.body.querySelector('#feld-ki-cancel').addEventListener('click', ki.close);
+    ki.body.querySelector('#feld-ki-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = ki.body.querySelector('#feld-ki-file').files[0];
+      const stichpunkte = ki.body.querySelector('#feld-ki-stichpunkte').value.trim();
+      if (!file && !stichpunkte) {
+        toast('Bitte Stichpunkte eingeben oder eine Vorlage hochladen', 'error');
+        return;
+      }
+      const submitBtn = ki.body.querySelector('#feld-ki-submit');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'KI erstellt Vorschlag ...';
+      try {
+        const fileDataUrl = file ? await fileToDataUrl(file) : undefined;
+        const result = await generateFormularFelder({ stichpunkte, fileDataUrl });
+        if (!result.felder || result.felder.length === 0) {
+          toast('Die KI konnte daraus keine Felder ableiten - bitte Vorlage/Stichpunkte prüfen.', 'error');
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Formular generieren';
+          return;
+        }
+        const nameInput = body.querySelector('input[name="name"]');
+        const beschreibungInput = body.querySelector('textarea[name="beschreibung"]');
+        if (!nameInput.value.trim() && result.name) nameInput.value = result.name;
+        if (!beschreibungInput.value.trim() && result.beschreibung) beschreibungInput.value = result.beschreibung;
+        feldState.push(...result.felder.map((f) => ({
+          id: uid(), typ: FELD_TYP_LABEL[f.typ] ? f.typ : 'text', label: f.label || '', pflicht: !!f.pflicht,
+          optionen: f.typ === 'auswahl' ? (f.optionen || []) : undefined,
+        })));
+        renderFeldList();
+        toast(`${result.felder.length} Feld(er) von der KI übernommen`, 'success');
+        ki.close();
+      } catch (err) {
+        toast(err.message, 'danger');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Formular generieren';
+      }
+    });
   });
 
   if (vorhanden) {

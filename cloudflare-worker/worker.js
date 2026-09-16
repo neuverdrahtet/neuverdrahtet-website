@@ -936,6 +936,110 @@ async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, inp
   return { status: res.status, data };
 }
 
+const FORMULAR_FELD_TYPEN = ['text', 'mehrzeilig', 'zahl', 'datum', 'checkbox', 'auswahl'];
+
+const FORMULAR_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    beschreibung: { type: 'string' },
+    felder: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          typ: { type: 'string', enum: FORMULAR_FELD_TYPEN },
+          label: { type: 'string' },
+          pflicht: { type: 'boolean' },
+          optionen: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['typ', 'label', 'pflicht', 'optionen'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['name', 'beschreibung', 'felder'],
+  additionalProperties: false,
+};
+
+function buildFormularSystemPrompt() {
+  return `Du hilfst einem deutschen Elektro-Handwerksbetrieb (neuverdrahtet), in der internen Verwaltungs-Software ein freies Formular (z.B. eine Sicherheitscheckliste, eine interne Abfrage, ein Freigabe-Formular) mit passenden Feldern zusammenzustellen - entweder aus einer hochgeladenen Vorlage (PDF/Foto eines bestehenden Formulars/Checkliste) oder aus kurzen Stichpunkten eines Mitarbeiters, was das Formular erfassen soll.
+
+Verfügbare Feld-Typen (Wert für "typ", exakt so verwenden):
+- "text": einzeiliges Textfeld (kurze Angaben, Namen, Orte).
+- "mehrzeilig": mehrzeiliges Textfeld (Notizen, Beschreibungen, längere Freitexte).
+- "zahl": numerisches Feld (Mengen, Beträge, Messwerte).
+- "datum": Datumsfeld.
+- "checkbox": einfaches Ja/Nein-Feld (z.B. "Erledigt", "In Ordnung", "Vorhanden").
+- "auswahl": Dropdown mit fester Optionsliste (nur wenn die Vorlage/Stichpunkte eine klare, überschaubare Auswahl an Werten nahelegen, z.B. Ampel-Status, Ja/Nein/Teilweise).
+
+Regeln:
+- Antworte ausschließlich auf Deutsch.
+- Ist eine Vorlage (Datei) beigefügt: baue die darin sichtbaren Felder/Abschnitte/Checklisten-Punkte so genau wie möglich nach - Reihenfolge, Beschriftungen und erkennbare Pflichtfelder (z.B. durch "*" markiert) übernehmen. Rein dekorative Elemente (Logo, Layout-Linien) werden nicht als Feld übernommen.
+- Sind nur Stichpunkte (Text) gegeben: leite daraus ein sinnvolles, vollständiges Set an Feldern ab - für jeden inhaltlich eigenständigen Punkt ein eigenes Feld, mit dem am besten passenden Typ.
+- Sind BEIDE gegeben (Vorlage UND Stichpunkte): die Vorlage ist die Basis, die Stichpunkte sind zusätzliche Anweisungen/Ergänzungen dazu (z.B. "und noch ein Feld für die Unterschrift").
+- "optionen": NUR bei "typ":"auswahl" eine Liste der Auswahlwerte, sonst immer ein leeres Array [].
+- "pflicht": true nur für Felder, die erkennbar zwingend sind (z.B. durch "*" markiert) oder inhaltlich offensichtlich nicht leer bleiben dürfen (z.B. "Name des Prüfers"). Im Zweifel false.
+- "name": kurzer, prägnanter Formular-Titel (max. ca. 60 Zeichen).
+- "beschreibung": ein kurzer Satz, wofür das Formular gedacht ist, oder leer lassen, wenn nicht klar ersichtlich.
+- Erzeuge KEINE Felder für Dinge, die die Software bereits automatisch erfasst (Datum/Uhrzeit der Erfassung, Name des Ausfüllenden) - diese werden von der Software selbst hinzugefügt.
+- Ist weder aus der Vorlage noch aus den Stichpunkten ein sinnvolles Formular ableitbar, liefere eine leere "felder"-Liste statt zu raten.`;
+}
+
+async function callClaudeFormularGenerieren({ apiKey, model, stichpunkte, fileDataUrl }) {
+  const content = [];
+  if (fileDataUrl) {
+    const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(fileDataUrl);
+    if (!match) {
+      throw new Error('Ungültiges Dateiformat (unterstützt: JPEG/PNG/WebP-Fotos oder PDF).');
+    }
+    const [, mediaType, base64Data] = match;
+    content.push(mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64Data } }
+      : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } });
+  }
+  content.push({
+    type: 'text',
+    text: [
+      fileDataUrl ? 'Baue aus dieser Vorlage ein Formular nach.' : null,
+      stichpunkte ? `Stichpunkte des Mitarbeiters:\n${stichpunkte}` : null,
+    ].filter(Boolean).join('\n\n'),
+  });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 4096,
+      system: buildFormularSystemPrompt(),
+      messages: [{ role: 'user', content }],
+      output_config: {
+        format: { type: 'json_schema', schema: FORMULAR_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
 const ASSISTENT_CHAT_SYSTEM_PROMPT = `Du bist der interne KI-Assistent in der Verwaltungs-Software (Werkora) des deutschen Elektro-Handwerksbetriebs neuverdrahtet. Du sprichst mit einem Mitarbeiter/der Geschäftsführung, nicht mit Kunden.
 
 Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHREIBENDEN Zugriff auf die echten Firmendaten (Kunden, Leads, Projekte, Aufgaben, Termine, Angebote, Rechnungen, Preisliste). Wichtige Regeln:
@@ -1273,6 +1377,30 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           positionen: body.positionen,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'formular-generieren') {
+      const stichpunkte = typeof body.stichpunkte === 'string' ? body.stichpunkte.trim() : '';
+      if (!stichpunkte && !body.fileDataUrl) {
+        return new Response(JSON.stringify({ error: 'Bitte Stichpunkte eingeben oder eine Vorlage hochladen.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeFormularGenerieren({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          stichpunkte,
+          fileDataUrl: body.fileDataUrl,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
