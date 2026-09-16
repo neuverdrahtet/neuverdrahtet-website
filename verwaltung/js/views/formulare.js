@@ -107,7 +107,11 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
 
   body.querySelector('#feld-add-btn').addEventListener('click', () => {
     const typ = body.querySelector('#feld-add-typ').value;
-    feldState.push({ id: uid(), typ, label: '', pflicht: false, optionen: typ === 'auswahl' ? [] : undefined });
+    // "optionen" bewusst immer als Array (nie undefined): Firestore lehnt
+    // undefined-Feldwerte beim Speichern komplett ab (setDoc wirft einen
+    // Fehler), was das Speichern des ganzen Formulars unbemerkt verhindert
+    // hätte, sobald ein Feld mit einem anderen Typ als "auswahl" dabei ist.
+    feldState.push({ id: uid(), typ, label: '', pflicht: false, optionen: [] });
     renderFeldList();
   });
 
@@ -163,7 +167,7 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
         if (!beschreibungInput.value.trim() && result.beschreibung) beschreibungInput.value = result.beschreibung;
         feldState.push(...result.felder.map((f, i) => ({
           id: uid(), typ: FELD_TYP_LABEL[f.typ] ? f.typ : 'text', label: (f.label || '').trim() || `Feld ${i + 1}`, pflicht: !!f.pflicht,
-          optionen: f.typ === 'auswahl' ? (f.optionen || []) : undefined,
+          optionen: f.typ === 'auswahl' ? (f.optionen || []) : [],
         })));
         renderFeldList();
         toast(`${result.felder.length} Feld(er) von der KI übernommen`, 'success');
@@ -208,7 +212,12 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
       aktiv: fd.get('aktiv') === 'on',
       felder: feldState,
     };
-    await put('formulare', updated);
+    try {
+      await put('formulare', updated);
+    } catch (err) {
+      toast(`Speichern fehlgeschlagen: ${err.message}`, 'danger');
+      return;
+    }
     toast('Formular gespeichert', 'success');
     close();
     if (onSaved) onSaved(updated);
