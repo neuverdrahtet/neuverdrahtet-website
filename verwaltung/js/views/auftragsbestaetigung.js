@@ -207,6 +207,7 @@ export async function render(container, route) {
     const { body, close } = openModal({
       title: isEdit ? `Auftragsbestätigung ${data.nummer}` : 'Neue Auftragsbestätigung',
       wide: true,
+      fullscreen: true,
       bodyHtml: `
         <form id="ab-form">
           <div class="form-grid">

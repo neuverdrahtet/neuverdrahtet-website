@@ -596,7 +596,7 @@ export async function render(container, route) {
                   <strong>${escapeHtml(p.titel)}</strong>
                   <div class="text-mute">${formatDate(p.start)}${p.ende ? ' – ' + formatDate(p.ende) : ''}</div>
                 </div>
-                <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+                <span class="badge" style="background:${escapeHtml(spaltenById[p.status]?.farbe || 'var(--border)')}22;color:${escapeHtml(spaltenById[p.status]?.farbe || 'var(--text)')}">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
               </li>
             `).join('')}</ul>${linkedProjekte.length > 5 ? `<p class="text-mute">... und ${linkedProjekte.length - 5} weitere – in der Kundenakte einsehbar.</p>` : ''}` : '<p class="text-mute">Noch keine Aufträge/Projekte für diesen Kunden.</p>'}
             ${linkedAusgaben.length ? `<p class="hint">💶 ${linkedAusgaben.length} Ausgabe(n) diesem Kunden zugeordnet · ${formatCurrency(ausgabenSumme)} – Details in der Kundenakte.</p>` : ''}
@@ -805,7 +805,7 @@ export async function render(container, route) {
           <strong>${escapeHtml(p.titel)}</strong>
           <span class="text-mute">${escapeHtml(kategorienById[p.kategorieId]?.titel || '')}</span>
           <span class="text-mute">${formatDate(p.start)}${p.ende ? ' – ' + formatDate(p.ende) : ''}</span>
-          <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+          <span class="badge" style="background:${escapeHtml(spaltenById[p.status]?.farbe || 'var(--border)')}22;color:${escapeHtml(spaltenById[p.status]?.farbe || 'var(--text)')}">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
           <span class="text-mute">📎 ${dokCount}</span>
         </summary>
         <div class="akte-projekt-body">

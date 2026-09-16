@@ -614,6 +614,7 @@ export async function render(container, route) {
     const { body, close } = openModal({
       title: isEdit ? `Rechnung ${data.nummer}` : 'Neue Rechnung',
       wide: true,
+      fullscreen: true,
       bodyHtml: `
         <form id="re-form">
           ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.stornoVonNummer && (data.stornoGrund || data.stornoGrundText) ? `Grund: ${escapeHtml([GRUENDE_STORNO.find((g) => g.id === data.stornoGrund)?.titel, data.stornoGrundText].filter(Boolean).join(' – '))}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}

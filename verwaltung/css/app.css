@@ -596,6 +596,21 @@ table.data-table th.col-select, table.data-table td.col-select {
   box-shadow: 0 10px 40px rgba(0,0,0,0.25);
 }
 .modal.modal-wide { max-width: 920px; }
+
+/* Vollbild-Modal (Angebote/Rechnungen/Auftragsbestätigungen): fühlt sich wie
+   eine eigene Seite an statt wie ein schwebender Dialog über der Liste - bei
+   diesen langen, oft minutenlang bearbeiteten Formularen bringt der
+   abgedunkelte Hintergrund und die begrenzte Breite keinen Mehrwert, sondern
+   kostet nur Platz für die Positionstabelle. */
+.modal-backdrop.modal-backdrop-fullscreen { padding: 0; align-items: stretch; background: var(--bg); }
+.modal.modal-fullscreen {
+  max-width: 100%;
+  width: 100%;
+  min-height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 22px clamp(16px, 5vw, 64px) 40px;
+}
 .gs-group-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-mute); margin: 14px 0 6px; }
 .gs-group:first-child .gs-group-title { margin-top: 0; }
 .gs-result {

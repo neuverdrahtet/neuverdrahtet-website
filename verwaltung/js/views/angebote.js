@@ -528,6 +528,7 @@ export async function render(container, route) {
     const { body, close } = openModal({
       title: isEdit ? `Angebot ${data.nummer}` : 'Neues Angebot',
       wide: true,
+      fullscreen: true,
       bodyHtml: `
         <form id="ang-form">
           <div class="form-grid">

@@ -13,6 +13,12 @@ import * as lexoffice from '../lexoffice.js';
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
 
+function statusBadgeHtml(spalte, statusFallback) {
+  const farbe = spalte?.farbe || 'var(--border)';
+  const titel = escapeHtml(spalte?.titel || statusFallback || '');
+  return `<span class="badge" style="background:${escapeHtml(farbe)}22;color:${escapeHtml(farbe)}">${titel}</span>`;
+}
+
 export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || null;
   const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
@@ -132,7 +138,7 @@ export async function render(container, opts = {}) {
               ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
               <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--border)')}22;color:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--text)')}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
               <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
-              <td><span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span></td>
+              <td>${statusBadgeHtml(spaltenById[p.status], p.status)}</td>
               <td>${formatDate(p.start)}</td>
               <td>${formatDate(p.ende)}</td>
             </tr>
@@ -147,7 +153,7 @@ export async function render(container, opts = {}) {
             <div class="tt-card" data-id="${p.id}">
               <div class="tt-card-top">
                 <span class="tt-card-meta">${escapeHtml(kunde?.firma || 'ohne Kunde')}</span>
-                <span class="badge badge-accent">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</span>
+                ${statusBadgeHtml(spaltenById[p.status], p.status)}
               </div>
               <div class="tt-card-title-row">
                 <span class="tt-card-icon">🔧</span>
