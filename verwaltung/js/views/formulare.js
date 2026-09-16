@@ -161,8 +161,8 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
         const beschreibungInput = body.querySelector('textarea[name="beschreibung"]');
         if (!nameInput.value.trim() && result.name) nameInput.value = result.name;
         if (!beschreibungInput.value.trim() && result.beschreibung) beschreibungInput.value = result.beschreibung;
-        feldState.push(...result.felder.map((f) => ({
-          id: uid(), typ: FELD_TYP_LABEL[f.typ] ? f.typ : 'text', label: f.label || '', pflicht: !!f.pflicht,
+        feldState.push(...result.felder.map((f, i) => ({
+          id: uid(), typ: FELD_TYP_LABEL[f.typ] ? f.typ : 'text', label: (f.label || '').trim() || `Feld ${i + 1}`, pflicht: !!f.pflicht,
           optionen: f.typ === 'auswahl' ? (f.optionen || []) : undefined,
         })));
         renderFeldList();
@@ -193,7 +193,10 @@ function openFormularEditor(vorhanden, { onSaved, onDeleted } = {}) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const name = (fd.get('name') || '').toString().trim();
-    if (!name) return;
+    if (!name) {
+      toast('Bitte einen Namen für das Formular eingeben', 'error');
+      return;
+    }
     if (feldState.some((f) => !f.label || !f.label.trim())) {
       toast('Jedes Feld braucht eine Beschriftung', 'error');
       return;
