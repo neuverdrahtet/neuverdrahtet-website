@@ -1,6 +1,6 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 
 const SPALTEN_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
@@ -266,7 +266,10 @@ export async function render(container) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Kunde</label>
-              <select name="kundeId"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+              <div class="flex-row" style="gap:6px">
+                <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+                <button type="button" class="btn btn-sm" id="btn-card-neuer-kunde" title="Neuen Kunden anlegen">+ Neu</button>
+              </div>
             </div>
             <div class="field"><label>Status</label>
               <select name="status">${spalten.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
@@ -285,6 +288,16 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-card-neuer-kunde').addEventListener('click', () => {
+      openKundeSchnellanlage({
+        onCreated: (neuerKunde) => {
+          kunden.push(neuerKunde);
+          kundenById[neuerKunde.id] = neuerKunde;
+          const select = body.querySelector('select[name="kundeId"]');
+          select.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
+        },
+      });
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Projekt "${data.titel}" in den Papierkorb verschieben?`)) return;

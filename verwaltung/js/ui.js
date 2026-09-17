@@ -1,5 +1,6 @@
-import { el, escapeHtml, debounce } from './utils.js';
+import { el, escapeHtml, debounce, uid, toast, farbeAusText } from './utils.js';
 import { searchAddress } from './geocode.js';
+import { put } from './db.js';
 
 // Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
 // (Tabellen, Positionstabellen, Plantafel-Gantt, Tag-Kalender, Kanban) - macht
@@ -207,7 +208,7 @@ export function mountProgressBar(host, { indeterminate = false, label = '' } = {
  * weiterlaufen, ohne dass Aufrufer wissen müssen, dass hier kein <select> mehr
  * steckt.
  */
-export function mountChipPicker(host, { name, icon = '📄', title = 'Auswählen', placeholder = '– wählen –', items = [], selectedId = '', itemLabel, itemSub, onChange, disabled = false } = {}) {
+export function mountChipPicker(host, { name, icon = '📄', title = 'Auswählen', placeholder = '– wählen –', items = [], selectedId = '', itemLabel, itemSub, onChange, disabled = false, onCreateNew, createNewLabel = '+ Neu anlegen' } = {}) {
   let list = items;
   let currentId = selectedId || '';
 
@@ -255,11 +256,22 @@ export function mountChipPicker(host, { name, icon = '📄', title = 'Auswählen
       title,
       bodyHtml: `
         <input type="text" class="chip-picker-search" placeholder="Suchen…" autocomplete="off">
+        ${onCreateNew ? `<button type="button" class="btn btn-sm" id="chip-picker-create" style="margin-top:8px">${escapeHtml(createNewLabel)}</button>` : ''}
         <div class="chip-picker-results"></div>
       `,
     });
     const searchInput = modal.body.querySelector('.chip-picker-search');
     const results = modal.body.querySelector('.chip-picker-results');
+    if (onCreateNew) {
+      modal.body.querySelector('#chip-picker-create').addEventListener('click', async () => {
+        const neu = await onCreateNew();
+        if (neu) {
+          list = [...list, neu];
+          setValue(neu.id);
+          modal.close();
+        }
+      });
+    }
     function renderResults() {
       const q = searchInput.value.trim().toLowerCase();
       const filtered = q ? list.filter((it) => itemLabel(it).toLowerCase().includes(q) || (itemSub && itemSub(it) || '').toLowerCase().includes(q)) : list;
@@ -300,6 +312,78 @@ export function mountChipPicker(host, { name, icon = '📄', title = 'Auswählen
     setValue,
     setItems: (newItems) => { list = newItems; renderBox(); },
   };
+}
+
+const KUNDE_SCHNELL_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
+
+/**
+ * Schlankes "Neuer Kunde"-Formular für die Schnellanlage aus anderen
+ * Dialogen heraus (Kanban/Projekt-Formular, Kunde-Auswahl bei Angebot/
+ * Rechnung/Auftragsbestätigung) - damit man dafür nicht erst zur
+ * Kunden-Ansicht wechseln muss. Legt nur die Kernfelder an; alles Weitere
+ * (Notizen, Kundennummer usw.) lässt sich danach wie gewohnt in der
+ * Kunden-Ansicht ergänzen. `onCreated(neuerKunde)` wird nach dem Anlegen
+ * aufgerufen - der Aufrufer ist dafür zuständig, den neuen Kunden in seine
+ * eigenen lokalen Listen (kunden/kundenById) einzutragen, da diese pro
+ * Ansicht unterschiedlich gehalten werden.
+ */
+export function openKundeSchnellanlage({ onCreated } = {}) {
+  const { body, close } = openModal({
+    title: 'Neuer Kunde',
+    bodyHtml: `
+      <form id="kunde-schnell-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required></div>
+          <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner"></div>
+          <div class="field"><label>Telefon</label><input name="telefon"></div>
+          <div class="field col-span-2"><label>E-Mail</label><input type="email" name="email"></div>
+          <div class="field col-span-2"><label>Straße, Nr.</label><input name="strasse" autocomplete="off"></div>
+          <div class="field"><label>PLZ</label><input name="plz"></div>
+          <div class="field"><label>Ort</label><input name="ort"></div>
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="ks-cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Anlegen</button>
+        </div>
+      </form>
+    `,
+  });
+  attachAddressSearch(body.querySelector('input[name="strasse"]'), (r) => {
+    const form = body.querySelector('#kunde-schnell-form');
+    form.strasse.value = r.strasse || form.strasse.value;
+    if (r.plz) form.plz.value = r.plz;
+    if (r.ort) form.ort.value = r.ort;
+  });
+  body.querySelector('#ks-cancel').addEventListener('click', close);
+  body.querySelector('#kunde-schnell-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const firma = (fd.get('firma') || '').toString().trim();
+    if (!firma) return;
+    const submitBtn = body.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const neuerKunde = {
+      id: uid(), firma,
+      ansprechpartner: (fd.get('ansprechpartner') || '').toString().trim(),
+      telefon: (fd.get('telefon') || '').toString().trim(),
+      email: (fd.get('email') || '').toString().trim(),
+      strasse: (fd.get('strasse') || '').toString().trim(),
+      plz: (fd.get('plz') || '').toString().trim(),
+      ort: (fd.get('ort') || '').toString().trim(),
+      notizen: '', kundennummer: '', farbe: farbeAusText(firma, KUNDE_SCHNELL_FARBEN), status: 'kunde',
+    };
+    try {
+      await put('kunden', neuerKunde);
+    } catch (err) {
+      toast(`Kunde anlegen fehlgeschlagen: ${err.message}`, 'danger');
+      submitBtn.disabled = false;
+      return;
+    }
+    toast('Kunde angelegt', 'success');
+    close();
+    if (onCreated) onCreated(neuerKunde);
+  });
 }
 
 export function optionList(items, { value = 'id', label = 'name', selected = '', placeholder = '' } = {}) {

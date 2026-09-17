@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderAufmassSection } from '../aufmass.js';
@@ -580,6 +580,7 @@ export async function render(container, opts = {}) {
             <div class="field"><label>Kunde</label>
               <div class="flex-row" style="gap:6px">
                 <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+                <button type="button" class="btn btn-sm" id="btn-proj-neuer-kunde" title="Neuen Kunden anlegen">+ Neu</button>
                 <button type="button" class="btn btn-sm" id="btn-proj-navi" title="Zur Kundenadresse navigieren">🧭</button>
               </div>
             </div>
@@ -652,6 +653,16 @@ export async function render(container, opts = {}) {
       renderMitarbeiterChecklist(e.target.value, checkedIds);
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-proj-neuer-kunde').addEventListener('click', () => {
+      openKundeSchnellanlage({
+        onCreated: (neuerKunde) => {
+          kunden.push(neuerKunde);
+          kundenById[neuerKunde.id] = neuerKunde;
+          const select = body.querySelector('select[name="kundeId"]');
+          select.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
+        },
+      });
+    });
     body.querySelector('#btn-proj-navi').addEventListener('click', () => {
       const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
       const adresse = kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '';
