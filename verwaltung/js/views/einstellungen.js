@@ -2,6 +2,7 @@ import { getSettings, setSettings, exportAll, importAll, getAll, put, remove, cl
 import { uid, escapeHtml, toast, compressImage, formatDateTime } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import * as google from '../google.js';
+import * as metaSocial from '../metaSocial.js';
 import * as lexoffice from '../lexoffice.js';
 import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
@@ -52,6 +53,7 @@ const NAV = [
     { id: 'ki', icon: '✨', label: 'KI-Angebotserstellung' },
     { id: 'kibuerokraft', icon: '🤖', label: 'KI-Bürokraft-API' },
     { id: 'lexoffice', icon: '🧾', label: 'lexoffice-Verbindung' },
+    { id: 'social', icon: '📱', label: 'Social-Media-Veröffentlichung' },
     { id: 'qonto', icon: '🏦', label: 'Qonto-Zahlungsabgleich' },
     { id: 'push', icon: '🔔', label: 'Benachrichtigungen' },
   ] },
@@ -392,6 +394,27 @@ export async function render(container) {
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-lexoffice-arbeitsstunde-choose">Artikel wählen ...</button>
           </div>
+        </div>
+
+        <div class="card settings-panel" data-panel="social" hidden>
+          <h2>Social-Media-Veröffentlichung (Meta)</h2>
+          <p class="hint">
+            Veröffentlicht einen unter <a href="#/social">Social-Media-Post</a> erstellten Post direkt auf der Facebook-Seite bzw. dem verknüpften Instagram-Business-Konto, ohne Bild/Text manuell hochzuladen. Die Anmeldung läuft wie bei Google komplett im Browser über dein Facebook-Konto - dafür wird einmalig eine kostenlose Meta-App sowie ein kleiner, separater Cloud-Vermittler (Cloudflare Worker) benötigt. Details/Einrichtung: Ordner <code>cloudflare-worker-social-publish/README.md</code> im Projekt bzw. frag im Chat nach.
+          </p>
+          <form id="social-connect-form">
+            <div class="form-grid">
+              <div class="field col-span-2"><label>Meta App-ID</label><input name="metaAppId" placeholder="123456789012345" value="${escapeHtml(settings.metaAppId || '')}"></div>
+              <div class="field col-span-2"><label>Worker-URL</label><input name="socialPublishWorkerUrl" placeholder="https://neuverdrahtet-social-publish.DEIN-SUBDOMAIN.workers.dev" value="${escapeHtml(settings.socialPublishWorkerUrl || '')}"></div>
+              <div class="field col-span-2"><label>App-Secret (im Worker als APP_SECRET hinterlegt)</label><input type="password" name="socialPublishAppSecret" value="${escapeHtml(settings.socialPublishAppSecret || '')}"></div>
+            </div>
+            <div class="modal-actions" style="border:none;padding-top:10px">
+              <span id="meta-status" class="badge ${metaSocial.isConnected() ? 'badge-success' : 'badge'}">${metaSocial.isConnected() ? `Verbunden: ${escapeHtml(metaSocial.getConnection()?.pageName || '')}${metaSocial.getConnection()?.instagramUsername ? ` · Instagram: @${escapeHtml(metaSocial.getConnection().instagramUsername)}` : ' · kein Instagram verknüpft'}` : 'Nicht verbunden'}</span>
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="btn-meta-disconnect" ${metaSocial.isConnected() ? '' : 'disabled'}>Trennen</button>
+              <button type="button" class="btn" id="btn-meta-connect">Mit Facebook verbinden</button>
+              <button type="submit" class="btn btn-primary">Speichern</button>
+            </div>
+          </form>
         </div>
 
         <div class="card settings-panel" data-panel="qonto" hidden>
@@ -895,6 +918,35 @@ export async function render(container) {
       qontoAppSecret: (fd.get('qontoAppSecret') || '').toString().trim(),
     });
     toast('Qonto-Einstellungen gespeichert', 'success');
+    render(container);
+  });
+
+  container.querySelector('#social-connect-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const patch = {
+      metaAppId: (fd.get('metaAppId') || '').toString().trim(),
+      socialPublishWorkerUrl: (fd.get('socialPublishWorkerUrl') || '').toString().trim(),
+      socialPublishAppSecret: (fd.get('socialPublishAppSecret') || '').toString().trim(),
+    };
+    await setSettings(patch);
+    metaSocial.updateCachedSettings(patch);
+    toast('Social-Media-Einstellungen gespeichert', 'success');
+  });
+
+  container.querySelector('#btn-meta-connect').addEventListener('click', async () => {
+    try {
+      await metaSocial.connect();
+      toast('Mit Facebook verbunden', 'success');
+      render(container);
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  });
+
+  container.querySelector('#btn-meta-disconnect').addEventListener('click', () => {
+    metaSocial.disconnect();
+    toast('Facebook-Verbindung getrennt');
     render(container);
   });
 

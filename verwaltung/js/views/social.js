@@ -2,12 +2,20 @@ import { getSettings, getAll, put, remove, GEWERKE } from '../db.js';
 import { uid, escapeHtml, toast, compressImage } from '../utils.js';
 import { confirmDelete } from '../ui.js';
 import { generateSocialPost } from '../ai.js';
+import { uploadBlobToStorage, FIREBASE_ENABLED } from '../blobstore.js';
+import * as metaSocial from '../metaSocial.js';
+import { publishToFacebook, publishToInstagram } from '../socialPublish.js';
 
 // width/height je Kanal orientiert an den jeweils empfohlenen Bildformaten
 // (Instagram-Feed quadratisch, Facebook/LinkedIn Link-Vorschau ca. 1.91:1,
 // Google Unternehmensprofil-Beitrag ca. 4:3). "key" ist das Feld im
 // KI-Ergebnis (siehe callClaudeSocialPost im Worker), "hashtags" steuert, ob
 // die separat gelieferten Hashtags für diesen Kanal angezeigt/mitkopiert werden.
+// Direktes Veröffentlichen (statt Bild/Text manuell hochzuladen) ist nur für
+// die beiden Meta-Plattformen umgesetzt - LinkedIn/Google Unternehmensprofil
+// haben keine vergleichbar einfache, ohne App-Review nutzbare Publish-API.
+const META_PUBLISHABLE = new Set(['facebook', 'instagram']);
+
 const CHANNELS = [
   { id: 'instagram', label: 'Instagram', icon: '📸', width: 1080, height: 1080, hashtags: true },
   { id: 'facebook', label: 'Facebook', icon: '👍', width: 1200, height: 630, hashtags: true },
@@ -231,10 +239,12 @@ export async function render(container) {
               <div class="flex-row flex-wrap" style="margin-top:8px;gap:8px">
                 <button type="button" class="btn btn-sm" data-dl="${ch.id}">⬇️ Bild herunterladen</button>
                 <button type="button" class="btn btn-sm" data-copy="${ch.id}">📋 Text kopieren</button>
+                ${META_PUBLISHABLE.has(ch.id) ? `<button type="button" class="btn btn-sm btn-primary" data-publish="${ch.id}" ${record.kanaele[ch.id]?.veroeffentlicht ? 'disabled' : ''}>🚀 Direkt veröffentlichen</button>` : ''}
                 <label class="btn btn-sm btn-ghost" style="cursor:pointer">
                   <input type="checkbox" data-posted="${ch.id}" ${record.kanaele[ch.id]?.veroeffentlicht ? 'checked' : ''} style="margin-right:6px">Veröffentlicht
                 </label>
               </div>
+              ${record.kanaele[ch.id]?.postLink ? `<p class="hint"><a href="${escapeHtml(record.kanaele[ch.id].postLink)}" target="_blank" rel="noopener">Zum veröffentlichten Post →</a></p>` : ''}
             </div>
           `).join('')}
         </div>
@@ -276,6 +286,50 @@ export async function render(container) {
         record.kanaele[id] = { ...record.kanaele[id], veroeffentlicht: cb.checked, veroeffentlichtAm: cb.checked ? new Date().toISOString() : '' };
         await put('socialPosts', record);
         posts = posts.map((p) => (p.id === record.id ? record : p));
+      });
+    });
+    resultHost.querySelectorAll('[data-publish]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.dataset.publish;
+        const ch = CHANNELS.find((c) => c.id === id);
+        if (!FIREBASE_ENABLED) {
+          toast('Direktes Veröffentlichen erfordert ein konfiguriertes Firebase-Projekt (fürs Bild-Hosting).', 'danger');
+          return;
+        }
+        const originalLabel = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Veröffentliche ...';
+        try {
+          if (!metaSocial.isConnected()) await metaSocial.connect();
+          const connection = metaSocial.getConnection();
+          if (!connection) throw new Error('Nicht mit Facebook verbunden.');
+          if (id === 'instagram' && !connection.instagramUserId) {
+            throw new Error('Kein Instagram-Business-Konto mit der verbundenen Facebook-Seite verknüpft.');
+          }
+          const text = resultHost.querySelector(`[data-text="${id}"]`).value;
+          const hashtagLine = ch.hashtags && record.hashtags?.length ? `\n\n${record.hashtags.join(' ')}` : '';
+          const fullText = text + hashtagLine;
+          const blob = await new Promise((resolve, reject) => {
+            canvases[id].toBlob((b) => (b ? resolve(b) : reject(new Error('Bild konnte nicht erzeugt werden.'))), 'image/jpeg', 0.92);
+          });
+          const uploaded = await uploadBlobToStorage(`socialPosts/${record.id}-${id}.jpg`, blob);
+          if (!uploaded.url) throw new Error('Bild-Upload fehlgeschlagen (kein Netz?) - bitte später erneut versuchen.');
+          const result = id === 'facebook'
+            ? await publishToFacebook({ pageId: connection.pageId, pageAccessToken: connection.pageAccessToken, imageUrl: uploaded.url, message: fullText })
+            : await publishToInstagram({ igUserId: connection.instagramUserId, pageAccessToken: connection.pageAccessToken, imageUrl: uploaded.url, caption: fullText });
+          record.kanaele[id] = {
+            ...record.kanaele[id], veroeffentlicht: true, veroeffentlichtAm: new Date().toISOString(),
+            postLink: result.link || null, postId: result.postId || null,
+          };
+          await put('socialPosts', record);
+          posts = posts.map((p) => (p.id === record.id ? record : p));
+          renderResult(record, img, { fromHistory });
+          toast('Erfolgreich veröffentlicht', 'success');
+        } catch (err) {
+          toast(err.message, 'danger');
+          btn.disabled = false;
+          btn.textContent = originalLabel;
+        }
       });
     });
   }

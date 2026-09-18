@@ -8,6 +8,7 @@ import { openGlobalSearch } from './globalSearch.js';
 import { closeAllModals, wireScrollFades } from './ui.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import { preloadGis } from './google.js';
+import { preload as preloadMetaSocial } from './metaSocial.js';
 
 // Views werden erst beim tatsächlichen Aufruf ihrer Route per dynamic
 // import() nachgeladen (statt alle 22 Module beim Start zu laden) - spart
@@ -226,6 +227,7 @@ async function boot() {
   // Zeitfenster aufbrauchen, in dem ein Klick noch ein Popup öffnen darf,
   // und Google meldet dann "Failed to open popup window".
   preloadGis();
+  preloadMetaSocial();
   // Push-Nachrichten, die eintreffen während die App offen/im Vordergrund ist,
   // zeigt der Browser NICHT automatisch als System-Benachrichtigung an (das
   // übernimmt sonst der Service Worker im Hintergrund) - hier stattdessen als
