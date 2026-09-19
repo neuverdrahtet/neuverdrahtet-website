@@ -227,7 +227,7 @@ export async function render(container) {
     resultHost.innerHTML = `
       <div class="card">
         <h2>Vorschau je Kanal</h2>
-        ${fromHistory ? '<p class="hint">Aus dem Verlauf geöffnet – das Bild liegt hier nur in reduzierter Auflösung vor.</p>' : ''}
+        ${fromHistory ? '<p class="hint">Aus dem Verlauf geöffnet – das Bild liegt hier nur in reduzierter Auflösung vor (zum Herunterladen/Direkt-Veröffentlichen bitte den Post neu aus dem Originalfoto erstellen).</p>' : ''}
         ${record.altText ? `<p class="hint">Alt-Text fürs Bild (Barrierefreiheit &amp; Bild-SEO, beim Hochladen auf der Plattform eintragen): „${escapeHtml(record.altText)}“</p>` : ''}
         <div class="social-channel-grid">
           ${CHANNELS.map((ch) => `
@@ -239,7 +239,7 @@ export async function render(container) {
               <div class="flex-row flex-wrap" style="margin-top:8px;gap:8px">
                 <button type="button" class="btn btn-sm" data-dl="${ch.id}">⬇️ Bild herunterladen</button>
                 <button type="button" class="btn btn-sm" data-copy="${ch.id}">📋 Text kopieren</button>
-                ${META_PUBLISHABLE.has(ch.id) ? `<button type="button" class="btn btn-sm btn-primary" data-publish="${ch.id}" ${record.kanaele[ch.id]?.veroeffentlicht ? 'disabled' : ''}>🚀 Direkt veröffentlichen</button>` : ''}
+                ${META_PUBLISHABLE.has(ch.id) ? `<button type="button" class="btn btn-sm btn-primary" data-publish="${ch.id}" ${record.kanaele[ch.id]?.veroeffentlicht || fromHistory ? 'disabled' : ''} ${fromHistory ? 'title="Aus dem Verlauf liegt nur ein komprimiertes Vorschaubild vor - dafür nicht verfügbar"' : ''}>🚀 Direkt veröffentlichen</button>` : ''}
                 <label class="btn btn-sm btn-ghost" style="cursor:pointer">
                   <input type="checkbox" data-posted="${ch.id}" ${record.kanaele[ch.id]?.veroeffentlicht ? 'checked' : ''} style="margin-right:6px">Veröffentlicht
                 </label>
