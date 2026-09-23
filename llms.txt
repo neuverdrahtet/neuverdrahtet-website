@@ -47,6 +47,9 @@
 - [Wallbox-Kostenschätzer](https://neuverdrahtet.com/wallbox-kostenschaetzer.html)
 - [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check-unterverteilung.html): Kostenloser KI-gestützter Foto-Check mit unverbindlicher Ersteinschätzung.
 
+## Privatkunden
+- [Privatkunden](https://neuverdrahtet.com/privatkunden.html): Elektroinstallation, Smart Home, Photovoltaik, Wallbox u.v.m. für Eigenheim, Eigentumswohnung, Neubau und Sanierung.
+
 ## Geschäftskunden
 - [Geschäftskunden](https://neuverdrahtet.com/geschaeftskunden.html): Ein Ansprechpartner für Prüftechnik, Wartung, Wärme & Klima, MSR und Elektrotechnik.
 

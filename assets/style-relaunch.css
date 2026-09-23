@@ -53,7 +53,7 @@ body { background: var(--paper); }
   display: flex; flex-direction: column; justify-content: center; gap: 14px;
 }
 .hero-panel .icon-badge { background: rgba(255,255,255,0.08); color: var(--orange-2); width: 56px; height: 56px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
-.hero-panel h3 { color: #fff; font-size: 20px; }
+.hero-panel h2 { color: #fff; font-size: 20px; }
 .hero-panel p { color: rgba(255,255,255,0.72); font-size: 14.5px; }
 
 .hub-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 18px; margin-top: 10px; }
@@ -74,7 +74,10 @@ body { background: var(--paper); }
 .process-row-n { display: grid; gap: 4px; margin-top: 32px; position: relative; }
 .process-step { position: relative; padding-top: 18px; }
 .process-step .num { font-family: var(--font-mono); font-size: 12px; color: var(--orange-2); letter-spacing: 0.05em; }
-.process-step h4 { font-size: 14.5px; margin: 8px 0 0; line-height: 1.3; }
+.process-step h3 { font-size: 14.5px; margin: 8px 0 0; line-height: 1.3; }
+/* WCAG AA-Fix: --copper hat auf dunklem Grund nur 3.17:1 Kontrast (braucht 4.5:1) —
+   betrifft global den Cookie-Banner-Link "Datenschutzerklärung" (assets/style.css). */
+.cookie-banner-inner a { color: var(--orange-2); }
 .process-row-n::before {
   content: ''; position: absolute; top: 6px; left: 3%; right: 3%; height: 1px;
   background: linear-gradient(90deg, var(--orange-2), transparent);
@@ -143,12 +146,21 @@ body { background: var(--paper); }
 .premium-card li { font-size: 13.5px; color: var(--ink-soft); }
 .premium-card .more { margin-top: auto; font-size: 13px; font-weight: 600; color: var(--orange-2); padding-top: 6px; }
 
+.elektro-row {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
+  margin-top: 20px; padding: 20px 26px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.elektro-row .label { display: flex; align-items: center; gap: 12px; font-family: var(--font-display); font-weight: 600; font-size: 15.5px; }
+.elektro-row .tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.elektro-row .tags span { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-soft); background: var(--surface-2); border-radius: 999px; padding: 4px 10px; }
+
 .process-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 4px; margin-top: 32px; position: relative; }
 @media (max-width: 900px) { .process-row { grid-template-columns: 1fr 1fr; gap: 20px; } }
 @media (max-width: 560px) { .process-row { grid-template-columns: 1fr; } }
 .process-row .process-step { position: relative; padding-top: 18px; }
 .process-row .process-step .num { font-family: var(--font-mono); font-size: 12px; color: var(--orange-2); letter-spacing: 0.05em; }
-.process-row .process-step h4 { font-size: 15px; margin: 8px 0 0; }
+.process-row .process-step h3 { font-size: 15px; margin: 8px 0 0; }
 .process-row::before {
   content: ''; position: absolute; top: 6px; left: 5%; right: 5%; height: 1px;
   background: linear-gradient(90deg, var(--orange-2), transparent);
