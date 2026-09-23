@@ -1602,11 +1602,17 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 
 .print-root { display: none; }
 @media print {
-  @page { size: A4; margin: 10mm 10mm 16mm 10mm; }
+  /* Der eigentliche Sicherheitsabstand zum Papierrand kommt bewusst NICHT
+     nur aus dieser @page-Regel, sondern zusätzlich als echtes Padding auf
+     .print-doc (siehe unten) - @page-Margins hängen vom "Ränder"-Dropdown
+     im Browser-Druckdialog ab (z.B. "Keine"/"Minimal" statt "Standard") und
+     werden dort teils ignoriert bzw. überschrieben. Mit eigenem Padding
+     bleibt der Abstand unabhängig von dieser Einstellung immer erhalten. */
+  @page { size: A4; margin: 6mm; }
   html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; background: #fff !important; }
-  .print-doc { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; }
+  .print-doc { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; padding: 6mm 8mm; box-sizing: border-box; }
   .print-doc * { color: #111; }
   .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
