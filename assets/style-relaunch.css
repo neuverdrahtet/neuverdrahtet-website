@@ -177,3 +177,7 @@ body { background: var(--paper); }
 .trust-seal { flex-shrink: 0; }
 .trust-seal img { width: 92px; height: 92px; border-radius: 50%; display: block; }
 .footer-brand-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+
+.hero-badge { display: flex; justify-content: center; }
+.hero-badge img { width: 100%; max-width: 420px; height: auto; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.45)); }
+@media (max-width: 900px) { .hero-badge { margin-top: 8px; } .hero-badge img { max-width: 280px; } }
