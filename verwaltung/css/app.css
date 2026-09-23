@@ -1627,9 +1627,18 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   .print-doc .print-logo-mittel .print-logo { max-width: 62mm; max-height: 30mm; }
   .print-doc .print-logo-gross .print-logo { max-width: 86mm; max-height: 42mm; }
   .print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
-  .print-doc .print-meta { text-align: right; min-width: 55mm; }
+  .print-doc .print-meta { text-align: right; min-width: 55mm; max-width: 90mm; }
   .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-  .print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; color: #333; padding: 1px 0; }
+  /* min-width:0 auf dem Label ist hier entscheidend: Flex-Kinder verweigern
+     standardmäßig (min-width:auto) das Schrumpfen unter ihre eigene
+     Inhaltsbreite - ohne diese Zeile drückt ein langes, kaum trennbares Wort
+     wie "Abschlagsrechnung-Nr.:" die ganze Meta-Box (und damit den Header)
+     über den rechten Seitenrand hinaus, statt umzubrechen. Dieselbe Ursache
+     wurde in docpdf.js (echter PDF-Export) schon einmal behoben - hier war
+     die Browser-Druck-Variante noch nicht angepasst. */
+  .print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #333; padding: 1px 0; }
+  .print-doc .print-meta .row span:first-child { min-width: 0; overflow-wrap: break-word; text-align: left; }
+  .print-doc .print-meta .row span:last-child { flex-shrink: 0; white-space: nowrap; }
 
   .print-doc .print-header { page-break-inside: avoid; }
   .print-doc .print-absender { font-size: 10px; color: #666; border-bottom: 1px solid #bbb; display: inline-block; margin-bottom: 10px; padding-bottom: 1px; }
