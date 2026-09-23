@@ -1,53 +1,78 @@
 # neuverdrahtet
 
-> Elektro Fachbetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
+> Technischer Servicebetrieb in Essen (Nordrhein-Westfalen, Deutschland). Geschäftsführer: Danny Berger.
 > Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
-> 12 Elektro-Leistungen unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
+> Prüftechnik, Wartung, Wärme & Klima, MSR/Gebäudeautomation und Elektrotechnik unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
 - Adresse: Donnerstr. 131, 45357 Essen
 - Telefon: 01706398575
 - E-Mail: neuverdrahtet@gmail.com
-- Einsatzgebiet: Essen und Ruhrgebiet (u. a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen)
+- Einsatzgebiet: Essen und Ruhrgebiet (u. a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen, Bottrop, Duisburg)
+- [Kontakt / Anfrage](https://neuverdrahtet.com/kontakt.html)
 
-## Leistungen
-- [Elektroinstallation](https://neuverdrahtet.com/elektroinstallation.html): Elektroinstallation für Neubau, Altbau und Sanierung. (inkl. Kosten-Konfigurator)
-- [Beleuchtungstechnik](https://neuverdrahtet.com/beleuchtungstechnik.html): Lichtplanung, LED-Umrüstung und Einbaustrahler. (inkl. Kosten-Konfigurator)
-- [Smart Home](https://neuverdrahtet.com/smart-home.html): Licht-, Heizungs- und Sicherheitssteuerung vernetzt. (inkl. Kosten-Konfigurator)
-- [Photovoltaik](https://neuverdrahtet.com/photovoltaik.html): Elektro-seitiger Anschluss für Ihre PV-Anlage. (inkl. Kosten-Konfigurator)
-- [Wallbox](https://neuverdrahtet.com/wallbox.html): Wallbox-Installation privat und gewerblich. (inkl. Kosten-Konfigurator)
-- [Elektro-Kostenrechner](https://neuverdrahtet.com/elektro-kostenrechner.html): Umfangreicher interaktiver Konfigurator für alle Elektro-Gewerke (Beleuchtung, Energie & Technik, E-Mobilität, Netzwerk/Sicherheit/Außen) mit direkter Anfrage.
-- [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check-unterverteilung.html): Kostenloser KI-gestützter Foto-Check der Unterverteilung mit unverbindlicher Ersteinschätzung.
-- [Wärmepumpe](https://neuverdrahtet.com/waermepumpe.html): Elektroanschluss für Ihre Wärmepumpe. (inkl. Kosten-Konfigurator)
-- [E-Check](https://neuverdrahtet.com/e-check.html): Prüfung ortsveränderlicher Geräte nach VDE 0701-0702. (inkl. Kosten-Konfigurator)
-- [DGUV Prüfung](https://neuverdrahtet.com/dguv-pruefung.html): DGUV V3 Prüfung für Betriebe, inkl. Dokumentation. (inkl. Kosten-Konfigurator)
-- [Wartung](https://neuverdrahtet.com/wartung.html): Wartung für Elektroinstallation, Wallbox, Photovoltaik-Anschluss, Wärmepumpe, Smart Home und Beleuchtung — Störungsbehebung und Thermografie. (inkl. Kosten-Konfigurator)
-- [Elektrosanierung](https://neuverdrahtet.com/elektrosanierung.html): Komplette Erneuerung veralteter Elektroinstallation im Altbau, auch im bewohnten Zustand. (inkl. Kosten-Konfigurator)
-- [Zählerschrank](https://neuverdrahtet.com/zaehlerschrank.html): Zählerschrank-Erweiterung und -Tausch nach VDE-AR-N 4100, z. B. für Wallbox oder PV. (inkl. Kosten-Konfigurator)
-- [Unterverteilung](https://neuverdrahtet.com/unterverteilung.html): Neue oder erweiterte Unterverteilung für Garage, Keller, Werkstatt oder Gewerbe. (inkl. Kosten-Konfigurator)
+## Prüftechnik
+- [Prüftechnik-Übersicht](https://neuverdrahtet.com/prueftechnik-uebersicht.html)
+- [DGUV V3 Prüfung](https://neuverdrahtet.com/prueftechnik-dguv-v3.html): Organisation, Durchführung und Dokumentation elektrischer Prüfungen für Unternehmen.
+- [Prüfmanagement](https://neuverdrahtet.com/prueftechnik-pruefmanagement.html): Inventarisierung, Prüfkennzeichnung, digitale Dokumentation, Mängellisten, Wiederholungsfristen.
+- [Ortsveränderliche Betriebsmittel (E-Check)](https://neuverdrahtet.com/prueftechnik-ortsveraenderliche-betriebsmittel.html): E-Check nach VDE 0701-0702.
+- [VDE-Prüfungen](https://neuverdrahtet.com/prueftechnik-vde-pruefungen.html): Überblick über die relevanten DIN-VDE-Normen.
+- [Prüfung ortsfester Anlagen](https://neuverdrahtet.com/prueftechnik-ortsfeste-anlagen.html): Prüfung nach DIN VDE 0105-100.
+- [Prüfung elektrischer Maschinenausrüstung](https://neuverdrahtet.com/prueftechnik-maschinen.html): Prüfung nach DIN EN 60204-1.
+
+## Wartung
+- [Technische Wartung](https://neuverdrahtet.com/wartung-service.html): Elektroanlagen, Schaltschränke, Wärmepumpen, Klimaanlagen, MSR-Komponenten, Thermografie, Fehlerdiagnose.
+- [Wartungsverträge](https://neuverdrahtet.com/wartungsvertraege.html): Basic, Service und Full Service — individuell kalkuliert.
+
+## Wärme & Klima
+- [Wärme & Klima Übersicht](https://neuverdrahtet.com/waerme-klima.html)
+- [Wärmepumpenwartung](https://neuverdrahtet.com/waermepumpenwartung.html)
+- [Klimaanlagenwartung](https://neuverdrahtet.com/klimaanlagenwartung.html)
+- [Fehlerdiagnose Wärmepumpe & Klimaanlage](https://neuverdrahtet.com/fehlerdiagnose.html)
+
+## MSR & Gebäudeautomation
+- [MSR-Technik & Gebäudeautomation](https://neuverdrahtet.com/msr-gebaeudeautomation.html): Feldtechnik, Fehlersuche, BACnet/Modbus/KNX, Inbetriebnahme-Unterstützung.
+
+## Elektrotechnik
+- [Elektrotechnik-Übersicht](https://neuverdrahtet.com/elektrotechnik.html)
+- [Elektroinstallation](https://neuverdrahtet.com/elektrotechnik-elektroinstallation.html)
+- [Elektrosanierung](https://neuverdrahtet.com/elektrotechnik-elektrosanierung.html)
+- [Zählerschrank](https://neuverdrahtet.com/elektrotechnik-zaehlerschrank.html)
+- [Unterverteilung](https://neuverdrahtet.com/elektrotechnik-unterverteilung.html)
+- [Beleuchtungstechnik](https://neuverdrahtet.com/elektrotechnik-beleuchtungstechnik.html)
+- [Smart Home](https://neuverdrahtet.com/elektrotechnik-smart-home.html)
+- [Photovoltaik](https://neuverdrahtet.com/elektrotechnik-photovoltaik.html)
+- [Wallbox](https://neuverdrahtet.com/elektrotechnik-wallbox.html)
+- [Elektro-Kostenrechner](https://neuverdrahtet.com/elektro-kostenrechner.html): Interaktiver Konfigurator für Beleuchtung, Photovoltaik, Wallbox, Smart Home u. v. m.
+- [Wallbox-Kostenschätzer](https://neuverdrahtet.com/wallbox-kostenschaetzer.html)
+- [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check-unterverteilung.html): Kostenloser KI-gestützter Foto-Check mit unverbindlicher Ersteinschätzung.
+
+## Geschäftskunden
+- [Geschäftskunden](https://neuverdrahtet.com/geschaeftskunden.html): Ein Ansprechpartner für Prüftechnik, Wartung, Wärme & Klima, MSR und Elektrotechnik.
 
 ## Stadtteile in Essen
 - [Alle Stadtteile im Überblick](https://neuverdrahtet.com/einsatzgebiet.html)
-- [Essen-Borbeck](https://neuverdrahtet.com/elektriker-essen-borbeck.html)
-- [Essen-Frintrop](https://neuverdrahtet.com/elektriker-essen-frintrop.html)
-- [Essen-Altenessen](https://neuverdrahtet.com/elektriker-essen-altenessen.html)
-- [Essen-Steele](https://neuverdrahtet.com/elektriker-essen-steele.html)
-- [Essen-Kettwig](https://neuverdrahtet.com/elektriker-essen-kettwig.html)
-- [Essen-Werden](https://neuverdrahtet.com/elektriker-essen-werden.html)
-- [Essen-Rüttenscheid](https://neuverdrahtet.com/elektriker-essen-ruettenscheid.html)
-- [Essen-Kray](https://neuverdrahtet.com/elektriker-essen-kray.html)
-- [Essen-Frohnhausen](https://neuverdrahtet.com/elektriker-essen-frohnhausen.html)
-- [Essen-Schonnebeck](https://neuverdrahtet.com/elektriker-essen-schonnebeck.html)
+- [Essen-Borbeck](https://neuverdrahtet.com/einsatzgebiet-essen-borbeck.html)
+- [Essen-Frintrop](https://neuverdrahtet.com/einsatzgebiet-essen-frintrop.html)
+- [Essen-Altenessen](https://neuverdrahtet.com/einsatzgebiet-essen-altenessen.html)
+- [Essen-Steele](https://neuverdrahtet.com/einsatzgebiet-essen-steele.html)
+- [Essen-Kettwig](https://neuverdrahtet.com/einsatzgebiet-essen-kettwig.html)
+- [Essen-Werden](https://neuverdrahtet.com/einsatzgebiet-essen-werden.html)
+- [Essen-Rüttenscheid](https://neuverdrahtet.com/einsatzgebiet-essen-ruettenscheid.html)
+- [Essen-Kray](https://neuverdrahtet.com/einsatzgebiet-essen-kray.html)
+- [Essen-Frohnhausen](https://neuverdrahtet.com/einsatzgebiet-essen-frohnhausen.html)
+- [Essen-Schonnebeck](https://neuverdrahtet.com/einsatzgebiet-essen-schonnebeck.html)
 
 ## Weitere Städte im Ruhrgebiet
-- [Oberhausen](https://neuverdrahtet.com/elektriker-oberhausen.html)
-- [Bottrop](https://neuverdrahtet.com/elektriker-bottrop.html)
-- [Mülheim an der Ruhr](https://neuverdrahtet.com/elektriker-muelheim-an-der-ruhr.html)
-- [Gelsenkirchen](https://neuverdrahtet.com/elektriker-gelsenkirchen.html)
-- [Bochum](https://neuverdrahtet.com/elektriker-bochum.html)
-- [Duisburg](https://neuverdrahtet.com/elektriker-duisburg.html)
+- [Oberhausen](https://neuverdrahtet.com/einsatzgebiet-oberhausen.html)
+- [Bottrop](https://neuverdrahtet.com/einsatzgebiet-bottrop.html)
+- [Mülheim an der Ruhr](https://neuverdrahtet.com/einsatzgebiet-muelheim-an-der-ruhr.html)
+- [Gelsenkirchen](https://neuverdrahtet.com/einsatzgebiet-gelsenkirchen.html)
+- [Bochum](https://neuverdrahtet.com/einsatzgebiet-bochum.html)
+- [Duisburg](https://neuverdrahtet.com/einsatzgebiet-duisburg.html)
 
 ## Weitere Seiten
-- [Alle Leistungen im Überblick](https://neuverdrahtet.com/leistungen.html)
+- [Unternehmen](https://neuverdrahtet.com/unternehmen.html)
+- [Referenzen](https://neuverdrahtet.com/referenzen.html)
 - [Impressum](https://neuverdrahtet.com/impressum.html)
 - [Datenschutz](https://neuverdrahtet.com/datenschutz.html)

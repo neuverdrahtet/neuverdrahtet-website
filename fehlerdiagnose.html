@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://formspree.io https://neuverdrahtet-ki-assistent.neuverdrahtetworkersdev.workers.dev; frame-src https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://formspree.io">
+<title>Fehlerdiagnose Wärmepumpe & Klimaanlage Essen | neuverdrahtet</title>
+<meta name="description" content="Elektrische und regelungstechnische Fehlerdiagnose an Wärmepumpen- und Klimaanlagen in Essen & Ruhrgebiet — systematische Fehlersuche mit Dokumentation.">
+<link rel="canonical" href="https://neuverdrahtet.com/fehlerdiagnose.html">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="neuverdrahtet">
+<meta property="og:title" content="Fehlerdiagnose Wärmepumpe & Klimaanlage Essen | neuverdrahtet">
+<meta property="og:description" content="Elektrische und regelungstechnische Fehlerdiagnose an Wärmepumpen- und Klimaanlagen in Essen & Ruhrgebiet — systematische Fehlersuche mit Dokumentation.">
+<meta property="og:url" content="https://neuverdrahtet.com/fehlerdiagnose.html">
+<meta property="og:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
+<meta property="og:locale" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fehlerdiagnose Wärmepumpe & Klimaanlage Essen | neuverdrahtet">
+<meta name="twitter:description" content="Elektrische und regelungstechnische Fehlerdiagnose an Wärmepumpen- und Klimaanlagen in Essen & Ruhrgebiet — systematische Fehlersuche mit Dokumentation.">
+<meta name="twitter:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
+<meta name="geo.region" content="DE-NW">
+<meta name="geo.placename" content="Essen">
+<meta name="geo.position" content="51.4556;7.0116">
+<meta name="ICBM" content="51.4556, 7.0116">
+<link rel="preload" href="assets/fonts/poppins-600.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/poppins-700.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-mono-400.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="assets/fonts/ibm-plex-mono-500.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style-relaunch.css">
+<!-- Google Consent Mode (Standard: abgelehnt, bis Nutzer zustimmt) -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('consent', 'default', {
+    'analytics_storage': 'denied',
+    'ad_storage': 'denied',
+    'ad_user_data': 'denied',
+    'ad_personalization': 'denied',
+    'wait_for_update': 500
+  });
+</script>
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-TC5LT5DXCZ"></script>
+<script>
+  gtag('js', new Date());
+  gtag('config', 'G-TC5LT5DXCZ', { 'anonymize_ip': true });
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://neuverdrahtet.com/#website",
+      "url": "https://neuverdrahtet.com/",
+      "name": "neuverdrahtet",
+      "publisher": {
+        "@id": "https://neuverdrahtet.com/#business"
+      },
+      "inLanguage": "de-DE"
+    },
+    {
+      "@type": "Electrician",
+      "@id": "https://neuverdrahtet.com/#business",
+      "name": "neuverdrahtet UG (haftungsbeschränkt)",
+      "url": "https://neuverdrahtet.com/",
+      "image": "https://neuverdrahtet.com/assets/og-image.jpg",
+      "logo": "https://neuverdrahtet.com/assets/logo/logo-full.webp",
+      "telephone": "+49-170-6398575",
+      "email": "neuverdrahtet@gmail.com",
+      "priceRange": "€€",
+      "vatID": "DE456245279",
+      "slogan": "Smarte Elektrokonzepte für Alt & Neubau",
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "Donnerstr. 131",
+        "addressLocality": "Essen",
+        "postalCode": "45357",
+        "addressRegion": "NRW",
+        "addressCountry": "DE"
+      },
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": 51.4556,
+        "longitude": 7.0116
+      },
+      "areaServed": [
+        {
+          "@type": "City",
+          "name": "Essen"
+        },
+        {
+          "@type": "City",
+          "name": "Bochum"
+        },
+        {
+          "@type": "City",
+          "name": "Mülheim an der Ruhr"
+        },
+        {
+          "@type": "City",
+          "name": "Oberhausen"
+        },
+        {
+          "@type": "City",
+          "name": "Gelsenkirchen"
+        },
+        {
+          "@type": "City",
+          "name": "Bottrop"
+        },
+        {
+          "@type": "City",
+          "name": "Duisburg"
+        }
+      ],
+      "founder": {
+        "@type": "Person",
+        "name": "Danny Berger"
+      },
+      "hasMap": "https://maps.app.goo.gl/jFSMik9pEeff53my5",
+      "sameAs": [
+        "https://www.facebook.com/neuverdrahtetug/",
+        "https://www.instagram.com/neuverdrahtet/",
+        "https://maps.app.goo.gl/jFSMik9pEeff53my5"
+      ],
+      "hasOfferCatalog": {
+        "@type": "OfferCatalog",
+        "name": "Leistungen",
+        "itemListElement": [
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "DGUV V3 Prüfung",
+              "url": "https://neuverdrahtet.com/prueftechnik-dguv-v3.html",
+              "description": "DGUV V3 Prüfung für Unternehmen in Essen und im Ruhrgebiet: Organisation, Durchführung und Dokumentation elektrischer Prüfungen."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Prüfmanagement",
+              "url": "https://neuverdrahtet.com/prueftechnik-pruefmanagement.html",
+              "description": "Prüfmanagement für Unternehmen in Essen: Inventarisierung, Prüfkennzeichnung, digitale Dokumentation, Mängellisten, Prüfhistorie und Wiederholungsfristen."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Ortsveränderliche Betriebsmittel (E-Check)",
+              "url": "https://neuverdrahtet.com/prueftechnik-ortsveraenderliche-betriebsmittel.html",
+              "description": "E-Check nach VDE 0701-0702 für ortsveränderliche Elektrogeräte in Essen & Ruhrgebiet, inklusive Prüfplakette und Dokumentation."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "VDE-Prüfungen",
+              "url": "https://neuverdrahtet.com/prueftechnik-vde-pruefungen.html",
+              "description": "Überblick über die relevanten DIN-VDE-Normen für elektrische Prüfungen: DIN VDE 0100, 0105-100, 0701-0702, 60204-1 und VDE-AR-N 4100."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Prüfung ortsfester Anlagen",
+              "url": "https://neuverdrahtet.com/prueftechnik-ortsfeste-anlagen.html",
+              "description": "Prüfung ortsfester elektrischer Anlagen nach DIN VDE 0105-100: Sichtprüfung, Messung, Dokumentation und Wiederholungsfristen."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Prüfung elektrischer Maschinenausrüstung",
+              "url": "https://neuverdrahtet.com/prueftechnik-maschinen.html",
+              "description": "Prüfung elektrischer Maschinenausrüstung nach DIN EN 60204-1 — kombinierbar mit der DGUV V3 Prüfung."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Technische Wartung",
+              "url": "https://neuverdrahtet.com/wartung-service.html",
+              "description": "Technische Wartung für Elektroanlagen, Schaltschränke, Wärmepumpen, Klimaanlagen, MSR-Komponenten, Thermografie und Fehlerdiagnose."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Wartungsverträge",
+              "url": "https://neuverdrahtet.com/wartungsvertraege.html",
+              "description": "Planbare Wartungsverträge für technische Anlagen: Basic, Service und Full Service — individuell kalkuliert."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Wärmepumpenwartung",
+              "url": "https://neuverdrahtet.com/waermepumpenwartung.html",
+              "description": "Wärmepumpenwartung: elektrische Sicherheitsprüfung, Dichtheitsprüfung, Kältemittelkreislauf und Fehlerdiagnose."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Klimaanlagenwartung",
+              "url": "https://neuverdrahtet.com/klimaanlagenwartung.html",
+              "description": "Klimaanlagenwartung: Sicht- und Funktionsprüfung, elektrische Anschlüsse, Steuerung, Regelung, Fehlerdiagnose und Dichtheitsprüfung."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Fehlerdiagnose Wärmepumpe & Klimaanlage",
+              "url": "https://neuverdrahtet.com/fehlerdiagnose.html",
+              "description": "Elektrische und regelungstechnische Fehlerdiagnose an Wärmepumpen- und Klimaanlagen — systematische Fehlersuche mit Dokumentation."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "MSR-Technik & Gebäudeautomation",
+              "url": "https://neuverdrahtet.com/msr-gebaeudeautomation.html",
+              "description": "MSR-Technik und Gebäudeautomation: Feldtechnik, Fehlersuche, Schaltschrank/Elektro, BACnet/Modbus/KNX, Inbetriebnahme-Unterstützung und Wartung."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Elektroinstallation",
+              "url": "https://neuverdrahtet.com/elektrotechnik-elektroinstallation.html",
+              "description": "Elektroinstallation für Neubau, Altbau und Sanierung — normgerecht, sauber geplant."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Elektrosanierung",
+              "url": "https://neuverdrahtet.com/elektrotechnik-elektrosanierung.html",
+              "description": "Elektrosanierung im Altbau — komplette Erneuerung von Leitungen, Zählerschrank und Unterverteilung, auch im bewohnten Zustand."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Zählerschrank",
+              "url": "https://neuverdrahtet.com/elektrotechnik-zaehlerschrank.html",
+              "description": "Zählerschrank-Erneuerung und -Erweiterung nach VDE-AR-N 4100, inkl. Vorbereitung für Wallbox und PV."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Unterverteilung",
+              "url": "https://neuverdrahtet.com/elektrotechnik-unterverteilung.html",
+              "description": "Unterverteilung installieren und erweitern — für Garage, Keller, Gewerbe oder Gartenhaus, normgerecht abgesichert."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Beleuchtungstechnik",
+              "url": "https://neuverdrahtet.com/elektrotechnik-beleuchtungstechnik.html",
+              "description": "Lichtplanung, LED-Umrüstung und Einbaustrahler — energiesparend und passend zum Raumkonzept."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Smart Home",
+              "url": "https://neuverdrahtet.com/elektrotechnik-smart-home.html",
+              "description": "Smart-Home-Installation — Licht-, Heizungs- und Sicherheitssteuerung, auch nachrüstbar im Altbau."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Photovoltaik",
+              "url": "https://neuverdrahtet.com/elektrotechnik-photovoltaik.html",
+              "description": "Elektro-seitiger Photovoltaik-Anschluss — Wechselrichter, Zählerschrank und Speicher-Einbindung."
+            }
+          },
+          {
+            "@type": "Offer",
+            "itemOffered": {
+              "@type": "Service",
+              "name": "Wallbox",
+              "url": "https://neuverdrahtet.com/elektrotechnik-wallbox.html",
+              "description": "Wallbox-Installation — privat und gewerblich, mit Lastmanagement und Netzbetreiber-Anmeldung."
+            }
+          }
+        ]
+      }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://neuverdrahtet.com/fehlerdiagnose.html#webpage",
+      "url": "https://neuverdrahtet.com/fehlerdiagnose.html",
+      "name": "Fehlerdiagnose Wärmepumpe & Klimaanlage Essen | neuverdrahtet",
+      "description": "Elektrische und regelungstechnische Fehlerdiagnose an Wärmepumpen- und Klimaanlagen in Essen & Ruhrgebiet — systematische Fehlersuche mit Dokumentation.",
+      "isPartOf": {
+        "@id": "https://neuverdrahtet.com/#website"
+      },
+      "about": {
+        "@id": "https://neuverdrahtet.com/#business"
+      },
+      "inLanguage": "de-DE"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Start",
+          "item": "https://neuverdrahtet.com/index.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Wärme & Klima",
+          "item": "https://neuverdrahtet.com/waerme-klima.html"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Fehlerdiagnose",
+          "item": "https://neuverdrahtet.com/fehlerdiagnose.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a href="index.html" class="brand"><img class="brand-logo" src="assets/logo/logo-full-ondark.webp" width="600" height="153" alt="neuverdrahtet – technischer Elektroservice Essen"></a>
+    
+    <nav class="main-nav" aria-label="Hauptnavigation">
+      <div class="nav-item-dropdown">
+        <a href="prueftechnik-uebersicht.html">Leistungen <svg width="11" height="7" viewBox="0 0 11 7" fill="none"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
+        <div class="nav-dropdown">
+          <a href="prueftechnik-uebersicht.html"><span class="code">01</span>Prüftechnik</a>
+          <a href="wartung-service.html"><span class="code">02</span>Wartung</a>
+          <a href="waerme-klima.html"><span class="code">03</span>Wärme &amp; Klima</a>
+          <a href="msr-gebaeudeautomation.html"><span class="code">04</span>MSR &amp; Gebäudeautomation</a>
+          <a href="elektrotechnik.html"><span class="code">05</span>Elektrotechnik</a>
+        </div>
+      </div>
+      <a href="geschaeftskunden.html">Geschäftskunden</a>
+      <a href="unternehmen.html">Unternehmen</a>
+      <a href="kontakt.html">Kontakt</a>
+    </nav>
+
+    <div class="header-cta">
+      
+      <div class="header-icons">
+        <a href="https://wa.me/491706398575" target="_blank" rel="noopener" aria-label="WhatsApp" title="WhatsApp"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.39 1.26 4.81L2 22l5.42-1.36a9.9 9.9 0 0 0 4.62 1.15h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.5 2 12.04 2Zm5.72 14.02c-.24.68-1.4 1.3-1.93 1.35-.5.05-1.02.24-3.43-.72-2.9-1.16-4.76-4.14-4.9-4.33-.14-.19-1.17-1.56-1.17-2.97 0-1.41.74-2.1 1-2.39.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.42-.07.65.5.24.58.82 2 .89 2.14.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.37-.43.5-.14.14-.29.29-.13.57.17.29.75 1.24 1.61 2 1.11.99 2.04 1.3 2.33 1.45.29.14.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.38-.24.63-.14.26.1 1.64.77 1.92.91.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg></a>
+        <a href="tel:+491706398575" aria-label="Anrufen" title="Anrufen: 01706398575"><svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.2 1.2.4 2.5.6 3.8.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.4 21 3 13.6 3 4.7c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.6.6 3.8.1.4 0 .8-.2 1.1L6.6 10.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></a>
+        <a href="https://www.instagram.com/neuverdrahtet/" target="_blank" rel="noopener" aria-label="Instagram" title="Instagram"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="5" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7"/><circle cx="17.3" cy="6.7" r="1.1" fill="currentColor"/></svg></a>
+        <a href="https://www.facebook.com/neuverdrahtetug/" target="_blank" rel="noopener" aria-label="Facebook" title="Facebook"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9h3V5.5h-3C11.5 5.5 10 7 10 9.4V11H8v3.5h2V21h3.5v-6.5H16l.5-3.5h-3V9.6c0-.4.3-.6.5-.6Z"/></svg></a>
+        <a href="https://maps.app.goo.gl/jFSMik9pEeff53my5" target="_blank" rel="noopener" aria-label="Google Maps" title="Auf Google Maps ansehen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="9.5" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg></a>
+      </div>
+
+      <a class="btn btn-primary btn-sm" href="kontakt.html">Service anfragen</a>
+      <button class="nav-toggle" id="navToggle" aria-label="Menü öffnen" aria-expanded="false">☰</button>
+    </div>
+  </div>
+</header>
+
+<div class="mobile-drawer" id="mobileDrawer">
+  <div class="mobile-drawer-head">
+    <img src="assets/logo/logo-full-ondark.webp" width="600" height="152" alt="neuverdrahtet – technischer Elektroservice Essen" style="height:32px;width:auto;">
+    <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
+  </div>
+  <a href="prueftechnik-uebersicht.html">Leistungen</a>
+  <a class="mobile-sub" href="prueftechnik-uebersicht.html">Prüftechnik</a>
+  <a class="mobile-sub" href="wartung-service.html">Wartung</a>
+  <a class="mobile-sub" href="waerme-klima.html">Wärme &amp; Klima</a>
+  <a class="mobile-sub" href="msr-gebaeudeautomation.html">MSR &amp; Gebäudeautomation</a>
+  <a class="mobile-sub" href="elektrotechnik.html">Elektrotechnik</a>
+  <a href="geschaeftskunden.html">Geschäftskunden</a>
+  <a href="unternehmen.html">Unternehmen</a>
+  <a href="kontakt.html">Kontakt</a>
+</div>
+
+<main>
+
+  <section class="page-hero hero">
+    <div class="wrap">
+      <div>
+        <div class="breadcrumb"><a href="index.html">Start</a> · <a href="waerme-klima.html">Wärme &amp; Klima</a> · Fehlerdiagnose</div>
+        <p class="eyebrow">Wärme &amp; Klima · Fehlerdiagnose</p>
+        <h1>Fehlerdiagnose an Wärmepumpen- und Klimaanlagen</h1>
+        <p class="hero-lede">Anlage fällt aus oder zeigt eine Störung? Systematische elektrische und regelungstechnische Fehlersuche statt Rätselraten — mit dokumentiertem Ergebnis.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="kontakt.html">Störung melden</a>
+          <a class="btn btn-outline" href="#ablauf">Ablauf ansehen</a>
+        </div>
+      </div>
+      <div class="hero-panel">
+        <div class="icon-badge"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M11 2a9 9 0 1 0 6.32 15.44L21 21M11 7v4l3 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <h3>Ursache statt Symptom</h3>
+        <p>Strukturierte Fehlersuche auf der elektrischen und regelungstechnischen Seite der Anlage.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="ablauf">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">So läuft es ab</p>
+        <h2>Von der Meldung zur dokumentierten Ursache</h2>
+      </div>
+      <div class="process-row-n" style="grid-template-columns:repeat(7,1fr);">
+        <div class="process-step"><span class="num">01</span><h4>Störungsmeldung aufnehmen</h4></div><div class="process-step"><span class="num">02</span><h4>Erstdiagnose vor Ort</h4></div><div class="process-step"><span class="num">03</span><h4>Systematische Fehlersuche</h4></div><div class="process-step"><span class="num">04</span><h4>Ursache eingrenzen</h4></div><div class="process-step"><span class="num">05</span><h4>Elektrische/regelungstechnische Prüfung</h4></div><div class="process-step"><span class="num">06</span><h4>Lösung umsetzen oder empfehlen</h4></div><div class="process-step"><span class="num">07</span><h4>Dokumentation & Rückmeldung</h4></div>
+      </div>
+      <style>@media (max-width:980px){ .process-row-n{ grid-template-columns:repeat(3,1fr) !important; gap:24px !important; } } @media (max-width:560px){ .process-row-n{ grid-template-columns:1fr !important; } }</style>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-top">
+      <div class="footer-brand">
+        <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;">
+          <img class="footer-logo" src="assets/logo/logo-full-ondark.webp" width="600" height="152" alt="neuverdrahtet – technischer Elektroservice Essen" loading="lazy" style="margin-bottom:0;">
+          <img src="assets/badge-siegel.webp" alt="neuverdrahtet Siegel" loading="lazy" style="width:76px;height:76px;border-radius:50%;">
+        </div>
+        <p>PRÜFTECHNIK · WARTUNG · MSR · ELEKTROTECHNIK<br>Essen | Ruhrgebiet</p>
+      </div>
+      <div class="footer-cols">
+        <div class="footer-col">
+          <h3>Bereiche</h3>
+          <a href="prueftechnik-uebersicht.html">Prüftechnik</a>
+          <a href="wartung-service.html">Wartung</a>
+          <a href="waerme-klima.html">Wärme &amp; Klima</a>
+          <a href="msr-gebaeudeautomation.html">MSR</a>
+          <a href="elektrotechnik.html">Elektrotechnik</a>
+        </div>
+        <div class="footer-col">
+          <h3>Unternehmen</h3>
+          <a href="unternehmen.html">Über uns</a>
+          <a href="einsatzgebiet.html">Einsatzgebiet</a>
+          <a href="kontakt.html">Kontakt</a>
+        </div>
+        <div class="footer-col">
+          <h3>Rechtliches</h3>
+          <a href="impressum.html">Impressum</a>
+          <a href="datenschutz.html">Datenschutz</a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 neuverdrahtet UG (haftungsbeschränkt), Essen</span>
+      <span>Smarte Elektrokonzepte für Alt &amp; Neubau</span>
+    </div>
+  </div>
+</footer>
+<script src="assets/script.js" defer></script>
+<script src="assets/ki-assistent.js" defer></script>
+</body>
+</html>
