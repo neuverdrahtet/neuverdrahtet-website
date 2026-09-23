@@ -1616,7 +1616,7 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   .print-doc * { color: #111; }
   .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
   .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
-  .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; }
+  .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; white-space: nowrap; }
   .print-doc tr { page-break-inside: avoid; }
   .print-doc thead { display: table-header-group; }
   .print-doc p { page-break-inside: avoid; }
