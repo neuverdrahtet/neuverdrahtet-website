@@ -21,6 +21,15 @@ function bytesToBlob(bytes, mimeType) {
   return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
 }
 
+// XRechnungen (elektronische Rechnungen nach EN 16931) kommen oft als reines
+// XML statt als Bild/PDF - Lieferanten benennen den Mimetype dabei nicht
+// immer sauber (manche schicken "text/xml" oder sogar "application/octet-stream"
+// mit .xml-Endung), daher zusätzlich über den Dateinamen erkennen.
+function istXmlAnhang(attachment) {
+  return attachment.mimeType === 'application/xml' || attachment.mimeType === 'text/xml'
+    || (attachment.filename || '').toLowerCase().endsWith('.xml');
+}
+
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -312,20 +321,25 @@ export async function render(container) {
         beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${belegId}`, blob) : blob,
         projektId: '', kundeId: '', kalkKategorie: '',
       };
-      if (attachment.mimeType.startsWith('image/')) {
+      const istXml = istXmlAnhang(attachment);
+      if (istXml || attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf') {
         try {
-          const imageDataUrl = await blobToDataUrl(blob);
-          const result = await analyzeBeleg({ imageDataUrl, kategorien: AUSGABEN_KATEGORIEN });
+          const result = istXml
+            ? await analyzeBeleg({ xmlText: await blob.text(), kategorien: AUSGABEN_KATEGORIEN })
+            : await analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: AUSGABEN_KATEGORIEN });
           const kategorie = AUSGABEN_KATEGORIEN.includes(result.kategorie) ? result.kategorie : prefill.kategorie;
           const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : prefill.steuersatz;
           const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : prefill.datum;
+          const unsicher = !result.lesbar || !result.kategorieSicher;
           prefill = {
             ...prefill,
             datum, kategorie, steuersatz,
-            beschreibung: `${!result.lesbar || !result.kategorieSicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || prefill.beschreibung}`.trim(),
+            beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || prefill.beschreibung}`.trim(),
             lieferant: result.haendler || prefill.lieferant,
             betragNetto: Number(result.betragNetto) || 0,
             betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
+            kiAnalyseUnsicher: unsicher,
+            kiAnalyseGrund: unsicher ? (!result.lesbar ? 'Beleg nicht klar lesbar' : 'Kategorie/Händler unsicher erkannt') : '',
           };
         } catch { /* KI-Erkennung ist optional – Anhang wird trotzdem als Beleg gespeichert */ }
       }
@@ -609,7 +623,9 @@ export async function render(container) {
       if (kandidaten.length === 0) return;
       let erledigt = 0;
       for (const m of kandidaten) {
-        const anhang = (m.attachments || []).find((a) => a.mimeType === 'application/pdf') || (m.attachments || []).find((a) => (a.mimeType || '').startsWith('image/'));
+        const anhang = (m.attachments || []).find((a) => a.mimeType === 'application/pdf')
+          || (m.attachments || []).find((a) => istXmlAnhang(a))
+          || (m.attachments || []).find((a) => (a.mimeType || '').startsWith('image/'));
         if (!anhang) { await put('emails', { ...m, belegUebernommen: true }); continue; }
         try {
           await uebernehmeAlsBeleg(m, anhang);

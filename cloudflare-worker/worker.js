@@ -249,7 +249,7 @@ const BELEG_SCHEMA = {
 
 function buildBelegSystemPrompt(kategorien) {
   const liste = (kategorien && kategorien.length ? kategorien : ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges']).join(', ');
-  return `Du liest einen fotografierten Kassenbon, eine PDF-Rechnung oder eine sonstige Rechnung für einen deutschen Handwerksbetrieb aus und extrahierst die Daten für die Ausgaben-Erfassung.
+  return `Du liest einen fotografierten Kassenbon, eine PDF-Rechnung, eine XRechnung (elektronische Rechnung im XML-Format, z.B. nach EN 16931/UBL/CII) oder eine sonstige Rechnung für einen deutschen Handwerksbetrieb aus und extrahierst die Daten für die Ausgaben-Erfassung. Bei einer XRechnung stehen die Werte als strukturierte XML-Felder vor (z.B. "PayableAmount", "InvoicedQuantity", Verkäufer-/Käufer-Blöcke) statt als Bild - lies sie aus dem XML-Text statt aus einem Bild.
 
 Regeln:
 - Antworte ausschließlich auf Deutsch.
@@ -265,16 +265,29 @@ Regeln:
 - Erfinde keine Beträge - wenn ein Betrag nicht lesbar ist, setze ihn auf 0 und "lesbar" auf false.`;
 }
 
-async function callClaudeBelegScan({ apiKey, model, imageDataUrl, kategorien }) {
-  const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(imageDataUrl || '');
-  if (!match) {
-    throw new Error('Ungültiges Beleg-Format (unterstützt: JPEG/PNG/WebP-Fotos oder PDF).');
+async function callClaudeBelegScan({ apiKey, model, imageDataUrl, xmlText, kategorien }) {
+  // XRechnungen kommen als reiner XML-Text (kein Bild/PDF) - dafür einen
+  // Text-Content-Block statt eines Bild-/Dokument-Blocks bauen. Auf ca.
+  // 50.000 Zeichen begrenzt, damit eine unerwartet riesige XML-Datei nicht
+  // den Kontext des Modells sprengt (echte XRechnungen sind normalerweise
+  // deutlich kleiner).
+  let content;
+  if (xmlText) {
+    content = [
+      { type: 'text', text: `Folgende XRechnung (XML) auslesen:\n\n${xmlText.slice(0, 50000)}` },
+    ];
+  } else {
+    const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(imageDataUrl || '');
+    if (!match) {
+      throw new Error('Ungültiges Beleg-Format (unterstützt: JPEG/PNG/WebP-Fotos, PDF oder XRechnung-XML).');
+    }
+    const [, mediaType, base64Data] = match;
+    // PDFs gehen als "document"-Content-Block, Fotos als "image" - Claude liest beide Typen.
+    const belegBlock = mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64Data } }
+      : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } };
+    content = [belegBlock, { type: 'text', text: 'Lies diesen Beleg aus und liefere die strukturierten Daten.' }];
   }
-  const [, mediaType, base64Data] = match;
-  // PDFs gehen als "document"-Content-Block, Fotos als "image" - Claude liest beide Typen.
-  const belegBlock = mediaType === 'application/pdf'
-    ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64Data } }
-    : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } };
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -287,13 +300,7 @@ async function callClaudeBelegScan({ apiKey, model, imageDataUrl, kategorien }) 
       model,
       max_tokens: 1024,
       system: buildBelegSystemPrompt(kategorien),
-      messages: [{
-        role: 'user',
-        content: [
-          belegBlock,
-          { type: 'text', text: 'Lies diesen Beleg aus und liefere die strukturierten Daten.' },
-        ],
-      }],
+      messages: [{ role: 'user', content }],
       output_config: {
         format: { type: 'json_schema', schema: BELEG_SCHEMA },
       },
@@ -1271,8 +1278,9 @@ export default {
     }
 
     if (body.action === 'beleg-scan') {
-      if (!body.imageDataUrl || typeof body.imageDataUrl !== 'string') {
-        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl" fehlt.' }), {
+      const hatXml = typeof body.xmlText === 'string' && body.xmlText.trim();
+      if (!hatXml && (!body.imageDataUrl || typeof body.imageDataUrl !== 'string')) {
+        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl" oder "xmlText" fehlt.' }), {
           status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
@@ -1281,6 +1289,7 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           imageDataUrl: body.imageDataUrl,
+          xmlText: body.xmlText,
           kategorien: body.kategorien,
         });
         return new Response(JSON.stringify(result), {

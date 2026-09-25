@@ -42,6 +42,27 @@ function blobToDataUrl(blob) {
   });
 }
 
+// Lädt den bereits gespeicherten Beleg zu einer Ausgabe erneut als Blob -
+// egal ob er (Firebase-Modus) nur als {url, mime, ...} referenziert ist oder
+// (lokaler IndexedDB-Modus) direkt als Blob im Datensatz liegt. Für den
+// nachträglichen KI-Rescan bereits importierter Belege (siehe
+// "Alle jetzt automatisch prüfen").
+async function holBelegBlob(a) {
+  if (a.beleg?.url) {
+    const res = await fetch(a.beleg.url);
+    if (!res.ok) throw new Error('Beleg konnte nicht geladen werden.');
+    const raw = await res.blob();
+    return a.beleg.mime ? new Blob([raw], { type: a.beleg.mime }) : raw;
+  }
+  if (a.beleg instanceof Blob) return a.beleg;
+  throw new Error('Kein Beleg hinterlegt.');
+}
+
+function istXmlBlob(blob, belegMeta) {
+  const mime = blob.type || belegMeta?.mime || '';
+  return mime === 'application/xml' || mime === 'text/xml' || mime.endsWith('/xml');
+}
+
 export async function render(container) {
   let [ausgaben, settings, projekte, kunden, buchungen] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen')]);
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
@@ -374,6 +395,7 @@ export async function render(container) {
             <ul class="cal-event-list">
               ${unvollstaendigOffen.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.beschreibung || a.lieferant || '(ohne Angaben)')}</span><span>${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
             </ul>
+            <button type="button" class="btn btn-sm btn-primary" id="btn-beleg-nachscannen" style="margin-top:8px">🤖 Alle jetzt automatisch prüfen (${unvollstaendigOffen.length})</button>
           ` : ''}
           ${unvollstaendigKiUnsicher.length > 0 ? `
             <p style="font-weight:600;margin:10px 0 4px">KI konnte den Betrag nicht sicher lesen (${unvollstaendigKiUnsicher.length})</p>
@@ -424,6 +446,45 @@ export async function render(container) {
       toast(fehler === 0
         ? `${fehltBuchung.length} Ausgabe(n) nachträglich verbucht`
         : `${fehltBuchung.length - fehler} Ausgabe(n) verbucht, ${fehler} fehlgeschlagen`, fehler === 0 ? 'success' : 'danger');
+      close();
+      render(container);
+    });
+    body.querySelector('#btn-beleg-nachscannen')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      let erfolgreich = 0;
+      let fehler = 0;
+      const gesamt = unvollstaendigOffen.length;
+      for (let i = 0; i < gesamt; i++) {
+        const a = unvollstaendigOffen[i];
+        btn.textContent = `Prüfe ${i + 1}/${gesamt} ...`;
+        try {
+          const blob = await holBelegBlob(a);
+          const result = istXmlBlob(blob, a.beleg)
+            ? await analyzeBeleg({ xmlText: await blob.text(), kategorien: KATEGORIEN })
+            : await analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: KATEGORIEN });
+          const kategorie = KATEGORIEN.includes(result.kategorie) ? result.kategorie : a.kategorie;
+          const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : (a.steuersatz || 19);
+          const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : a.datum;
+          const unsicher = !result.lesbar || !result.kategorieSicher;
+          const updated = {
+            ...a, datum, kategorie, steuersatz,
+            beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || a.beschreibung || ''}`.trim(),
+            lieferant: result.haendler || a.lieferant,
+            betragNetto: Number(result.betragNetto) || 0,
+            betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
+            kiAnalyseUnsicher: unsicher,
+            kiAnalyseGrund: unsicher ? (!result.lesbar ? 'Beleg nicht klar lesbar' : 'Kategorie/Händler unsicher erkannt') : '',
+          };
+          await put('ausgaben', updated);
+          try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf die Prüfung nicht blockieren */ }
+          Object.assign(a, updated);
+          erfolgreich++;
+        } catch {
+          fehler++;
+        }
+      }
+      toast(`${erfolgreich} Beleg(e) automatisch eingelesen${fehler ? `, ${fehler} fehlgeschlagen (weiterhin manuell prüfbar)` : ''}`, fehler ? 'info' : 'success');
       close();
       render(container);
     });
