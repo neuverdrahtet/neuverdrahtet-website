@@ -131,10 +131,12 @@ export async function classifyEmails({ emails }) {
 /**
  * Lässt einen fotografierten Beleg, ein PDF oder eine XRechnung (elektronische
  * Rechnung im XML-Format) per KI auslesen (Händler/Datum/Betrag/Kategorie).
- * Genau eines von imageDataUrl (Foto/PDF als Data-URL) oder xmlText (reiner
- * XML-Inhalt einer XRechnung) angeben.
+ * Genau eines angeben: imageDataUrl (Foto/PDF als Data-URL), xmlText (reiner
+ * XML-Inhalt einer XRechnung) oder belegUrl (bereits hochgeladener Beleg,
+ * z.B. eine Firebase-Storage-URL - wird vom Worker server-seitig geladen,
+ * da Firebase Storage kein Cross-Origin-fetch() aus dem Browser erlaubt).
  */
-export async function analyzeBeleg({ imageDataUrl, xmlText, kategorien }) {
+export async function analyzeBeleg({ imageDataUrl, xmlText, belegUrl, kategorien }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {
     throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
@@ -145,7 +147,7 @@ export async function analyzeBeleg({ imageDataUrl, xmlText, kategorien }) {
       'Content-Type': 'application/json',
       'X-App-Secret': settings.aiAppSecret || '',
     },
-    body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, xmlText, kategorien }),
+    body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, xmlText, belegUrl, kategorien }),
   });
   if (!res.ok) {
     let message = `Fehler (${res.status})`;

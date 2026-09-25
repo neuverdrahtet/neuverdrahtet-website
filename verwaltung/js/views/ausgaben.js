@@ -459,10 +459,20 @@ export async function render(container) {
         const a = unvollstaendigOffen[i];
         btn.textContent = `Prüfe ${i + 1}/${gesamt} ...`;
         try {
-          const blob = await holBelegBlob(a);
-          const result = istXmlBlob(blob, a.beleg)
-            ? await analyzeBeleg({ xmlText: await blob.text(), kategorien: KATEGORIEN })
-            : await analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: KATEGORIEN });
+          // Bei einer Firebase-Storage-URL den Beleg NICHT selbst per fetch()
+          // laden (Firebase Storage blockt Cross-Origin-fetch() aus dem
+          // Browser per CORS) - stattdessen die URL an den Worker geben,
+          // der lädt sie server-seitig ohne diese Einschränkung. Nur für
+          // lokal als Blob gespeicherte Belege (kein Firebase-Projekt
+          // konfiguriert) wird hier direkt gelesen.
+          const result = a.beleg?.url
+            ? await analyzeBeleg({ belegUrl: a.beleg.url, kategorien: KATEGORIEN })
+            : await (async () => {
+                const blob = await holBelegBlob(a);
+                return istXmlBlob(blob, a.beleg)
+                  ? analyzeBeleg({ xmlText: await blob.text(), kategorien: KATEGORIEN })
+                  : analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: KATEGORIEN });
+              })();
           const kategorie = KATEGORIEN.includes(result.kategorie) ? result.kategorie : a.kategorie;
           const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : (a.steuersatz || 19);
           const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : a.datum;

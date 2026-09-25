@@ -265,7 +265,49 @@ Regeln:
 - Erfinde keine Beträge - wenn ein Betrag nicht lesbar ist, setze ihn auf 0 und "lesbar" auf false.`;
 }
 
-async function callClaudeBelegScan({ apiKey, model, imageDataUrl, xmlText, kategorien }) {
+// Wandelt einen ArrayBuffer ohne Zwischenstring-Explosion in Base64 um (der
+// naive Weg über String.fromCharCode(...new Uint8Array(buf)) sprengt bei
+// größeren PDFs den Funktionsargument-Stack).
+function arrayBufferToBase64(buffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Lädt einen bereits gespeicherten Beleg (z.B. eine Firebase-Storage-URL)
+ * server-seitig herunter, statt ihn dem Browser zu überlassen - Firebase
+ * Storage erlaubt standardmäßig kein Cross-Origin-fetch() aus dem Browser
+ * (CORS), ein Server-zu-Server-Aufruf hier im Worker ist davon nicht
+ * betroffen. Wird für das nachträgliche Neu-Einlesen bereits importierter
+ * Belege in Werkora (Ausgaben -> "Ausgaben prüfen") genutzt.
+ */
+async function ladeBelegVonUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Beleg konnte nicht geladen werden (${res.status}).`);
+  }
+  const contentType = (res.headers.get('content-type') || '').split(';')[0].trim();
+  if (contentType.includes('xml')) {
+    return { xmlText: await res.text() };
+  }
+  const buffer = await res.arrayBuffer();
+  const mediaType = /^image\/(png|jpe?g|webp)$/.test(contentType) || contentType === 'application/pdf'
+    ? contentType
+    : 'application/pdf'; // Firebase liefert für hochgeladene PDFs teils generische Content-Types
+  return { imageDataUrl: `data:${mediaType};base64,${arrayBufferToBase64(buffer)}` };
+}
+
+async function callClaudeBelegScan({ apiKey, model, imageDataUrl, xmlText, belegUrl, kategorien }) {
+  if (belegUrl) {
+    const geladen = await ladeBelegVonUrl(belegUrl);
+    imageDataUrl = geladen.imageDataUrl;
+    xmlText = geladen.xmlText;
+  }
   // XRechnungen kommen als reiner XML-Text (kein Bild/PDF) - dafür einen
   // Text-Content-Block statt eines Bild-/Dokument-Blocks bauen. Auf ca.
   // 50.000 Zeichen begrenzt, damit eine unerwartet riesige XML-Datei nicht
@@ -1279,8 +1321,9 @@ export default {
 
     if (body.action === 'beleg-scan') {
       const hatXml = typeof body.xmlText === 'string' && body.xmlText.trim();
-      if (!hatXml && (!body.imageDataUrl || typeof body.imageDataUrl !== 'string')) {
-        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl" oder "xmlText" fehlt.' }), {
+      const hatUrl = typeof body.belegUrl === 'string' && body.belegUrl.trim();
+      if (!hatXml && !hatUrl && (!body.imageDataUrl || typeof body.imageDataUrl !== 'string')) {
+        return new Response(JSON.stringify({ error: 'Feld "imageDataUrl", "xmlText" oder "belegUrl" fehlt.' }), {
           status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
@@ -1290,6 +1333,7 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           imageDataUrl: body.imageDataUrl,
           xmlText: body.xmlText,
+          belegUrl: body.belegUrl,
           kategorien: body.kategorien,
         });
         return new Response(JSON.stringify(result), {
