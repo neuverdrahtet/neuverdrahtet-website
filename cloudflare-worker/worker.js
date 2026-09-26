@@ -1098,12 +1098,29 @@ Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHR
 - Rechnungen anlegen, Angebote/Rechnungen versenden oder freigeben sowie jedes Löschen ist über diese API technisch gesperrt (Sicherheitsregeln der Werkora-API) - wenn danach gefragt wird, erkläre freundlich, dass das aktuell nur direkt in Werkora selbst geht, und biete stattdessen die verfügbare Alternative an (z.B. einen Angebots-Entwurf statt einer Rechnung anlegen).
 - Erfinde niemals Ergebnisse, IDs oder Daten - nutze ausschließlich das, was die Tools tatsächlich zurückgeben. Bei einem Tool-Fehler erkläre ehrlich, was schiefging.
 - Antworte präzise und knapp auf Deutsch. Bei Listen mit vielen Treffern eine sinnvolle, kompakte Zusammenfassung liefern statt jeden Datensatz einzeln auszuschreiben, außer explizit nach Details gefragt wird.
-- Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.`;
+- Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.
+
+Internetrecherche, Kalkulation und Datenpflege:
+- Fehlende Informationen (Artikelbezeichnungen, Hersteller/Modellnummern, technische Daten, Materialeigenschaften, Produktvarianten, marktübliche Materialpreise, Lieferbarkeit, typische Montageschritte/Arbeitsabläufe/Zeitansätze, benötigtes Material, übliche Zusatzarbeiten, technische Voraussetzungen) darfst du eigenständig per Web-Suche recherchieren statt sie sofort zurückzugeben - bevorzugt in dieser Reihenfolge: 1) Herstellerangaben/technische Datenblätter, 2) offizielle Dokumentationen/Norm- oder Regelwerksinformationen, 3) Großhändler/etablierte Fachhändler, 4) seriöse Brancheninformationen, 5) andere nachvollziehbare Quellen. Gleiche geschäftlich wichtige Angaben nach Möglichkeit mit mehreren Quellen ab und nenne bei Bedarf Quelle und Recherchedatum.
+- Reihenfolge beim Nachschlagen fehlender Informationen: erst per Tools die echten Werkora-Daten prüfen (Kunden/Projekte per searchCustomers/searchProjects, Preise per getPriceList) - erst wenn dort nichts Passendes zu finden ist, im Internet recherchieren und Ergebnisse miteinander vergleichen. Ein Soll-/Ist-Zeitvergleich mit echten Arbeitsberichten/Zeiterfassungsdaten ist aktuell technisch noch nicht möglich (kein Werkzeug dafür vorhanden) - weise das bei entsprechenden Fragen ehrlich darauf hin, statt Zeitansätze auf Verdacht zu vergleichen. Frage den Nutzer nur, wenn eine Information danach immer noch nicht zuverlässig bestimmbar ist.
+- Preise: ein bereits in der Werkora-Preisliste (getPriceList) hinterlegter Preis hat IMMER Vorrang vor einem recherchierten Internetpreis. Recherchierte Preise sind nur eine Kalkulationsgrundlage, nicht automatisch der Verkaufspreis von neuverdrahtet. Erfinde niemals Materialaufschläge, Stundensätze oder sonstige Kalkulationsregeln - nutze ausschließlich das, was in Werkora hinterlegt ist.
+- Du hast ohnehin kein Werkzeug, um Preise/Aufschläge/Stundensätze zu ändern - das ist Absicht. Erkennst du trotzdem eine sinnvolle Anpassung (z.B. weil ein Materialpreis sich laut Recherche deutlich verändert hat), ändere nichts direkt, sondern: fasse Recherche/Analyse samt Auswirkung zusammen -> lege per createTask eine Aufgabe für die Geschäftsführung an, die den bisherigen Wert, den Änderungsvorschlag und die Begründung/Quellen konkret nennt -> reserviere per createAppointment einen Termin zur Prüfung/Freigabe. Erst nach ausdrücklicher Freigabe durch den Nutzer gilt ein neuer Wert als verbindlich - ändere niemals eigenständig zentrale Verkaufspreise oder Kalkulationsregeln, wenn dadurch künftige Angebote/Rechnungen finanziell beeinflusst würden.
+- Kennzeichne jede von dir gelieferte Information eindeutig als "intern bestätigt" (direkt aus Werkora-Daten), "extern verifiziert" (per Internetrecherche bestätigt, mit Quelle und Datum) oder "Schätzung/Empfehlung" (abgeleiteter/geschätzter Wert ohne gesicherte Quelle) - der Nutzer muss jederzeit erkennen können, woher ein Wert stammt. Speichere bzw. behaupte unsichere Informationen niemals als gesicherte Tatsache.`;
+
+// Neben den eigenen Werkora-Werkzeugen (client-seitig ausgeführt, siehe
+// callKiBuerokraft) bekommt der Assistent hiermit Web-Suche als serverseitig
+// von Anthropic selbst ausgeführtes Tool - für fehlende technische Daten/
+// Marktpreise/Herstellerangaben (siehe Regeln in ASSISTENT_CHAT_SYSTEM_PROMPT).
+// max_uses begrenzt die Recherchetiefe pro Chat-Antwort aus Kosten-/
+// Zeitgründen. allowed_callers:['direct'] wie beim GAEB-Preis-Tool, damit
+// auch günstigere Modelle ohne "programmatic tool calling" den Aufruf nutzen
+// dürfen.
+const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, allowed_callers: ['direct'] };
 
 async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey }) {
   let conversation = messages;
 
-  for (let iteration = 0; iteration < 8; iteration++) {
+  for (let iteration = 0; iteration < 10; iteration++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1116,7 +1133,7 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         max_tokens: 2048,
         system: ASSISTENT_CHAT_SYSTEM_PROMPT,
         messages: conversation,
-        tools: KI_BUEROKRAFT_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema })),
+        tools: [...KI_BUEROKRAFT_TOOLS.map(({ name, description, input_schema }) => ({ name, description, input_schema })), ASSISTENT_WEB_SEARCH_TOOL],
       }),
     });
 
@@ -1130,9 +1147,19 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
       throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
     }
 
+    // Eine mehrstufige Web-Suche kann Anthropic mitten in der Recherche
+    // anhalten (pause_turn) und um Fortsetzung bitten - das ist keine Bitte
+    // um ein Tool-Ergebnis von uns, sondern läuft serverseitig weiter, sobald
+    // wir denselben Content unverändert als nächste Assistenten-Runde
+    // zurückschicken (analog zum GAEB-Preisrecherche-Tool).
+    if (data.stop_reason === 'pause_turn') {
+      conversation = [...conversation, { role: 'assistant', content: data.content }];
+      continue;
+    }
+
     const toolUses = (data.content || []).filter((b) => b.type === 'tool_use');
     if (toolUses.length === 0 || data.stop_reason !== 'tool_use') {
-      const textBlock = (data.content || []).find((b) => b.type === 'text');
+      const textBlock = (data.content || []).filter((b) => b.type === 'text').pop();
       return { reply: textBlock ? textBlock.text : 'Dazu kann ich gerade nichts sagen.' };
     }
 
