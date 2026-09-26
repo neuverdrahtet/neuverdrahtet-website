@@ -11,10 +11,20 @@
  * (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), beantwortet als
  * interner KI-Assistent (Chat) Fragen zu den echten Firmendaten per
  * Tool-Use-Loop gegen die KI-Bürokraft-API, oder löst eine Firebase-Cloud-
- * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Die
+ * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Zusätzlich
+ * läuft einmal täglich morgens automatisch ein "Büro-Check" (Cloudflare Cron
+ * Trigger, siehe scheduled()): dieselbe Tool-Loop wie der Chat prüft ohne
+ * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads, legt bei Bedarf
+ * neue Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
  * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
  * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
+ *
+ * Damit der tägliche Büro-Check tatsächlich läuft, muss im Cloudflare-
+ * Dashboard bei diesem Worker unter Settings -> Triggers -> Cron Triggers
+ * einmalig ein Trigger hinzugefügt werden (z.B. "0 5 * * *" für ca. 6-7 Uhr
+ * deutscher Zeit, je nach Sommer-/Winterzeit) - das lässt sich nicht per
+ * Quick-Edit-Code allein einrichten.
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -1281,7 +1291,127 @@ async function sendFcmMessages({ serviceAccount, tokens, title, body, url }) {
   }));
 }
 
+// --- Firestore-Lesezugriff per REST (nur für den täglichen Büro-Check nötig,
+// um die Geräte-Tokens für die Push-Benachrichtigung zu ermitteln - der
+// Worker hat sonst keinen eigenständigen Firestore-Zugriff, das läuft normal
+// ausschließlich über den Browser/das Firebase-SDK). Nutzt denselben Service-
+// Account wie der Push-Versand. ---
+
+function firestoreValueToJs(value) {
+  if (!value || typeof value !== 'object') return null;
+  if ('stringValue' in value) return value.stringValue;
+  if ('integerValue' in value) return Number(value.integerValue);
+  if ('doubleValue' in value) return value.doubleValue;
+  if ('booleanValue' in value) return value.booleanValue;
+  if ('nullValue' in value) return null;
+  if ('timestampValue' in value) return value.timestampValue;
+  if ('arrayValue' in value) return (value.arrayValue.values || []).map(firestoreValueToJs);
+  if ('mapValue' in value) return firestoreFieldsToObject(value.mapValue.fields || {});
+  return null;
+}
+
+function firestoreFieldsToObject(fields) {
+  const obj = {};
+  for (const [key, value] of Object.entries(fields)) obj[key] = firestoreValueToJs(value);
+  return obj;
+}
+
+/** Liest alle Dokumente einer Firestore-Collection per REST (mit Pagination). */
+async function firestoreListDocuments({ serviceAccount, collection }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const docs = [];
+  let pageToken = '';
+  do {
+    const url = `https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default)/documents/${collection}?pageSize=300${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ''}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Firestore-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const data = await res.json();
+    for (const doc of data.documents || []) {
+      docs.push({ id: doc.name.split('/').pop(), ...firestoreFieldsToObject(doc.fields || {}) });
+    }
+    pageToken = data.nextPageToken || '';
+  } while (pageToken);
+  return docs;
+}
+
+// --- Täglicher automatischer Büro-Check (Cloudflare Cron Trigger) ---
+//
+// Läuft ohne Mitarbeiter-Interaktion einmal morgens durch dieselbe
+// Tool-Loop wie der interaktive KI-Assistent (siehe callClaudeAssistentChat)
+// - mit einem festen Auftrag statt einer Chat-Nachricht. Die KI prüft
+// Aufgaben/Rechnungen/Termine/Leads, legt bei Bedarf per createTask neue
+// Aufgaben an und schließt IMMER mit einer Tages-Zusammenfassungs-Aufgabe ab.
+// Zusätzlich wird eine Push-Benachrichtigung an alle admin/büro-Geräte
+// geschickt. Eine E-Mail-Zusammenfassung ist bewusst (noch) nicht
+// eingebaut - dafür fehlt aktuell ein serverseitiger E-Mail-Versandweg (das
+// bestehende E-Mail-Feature läuft über die Gmail-Anbindung im Browser, die
+// bei einem nächtlichen Cron-Lauf ohne offene App nicht zur Verfügung
+// steht).
+function buildTagescheckPrompt(heute) {
+  return `Führe jetzt deinen täglichen Büro-Check durch (automatischer Lauf ohne Mitarbeiter - es beantwortet dir gerade niemand Rückfragen, entscheide eigenständig im Rahmen deiner Regeln). Heutiges Datum: ${heute}.
+
+Gehe systematisch vor:
+1. getDashboard für den Überblick.
+2. searchTasks (status=offen) auf überfällige oder heute fällige Aufgaben prüfen.
+3. searchInvoices (status=overdue) auf überfällige Rechnungen prüfen.
+4. searchAppointments für die nächsten Tage auf anstehende Termine prüfen, für die ggf. noch etwas vorzubereiten ist.
+5. searchLeads auf unbearbeitete Leads ohne next_action prüfen.
+6. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
+7. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
+8. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist (auch wenn nichts Dringendes ansteht - dann das kurz so vermerken).
+
+Antworte danach zusätzlich mit einer kurzen Fließtext-Zusammenfassung (max. 3-4 Sätze, ohne Aufzählungszeichen, geeignet als Text einer Push-Benachrichtigung).`;
+}
+
+async function runTagescheck(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.KI_BUEROKRAFT_URL || !env.KI_BUEROKRAFT_API_KEY) {
+    console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY/KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlt.');
+    return;
+  }
+
+  const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
+  let ergebnis;
+  try {
+    ergebnis = await callClaudeAssistentChat({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.MODEL_ID || 'claude-opus-4-8',
+      messages: [{ role: 'user', content: buildTagescheckPrompt(heute) }],
+      kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
+      kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
+    });
+  } catch (err) {
+    console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
+    return;
+  }
+
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return; // Aufgabe(n) wurden trotzdem angelegt, nur der Push entfällt
+
+  try {
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });
+    const tokens = tokenDocs.filter((t) => ['admin', 'buero'].includes(t.role)).map((t) => t.id);
+    if (tokens.length === 0) return;
+    await sendFcmMessages({
+      serviceAccount,
+      tokens,
+      title: 'Täglicher Büro-Check',
+      body: (ergebnis.reply || 'Der tägliche Check ist fertig - Details in der neuen Aufgabe.').slice(0, 500),
+      url: './index.html#/aufgaben',
+    });
+  } catch (err) {
+    console.log('Push nach täglichem Büro-Check fehlgeschlagen:', err.message);
+  }
+}
+
 export default {
+  /** Cloudflare Cron Trigger - siehe Dashboard -> dieser Worker -> Settings -> Triggers -> Cron Triggers. */
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runTagescheck(env));
+  },
+
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
     const headers = corsHeaders(origin, env);

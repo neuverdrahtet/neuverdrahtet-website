@@ -8,3 +8,10 @@ compatibility_date = "2026-01-01"
 [vars]
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
+
+# Täglicher automatischer Büro-Check (siehe scheduled() in worker.js). Wird
+# beim Deploy per Cloudflare-Dashboard (Quick Edit) NICHT automatisch
+# übernommen - dafür im Dashboard unter Settings -> Triggers -> Cron
+# Triggers manuell denselben Ausdruck eintragen.
+[triggers]
+crons = ["0 5 * * *"]
