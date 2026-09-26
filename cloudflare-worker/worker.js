@@ -14,8 +14,9 @@
  * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Zusätzlich
  * läuft einmal täglich morgens automatisch ein "Büro-Check" (Cloudflare Cron
  * Trigger, siehe scheduled()): dieselbe Tool-Loop wie der Chat prüft ohne
- * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads, legt bei Bedarf
- * neue Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
+ * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads sowie unvollständige
+ * Belege (per bulkFixReceipts automatisch per KI ausgelesen und übernommen),
+ * legt bei Bedarf neue Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
  * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
  * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
@@ -977,6 +978,64 @@ const KI_BUEROKRAFT_TOOLS = [
     description: 'Komplette Preisliste (Artikel+Leistungen) abrufen (nur lesen).',
     input_schema: { type: 'object', properties: { trade: { type: 'string' }, count: { type: 'boolean' }, limit: { type: 'integer' } }, additionalProperties: false },
   },
+  {
+    name: 'searchExpenses',
+    method: 'GET',
+    path: (i) => '/expenses' + buildQuery(i, ['customer_id', 'project_id', 'category', 'supplier', 'date_from', 'date_to', 'status', 'incomplete', 'offset', 'limit']),
+    description: 'Ausgaben/Belege abrufen (inkl. Beleg-URL/-Dateityp, falls in Werkora bereits ein Beleg hochgeladen wurde). incomplete=true filtert auf Belege ohne Betrag oder mit 0 Euro. Antwort ist { items, total, offset, limit, has_more } statt einer reinen Liste - offset erhöhen, bis has_more false ist, für die komplette Liste.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        category: { type: 'string' },
+        supplier: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        status: { type: 'string' },
+        incomplete: { type: 'boolean', description: 'true = nur Belege ohne bzw. mit 0 Euro Betrag.' },
+        offset: { type: 'integer' },
+        limit: { type: 'integer' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'updateExpense',
+    method: 'PATCH',
+    path: (i) => `/expenses/${encodeURIComponent(i.id)}`,
+    body: bodyOhneId,
+    description: 'Eine einzelne Ausgabe/einen Beleg nachträglich korrigieren (z.B. Kategorie zuordnen, Betrag/Lieferant/Datum berichtigen).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        category: { type: 'string' },
+        description: { type: 'string' },
+        supplier: { type: 'string' },
+        amount_net: { type: 'number' },
+        amount_gross: { type: 'number' },
+        vat_rate: { type: 'number' },
+        date: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+      },
+      required: ['id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'bulkFixReceipts',
+    method: 'POST',
+    path: () => '/expenses/bulk-fix-receipts',
+    body: bodyOhneId,
+    description: 'Verarbeitet in einem Aufruf mehrere unvollständige Belege (ohne/mit 0 Euro Betrag) automatisch per KI-Belegerkennung: liest jeden Beleg wirklich aus und übernimmt bei sicher lesbaren Belegen Betrag/Datum/Lieferant sofort (Kategorie nur bei hoher KI-Sicherheit, sonst bleibt sie unverändert). Nicht sicher lösbare Belege werden mit kiAnalyseUnsicher=true markiert (verschwinden dadurch aus dem Kandidatenkreis künftiger Aufrufe) und im Feld needs_manual_review gemeldet - erfinde bei denen nichts, sondern melde sie ehrlich als "manuell zu prüfen". Antwort: { processed, updated, needs_manual_review, remaining_incomplete, has_more }. Bei has_more=true erneut aufrufen, um den restlichen Rückstand abzuarbeiten - dabei die Anzahl Aufrufe pro Gespräch/Lauf sinnvoll begrenzen (z.B. höchstens 6), der Rest folgt beim nächsten Lauf.',
+    input_schema: {
+      type: 'object',
+      properties: { limit: { type: 'integer', description: 'Wie viele Belege je Aufruf verarbeitet werden (Standard 10, maximal 25).' } },
+      additionalProperties: false,
+    },
+  },
 ];
 
 async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input }) {
@@ -1106,6 +1165,7 @@ Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHR
 - Vor dem Anlegen eines neuen Kunden IMMER zuerst mit searchCustomers prüfen, ob er schon existiert (E-Mail/Telefon).
 - Bei reinen Zählfragen ("Wie viele offene Aufgaben haben wir?") das jeweilige Tool nach Möglichkeit mit count=true aufrufen statt die volle Liste zu laden.
 - Rechnungen anlegen, Angebote/Rechnungen versenden oder freigeben sowie jedes Löschen ist über diese API technisch gesperrt (Sicherheitsregeln der Werkora-API) - wenn danach gefragt wird, erkläre freundlich, dass das aktuell nur direkt in Werkora selbst geht, und biete stattdessen die verfügbare Alternative an (z.B. einen Angebots-Entwurf statt einer Rechnung anlegen).
+- Unvollständige Belege/Ausgaben (ohne oder mit 0 Euro Betrag) kannst du eigenständig per bulkFixReceipts automatisch nachlesen und korrigieren lassen - das liest den tatsächlichen Beleginhalt per KI aus, erfindet nichts. Nicht sicher lösbare Belege werden ehrlich als "manuell zu prüfen" gemeldet (needs_manual_review), nie als erledigt ausgegeben. Bei vielen offenen Belegen mehrere bulkFixReceipts-Aufrufe hintereinander nutzen (has_more prüfen), aber sinnvoll begrenzen statt endlos zu wiederholen.
 - Erfinde niemals Ergebnisse, IDs oder Daten - nutze ausschließlich das, was die Tools tatsächlich zurückgeben. Bei einem Tool-Fehler erkläre ehrlich, was schiefging.
 - Antworte präzise und knapp auf Deutsch. Bei Listen mit vielen Treffern eine sinnvolle, kompakte Zusammenfassung liefern statt jeden Datensatz einzeln auszuschreiben, außer explizit nach Details gefragt wird.
 - Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.
@@ -1130,7 +1190,11 @@ const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_sear
 async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey }) {
   let conversation = messages;
 
-  for (let iteration = 0; iteration < 10; iteration++) {
+  // 20 statt vorher 10 Runden, damit der tägliche Büro-Check auch mehrere
+  // bulkFixReceipts-Aufrufe (Beleg-Rückstand abarbeiten) hintereinander
+  // durchführen kann, ohne vorzeitig abgebrochen zu werden - im normalen
+  // interaktiven Chat werden davon fast nie mehr als 2-3 Runden gebraucht.
+  for (let iteration = 0; iteration < 20; iteration++) {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1359,9 +1423,10 @@ Gehe systematisch vor:
 3. searchInvoices (status=overdue) auf überfällige Rechnungen prüfen.
 4. searchAppointments für die nächsten Tage auf anstehende Termine prüfen, für die ggf. noch etwas vorzubereiten ist.
 5. searchLeads auf unbearbeitete Leads ohne next_action prüfen.
-6. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
-7. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
-8. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist (auch wenn nichts Dringendes ansteht - dann das kurz so vermerken).
+6. searchExpenses mit incomplete=true prüfen, ob unvollständige Belege (ohne/mit 0 Euro Betrag) offen sind. Falls ja: räume den Rückstand per bulkFixReceipts (limit=25) ab - wiederhole den Aufruf, solange has_more=true ist, aber höchstens 6 Aufrufe in diesem Lauf (der Rest folgt automatisch beim nächsten täglichen Check). Erfinde dabei nichts - Belege, die bulkFixReceipts als needs_manual_review meldet, bleiben offen und werden nur zusammengefasst, nicht als erledigt gemeldet.
+7. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
+8. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
+9. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist - inkl. wie viele Belege automatisch erledigt wurden und wie viele noch manuell geprüft werden müssen (auch wenn sonst nichts Dringendes ansteht - dann das kurz so vermerken).
 
 Antworte danach zusätzlich mit einer kurzen Fließtext-Zusammenfassung (max. 3-4 Sätze, ohne Aufzählungszeichen, geeignet als Text einer Push-Benachrichtigung).`;
 }
