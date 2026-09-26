@@ -1189,6 +1189,13 @@ const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_sear
 
 async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey }) {
   let conversation = messages;
+  // Sammelt jeden Tool-Aufruf mit Rohantwort - hilft bei der Fehlersuche, weil
+  // das Modell einen Tool-Fehler sonst nur in eigenen (oft zu vagen) Worten
+  // zusammenfasst, statt den tatsächlichen Fehlertext zu zeigen. Wird im
+  // JSON-Response als "debugLog" mitgeschickt (nur zur Diagnose gedacht,
+  // keine sensiblen Daten - dieselben Werte, die eh im Browser-Payload/den
+  // Chat-Nachrichten sichtbar sind).
+  const debugLog = [];
 
   // 20 statt vorher 10 Runden, damit der tägliche Büro-Check auch mehrere
   // bulkFixReceipts-Aufrufe (Beleg-Rückstand abarbeiten) hintereinander
@@ -1234,7 +1241,7 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
     const toolUses = (data.content || []).filter((b) => b.type === 'tool_use');
     if (toolUses.length === 0 || data.stop_reason !== 'tool_use') {
       const textBlock = (data.content || []).filter((b) => b.type === 'text').pop();
-      return { reply: textBlock ? textBlock.text : 'Dazu kann ich gerade nichts sagen.' };
+      return { reply: textBlock ? textBlock.text : 'Dazu kann ich gerade nichts sagen.', debugLog };
     }
 
     conversation = [...conversation, { role: 'assistant', content: data.content }];
@@ -1245,6 +1252,7 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         content: 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).',
         is_error: true,
       }));
+      debugLog.push(...toolUses.map((tu) => ({ tool: tu.name, input: tu.input, error: 'KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen' })));
       conversation = [...conversation, { role: 'user', content: toolResults }];
       continue;
     }
@@ -1254,23 +1262,27 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
       const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
       if (!tool) {
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Unbekanntes Werkzeug: ${toolUse.name}`, is_error: true });
+        debugLog.push({ tool: toolUse.name, input: toolUse.input, error: 'Unbekanntes Werkzeug' });
         continue;
       }
       try {
+        const path = tool.path(toolUse.input || {});
         const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
         toolResults.push({
           type: 'tool_result', tool_use_id: toolUse.id,
           content: JSON.stringify(ergebnis).slice(0, 8000),
           is_error: status >= 400,
         });
+        debugLog.push({ tool: toolUse.name, input: toolUse.input, path, status, response: ergebnis });
       } catch (err) {
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Fehler beim Aufruf: ${err.message}`, is_error: true });
+        debugLog.push({ tool: toolUse.name, input: toolUse.input, error: err.message, stack: err.stack });
       }
     }
     conversation = [...conversation, { role: 'user', content: toolResults }];
   }
 
-  return { reply: 'Das dauert gerade zu lange oder braucht zu viele Schritte - bitte die Frage eingrenzen oder in Werkora direkt nachsehen.' };
+  return { reply: 'Das dauert gerade zu lange oder braucht zu viele Schritte - bitte die Frage eingrenzen oder in Werkora direkt nachsehen.', debugLog };
 }
 
 // --- Push-Versand (Firebase Cloud Messaging HTTP v1, Server-Auth per Service Account) ---
