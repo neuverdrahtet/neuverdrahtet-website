@@ -47,6 +47,67 @@ window.addEventListener('afterprint', () => {
   if (root) root.innerHTML = '';
 });
 
+/**
+ * Baut in der Kopfzeile eines Dokument-Formulars (Angebot/Auftrags-
+ * bestätigung/Rechnung) einen Umschalter zwischen der Eingabemaske und einer
+ * Live-Druckansicht - identisch zum echten Ausdruck (dieselben .print-doc-
+ * Styles, siehe app.css), aber direkt im Formular sichtbar, auch bei einem
+ * noch nicht gespeicherten neuen Dokument. Wechselt man zur Druckansicht,
+ * wird sie live aus dem AKTUELLEN Formularstand aufgebaut (getDocOpts()),
+ * nicht aus dem zuletzt gespeicherten Stand.
+ *
+ * @param {HTMLElement} body - das modal-body-Element aus openModal()
+ * @param {() => object} getDocOpts - liefert die aktuellen Props für buildDocHtml()
+ * @param {object} settings - für Akzentfarbe/Schriftgröße der Vorschau
+ * @param {'formular'|'druck'} defaultView - Startansicht (aus den Einstellungen)
+ */
+export function mountDocPreviewToggle({ body, getDocOpts, settings, defaultView = 'formular' }) {
+  const modal = body.closest('.modal');
+  const formEl = body.querySelector('form');
+  const headerHost = modal?.querySelector('.modal-header');
+  const closeBtn = headerHost?.querySelector('.modal-close');
+  if (!modal || !formEl || !headerHost) return null;
+
+  const toggle = document.createElement('div');
+  toggle.className = 'toggle-group';
+  toggle.innerHTML = `
+    <button type="button" data-val="formular">📝 Formular</button>
+    <button type="button" data-val="druck">🖨️ Druckansicht</button>
+  `;
+  headerHost.insertBefore(toggle, closeBtn);
+
+  const previewWrap = document.createElement('div');
+  previewWrap.className = 'doc-preview-wrap';
+  previewWrap.hidden = true;
+  formEl.insertAdjacentElement('afterend', previewWrap);
+
+  function renderPreview() {
+    const accent = settings?.dokAkzentfarbe || '#0f1b2d';
+    const fontSize = Number(settings?.dokSchriftgroesse) || 10;
+    previewWrap.innerHTML = `<div class="doc-preview-page print-doc" style="--dok-akzent:${accent};--dok-fontsize:${fontSize}px">${buildDocHtml(getDocOpts())}</div>`;
+  }
+
+  function setView(view) {
+    toggle.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.val === view));
+    if (view === 'druck') {
+      renderPreview();
+      formEl.hidden = true;
+      previewWrap.hidden = false;
+    } else {
+      formEl.hidden = false;
+      previewWrap.hidden = true;
+    }
+  }
+
+  toggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-val]');
+    if (btn) setView(btn.dataset.val);
+  });
+
+  setView(defaultView === 'druck' ? 'druck' : 'formular');
+  return { setView };
+}
+
 function kundeAdresse(kunde) {
   if (!kunde) return '';
   return [

@@ -2,7 +2,7 @@ import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, ST
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
-import { printDokument, buildDocHtml } from '../pdf.js';
+import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { buildXRechnungBlob, xRechnungFilename } from '../xrechnung.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -871,6 +871,54 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       });
     }
 
+    function getEffectiveSettings(projektId) {
+      const projekt = projekte.find((p) => p.id === projektId);
+      return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+    }
+    function docOpts() {
+      const totals = editor.getTotals();
+      const istAbschlag = data.rechnungstyp === 'abschlag';
+      const kundeIdLive = kundePicker.getValue() || data.kundeId;
+      const projektIdLive = projektPicker.getValue() || data.projektId;
+      const kunde = kundenById[kundeIdLive];
+      const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
+      const zahlungsartLive = body.querySelector('#f-zahlungsart')?.value || data.zahlungsart || 'ueberweisung';
+      const istBar = zahlungsartLive === 'bar';
+      const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
+      return {
+        settings: getEffectiveSettings(projektIdLive), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
+        leistungsdatum: data.leistungsdatum || data.datum,
+        refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
+        kunde, betreff: betreffLive,
+        projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
+        introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
+        positionen: editor.getPositionen(), totals,
+        steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
+        aufbewahrungsHinweis: kunde?.istPrivatperson
+          ? 'Hinweis gemäß § 14 Abs. 4 Nr. 9 UStG: Als Privatperson sind Sie verpflichtet, diese Rechnung sowie zugehörige Zahlungsbelege im Zusammenhang mit dieser Werklieferung/Leistung 2 Jahre lang aufzubewahren.'
+          : '',
+        closingText: notizenLive +
+          (data.skontoProzent > 0
+            ? `\n\nBei Zahlung bis zum ${formatDate(addDays(data.datum, data.skontoTage || 0))} (${data.skontoTage || 0} Tage) gewähren wir ${data.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * data.skontoProzent) / 100)}).`
+            : '') +
+          `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
+        abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
+        skonto: !istAbschlag && data.skontoProzent > 0 ? {
+          prozent: data.skontoProzent,
+          faelligBis: addDays(data.datum, data.skontoTage || 0),
+          betrag: Math.round(totals.brutto * data.skontoProzent) / 100,
+          zahlbetrag: totals.brutto - Math.round(totals.brutto * data.skontoProzent) / 100,
+        } : undefined,
+        faelligAm: data.faelligAm, steuerart: data.steuerart || 'regel',
+        zeigeUnterschriftsfeld: istBar,
+        unterschriftKunde: sigKunde.getDataUrl() || null,
+        zeigeZweiteUnterschrift: istBar,
+        unterschriftMitarbeiter: sigMitarbeiter.getDataUrl() || null,
+        zweiteUnterschriftLabel: 'Unterschrift Mitarbeiter',
+      };
+    }
+    mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
+
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       const deleteBtn = body.querySelector('#btn-delete');
@@ -927,52 +975,6 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             render(container);
           });
         });
-      }
-      function getEffectiveSettings(projektId) {
-        const projekt = projekte.find((p) => p.id === projektId);
-        return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
-      }
-      function docOpts() {
-        const totals = editor.getTotals();
-        const istAbschlag = data.rechnungstyp === 'abschlag';
-        const kundeIdLive = kundePicker.getValue() || data.kundeId;
-        const projektIdLive = projektPicker.getValue() || data.projektId;
-        const kunde = kundenById[kundeIdLive];
-        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
-        const zahlungsartLive = body.querySelector('#f-zahlungsart')?.value || data.zahlungsart || 'ueberweisung';
-        const istBar = zahlungsartLive === 'bar';
-        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
-        return {
-          settings: getEffectiveSettings(projektIdLive), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: data.nummer, datum: data.datum,
-          leistungsdatum: data.leistungsdatum || data.datum,
-          refLabel: 'Zahlbar bis', refValue: formatDate(data.faelligAm),
-          kunde, betreff: betreffLive,
-          projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
-          introText: 'wir bedanken uns für Ihren Auftrag und stellen Ihnen wie folgt in Rechnung:',
-          positionen: editor.getPositionen(), totals,
-          steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          aufbewahrungsHinweis: kunde?.istPrivatperson
-            ? 'Hinweis gemäß § 14 Abs. 4 Nr. 9 UStG: Als Privatperson sind Sie verpflichtet, diese Rechnung sowie zugehörige Zahlungsbelege im Zusammenhang mit dieser Werklieferung/Leistung 2 Jahre lang aufzubewahren.'
-            : '',
-          closingText: notizenLive +
-            (data.skontoProzent > 0
-              ? `\n\nBei Zahlung bis zum ${formatDate(addDays(data.datum, data.skontoTage || 0))} (${data.skontoTage || 0} Tage) gewähren wir ${data.skontoProzent}% Skonto (Skontobetrag: ${formatCurrency(Math.round(totals.brutto * data.skontoProzent) / 100)}).`
-              : '') +
-            `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(data.faelligAm)} auf unser unten genanntes Konto.`,
-          abschlaege: !istAbschlag && data.verrechneteAbschlaege?.length ? data.verrechneteAbschlaege : undefined,
-          skonto: !istAbschlag && data.skontoProzent > 0 ? {
-            prozent: data.skontoProzent,
-            faelligBis: addDays(data.datum, data.skontoTage || 0),
-            betrag: Math.round(totals.brutto * data.skontoProzent) / 100,
-            zahlbetrag: totals.brutto - Math.round(totals.brutto * data.skontoProzent) / 100,
-          } : undefined,
-          faelligAm: data.faelligAm, steuerart: data.steuerart || 'regel',
-          zeigeUnterschriftsfeld: istBar,
-          unterschriftKunde: sigKunde.getDataUrl() || null,
-          zeigeZweiteUnterschrift: istBar,
-          unterschriftMitarbeiter: sigMitarbeiter.getDataUrl() || null,
-          zweiteUnterschriftLabel: 'Unterschrift Mitarbeiter',
-        };
       }
       async function markVersendetUndSperren() {
         if (data.versendet) return;

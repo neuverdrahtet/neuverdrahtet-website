@@ -632,7 +632,9 @@ table.data-table th.col-select, table.data-table td.col-select {
   align-items: center;
   margin-bottom: 16px;
 }
-.modal-header h2 { margin: 0; font-size: 17px; }
+.modal-header h2 { margin: 0; font-size: 17px; flex: 1 1 auto; min-width: 0; }
+.modal-header .toggle-group { flex-shrink: 0; margin-right: 10px; gap: 4px; }
+.modal-header .toggle-group button { padding: 5px 10px; font-size: 12px; min-width: 0; }
 .modal-close {
   border: none;
   background: transparent;
@@ -1602,10 +1604,89 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 .dok-layout-preview .dlp-footer { border-top: 1px solid #ccc; padding-top: 6px; font-size: 0.7em; color: #666; }
 
 .print-root { display: none; }
+
+/* Das eigentliche "Papier"-Aussehen (.print-doc und Unterklassen) gilt
+   bewusst IMMER, nicht nur innerhalb von @media print: dieselben Regeln
+   werden jetzt auch für die Live-Druckansicht im Dokument-Formular
+   wiederverwendet (siehe .doc-preview-page in pdf.js/mountDocPreviewToggle),
+   damit Bildschirm-Vorschau und echter Ausdruck garantiert gleich aussehen -
+   eine zweite, separat gepflegte Kopie der Styles wäre eine Fehlerquelle. */
+.print-doc { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; padding: 6mm 8mm; box-sizing: border-box; }
+.print-doc * { color: #111; }
+.print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
+.print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
+.print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; white-space: nowrap; }
+.print-doc tr { page-break-inside: avoid; }
+.print-doc thead { display: table-header-group; }
+.print-doc p { page-break-inside: avoid; }
+
+.print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; position: relative; }
+.print-doc .print-header.pos-rechts { flex-direction: row-reverse; }
+.print-doc .print-header.pos-rechts .print-meta { text-align: left; }
+.print-doc .print-header.pos-mittig { justify-content: center; }
+.print-doc .print-header.pos-mittig .print-meta { position: absolute; top: 0; right: 0; }
+.print-doc .print-logo-col { flex: 0 0 74mm; display: flex; justify-content: center; }
+.print-doc .print-header.pos-rechts .print-logo-col { justify-content: flex-end; }
+.print-doc .print-logo { max-width: 62mm; max-height: 30mm; object-fit: contain; }
+.print-doc .print-logo-klein .print-logo { max-width: 40mm; max-height: 20mm; }
+.print-doc .print-logo-mittel .print-logo { max-width: 62mm; max-height: 30mm; }
+.print-doc .print-logo-gross .print-logo { max-width: 86mm; max-height: 42mm; }
+.print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
+.print-doc .print-meta { text-align: right; min-width: 55mm; max-width: 90mm; }
+.print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+/* min-width:0 auf dem Label ist hier entscheidend: Flex-Kinder verweigern
+   standardmäßig (min-width:auto) das Schrumpfen unter ihre eigene
+   Inhaltsbreite - ohne diese Zeile drückt ein langes, kaum trennbares Wort
+   wie "Abschlagsrechnung-Nr.:" die ganze Meta-Box (und damit den Header)
+   über den rechten Seitenrand hinaus, statt umzubrechen. Dieselbe Ursache
+   wurde in docpdf.js (echter PDF-Export) schon einmal behoben - hier war
+   die Browser-Druck-Variante noch nicht angepasst. */
+.print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #333; padding: 1px 0; }
+.print-doc .print-meta .row span:first-child { min-width: 0; overflow-wrap: break-word; text-align: left; }
+.print-doc .print-meta .row span:last-child { flex-shrink: 0; white-space: nowrap; }
+
+.print-doc .print-header { page-break-inside: avoid; }
+.print-doc .print-absender { font-size: 10px; color: #666; border-bottom: 1px solid #bbb; display: inline-block; margin-bottom: 10px; padding-bottom: 1px; }
+.print-doc .print-empfaenger { font-size: 13px; line-height: 1.5; margin-bottom: 18px; page-break-inside: avoid; }
+
+.print-doc .print-totals { width: 260px; margin-left: auto; page-break-inside: avoid; }
+.print-doc .print-totals .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
+.print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
+
+.print-doc .print-unterschrift { margin-top: 22px; page-break-inside: avoid; }
+.print-doc .print-unterschrift-ort { font-size: 12px; margin-bottom: 20px; }
+.print-doc .print-unterschrift-reihe { display: flex; gap: 20mm; }
+.print-doc .print-unterschrift-feld { width: 70mm; }
+.print-doc .print-unterschrift-bild { display: block; max-width: 70mm; max-height: 22mm; margin-bottom: -4px; }
+.print-doc .print-unterschrift-linie { border-top: 1px solid #333; margin-top: 22mm; }
+.print-doc .print-unterschrift-feld:has(.print-unterschrift-bild) .print-unterschrift-linie { margin-top: 0; }
+.print-doc .print-unterschrift-label { font-size: 11px; color: #666; margin-top: 4px; }
+
+.print-doc .print-footer {
+  margin-top: 16px;
+  padding-top: 6px;
+  border-top: 1px solid #ccc;
+  font-size: 9.5px;
+  color: #444;
+  line-height: 1.5;
+  page-break-inside: avoid;
+}
+.print-doc .print-footer-zusatz { margin-bottom: 6px; white-space: pre-wrap; }
+.print-doc .print-footer-spalten { display: flex; gap: 10px; }
+.print-doc .print-footer-spalten > div { flex: 1; }
+
+/* Bildschirm-Vorschau: .print-doc wie ein auf grauem Grund liegendes
+   Papierblatt darstellen (DIN-A4-Breite, Schatten) - unabhängig vom
+   Hell-/Dunkel-Theme der App, ein Dokument sieht auf Papier immer gleich
+   aus. Gilt nur außerhalb von @media print (dort übernimmt die echte Seite
+   die Rolle des "Blatts", ein Schatten wäre dort nur störend). */
+.doc-preview-wrap { background: #6b7178; padding: 18px; overflow: auto; border-radius: 8px; }
+.doc-preview-page.print-doc { max-width: 210mm; margin: 0 auto; box-shadow: 0 4px 18px rgba(0,0,0,.35); min-height: 297mm; }
+
 @media print {
   /* Der eigentliche Sicherheitsabstand zum Papierrand kommt bewusst NICHT
      nur aus dieser @page-Regel, sondern zusätzlich als echtes Padding auf
-     .print-doc (siehe unten) - @page-Margins hängen vom "Ränder"-Dropdown
+     .print-doc (siehe oben) - @page-Margins hängen vom "Ränder"-Dropdown
      im Browser-Druckdialog ab (z.B. "Keine"/"Minimal" statt "Standard") und
      werden dort teils ignoriert bzw. überschrieben. Mit eigenem Padding
      bleibt der Abstand unabhängig von dieser Einstellung immer erhalten. */
@@ -1613,69 +1694,6 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; background: #fff !important; }
-  .print-doc { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: var(--dok-fontsize, 13px); background: #fff; padding: 6mm 8mm; box-sizing: border-box; }
-  .print-doc * { color: #111; }
-  .print-doc table { width: 100%; border-collapse: collapse; margin: 14px 0; }
-  .print-doc th, .print-doc td { border-bottom: 1px solid #ccc; padding: 6px 4px; font-size: 12px; text-align: left; }
-  .print-doc th { background: var(--dok-akzent, #0f1b2d); color: #fff; white-space: nowrap; }
-  .print-doc tr { page-break-inside: avoid; }
-  .print-doc thead { display: table-header-group; }
-  .print-doc p { page-break-inside: avoid; }
-
-  .print-doc .print-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; position: relative; }
-  .print-doc .print-header.pos-rechts { flex-direction: row-reverse; }
-  .print-doc .print-header.pos-rechts .print-meta { text-align: left; }
-  .print-doc .print-header.pos-mittig { justify-content: center; }
-  .print-doc .print-header.pos-mittig .print-meta { position: absolute; top: 0; right: 0; }
-  .print-doc .print-logo-col { flex: 0 0 74mm; display: flex; justify-content: center; }
-  .print-doc .print-header.pos-rechts .print-logo-col { justify-content: flex-end; }
-  .print-doc .print-logo { max-width: 62mm; max-height: 30mm; object-fit: contain; }
-  .print-doc .print-logo-klein .print-logo { max-width: 40mm; max-height: 20mm; }
-  .print-doc .print-logo-mittel .print-logo { max-width: 62mm; max-height: 30mm; }
-  .print-doc .print-logo-gross .print-logo { max-width: 86mm; max-height: 42mm; }
-  .print-doc .print-firmenname { font-size: 15px; font-weight: 700; }
-  .print-doc .print-meta { text-align: right; min-width: 55mm; max-width: 90mm; }
-  .print-doc .print-meta-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
-  /* min-width:0 auf dem Label ist hier entscheidend: Flex-Kinder verweigern
-     standardmäßig (min-width:auto) das Schrumpfen unter ihre eigene
-     Inhaltsbreite - ohne diese Zeile drückt ein langes, kaum trennbares Wort
-     wie "Abschlagsrechnung-Nr.:" die ganze Meta-Box (und damit den Header)
-     über den rechten Seitenrand hinaus, statt umzubrechen. Dieselbe Ursache
-     wurde in docpdf.js (echter PDF-Export) schon einmal behoben - hier war
-     die Browser-Druck-Variante noch nicht angepasst. */
-  .print-doc .print-meta .row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: #333; padding: 1px 0; }
-  .print-doc .print-meta .row span:first-child { min-width: 0; overflow-wrap: break-word; text-align: left; }
-  .print-doc .print-meta .row span:last-child { flex-shrink: 0; white-space: nowrap; }
-
-  .print-doc .print-header { page-break-inside: avoid; }
-  .print-doc .print-absender { font-size: 10px; color: #666; border-bottom: 1px solid #bbb; display: inline-block; margin-bottom: 10px; padding-bottom: 1px; }
-  .print-doc .print-empfaenger { font-size: 13px; line-height: 1.5; margin-bottom: 18px; page-break-inside: avoid; }
-
-  .print-doc .print-totals { width: 260px; margin-left: auto; page-break-inside: avoid; }
-  .print-doc .print-totals .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
-  .print-doc .print-totals .row.grand { font-weight: 700; border-top: 1px solid #333; margin-top: 4px; padding-top: 6px; }
-
-  .print-doc .print-unterschrift { margin-top: 22px; page-break-inside: avoid; }
-  .print-doc .print-unterschrift-ort { font-size: 12px; margin-bottom: 20px; }
-  .print-doc .print-unterschrift-reihe { display: flex; gap: 20mm; }
-  .print-doc .print-unterschrift-feld { width: 70mm; }
-  .print-doc .print-unterschrift-bild { display: block; max-width: 70mm; max-height: 22mm; margin-bottom: -4px; }
-  .print-doc .print-unterschrift-linie { border-top: 1px solid #333; margin-top: 22mm; }
-  .print-doc .print-unterschrift-feld:has(.print-unterschrift-bild) .print-unterschrift-linie { margin-top: 0; }
-  .print-doc .print-unterschrift-label { font-size: 11px; color: #666; margin-top: 4px; }
-
-  .print-doc .print-footer {
-    margin-top: 16px;
-    padding-top: 6px;
-    border-top: 1px solid #ccc;
-    font-size: 9.5px;
-    color: #444;
-    line-height: 1.5;
-    page-break-inside: avoid;
-  }
-  .print-doc .print-footer-zusatz { margin-bottom: 6px; white-space: pre-wrap; }
-  .print-doc .print-footer-spalten { display: flex; gap: 10px; }
-  .print-doc .print-footer-spalten > div { flex: 1; }
 }
 
 .text-mute { color: var(--text-mute); }

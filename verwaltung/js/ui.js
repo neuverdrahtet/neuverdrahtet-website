@@ -95,11 +95,12 @@ export function attachAddressSearch(inputEl, onSelect) {
 // kann, statt nur den Backdrop pauschal aus dem DOM zu reißen).
 let openModals = [];
 
-export function openModal({ title, bodyHtml, wide = false, fullscreen = false, onClose } = {}) {
+export function openModal({ title, bodyHtml, wide = false, fullscreen = false, onClose, headerExtra = '' } = {}) {
   const backdrop = el(`<div class="modal-backdrop ${fullscreen ? 'modal-backdrop-fullscreen' : ''}"></div>`);
   const modal = el(`<div class="modal ${wide ? 'modal-wide' : ''} ${fullscreen ? 'modal-fullscreen' : ''}">
     <div class="modal-header">
       <h2>${title}</h2>
+      ${headerExtra}
       <button type="button" class="modal-close" aria-label="Schließen">&times;</button>
     </div>
     <div class="modal-body"></div>

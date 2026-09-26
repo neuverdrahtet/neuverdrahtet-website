@@ -2,7 +2,7 @@ import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, ST
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
-import { printDokument, buildDocHtml } from '../pdf.js';
+import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
@@ -733,6 +733,31 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       btn.textContent = '🔍 Preise per KI recherchieren';
     });
 
+    function getEffectiveSettings(projektId) {
+      const projekt = projekte.find((p) => p.id === projektId);
+      return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+    }
+    function docOpts() {
+      const totals = editor.getTotals();
+      const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
+      const kundeIdLive = kundePicker.getValue() || data.kundeId;
+      const projektIdLive = projektPicker.getValue() || data.projektId;
+      const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
+      return {
+        settings: getEffectiveSettings(projektIdLive), art: 'Angebot', nummer: data.nummer, datum: data.datum,
+        refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
+        kunde: kundenById[kundeIdLive], betreff: betreffLive,
+        projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
+        introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
+        positionen: editor.getPositionen(), totals,
+        steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
+        closingText: notizenLive + '\n\nWir freuen uns auf Ihren Auftrag.',
+        zeigeUnterschriftsfeld: true,
+        unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
+      };
+    }
+    mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
+
     body.querySelector('#btn-cancel').addEventListener('click', close);
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
@@ -742,29 +767,6 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         close();
         render(container);
       });
-      function getEffectiveSettings(projektId) {
-        const projekt = projekte.find((p) => p.id === projektId);
-        return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
-      }
-      function docOpts() {
-        const totals = editor.getTotals();
-        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
-        const kundeIdLive = kundePicker.getValue() || data.kundeId;
-        const projektIdLive = projektPicker.getValue() || data.projektId;
-        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
-        return {
-          settings: getEffectiveSettings(projektIdLive), art: 'Angebot', nummer: data.nummer, datum: data.datum,
-          refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
-          kunde: kundenById[kundeIdLive], betreff: betreffLive,
-          projekt: projekte.find((p) => p.id === projektIdLive)?.titel || '',
-          introText: 'vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot:',
-          positionen: editor.getPositionen(), totals,
-          steuerHinweis: STEUERARTEN.find((s) => s.id === data.steuerart)?.hinweis || '',
-          closingText: notizenLive + '\n\nWir freuen uns auf Ihren Auftrag.',
-          zeigeUnterschriftsfeld: true,
-          unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
-        };
-      }
       body.querySelector('#btn-print').addEventListener('click', () => {
         printDokument({ bodyHtml: buildDocHtml(docOpts()), settings, buildPdfBlob: () => buildDocPdfBlob(docOpts()) });
       });

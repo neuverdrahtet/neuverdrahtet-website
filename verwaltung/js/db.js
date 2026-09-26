@@ -575,6 +575,7 @@ const DEFAULT_SETTINGS = {
   dokFooterBankverbindung: true,
   dokFooterSeitenzahl: true,
   dokFooterZusatztext: '',
+  dokStandardansicht: 'formular', // 'formular' oder 'druck' - welche Ansicht beim Öffnen eines Angebots/einer Rechnung/AB zuerst erscheint
 };
 
 // Gut unterscheidbare Farbfolge für automatisch vergebene Status-/Stufenfarben

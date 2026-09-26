@@ -269,6 +269,13 @@ export async function render(container) {
                   <option value="gross" ${settings.dokLogoGroesse === 'gross' ? 'selected' : ''}>Groß</option>
                 </select>
               </div>
+              <div class="field"><label>Standard-Ansicht beim Öffnen eines Dokuments</label>
+                <select name="dokStandardansicht" id="layout-standardansicht">
+                  <option value="formular" ${(settings.dokStandardansicht || 'formular') === 'formular' ? 'selected' : ''}>Formular (Eingabemaske)</option>
+                  <option value="druck" ${settings.dokStandardansicht === 'druck' ? 'selected' : ''}>Druckansicht (wie das fertige Dokument aussieht)</option>
+                </select>
+                <p class="hint">Gilt für Angebote, Auftragsbestätigungen und Rechnungen. Lässt sich beim Bearbeiten jederzeit oben umschalten.</p>
+              </div>
             </div>
             <div class="divider"></div>
             <h3 style="font-size:13px;margin:0 0 8px">Fußzeile</h3>
@@ -793,6 +800,7 @@ export async function render(container) {
       dokSchriftgroesse: Number(fd.get('dokSchriftgroesse')) || 10,
       dokLogoPosition: (fd.get('dokLogoPosition') || 'links').toString(),
       dokLogoGroesse: (fd.get('dokLogoGroesse') || 'mittel').toString(),
+      dokStandardansicht: (fd.get('dokStandardansicht') || 'formular').toString(),
       dokFooterFirmendaten: fd.get('dokFooterFirmendaten') === 'on',
       dokFooterSteuerdaten: fd.get('dokFooterSteuerdaten') === 'on',
       dokFooterBankverbindung: fd.get('dokFooterBankverbindung') === 'on',
