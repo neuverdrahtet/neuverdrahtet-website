@@ -4,7 +4,7 @@
 // Backend nötig. Ist die API im Browser nicht verfügbar, bleibt trotzdem ein
 // normales, frei editierbares Textfeld übrig (kein Absturz, keine
 // Funktionslücke, nur ohne automatisches Diktat).
-function getSpeechRecognitionCtor() {
+export function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
 
