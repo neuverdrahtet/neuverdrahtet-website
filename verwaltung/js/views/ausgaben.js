@@ -64,7 +64,9 @@ function istXmlBlob(blob, belegMeta) {
 }
 
 export async function render(container) {
-  let [ausgaben, settings, projekte, kunden, buchungen] = await Promise.all([getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen')]);
+  let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen] = await Promise.all([
+    getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'),
+  ]);
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -95,7 +97,7 @@ export async function render(container) {
         <input type="file" id="beleg-scan-input" accept="image/*" capture="environment" hidden>
         <button class="btn" id="btn-export">⇩ Export (CSV)</button>
         <button class="btn" id="btn-export-belege">⇩ Belege exportieren (ZIP)</button>
-        <button class="btn" id="btn-ausgaben-pruefen">🔍 Ausgaben prüfen</button>
+        <button class="btn" id="btn-ausgaben-pruefen">🔍 Belege & Rechnungen prüfen</button>
         <button class="btn btn-primary" id="btn-new">+ Ausgabe erfassen</button>
       </div>
     </div>
@@ -341,8 +343,40 @@ export async function render(container) {
     const gebuchteAusgabenIds = new Set(buchungen.filter((b) => b.quelle?.typ === 'ausgabe').map((b) => b.quelle.id));
     const fehltBuchung = ausgaben.filter((a) => !a.istInvestition && Number(a.betragBrutto) > 0 && !gebuchteAusgabenIds.has(a.id));
 
+    // Rechnungen (Einnahmen-Seite) auf Duplikate prüfen - analog zu den
+    // Ausgaben-Duplikaten oben, aber getrennt: eine doppelte Rechnungsnummer
+    // ist ein echter Datenfehler (Nummern müssen eindeutig/fortlaufend sein),
+    // während gleiches Datum/Betrag/Kunde bei unterschiedlicher Nummer eher
+    // auf eine versehentlich zweimal angelegte Rechnung hindeutet (z.B. durch
+    // einen doppelten ZIP-Import-Lauf). Wird bewusst nur angezeigt statt per
+    // Klick löschbar zu machen - eine bereits versendete Rechnung ist GoBD-
+    // gesperrt und darf nur per Storno korrigiert werden, nicht gelöscht.
+    const rechnungNummerGruppen = Array.from(
+      rechnungen.reduce((map, r) => {
+        const key = (r.nummer || '').trim().toLowerCase();
+        if (!key) return map;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(r);
+        return map;
+      }, new Map()).values()
+    ).filter((g) => g.length > 1);
+    const rechnungInhaltGruppen = Array.from(
+      rechnungen.filter((r) => r.status !== 'storniert' && !rechnungNummerGruppen.some((g) => g.includes(r))).reduce((map, r) => {
+        const key = `${r.datum}|${Number(r.brutto || 0).toFixed(2)}|${r.kundeId}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key).push(r);
+        return map;
+      }, new Map()).values()
+    ).filter((g) => g.length > 1);
+
+    // Mahnungen, deren verknüpfte Rechnung nicht (mehr) existiert - z.B. wenn
+    // die Rechnung im Papierkorb gelöscht wurde, ohne die zugehörige(n)
+    // Mahnung(en) mitzunehmen.
+    const rechnungenById2 = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
+    const mahnungenOhneRechnung = mahnungen.filter((m) => !rechnungenById2[m.rechnungId]);
+
     const { body, close } = openModal({
-      title: 'Ausgaben prüfen',
+      title: 'Belege & Rechnungen prüfen',
       wide: true,
       bodyHtml: `
         <h2 style="font-size:14px;margin:0 0 8px">Mögliche Duplikate (${dupGroups.length} Gruppe${dupGroups.length === 1 ? '' : 'n'})</h2>
@@ -418,14 +452,52 @@ export async function render(container) {
             ${ohneZuordnung.slice(0, OHNE_ZUORDNUNG_LIMIT).map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.kategorie)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span>${formatCurrency(a.betragBrutto)} ${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
           </ul>
         `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Rechnungen (Einnahmen) – doppelte Nummer (${rechnungNummerGruppen.length})</h2>
+        ${rechnungNummerGruppen.length === 0 ? '<p class="text-mute">Keine zwei Rechnungen mit derselben Nummer gefunden.</p>' : `
+          <p class="hint">Echter Datenfehler – Rechnungsnummern müssen eindeutig sein. Nicht automatisch löschbar (GoBD-Sperre), bitte die betroffenen Rechnungen einzeln in der Rechnungen-Ansicht prüfen und ggf. per Storno korrigieren.</p>
+          ${rechnungNummerGruppen.map((g) => `
+            <ul class="cal-event-list">
+              ${g.map((r) => `<li><span>${escapeHtml(r.nummer)} · ${formatDate(r.datum)} · ${escapeHtml(kundenById[r.kundeId]?.firma || '(unbekannter Kunde)')}</span><span class="text-mute">${formatCurrency(r.brutto)} · Status: ${escapeHtml(r.status || '')}</span></li>`).join('')}
+            </ul>
+          `).join('')}
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Rechnungen – möglicherweise doppelt angelegt (${rechnungInhaltGruppen.length})</h2>
+        ${rechnungInhaltGruppen.length === 0 ? '<p class="text-mute">Keine Rechnungen mit identischem Kunde/Datum/Betrag unter unterschiedlicher Nummer gefunden.</p>' : `
+          <p class="hint">Gleicher Kunde, gleiches Datum, gleicher Bruttobetrag, aber unterschiedliche Rechnungsnummer – prüfen, ob dieselbe Rechnung versehentlich zweimal angelegt wurde (z.B. durch einen doppelten Import-Lauf).</p>
+          ${rechnungInhaltGruppen.map((g) => `
+            <ul class="cal-event-list">
+              ${g.map((r) => `<li><span>${escapeHtml(r.nummer)} · ${formatDate(r.datum)} · ${escapeHtml(kundenById[r.kundeId]?.firma || '(unbekannter Kunde)')}</span><span class="text-mute">${formatCurrency(r.brutto)} · Status: ${escapeHtml(r.status || '')}</span></li>`).join('')}
+            </ul>
+          `).join('')}
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Mahnungen ohne zugehörige Rechnung (${mahnungenOhneRechnung.length})</h2>
+        ${mahnungenOhneRechnung.length === 0 ? '<p class="text-mute">Jede Mahnung ist einer bestehenden Rechnung zugeordnet.</p>' : `
+          <p class="hint">Diese Mahnungen verweisen auf eine Rechnung, die nicht mehr existiert (z.B. gelöscht) – sie können entfernt werden.</p>
+          <ul class="cal-event-list">
+            ${mahnungenOhneRechnung.map((m) => `<li><span>${formatDate(m.datum)} · Stufe ${escapeHtml(String(m.stufe ?? ''))} · Rechnungs-ID: ${escapeHtml(m.rechnungId || '(keine)')}</span><span><button type="button" class="btn btn-sm btn-danger mahnung-verwaist-loeschen" data-id="${m.id}">Löschen</button></span></li>`).join('')}
+          </ul>
+        `}
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Schließen</button>
-          ${dupGroups.length > 0 ? '<button type="button" class="btn btn-danger" id="btn-ausg-dup-delete">Ausgewählte Duplikate löschen</button>' : ''}
+          ${dupGroups.length > 0 ? '<button type="button" class="btn btn-danger" id="btn-ausg-dup-delete">Ausgewählte Ausgaben-Duplikate löschen</button>' : ''}
         </div>
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelectorAll('.mahnung-verwaist-loeschen').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirmDelete('Diese verwaiste Mahnung wirklich löschen?')) return;
+        await remove('mahnungen', btn.dataset.id);
+        mahnungen = mahnungen.filter((m) => m.id !== btn.dataset.id);
+        toast('Mahnung gelöscht');
+        close();
+        openAusgabenPruefung();
+      });
+    });
     body.querySelector('#btn-fix-kategorie')?.addEventListener('click', async () => {
       for (const { a, vorschlag } of kategorieVerbesserbar) {
         const updated = { ...a, kategorie: vorschlag };
