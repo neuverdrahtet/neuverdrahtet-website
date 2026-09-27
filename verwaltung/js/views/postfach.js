@@ -327,6 +327,18 @@ export async function render(container) {
           const result = istXml
             ? await analyzeBeleg({ xmlText: await blob.text(), kategorien: AUSGABEN_KATEGORIEN })
             : await analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: AUSGABEN_KATEGORIEN });
+          // Nicht jeder Anhang, der "als Beleg übernommen" wird, ist wirklich
+          // eine eigene Ausgabe - eine Ausgangsrechnung (eigene Rechnung an
+          // einen Kunden), eine Mahnung oder ein branchenfremdes Dokument
+          // (AGB, Vertrag, Werbung) gehört nicht in die Ausgaben-Erfassung.
+          // Statt es mit Betrag 0 als "unsicher" abzulegen (müsste später von
+          // Hand wieder gelöscht werden), wird es dann gar nicht erst
+          // gespeichert.
+          if (result.dokumenttyp && result.dokumenttyp !== 'eingangsrechnung') {
+            const label = { ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme)', mahnung: 'Mahnung', sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)' }[result.dokumenttyp] || result.dokumenttyp;
+            toast(`Anhang wurde NICHT als Ausgabe gespeichert – von der KI erkannt als: ${label}.`, 'info');
+            return { gespeichert: false, dokumenttyp: result.dokumenttyp };
+          }
           const kategorie = AUSGABEN_KATEGORIEN.includes(result.kategorie) ? result.kategorie : prefill.kategorie;
           const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : prefill.steuersatz;
           const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : prefill.datum;
@@ -346,6 +358,7 @@ export async function render(container) {
       await put('ausgaben', prefill);
       try { await journal.syncBuchungFuerAusgabe(prefill, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
       toast('Anhang als Ausgabe/Beleg gespeichert – bitte in Ausgaben prüfen', 'success');
+      return { gespeichert: true };
     }
 
     async function openKundeVorschlag(message) {
@@ -622,19 +635,24 @@ export async function render(container) {
       const kandidaten = allEmails.filter((m) => m.kategorie === 'rechnung-lieferant' && !m.belegUebernommen && (m.attachments || []).length > 0);
       if (kandidaten.length === 0) return;
       let erledigt = 0;
+      let aussortiert = 0;
       for (const m of kandidaten) {
         const anhang = (m.attachments || []).find((a) => a.mimeType === 'application/pdf')
           || (m.attachments || []).find((a) => istXmlAnhang(a))
           || (m.attachments || []).find((a) => (a.mimeType || '').startsWith('image/'));
         if (!anhang) { await put('emails', { ...m, belegUebernommen: true }); continue; }
         try {
-          await uebernehmeAlsBeleg(m, anhang);
+          const ergebnis = await uebernehmeAlsBeleg(m, anhang);
           await put('emails', { ...m, belegUebernommen: true });
-          erledigt++;
+          if (ergebnis?.gespeichert === false) aussortiert++;
+          else erledigt++;
         } catch { /* einzelne fehlgeschlagene Übernahme blockiert die anderen nicht - Mail bleibt unmarkiert, nächster Versuch beim nächsten Öffnen */ }
       }
-      if (erledigt > 0) {
-        toast(`${erledigt} Lieferantenrechnung(en) aus dem Postfach automatisch als Ausgabe übernommen - bitte in Ausgaben prüfen`, 'success');
+      if (erledigt > 0 || aussortiert > 0) {
+        const teile = [];
+        if (erledigt > 0) teile.push(`${erledigt} Lieferantenrechnung(en) automatisch als Ausgabe übernommen`);
+        if (aussortiert > 0) teile.push(`${aussortiert} Anhang/Anhänge als kein Ausgaben-Beleg erkannt und übersprungen (z.B. Ausgangsrechnung/Mahnung/Sonstiges)`);
+        toast(`${teile.join(', ')} - bitte in Ausgaben prüfen`, 'success');
         allEmails = (await getAll('emails')).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
         renderList();
       }

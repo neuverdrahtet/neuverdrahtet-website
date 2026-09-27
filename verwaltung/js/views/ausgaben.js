@@ -63,6 +63,12 @@ function istXmlBlob(blob, belegMeta) {
   return mime === 'application/xml' || mime === 'text/xml' || mime.endsWith('/xml');
 }
 
+const DOKUMENTTYP_LABEL = {
+  ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme, keine Ausgabe)',
+  mahnung: 'Mahnung (kein neuer Einkauf)',
+  sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)',
+};
+
 export async function render(container) {
   let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen] = await Promise.all([
     getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'),
@@ -375,6 +381,13 @@ export async function render(container) {
     const rechnungenById2 = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
     const mahnungenOhneRechnung = mahnungen.filter((m) => !rechnungenById2[m.rechnungId]);
 
+    // Für die Beleg-Art-Vollprüfung (KI erkennt Eingangsrechnung/Ausgangs-
+    // rechnung/Mahnung/Sonstiges) - anders als die obige "Unvollständig"-
+    // Prüfung auf ALLE Ausgaben mit Beleg angewendet, nicht nur die ohne
+    // Betrag, damit auch bereits mit einem (fälschlich übernommenen) Betrag
+    // versehene Fehleinträge gefunden werden.
+    const ausgabenMitBeleg = ausgaben.filter((a) => a.beleg?.url || a.beleg instanceof Blob);
+
     const { body, close } = openModal({
       title: 'Belege & Rechnungen prüfen',
       wide: true,
@@ -480,6 +493,11 @@ export async function render(container) {
             ${mahnungenOhneRechnung.map((m) => `<li><span>${formatDate(m.datum)} · Stufe ${escapeHtml(String(m.stufe ?? ''))} · Rechnungs-ID: ${escapeHtml(m.rechnungId || '(keine)')}</span><span><button type="button" class="btn btn-sm btn-danger mahnung-verwaist-loeschen" data-id="${m.id}">Löschen</button></span></li>`).join('')}
           </ul>
         `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Beleg-Art aller Ausgaben mit Beleg prüfen (KI)</h2>
+        <p class="hint">Prüft ALLE ${ausgabenMitBeleg.length} Ausgaben mit hinterlegtem Beleg-Foto/PDF (auch bereits vollständige) auf ihre tatsächliche Art - findet z.B. versehentlich als Ausgabe abgelegte Ausgangsrechnungen, Mahnungen oder branchenfremde Dokumente (AGB usw.). Kann bei vielen Belegen einige Zeit dauern.</p>
+        ${ausgabenMitBeleg.length === 0 ? '<p class="text-mute">Keine Ausgaben mit Beleg vorhanden.</p>' : `<button type="button" class="btn btn-sm" id="btn-belegtyp-vollpruefung">🤖 Jetzt prüfen (${ausgabenMitBeleg.length} Beleg(e))</button>`}
+        <div id="belegtyp-ergebnis"></div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="btn-cancel">Schließen</button>
@@ -496,6 +514,60 @@ export async function render(container) {
         toast('Mahnung gelöscht');
         close();
         openAusgabenPruefung();
+      });
+    });
+    body.querySelector('#btn-belegtyp-vollpruefung')?.addEventListener('click', async (e) => {
+      const btn = e.target;
+      btn.disabled = true;
+      const gefunden = [];
+      let fehler = 0;
+      for (let i = 0; i < ausgabenMitBeleg.length; i++) {
+        const a = ausgabenMitBeleg[i];
+        btn.textContent = `Prüfe ${i + 1}/${ausgabenMitBeleg.length} ...`;
+        try {
+          const result = a.beleg?.url
+            ? await analyzeBeleg({ belegUrl: a.beleg.url, kategorien: KATEGORIEN })
+            : await (async () => {
+                const blob = await holBelegBlob(a);
+                return istXmlBlob(blob, a.beleg)
+                  ? analyzeBeleg({ xmlText: await blob.text(), kategorien: KATEGORIEN })
+                  : analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: KATEGORIEN });
+              })();
+          if (result.dokumenttyp && result.dokumenttyp !== 'eingangsrechnung') {
+            gefunden.push({ a, dokumenttyp: result.dokumenttyp });
+          }
+        } catch {
+          fehler++;
+        }
+      }
+      btn.disabled = false;
+      btn.textContent = `🤖 Jetzt prüfen (${ausgabenMitBeleg.length} Beleg(e))`;
+      const ergebnisHost = body.querySelector('#belegtyp-ergebnis');
+      if (gefunden.length === 0) {
+        ergebnisHost.innerHTML = `<p class="text-mute">Keine falsch einsortierten Belege gefunden.${fehler ? ` (${fehler} Beleg(e) konnten nicht geprüft werden.)` : ''}</p>`;
+        return;
+      }
+      ergebnisHost.innerHTML = `
+        <p class="hint">${gefunden.length} vermutlich falsch einsortierte Ausgabe(n) gefunden${fehler ? ` (${fehler} Beleg(e) konnten nicht geprüft werden)` : ''} - Häkchen prüfen und löschen:</p>
+        <ul class="cal-event-list">
+          ${gefunden.map(({ a, dokumenttyp }, i) => `<li><span><input type="checkbox" class="belegtyp-del" data-i="${i}" checked> ${formatDate(a.datum)} · ${escapeHtml(a.lieferant || a.beschreibung || '(ohne Angaben)')}</span><span class="text-mute">${DOKUMENTTYP_LABEL[dokumenttyp] || dokumenttyp} ${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen-vp" data-i="${i}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+        </ul>
+        <button type="button" class="btn btn-sm btn-danger" id="btn-belegtyp-loeschen">Ausgewählte löschen</button>
+      `;
+      ergebnisHost.querySelectorAll('.ausg-beleg-ansehen-vp').forEach((b) => {
+        b.addEventListener('click', () => openBelegAnsicht(gefunden[Number(b.dataset.i)].a.beleg));
+      });
+      ergebnisHost.querySelector('#btn-belegtyp-loeschen').addEventListener('click', async () => {
+        const ausgewaehlt = Array.from(ergebnisHost.querySelectorAll('.belegtyp-del:checked')).map((c) => gefunden[Number(c.dataset.i)].a);
+        if (ausgewaehlt.length === 0) { toast('Nichts ausgewählt', 'info'); return; }
+        if (!confirmDelete(`${ausgewaehlt.length} Ausgabe(n) in den Papierkorb verschieben?`)) return;
+        for (const a of ausgewaehlt) {
+          await remove('ausgaben', a.id);
+          try { await journal.entferneBuchungFuerAusgabe(a.id); } catch { /* Verbuchung ist ein Komfort-Feature */ }
+        }
+        toast(`${ausgewaehlt.length} Ausgabe(n) in den Papierkorb verschoben`, 'success');
+        close();
+        render(container);
       });
     });
     body.querySelector('#btn-fix-kategorie')?.addEventListener('click', async () => {
@@ -545,23 +617,40 @@ export async function render(container) {
                   ? analyzeBeleg({ xmlText: await blob.text(), kategorien: KATEGORIEN })
                   : analyzeBeleg({ imageDataUrl: await blobToDataUrl(blob), kategorien: KATEGORIEN });
               })();
-          const kategorie = KATEGORIEN.includes(result.kategorie) ? result.kategorie : a.kategorie;
-          const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : (a.steuersatz || 19);
-          const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : a.datum;
-          const unsicher = !result.lesbar || !result.kategorieSicher;
-          const updated = {
-            ...a, datum, kategorie, steuersatz,
-            beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || a.beschreibung || ''}`.trim(),
-            lieferant: result.haendler || a.lieferant,
-            betragNetto: Number(result.betragNetto) || 0,
-            betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
-            kiAnalyseUnsicher: unsicher,
-            kiAnalyseGrund: unsicher ? (!result.lesbar ? 'Beleg nicht klar lesbar' : 'Kategorie/Händler unsicher erkannt') : '',
-          };
-          await put('ausgaben', updated);
-          try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf die Prüfung nicht blockieren */ }
-          Object.assign(a, updated);
-          erfolgreich++;
+          let updated;
+          if (result.dokumenttyp && result.dokumenttyp !== 'eingangsrechnung') {
+            // Kein eigener Einkauf - Betrag NICHT aus dem Dokument übernehmen
+            // (der stünde sonst für die falsche Sache), stattdessen klar als
+            // "vermutlich falsch einsortiert" markieren statt es wie eine
+            // normal gelöste Ausgabe aussehen zu lassen.
+            updated = {
+              ...a,
+              beschreibung: `⚠️ Vermutlich falsch einsortiert (${DOKUMENTTYP_LABEL[result.dokumenttyp] || result.dokumenttyp}): ${a.beschreibung || ''}`.trim(),
+              kiAnalyseUnsicher: true,
+              kiAnalyseGrund: `KI erkennt dies als ${DOKUMENTTYP_LABEL[result.dokumenttyp] || result.dokumenttyp} statt als Eingangsrechnung - bitte prüfen, ob dieser Ausgaben-Eintrag korrekt ist (ggf. löschen).`,
+            };
+            await put('ausgaben', updated);
+            Object.assign(a, updated);
+            erfolgreich++;
+          } else {
+            const kategorie = KATEGORIEN.includes(result.kategorie) ? result.kategorie : a.kategorie;
+            const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : (a.steuersatz || 19);
+            const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : a.datum;
+            const unsicher = !result.lesbar || !result.kategorieSicher;
+            updated = {
+              ...a, datum, kategorie, steuersatz,
+              beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || a.beschreibung || ''}`.trim(),
+              lieferant: result.haendler || a.lieferant,
+              betragNetto: Number(result.betragNetto) || 0,
+              betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
+              kiAnalyseUnsicher: unsicher,
+              kiAnalyseGrund: unsicher ? (!result.lesbar ? 'Beleg nicht klar lesbar' : 'Kategorie/Händler unsicher erkannt') : '',
+            };
+            await put('ausgaben', updated);
+            try { await journal.syncBuchungFuerAusgabe(updated, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf die Prüfung nicht blockieren */ }
+            Object.assign(a, updated);
+            erfolgreich++;
+          }
         } catch {
           fehler++;
         }

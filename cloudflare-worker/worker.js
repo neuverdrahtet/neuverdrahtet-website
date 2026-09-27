@@ -244,6 +244,7 @@ async function callClaudeAngebotImport({ apiKey, model, fileDataUrl, standardSte
 const BELEG_SCHEMA = {
   type: 'object',
   properties: {
+    dokumenttyp: { type: 'string', enum: ['eingangsrechnung', 'ausgangsrechnung', 'mahnung', 'sonstiges'] },
     haendler: { type: 'string' },
     datum: { type: 'string' },
     betragNetto: { type: 'number' },
@@ -254,25 +255,32 @@ const BELEG_SCHEMA = {
     beschreibung: { type: 'string' },
     lesbar: { type: 'boolean' },
   },
-  required: ['haendler', 'datum', 'betragNetto', 'betragBrutto', 'steuersatz', 'kategorie', 'kategorieSicher', 'beschreibung', 'lesbar'],
+  required: ['dokumenttyp', 'haendler', 'datum', 'betragNetto', 'betragBrutto', 'steuersatz', 'kategorie', 'kategorieSicher', 'beschreibung', 'lesbar'],
   additionalProperties: false,
 };
 
 function buildBelegSystemPrompt(kategorien) {
   const liste = (kategorien && kategorien.length ? kategorien : ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Personal', 'Sonstiges']).join(', ');
-  return `Du liest einen fotografierten Kassenbon, eine PDF-Rechnung, eine XRechnung (elektronische Rechnung im XML-Format, z.B. nach EN 16931/UBL/CII) oder eine sonstige Rechnung für einen deutschen Handwerksbetrieb aus und extrahierst die Daten für die Ausgaben-Erfassung. Bei einer XRechnung stehen die Werte als strukturierte XML-Felder vor (z.B. "PayableAmount", "InvoicedQuantity", Verkäufer-/Käufer-Blöcke) statt als Bild - lies sie aus dem XML-Text statt aus einem Bild.
+  return `Du liest ein Dokument (fotografierter Kassenbon, PDF, XRechnung im XML-Format z.B. nach EN 16931/UBL/CII, oder ein sonstiges Schriftstück) für einen deutschen Handwerksbetrieb aus, das als "Ausgaben-Beleg" hochgeladen oder aus einer E-Mail übernommen wurde. Bei einer XRechnung stehen die Werte als strukturierte XML-Felder vor (z.B. "PayableAmount", "InvoicedQuantity", Verkäufer-/Käufer-Blöcke) statt als Bild - lies sie aus dem XML-Text statt aus einem Bild.
 
-Regeln:
+WICHTIG - nicht jedes hochgeladene Dokument ist tatsächlich eine Eingangsrechnung (ein eigener Einkauf/eine Ausgabe). Bestimme deshalb IMMER zuerst "dokumenttyp", bevor du die übrigen Felder befüllst:
+- "eingangsrechnung": eine Rechnung/ein Kassenbon/Beleg, den der Betrieb selbst als Käufer/Kunde von einem Lieferanten/Dienstleister erhalten hat (ein echter eigener Einkauf/Kosten). NUR in diesem Fall sind Betrag/Kategorie für die Ausgaben-Erfassung wirklich gemeint.
+- "ausgangsrechnung": eine vom Betrieb SELBST an einen eigenen Kunden gestellte Rechnung (z.B. eine Kopie/ein Anhang der eigenen Rechnung, erkennbar am eigenen Firmennamen als Rechnungssteller/Absender) - das ist eine EINNAHME, kein Einkauf, gehört NICHT in die Ausgaben.
+- "mahnung": eine Zahlungserinnerung/Mahnung (egal ob der Betrieb selbst gemahnt wird, weil er eine Rechnung nicht bezahlt hat, oder eine Kopie einer eigenen Mahnung an einen Kunden) - das ist selbst KEIN neuer Einkauf/keine neue Ausgabe, sondern bezieht sich auf eine bereits an anderer Stelle erfasste Rechnung.
+- "sonstiges": alles andere, das keinen Bezug zur Buchhaltung hat oder keine abrechenbare Ausgabe darstellt - z.B. AGB, Verträge, Datenblätter, Werbung, allgemeine Korrespondenz, Lieferscheine ohne Preisangabe, Angebote (noch keine Rechnung).
+Sei bei "eingangsrechnung" nicht übervorsichtig (ein normaler Kassenbon/eine normale Lieferantenrechnung ist der Normalfall), aber wähle "ausgangsrechnung"/"mahnung"/"sonstiges" bewusst, wenn das Dokument eindeutig danach aussieht - lieber einmal zu vorsichtig einsortieren als eine AGB oder die eigene Ausgangsrechnung als Ausgabe verbuchen.
+
+Regeln für die übrigen Felder (bei "dokumenttyp" ungleich "eingangsrechnung" nur so gut wie möglich ausfüllen, wird von der aufrufenden Software ohnehin nicht als Ausgabe übernommen):
 - Antworte ausschließlich auf Deutsch.
-- "haendler": Name des Geschäfts/Lieferanten, so wie auf dem Beleg erkennbar (z.B. "Hornbach", "Esso").
+- "haendler": bei "eingangsrechnung" der Name des Lieferanten/Geschäfts (z.B. "Hornbach", "Esso"); bei anderen Typen der erkennbare Absender/Aussteller des Dokuments.
 - "datum": Belegdatum im Format JJJJ-MM-TT. Wenn nicht lesbar, leer lassen.
 - "betragBrutto": Gesamtbetrag (inkl. USt.) als Zahl, ohne Währungssymbol.
 - "steuersatz": erkannter USt.-Satz in Prozent als Zahl (meist 19 oder 7). Wenn nicht erkennbar, 19 annehmen.
 - "betragNetto": betragBrutto / (1 + steuersatz/100), gerundet auf 2 Nachkommastellen.
 - "kategorie": wähle GENAU einen Eintrag aus dieser Liste, der am besten passt: ${liste}.
 - "kategorieSicher": true nur wenn du dir bei Händler UND Kategorie wirklich sicher bist. Bei Unsicherheit, schlechter Bildqualität oder einem für die Kategorie untypischen Beleg: false.
-- "beschreibung": sehr kurze Zusammenfassung, was gekauft/bezahlt wurde (max. ca. 60 Zeichen).
-- "lesbar": false, wenn das Bild kein auswertbarer Beleg ist oder die wichtigsten Felder (Betrag, Händler) nicht erkennbar sind. In diesem Fall die übrigen Felder so gut wie möglich schätzen bzw. leer/0 lassen.
+- "beschreibung": sehr kurze Zusammenfassung, was gekauft/bezahlt wurde bzw. worum es im Dokument geht (max. ca. 60 Zeichen).
+- "lesbar": false, wenn das Bild kein auswertbares Dokument ist oder die wichtigsten Felder (Betrag, Händler) nicht erkennbar sind. In diesem Fall die übrigen Felder so gut wie möglich schätzen bzw. leer/0 lassen.
 - Erfinde keine Beträge - wenn ein Betrag nicht lesbar ist, setze ihn auf 0 und "lesbar" auf false.`;
 }
 
