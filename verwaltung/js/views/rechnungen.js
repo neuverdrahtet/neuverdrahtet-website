@@ -671,6 +671,7 @@ export async function render(container, route) {
           <div class="modal-actions">
             ${isEdit && !locked ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit && locked && data.status !== 'storniert' ? '<button type="button" class="btn btn-danger" id="btn-storno">Stornieren</button>' : ''}
+            ${isEdit && data.rechnungstyp === 'abschlag' && data.status !== 'storniert' && !data.verrechnetIn ? '<button type="button" class="btn" id="btn-to-schlussrechnung">→ Schlussrechnung erstellen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-xrechnung" title="E-Rechnung im XRechnung-Format (UBL-XML)">XRechnung (XML)</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
@@ -932,6 +933,13 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           render(container);
         });
       }
+      body.querySelector('#btn-to-schlussrechnung')?.addEventListener('click', () => {
+        close();
+        openForm(null, {
+          kundeId: data.kundeId, projektId: data.projektId, betreff: data.betreff,
+          rechnungstyp: 'rechnung', abschlagIds: [data.id],
+        });
+      });
       const stornoBtn = body.querySelector('#btn-storno');
       if (stornoBtn) {
         stornoBtn.addEventListener('click', () => {
