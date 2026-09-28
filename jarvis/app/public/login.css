@@ -1,0 +1,27 @@
+:root { --bg:#05070b; --gold:#ffb23e; --amber:#ff7a00; --text:#f3e6cf; --muted:#9a8a70; }
+* { box-sizing:border-box; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
+  font:16px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif; }
+body { display:grid; place-items:center; padding:16px;
+  background:radial-gradient(circle at 50% 40%, rgba(255,140,0,.12), transparent 55%), var(--bg); }
+main { width:100%; max-width:340px; text-align:center; }
+h1 { font-weight:600; letter-spacing:.35em; margin:24px 0 4px; color:var(--gold); }
+.sub { color:var(--muted); margin:0 0 28px; letter-spacing:.08em; }
+form { display:grid; gap:10px; text-align:left; }
+label { font-size:13px; color:var(--muted); letter-spacing:.08em; }
+input { width:100%; padding:12px 14px; border-radius:10px; border:1px solid rgba(255,178,62,.35);
+  background:rgba(255,178,62,.05); color:var(--text); font-size:16px; outline:none; }
+input:focus { border-color:var(--gold); box-shadow:0 0 0 3px rgba(255,178,62,.18); }
+button { margin-top:6px; padding:12px; border-radius:10px; border:0; cursor:pointer; font-size:16px; font-weight:600;
+  color:#1a0f00; background:linear-gradient(180deg,#ffd27a,var(--gold)); }
+button:focus-visible { outline:2px solid #fff3d6; outline-offset:2px; }
+.err { color:#ff8f6b; margin:4px 0 0; }
+.core { position:relative; width:120px; height:120px; margin:0 auto; }
+.core i { position:absolute; inset:0; border-radius:50%; }
+.core i:nth-child(1) { inset:30px; background:radial-gradient(circle,#fff3d6,var(--gold) 45%,var(--amber) 70%,transparent 72%);
+  box-shadow:0 0 40px 10px rgba(255,140,0,.45); animation:pulse 2.6s ease-in-out infinite; }
+.core i:nth-child(2) { border:2px dashed rgba(255,178,62,.7); animation:spin 14s linear infinite; }
+.core i:nth-child(3) { inset:12px; border:1px solid rgba(255,178,62,.4); border-top-color:var(--gold); animation:spin 4s linear infinite reverse; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@keyframes pulse { 50% { transform:scale(1.08); box-shadow:0 0 60px 16px rgba(255,140,0,.55); } }
+@media (prefers-reduced-motion:reduce) { .core i { animation:none !important; } }

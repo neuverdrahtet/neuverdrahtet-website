@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#05070b">
+<title>JARVIS · Anmeldung</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/login.css">
+</head>
+<body>
+<main>
+  <div class="core" aria-hidden="true"><i></i><i></i><i></i></div>
+  <h1>J.A.R.V.I.S.</h1>
+  <p class="sub">Identität bestätigen</p>
+  <form method="post" action="/login">
+    <label for="pw">Passwort</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+    <button type="submit">Anmelden</button>
+    <p class="err" id="err" hidden></p>
+  </form>
+</main>
+<noscript><p class="sub">JavaScript wird für das Dashboard benötigt.</p></noscript>
+<script src="/login.js"></script>
+</body>
+</html>
