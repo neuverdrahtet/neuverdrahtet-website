@@ -141,6 +141,8 @@ body { background: var(--paper); }
 }
 .premium-card:hover { border-color: var(--orange-2); transform: translateY(-3px); }
 .premium-card .icon-badge { width: 52px; height: 52px; border-radius: 13px; background: var(--orange-soft); color: var(--orange-2); display: flex; align-items: center; justify-content: center; }
+.premium-card-photo { margin: -30px -26px 4px; border-radius: var(--radius) var(--radius) 0 0; overflow: hidden; }
+.premium-card-photo img { width: 100%; height: 160px; object-fit: cover; display: block; }
 .premium-card h3 { font-size: 19px; }
 .premium-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
 .premium-card li { font-size: 13.5px; color: var(--ink-soft); }
