@@ -446,15 +446,29 @@
     </div>
   </section>
 
-  <section class="section-alt" id="kontakt">
+  <section class="section-alt" id="fotos">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Aus der Praxis</p>
+        <h2>Eigene Projekte</h2>
+      </div>
+      <div class="photo-grid"><figure><img src="assets/photos/dguv-v3.webp" alt="Prüfgerät für die DGUV V3 Prüfung im Einsatz" loading="lazy" width="900" height="720"></figure></div>
+    </div>
+  </section>
+
+  <section id="kontakt">
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">Anfrage</p>
         <h2>DGUV-Prüfung anfragen</h2>
       </div>
       <div style="max-width:520px;">
-        <p style="color:var(--ink-soft);font-size:14.5px;">Für ein passendes Angebot hilft die ungefähre Anzahl zu prüfender Geräte/Anlagen — im Anfrageformular optional als Zusatzangabe.</p>
-        <a class="btn btn-primary" href="kontakt.html" style="margin-top:16px;display:inline-block;">Prüfung anfragen</a>
+        <div class="form-row">
+          <div class="field"><label for="dguv-firma">Firma</label><input type="text" id="dguv-firma" disabled></div>
+          <div class="field"><label for="dguv-ansprechpartner">Ansprechpartner</label><input type="text" id="dguv-ansprechpartner" disabled></div>
+        </div>
+        <div class="field"><label for="dguv-anzahl">Anzahl Geräte/Anlagen (ca.)</label><input type="number" id="dguv-anzahl" placeholder="z. B. 40" disabled></div>
+        <div class="qty-hint">💡 Laut Briefing soll das Formular explizit nach der Anzahl der zu prüfenden Geräte/Anlagen fragen — hier umgesetzt.</div>
       </div>
     </div>
   </section>
