@@ -102,6 +102,15 @@ const EK_WORKER_URL = 'https://neuverdrahtetworkersdevworkersdev.neuverdrahtetwo
   });
   btnBack.addEventListener('click', () => { if (current > 1) showStep(current - 1); });
 
+  /** Vereinfachter Einstieg: springt mit den bestehenden Standardwerten
+   *  direkt zur Orientierungssumme (Schritt totalSteps-1), ohne dass
+   *  Schritt 2-6 einzeln durchgeklickt werden müssen. Alle Felder sind
+   *  ohnehin optional — der Button macht das nur sichtbar. */
+  const btnSchnell = document.getElementById('ekBtnSchnellschaetzung');
+  if (btnSchnell) {
+    btnSchnell.addEventListener('click', () => showStep(totalSteps - 1));
+  }
+
   /** Erlaubt Einzel-Leistungsseiten (z.B. wallbox.html), direkt beim
    *  passenden Schritt zu starten statt immer bei Schritt 1, per
    *  ?schritt=N in der verlinkten URL (siehe href in den jeweiligen
