@@ -74,6 +74,52 @@ async function refreshStatus() {
   }
 }
 
+// ---------------- Freigaben für ausgehende Aktionen ----------------
+const shownApprovals = new Map();
+async function pollApprovals() {
+  try {
+    const r = await fetch("/api/approvals", { cache: "no-store" });
+    if (!r.ok) return;
+    const { items } = await r.json();
+    const live = new Set(items.map((i) => i.id));
+    for (const [id, card] of shownApprovals) {
+      if (!live.has(id) && !card.dataset.decided) { card.remove(); shownApprovals.delete(id); }
+    }
+    for (const item of items) if (!shownApprovals.has(item.id)) showApproval(item);
+  } catch { /* offline */ }
+}
+function showApproval(item) {
+  const li = document.createElement("li");
+  li.className = "approval";
+  const title = document.createElement("strong");
+  title.textContent = "Freigabe nötig";
+  const pre = document.createElement("pre");
+  pre.textContent = item.preview;
+  const row = document.createElement("div");
+  const yes = document.createElement("button");
+  yes.type = "button"; yes.className = "approve"; yes.textContent = "Freigeben";
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "ghost small"; no.textContent = "Ablehnen";
+  row.append(yes, no);
+  li.append(title, pre, row);
+  els.log.appendChild(li);
+  els.log.scrollTop = els.log.scrollHeight;
+  shownApprovals.set(item.id, li);
+  document.body.classList.add("chat-open");
+  const decide = async (decision) => {
+    yes.disabled = no.disabled = true;
+    const r = await fetch(`/api/approvals/${item.id}/${decision}`, { method: "POST", headers: { "X-Jarvis": "1" } });
+    if (!r.ok) { title.textContent = "Freigabe abgelaufen – bitte JARVIS erneut fragen"; return; }
+    li.dataset.decided = decision;
+    title.textContent = decision === "approve" ? "✔ Freigegeben" : "✘ Abgelehnt";
+    send(decision === "approve"
+      ? `Freigegeben (ID ${item.id}). Führe exakt denselben Aufruf jetzt aus.`
+      : `Abgelehnt (ID ${item.id}). Nicht senden.`);
+  };
+  yes.addEventListener("click", () => decide("approve"));
+  no.addEventListener("click", () => decide("reject"));
+}
+
 // ---------------- Sprachausgabe (satzweise gestreamt) ----------------
 const audioEl = new Audio();
 audioEl.preload = "auto";
@@ -447,5 +493,7 @@ tickClock();
 setInterval(tickClock, 10000);
 refreshStatus();
 setInterval(refreshStatus, 30000);
+pollApprovals();
+setInterval(pollApprovals, 2500);
 resizeCanvas();
 requestAnimationFrame(draw);

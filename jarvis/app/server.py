@@ -27,6 +27,8 @@ APP_DIR = Path(__file__).resolve().parent
 PUBLIC_DIR = APP_DIR / "public"
 JARVIS_HOME = Path(os.environ.get("JARVIS_HOME", Path.home() / ".jarvis"))
 ENV_FILE = JARVIS_HOME / "jarvis.env"
+PENDING_DIR = JARVIS_HOME / "approvals" / "pending"
+APPROVED_DIR = JARVIS_HOME / "approvals" / "ok"
 
 SESSION_COOKIE = "jarvis_session"
 SESSION_DAYS = 30
@@ -223,6 +225,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.redirect("/login")
         if path == "/api/status":
             return self.status()
+        if path == "/api/approvals":
+            return self.approvals()
         if path == "/":
             return self.send_file(PUBLIC_DIR / "index.html")
         target = (PUBLIC_DIR / path.lstrip("/")).resolve()
@@ -246,6 +250,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.chat()
         if path == "/api/tts":
             return self.tts()
+        if path.startswith("/api/approvals/"):
+            return self.decide(path)
         self.send_json(404, {"error": "nicht gefunden"})
 
     def login(self):
@@ -277,6 +283,33 @@ class Handler(BaseHTTPRequestHandler):
             "model": MODEL_LABEL,
             "voice": "elevenlabs" if EL_KEY and EL_VOICE else "browser",
         })
+
+    def approvals(self):
+        items = []
+        for f in sorted(PENDING_DIR.glob("*.json")) if PENDING_DIR.exists() else []:
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if time.time() - data.get("created", 0) > 3600:
+                f.unlink(missing_ok=True)
+                continue
+            items.append({k: data.get(k) for k in ("id", "tool", "preview", "created")})
+        self.send_json(200, {"items": items})
+
+    def decide(self, path):
+        parts = path.split("/")  # ['', 'api', 'approvals', '<id>', '<approve|reject>']
+        if len(parts) != 5 or not parts[3].isalnum() or parts[4] not in ("approve", "reject"):
+            return self.send_json(400, {"error": "ungültig"})
+        pending = PENDING_DIR / f"{parts[3]}.json"
+        if not pending.exists():
+            return self.send_json(404, {"error": "Anfrage nicht gefunden oder abgelaufen"})
+        if parts[4] == "approve":
+            APPROVED_DIR.mkdir(parents=True, exist_ok=True)
+            (APPROVED_DIR / parts[3]).touch()
+        else:
+            pending.unlink(missing_ok=True)
+        self.send_json(200, {"ok": True})
 
     def chat(self):
         try:
@@ -368,6 +401,9 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main():
+    if sys.stderr is None or sys.stdout is None:  # pythonw (Windows-Autostart) hat keine Konsole
+        (JARVIS_HOME / "logs").mkdir(parents=True, exist_ok=True)
+        sys.stdout = sys.stderr = open(JARVIS_HOME / "logs" / "dashboard.log", "a", buffering=1, encoding="utf-8")
     if len(sys.argv) > 1 and sys.argv[1] == "hash-password":
         print(hash_password(sys.stdin.readline().rstrip("\n")))
         return

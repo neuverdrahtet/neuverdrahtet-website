@@ -1,0 +1,3 @@
+name: jarvis-guard
+version: "1.0"
+description: Hält alles an, was nach außen geht (E-Mail, Einladungen, Nachrichten), bis der Nutzer es im JARVIS-Dashboard freigibt.
