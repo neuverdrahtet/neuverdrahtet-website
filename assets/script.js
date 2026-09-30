@@ -237,9 +237,15 @@ document.querySelectorAll('.ajax-form').forEach(form => {
 (() => {
   const params = new URLSearchParams(location.search);
   if (params.get('anfrage_gesendet') !== '1') return;
+  // .calc-contact-reveal ist ein optionales Panel-Muster für Formulare,
+  // die standardmäßig eingeklappt sind (aktuell auf keiner Seite verbaut).
+  // Fallback: das normale, direkt sichtbare .ajax-form (z.B. kontakt.html) —
+  // ohne diesen Fallback blieb die Erfolgsmeldung nach einem nativen
+  // Datei-Upload-POST (siehe oben) unsichtbar, obwohl die Anfrage ankam.
   const reveal = document.querySelector('.calc-contact-reveal');
   const toggle = document.querySelector('.calc-contact-toggle');
-  const statusEl = reveal ? reveal.querySelector('.form-status') : null;
+  const form = reveal ? reveal.querySelector('form') : document.querySelector('.ajax-form');
+  const statusEl = form ? form.querySelector('.form-status') : null;
   if (reveal) {
     reveal.hidden = false;
     toggle?.setAttribute('aria-expanded', 'true');
@@ -248,8 +254,8 @@ document.querySelectorAll('.ajax-form').forEach(form => {
     statusEl.textContent = 'Danke — Ihre Anfrage inkl. Fotos ist angekommen. Rückmeldung folgt in Kürze.';
     statusEl.classList.add('ok');
   }
-  reveal?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  const leadSource = (reveal?.querySelector('form') || {}).dataset?.leadSource || 'contact_form';
+  (reveal || form)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const leadSource = (form || {}).dataset?.leadSource || 'contact_form';
   trackEvent('generate_lead', { method: leadSource });
   const clean = new URL(location.href);
   clean.searchParams.delete('anfrage_gesendet');
