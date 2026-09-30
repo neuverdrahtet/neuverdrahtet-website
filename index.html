@@ -351,11 +351,15 @@
       <div class="nav-item-dropdown">
         <a href="elektrotechnik.html">Leistungen <svg width="11" height="7" viewBox="0 0 11 7" fill="none"><path d="M1 1l4.5 4.5L10 1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></a>
         <div class="nav-dropdown">
-          <a href="elektrotechnik.html"><span class="code">01</span>Elektrotechnik</a>
+          <a href="elektrotechnik-elektroinstallation.html"><span class="code">01</span>Elektroinstallation &amp; -sanierung</a>
           <a href="prueftechnik-uebersicht.html"><span class="code">02</span>Prüftechnik</a>
           <a href="wartung-service.html"><span class="code">03</span>Wartung</a>
           <a href="waerme-klima.html"><span class="code">04</span>Wärme &amp; Klima</a>
           <a href="msr-gebaeudeautomation.html"><span class="code">05</span>MSR &amp; Gebäudeautomation</a>
+          <a href="elektrotechnik-wallbox.html"><span class="code">06</span>Wallbox</a>
+          <a href="elektrotechnik-photovoltaik.html"><span class="code">07</span>Photovoltaik</a>
+          <a href="elektrotechnik-smart-home.html"><span class="code">08</span>Smart Home</a>
+          <a href="elektrotechnik-rauchwarnmelder.html"><span class="code">09</span>Rauchwarnmelder</a>
         </div>
       </div>
       <a href="privatkunden.html">Privatkunden</a>
@@ -386,11 +390,15 @@
     <button class="mobile-close" id="mobileClose" aria-label="Menü schließen">✕</button>
   </div>
   <a href="elektrotechnik.html">Leistungen</a>
-  <a class="mobile-sub" href="elektrotechnik.html">Elektrotechnik</a>
+  <a class="mobile-sub" href="elektrotechnik-elektroinstallation.html">Elektroinstallation &amp; -sanierung</a>
   <a class="mobile-sub" href="prueftechnik-uebersicht.html">Prüftechnik</a>
   <a class="mobile-sub" href="wartung-service.html">Wartung</a>
   <a class="mobile-sub" href="waerme-klima.html">Wärme &amp; Klima</a>
   <a class="mobile-sub" href="msr-gebaeudeautomation.html">MSR &amp; Gebäudeautomation</a>
+  <a class="mobile-sub" href="elektrotechnik-wallbox.html">Wallbox</a>
+  <a class="mobile-sub" href="elektrotechnik-photovoltaik.html">Photovoltaik</a>
+  <a class="mobile-sub" href="elektrotechnik-smart-home.html">Smart Home</a>
+  <a class="mobile-sub" href="elektrotechnik-rauchwarnmelder.html">Rauchwarnmelder</a>
   <a href="privatkunden.html">Privatkunden</a>
   <a href="geschaeftskunden.html">Geschäftskunden</a>
   <a href="unternehmen.html">Unternehmen</a>
@@ -566,26 +574,75 @@
     </div>
   </section>
 
-  <section class="section-alt" id="schnellanfrage">
+  <section class="section-alt" id="kontaktformular">
     <div class="wrap" style="max-width:640px;">
       <div class="section-head">
-        <p class="eyebrow">Schnellanfrage</p>
-        <h2>In 30 Sekunden anfragen.</h2>
-        <p>Oder direkt <a href="tel:+491706398575" style="color:var(--orange-2);">anrufen</a> oder <a href="https://wa.me/491706398575" target="_blank" rel="noopener" style="color:#25D366;font-weight:600;">per WhatsApp schreiben</a> — Rückmeldung i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
+        <p class="eyebrow">Anfrageformular</p>
+        <h2>Technischen Service anfragen.</h2>
+        <p>Grundangaben, Leistungsart, technische Zusatzangaben und optionaler Datei-Upload. Oder direkt <a href="tel:+491706398575" style="color:var(--orange-2);">anrufen</a> oder <a href="https://wa.me/491706398575" target="_blank" rel="noopener" style="color:#25D366;font-weight:600;">per WhatsApp schreiben</a> — Rückmeldung i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
       </div>
-      <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" data-lead-source="homepage-schnellanfrage" data-werkora-lead="true">
-        <input type="hidden" name="service" value="Schnellanfrage (Startseite)">
+      <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="homepage-kontaktformular" data-werkora-lead="true">
+        <input type="hidden" name="_next" value="">
+        <h3 style="font-size:15px;margin-bottom:14px;color:var(--ink-soft);font-weight:600;">Ihre Angaben</h3>
         <div class="form-row">
-          <div class="field"><label for="q-name">Name *</label><input type="text" id="q-name" name="name" required></div>
-          <div class="field"><label for="q-kontakt">Telefon oder E-Mail *</label><input type="text" id="q-kontakt" name="email" required></div>
+          <div class="field"><label for="h-firma">Firma</label><input type="text" id="h-firma" name="firma"></div>
+          <div class="field"><label for="h-ansprechpartner">Ansprechpartner *</label><input type="text" id="h-ansprechpartner" name="name" required></div>
         </div>
-        <div class="field"><label for="q-nachricht">Worum geht es? *</label><textarea id="q-nachricht" name="message" rows="3" required placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
+        <div class="form-row">
+          <div class="field"><label for="h-telefon">Telefon</label><input type="tel" id="h-telefon" name="phone"></div>
+          <div class="field"><label for="h-email">E-Mail *</label><input type="email" id="h-email" name="email" required></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="h-plz">PLZ</label><input type="text" id="h-plz" name="plz" inputmode="numeric" pattern="[0-9]*"></div>
+          <div class="field"><label for="h-ort">Ort</label><input type="text" id="h-ort" name="ort" value="Essen"></div>
+        </div>
+
+        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Leistungsart</h3>
+        <div class="field">
+          <label for="h-leistung">Worum geht es? *</label>
+          <select id="h-leistung" name="service" required>
+            <option value="">Bitte wählen</option>
+            <option>DGUV / Prüftechnik</option>
+            <option>Wartung</option>
+            <option>Wärmepumpe</option>
+            <option>Klimaanlage</option>
+            <option>MSR / Gebäudeautomation</option>
+            <option>Elektrotechnik</option>
+            <option>Wallbox</option>
+            <option>Photovoltaik</option>
+            <option>Smart Home</option>
+            <option>Rauchwarnmelder</option>
+            <option>Störung</option>
+            <option>Sonstiges</option>
+          </select>
+        </div>
+
+        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Technische Angaben (optional, hilft bei der Einschätzung)</h3>
+        <div class="form-row-3">
+          <div class="field"><label for="h-anlagenart">Anlagenart</label><input type="text" id="h-anlagenart" name="anlagenart" placeholder="z. B. Wärmepumpe"></div>
+          <div class="field"><label for="h-hersteller">Hersteller</label><input type="text" id="h-hersteller" name="hersteller"></div>
+          <div class="field"><label for="h-modell">Modell</label><input type="text" id="h-modell" name="modell"></div>
+        </div>
+        <div class="form-row">
+          <div class="field"><label for="h-anzahl">Anzahl Betriebsmittel</label><input type="number" id="h-anzahl" name="anzahl_betriebsmittel" placeholder="z. B. 40"></div>
+          <div class="field"><label for="h-termin">Gewünschter Termin</label><input type="text" id="h-termin" name="termin" placeholder="z. B. nächste 2 Wochen"></div>
+        </div>
+        <div class="field"><label for="h-beschreibung">Beschreibung</label><textarea id="h-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
+
+        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Dateien (optional)</h3>
+        <div class="upload-box">
+          📎 <b>Fotos, Typenschild, Prüfliste oder Dokumente</b> hochladen — hilft bei der ersten Einschätzung.
+          <div style="margin-top:8px;"><input type="file" name="attachment" multiple aria-label="Dateien hochladen" style="font-size:12.5px;"></div>
+        </div>
+
         <label class="checkbox-row">
           <input type="checkbox" required>
           <span>Ich stimme der Verarbeitung meiner Daten gemäß <a href="datenschutz.html" style="color:var(--orange-2);">Datenschutzerklärung</a> zu. *</span>
         </label>
-        <button type="submit" class="btn btn-primary btn-block">Anfrage senden</button>
+
+        <button type="submit" class="btn btn-primary btn-block">Service anfragen</button>
         <p class="form-status" role="status"></p>
+        <p class="form-note" style="margin-top:14px;">Felder mit * sind erforderlich. Wir melden uns i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
       </form>
     </div>
   </section>

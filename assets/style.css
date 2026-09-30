@@ -244,12 +244,17 @@ h1,h2,h3,h4{
   transition:background .2s ease, color .2s ease, transform .2s ease;
 }
 .header-icons a svg{ width:17px; height:17px; }
-.header-icons a:hover{ transform:translateY(-1px); color:#fff; }
+.header-icons a:hover{ transform:translateY(-1px); }
 .header-icons a.fab-whatsapp, .header-icons a:nth-child(1){ background:#25D366; color:#0B0F14; }
 .header-icons a.fab-whatsapp:hover, .header-icons a:nth-child(1):hover{ background:#1DA851; color:#0B0F14; }
-.header-icons a:nth-child(2):hover{ background:var(--orange); }
-.header-icons a:nth-child(3):hover{ background:linear-gradient(135deg,#fd5949,#d6249f,#285AEB); }
-.header-icons a:nth-child(4):hover{ background:#1877F2; }
+.header-icons a:nth-child(2){ background:var(--orange); color:#fff; }
+.header-icons a:nth-child(2):hover{ background:var(--orange-2); color:#fff; }
+.header-icons a:nth-child(3){ background:linear-gradient(135deg,#fd5949,#d6249f,#285AEB); color:#fff; }
+.header-icons a:nth-child(3):hover{ filter:brightness(1.1); color:#fff; }
+.header-icons a:nth-child(4){ background:#1877F2; color:#fff; }
+.header-icons a:nth-child(4):hover{ background:#1461C7; color:#fff; }
+.header-icons a:nth-child(5){ background:#EA4335; color:#fff; }
+.header-icons a:nth-child(5):hover{ background:#C5221F; color:#fff; }
 @media (max-width:980px){ .header-icons{ display:none; } }
 .nav-toggle{ display:none; }
 
