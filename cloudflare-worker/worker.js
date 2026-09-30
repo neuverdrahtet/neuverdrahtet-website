@@ -14,9 +14,12 @@
  * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Zusätzlich
  * läuft einmal täglich morgens automatisch ein "Büro-Check" (Cloudflare Cron
  * Trigger, siehe scheduled()): dieselbe Tool-Loop wie der Chat prüft ohne
- * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads sowie unvollständige
+ * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads, unvollständige
  * Belege (per bulkFixReceipts automatisch per KI ausgelesen und übernommen),
- * legt bei Bedarf neue Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
+ * einen Soll-/Ist-Zeitvergleich (kalkulierte Std.-Positionen vs. echte
+ * Zeiterfassung) sowie - falls eingerichtet - ungelesene E-Mails/Kalender-
+ * termine über die separate Google-Büro-Anbindung, legt bei Bedarf neue
+ * Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
  * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
  * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
@@ -50,6 +53,15 @@
  *                        (siehe cloudflare-worker-ki-buerokraft/README.md).
  *                        Ohne diese beiden Variablen läuft der Chat trotzdem,
  *                        kann dann aber keine echten Firmendaten abrufen.
+ *   GOOGLE_BUERO_URL   (Variable, optional) – Basis-URL des
+ *                        cloudflare-worker-google-buero-Workers, für
+ *                        E-Mail-/Kalender-Zugriff (searchEmails/
+ *                        searchCalendarEvents) im Chat und im täglichen
+ *                        Büro-Check.
+ *   GOOGLE_BUERO_API_KEY (Secret, optional) – derselbe API_KEY, den der
+ *                        Google-Büro-Worker erwartet. Ohne diese beiden
+ *                        Variablen funktionieren alle anderen Funktionen
+ *                        unverändert, nur E-Mail/Kalender bleiben aus.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -1044,6 +1056,57 @@ const KI_BUEROKRAFT_TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'searchTimeEntries',
+    method: 'GET',
+    path: (i) => '/time-entries' + buildQuery(i, ['project_id', 'employee_id', 'date_from', 'date_to', 'count', 'offset', 'limit']),
+    description: 'Echte erfasste Arbeitszeit (Zeiterfassung/Stechuhr, nicht die freiwilligen Arbeitsberichte) abrufen - das ist die maßgebliche Quelle für einen Soll-/Ist-Zeitvergleich gegen kalkulierte Std.-Positionen eines Angebots. Antwort enthält immer sum_minutes (Summe der gefilterten Einträge). Bei reinen Summenfragen count=true nutzen statt der vollen Liste.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        employee_id: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        count: { type: 'boolean' },
+        offset: { type: 'integer' },
+        limit: { type: 'integer' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchEmails',
+    service: 'google',
+    method: 'GET',
+    path: (i) => '/emails' + buildQuery(i, ['q', 'unread', 'from', 'to', 'subject', 'after', 'before']),
+    description: 'E-Mails im geschäftlichen Gmail-Postfach durchsuchen (max. 25 Treffer, neueste zuerst). "after"/"before" im Format YYYY/MM/DD, "q" ist normale Gmail-Suchsyntax. Nur verfügbar, wenn die separate Google-Büro-Anbindung eingerichtet ist (sonst kommt ein klarer Fehler zurück).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        q: { type: 'string', description: 'Freie Gmail-Suchsyntax, z.B. "Rechnung" oder "from:kunde@example.com".' },
+        unread: { type: 'boolean' },
+        from: { type: 'string' },
+        to: { type: 'string' },
+        subject: { type: 'string' },
+        after: { type: 'string', description: 'Format YYYY/MM/DD.' },
+        before: { type: 'string', description: 'Format YYYY/MM/DD.' },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'searchCalendarEvents',
+    service: 'google',
+    method: 'GET',
+    path: (i) => '/calendar/events' + buildQuery(i, ['date_from', 'date_to', 'q']),
+    description: 'Termine im geschäftlichen Google-Kalender abrufen (max. 50 Treffer). Nur verfügbar, wenn die separate Google-Büro-Anbindung eingerichtet ist (sonst kommt ein klarer Fehler zurück).',
+    input_schema: {
+      type: 'object',
+      properties: { date_from: { type: 'string' }, date_to: { type: 'string' }, q: { type: 'string' } },
+      additionalProperties: false,
+    },
+  },
 ];
 
 async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input }) {
@@ -1177,10 +1240,12 @@ Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHR
 - Erfinde niemals Ergebnisse, IDs oder Daten - nutze ausschließlich das, was die Tools tatsächlich zurückgeben. Bei einem Tool-Fehler erkläre ehrlich, was schiefging.
 - Antworte präzise und knapp auf Deutsch. Bei Listen mit vielen Treffern eine sinnvolle, kompakte Zusammenfassung liefern statt jeden Datensatz einzeln auszuschreiben, außer explizit nach Details gefragt wird.
 - Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.
+- searchEmails/searchCalendarEvents greifen auf das geschäftliche Gmail-Postfach/Google-Kalender zu (separate Anbindung, nicht auf jedem Worker eingerichtet) - kommt ein klarer Fehler zurück, dass diese Anbindung fehlt, erkläre das ehrlich statt es zu ignorieren oder zu erfinden.
 
 Internetrecherche, Kalkulation und Datenpflege:
 - Fehlende Informationen (Artikelbezeichnungen, Hersteller/Modellnummern, technische Daten, Materialeigenschaften, Produktvarianten, marktübliche Materialpreise, Lieferbarkeit, typische Montageschritte/Arbeitsabläufe/Zeitansätze, benötigtes Material, übliche Zusatzarbeiten, technische Voraussetzungen) darfst du eigenständig per Web-Suche recherchieren statt sie sofort zurückzugeben - bevorzugt in dieser Reihenfolge: 1) Herstellerangaben/technische Datenblätter, 2) offizielle Dokumentationen/Norm- oder Regelwerksinformationen, 3) Großhändler/etablierte Fachhändler, 4) seriöse Brancheninformationen, 5) andere nachvollziehbare Quellen. Gleiche geschäftlich wichtige Angaben nach Möglichkeit mit mehreren Quellen ab und nenne bei Bedarf Quelle und Recherchedatum.
-- Reihenfolge beim Nachschlagen fehlender Informationen: erst per Tools die echten Werkora-Daten prüfen (Kunden/Projekte per searchCustomers/searchProjects, Preise per getPriceList) - erst wenn dort nichts Passendes zu finden ist, im Internet recherchieren und Ergebnisse miteinander vergleichen. Ein Soll-/Ist-Zeitvergleich mit echten Arbeitsberichten/Zeiterfassungsdaten ist aktuell technisch noch nicht möglich (kein Werkzeug dafür vorhanden) - weise das bei entsprechenden Fragen ehrlich darauf hin, statt Zeitansätze auf Verdacht zu vergleichen. Frage den Nutzer nur, wenn eine Information danach immer noch nicht zuverlässig bestimmbar ist.
+- Reihenfolge beim Nachschlagen fehlender Informationen: erst per Tools die echten Werkora-Daten prüfen (Kunden/Projekte per searchCustomers/searchProjects, Preise per getPriceList) - erst wenn dort nichts Passendes zu finden ist, im Internet recherchieren und Ergebnisse miteinander vergleichen. Frage den Nutzer nur, wenn eine Information danach immer noch nicht zuverlässig bestimmbar ist.
+- Soll-/Ist-Zeitvergleich: searchTimeEntries liefert die echte erfasste Arbeitszeit (Zeiterfassung/Stechuhr, project_id + sum_minutes) - das ist die Istzeit. Die Sollzeit ergibt sich aus den kalkulierten Std.-Positionen im zugehörigen Angebot (searchQuotes). Vergleiche beide nur, wenn du echte Werte aus beiden Quellen hast - erfinde nie eine Sollzeit ohne passende Angebots-Position. Nenne bei einer Abweichung immer beide Werte (Sollzeit, Istzeit) und ob/wie stark sie abweichen, als "Beobachtung/Empfehlung" (siehe Kennzeichnungsregel unten) - keine automatische Anpassung von Kalkulationswerten daraus.
 - Preise: ein bereits in der Werkora-Preisliste (getPriceList) hinterlegter Preis hat IMMER Vorrang vor einem recherchierten Internetpreis. Recherchierte Preise sind nur eine Kalkulationsgrundlage, nicht automatisch der Verkaufspreis von neuverdrahtet. Erfinde niemals Materialaufschläge, Stundensätze oder sonstige Kalkulationsregeln - nutze ausschließlich das, was in Werkora hinterlegt ist.
 - Du hast ohnehin kein Werkzeug, um Preise/Aufschläge/Stundensätze zu ändern - das ist Absicht. Erkennst du trotzdem eine sinnvolle Anpassung (z.B. weil ein Materialpreis sich laut Recherche deutlich verändert hat), ändere nichts direkt, sondern: fasse Recherche/Analyse samt Auswirkung zusammen -> lege per createTask eine Aufgabe für die Geschäftsführung an, die den bisherigen Wert, den Änderungsvorschlag und die Begründung/Quellen konkret nennt -> reserviere per createAppointment einen Termin zur Prüfung/Freigabe. Erst nach ausdrücklicher Freigabe durch den Nutzer gilt ein neuer Wert als verbindlich - ändere niemals eigenständig zentrale Verkaufspreise oder Kalkulationsregeln, wenn dadurch künftige Angebote/Rechnungen finanziell beeinflusst würden.
 - Kennzeichne jede von dir gelieferte Information eindeutig als "intern bestätigt" (direkt aus Werkora-Daten), "extern verifiziert" (per Internetrecherche bestätigt, mit Quelle und Datum) oder "Schätzung/Empfehlung" (abgeleiteter/geschätzter Wert ohne gesicherte Quelle) - der Nutzer muss jederzeit erkennen können, woher ein Wert stammt. Speichere bzw. behaupte unsichere Informationen niemals als gesicherte Tatsache.`;
@@ -1195,7 +1260,7 @@ Internetrecherche, Kalkulation und Datenpflege:
 // dürfen.
 const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, allowed_callers: ['direct'] };
 
-async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey }) {
+async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleBueroUrl, googleBueroApiKey }) {
   let conversation = messages;
   // Sammelt jeden Tool-Aufruf mit Rohantwort - hilft bei der Fehlersuche, weil
   // das Modell einen Tool-Fehler sonst nur in eigenen (oft zu vagen) Worten
@@ -1254,17 +1319,11 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
 
     conversation = [...conversation, { role: 'assistant', content: data.content }];
 
-    if (!kiBuerokraftUrl || !kiBuerokraftApiKey) {
-      const toolResults = toolUses.map((tu) => ({
-        type: 'tool_result', tool_use_id: tu.id,
-        content: 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).',
-        is_error: true,
-      }));
-      debugLog.push(...toolUses.map((tu) => ({ tool: tu.name, input: tu.input, error: 'KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen' })));
-      conversation = [...conversation, { role: 'user', content: toolResults }];
-      continue;
-    }
-
+    // Zwei getrennte externe APIs möglich (service: 'buerokraft' [Standard]
+    // oder 'google' für Gmail/Kalender) - jedes Werkzeug bekommt einzeln
+    // geprüft, ob die dafür nötige Anbindung eingerichtet ist, statt bei
+    // fehlender Google-Anbindung gleich ALLE Werkzeuge (auch die KI-
+    // Bürokraft-Werkzeuge) zu blockieren.
     const toolResults = [];
     for (const toolUse of toolUses) {
       const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
@@ -1273,9 +1332,20 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         debugLog.push({ tool: toolUse.name, input: toolUse.input, error: 'Unbekanntes Werkzeug' });
         continue;
       }
+      const istGoogle = tool.service === 'google';
+      const baseUrl = istGoogle ? googleBueroUrl : kiBuerokraftUrl;
+      const apiKeyFuerTool = istGoogle ? googleBueroApiKey : kiBuerokraftApiKey;
+      if (!baseUrl || !apiKeyFuerTool) {
+        const meldung = istGoogle
+          ? 'Die Google-Büro-Anbindung (Gmail/Kalender) ist auf diesem Worker nicht eingerichtet (GOOGLE_BUERO_URL/GOOGLE_BUERO_API_KEY fehlen).'
+          : 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).';
+        toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: meldung, is_error: true });
+        debugLog.push({ tool: toolUse.name, input: toolUse.input, error: meldung });
+        continue;
+      }
       try {
         const path = tool.path(toolUse.input || {});
-        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
+        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl: baseUrl, kiBuerokraftApiKey: apiKeyFuerTool, tool, input: toolUse.input || {} });
         toolResults.push({
           type: 'tool_result', tool_use_id: toolUse.id,
           content: JSON.stringify(ergebnis).slice(0, 8000),
@@ -1434,7 +1504,7 @@ async function firestoreListDocuments({ serviceAccount, collection }) {
 // bestehende E-Mail-Feature läuft über die Gmail-Anbindung im Browser, die
 // bei einem nächtlichen Cron-Lauf ohne offene App nicht zur Verfügung
 // steht).
-function buildTagescheckPrompt(heute) {
+function buildTagescheckPrompt(heute, { googleVerfuegbar = false } = {}) {
   return `Führe jetzt deinen täglichen Büro-Check durch (automatischer Lauf ohne Mitarbeiter - es beantwortet dir gerade niemand Rückfragen, entscheide eigenständig im Rahmen deiner Regeln). Heutiges Datum: ${heute}.
 
 Gehe systematisch vor:
@@ -1444,9 +1514,11 @@ Gehe systematisch vor:
 4. searchAppointments für die nächsten Tage auf anstehende Termine prüfen, für die ggf. noch etwas vorzubereiten ist.
 5. searchLeads auf unbearbeitete Leads ohne next_action prüfen.
 6. searchExpenses mit incomplete=true prüfen, ob unvollständige Belege (ohne/mit 0 Euro Betrag) offen sind. Falls ja: räume den Rückstand per bulkFixReceipts (limit=25) ab - wiederhole den Aufruf, solange has_more=true ist, aber höchstens 6 Aufrufe in diesem Lauf (der Rest folgt automatisch beim nächsten täglichen Check). Erfinde dabei nichts - Belege, die bulkFixReceipts als needs_manual_review meldet, bleiben offen und werden nur zusammengefasst, nicht als erledigt gemeldet.
-7. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
-8. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
-9. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist - inkl. wie viele Belege automatisch erledigt wurden und wie viele noch manuell geprüft werden müssen (auch wenn sonst nichts Dringendes ansteht - dann das kurz so vermerken).
+7. Soll-/Ist-Zeitvergleich: prüfe searchProjects für laufende Projekte (Status "in Arbeit"/vergleichbar). Für jedes: kalkulierte Stunden aus den zugehörigen Std.-Positionen im Angebot (searchQuotes) mit der tatsächlich erfassten Zeit (searchTimeEntries, project_id + sum_minutes) vergleichen. Weicht die Istzeit deutlich (z.B. >20%) von der Sollzeit ab, per createTask eine Aufgabe mit Sollzeit/Istzeit/Abweichung anlegen - keine automatische Anpassung von Kalkulationswerten, nur eine Beobachtung/Empfehlung zur Prüfung (siehe deine Regeln zu Kalkulation/Datenpflege).
+${googleVerfuegbar ? `8. searchEmails mit unread=true auf ungelesene wichtige E-Mails prüfen (grob überfliegen, nicht jede einzeln bearbeiten) - bei erkennbar dringenden/kundenbezogenen Mails eine Aufgabe anlegen. searchCalendarEvents für die nächsten paar Tage auf Termine prüfen, die nicht schon in Werkora als Termin erfasst sind, und ggf. darauf hinweisen.` : ''}
+${googleVerfuegbar ? '9' : '8'}. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
+${googleVerfuegbar ? '10' : '9'}. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
+${googleVerfuegbar ? '11' : '10'}. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist - inkl. wie viele Belege automatisch erledigt wurden, wie viele noch manuell geprüft werden müssen, und auffällige Soll-/Ist-Zeitabweichungen${googleVerfuegbar ? ' sowie relevante E-Mails/Kalendertermine' : ''} (auch wenn sonst nichts Dringendes ansteht - dann das kurz so vermerken).
 
 Antworte danach zusätzlich mit einer kurzen Fließtext-Zusammenfassung (max. 3-4 Sätze, ohne Aufzählungszeichen, geeignet als Text einer Push-Benachrichtigung).`;
 }
@@ -1458,14 +1530,17 @@ async function runTagescheck(env) {
   }
 
   const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
+  const googleVerfuegbar = !!(env.GOOGLE_BUERO_URL && env.GOOGLE_BUERO_API_KEY);
   let ergebnis;
   try {
     ergebnis = await callClaudeAssistentChat({
       apiKey: env.ANTHROPIC_API_KEY,
       model: env.MODEL_ID || 'claude-opus-4-8',
-      messages: [{ role: 'user', content: buildTagescheckPrompt(heute) }],
+      messages: [{ role: 'user', content: buildTagescheckPrompt(heute, { googleVerfuegbar }) }],
       kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
       kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
+      googleBueroUrl: env.GOOGLE_BUERO_URL,
+      googleBueroApiKey: env.GOOGLE_BUERO_API_KEY,
     });
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
@@ -1720,6 +1795,8 @@ export default {
           messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
           kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
           kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
+          googleBueroUrl: env.GOOGLE_BUERO_URL,
+          googleBueroApiKey: env.GOOGLE_BUERO_API_KEY,
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },

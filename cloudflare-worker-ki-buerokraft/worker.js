@@ -583,6 +583,29 @@ function apiToWorkReport(body) {
   };
 }
 
+// Echte Zeiterfassung (Stechuhr/Timer je Mitarbeiter, siehe Werkora-Ansicht
+// "Zeiterfassung") - eine ANDERE, feinere Datenquelle als die Arbeitsberichte
+// oben: dort trägt ein Mitarbeiter freiwillig einen zusammenfassenden Bericht
+// ein, hier läuft die tatsächlich gestoppte/erfasste Arbeitszeit je Projekt
+// auf. Nur lesend, da die Erfassung selbst in Werkora per Timer/manuell
+// läuft - für einen Soll-/Ist-Zeitvergleich (kalkulierte Std.-Positionen
+// eines Angebots vs. tatsächlich erfasste Zeit) ist genau das die
+// maßgebliche Quelle.
+function timeEntryToApi(z) {
+  return {
+    id: z.id,
+    project_id: z.projektId || '',
+    employee_id: z.mitarbeiterId || '',
+    date: z.datum || '',
+    duration_minutes: z.dauerMinuten || 0,
+    activity: z.taetigkeit || '',
+    description: z.beschreibung || '',
+    start_time: z.startzeit || '',
+    end_time: z.endzeit || '',
+    billed: !!z.abgerechnet,
+  };
+}
+
 const DOKUMENT_TYPEN = ['photo', 'measurement_report', 'vde_report', 'dguv_report', 'acceptance', 'customer_signature', 'invoice_document', 'quote_document', 'plan', 'other'];
 
 function documentToApi(d) {
@@ -1394,6 +1417,34 @@ export default {
           return okResponse(workReportToApi(updated));
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Zeiterfassung (nur lesen - Erfassung läuft per Timer/manuell in Werkora selbst) ---
+      if (teile[0] === 'time-entries') {
+        if (request.method === 'GET' && !teile[1]) {
+          let eintraege = await firestoreList({ accessToken, projectId, collection: 'zeiterfassung' });
+          const projectIdFilter = q.get('project_id'); const employeeId = q.get('employee_id');
+          const dateFrom = q.get('date_from'); const dateTo = q.get('date_to');
+          if (projectIdFilter) eintraege = eintraege.filter((z) => z.projektId === projectIdFilter);
+          if (employeeId) eintraege = eintraege.filter((z) => z.mitarbeiterId === employeeId);
+          if (dateFrom) eintraege = eintraege.filter((z) => (z.datum || '') >= dateFrom);
+          if (dateTo) eintraege = eintraege.filter((z) => (z.datum || '') <= dateTo);
+          await logAction(ctx, { action: 'time-entries.search', status: 'success' });
+          // sum_minutes wird IMMER mitgeliefert (auch ohne count=true) - das ist
+          // der eigentlich interessante Wert für einen Soll-/Ist-Zeitvergleich,
+          // ohne dass die KI jede einzelne Seite aufsummieren müsste.
+          const sumMinutes = eintraege.reduce((s, z) => s + (Number(z.dauerMinuten) || 0), 0);
+          if (q.get('count') === 'true') return okResponse({ count: eintraege.length, sum_minutes: sumMinutes });
+          eintraege.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+          const offset = Math.max(0, Number(q.get('offset')) || 0);
+          const limit = Math.min(Number(q.get('limit')) || 100, 100);
+          const seite = eintraege.slice(offset, offset + limit);
+          return okResponse({
+            items: seite.map(timeEntryToApi), total: eintraege.length, sum_minutes: sumMinutes,
+            offset, limit, has_more: offset + limit < eintraege.length,
+          });
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Zeiterfassung wird über diese API nur gelesen (Erfassung läuft per Timer/manuell in Werkora selbst).', 405);
       }
 
       // --- Zahlungen (Vorgabe Abschnitt 23 - nur Lesen, Werkora bildet das über Kontoauszug-Abgleich ab) ---

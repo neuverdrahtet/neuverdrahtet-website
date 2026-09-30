@@ -169,6 +169,12 @@ PATCH /work-reports/{id}           ({ work_done?, material_used?, additional_wor
 GET   /payments                    (Bankbuchungen/Kontoauszug-Abgleich, nur lesen; nur direkt per Worker-API -
                                      nicht in der ChatGPT-Action, da es keine sinnvolle "Bearbeiten"-Aktion gibt)
 
+GET   /time-entries?project_id=&employee_id=&date_from=&date_to=&count=&offset=&limit=
+      (echte Zeiterfassung/Stechuhr aus Werkora, nur lesen - Erfassung läuft per Timer/manuell in Werkora
+       selbst. Antwort enthält immer sum_minutes (Summe der gefilterten Einträge) - für einen Soll-/Ist-
+       Zeitvergleich mit kalkulierten Std.-Positionen eines Angebots die maßgebliche Quelle, anders als die
+       freiwilligen Arbeitsberichte oben. count=true liefert nur { count, sum_minutes } ohne die Einzeleinträge.)
+
 GET   /reminders?invoice_id=       (nur direkt per Worker-API)
 POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? } - nur direkt per Worker-API)
 
