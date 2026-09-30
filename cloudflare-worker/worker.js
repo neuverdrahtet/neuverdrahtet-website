@@ -18,9 +18,10 @@
  * Belege (per bulkFixReceipts automatisch per KI ausgelesen und übernommen),
  * einen Soll-/Ist-Zeitvergleich (kalkulierte Std.-Positionen vs. echte
  * Zeiterfassung) sowie - falls eingerichtet - ungelesene E-Mails/Kalender-
- * termine über die separate Google-Büro-Anbindung, legt bei Bedarf neue
- * Aufgaben an und schickt danach eine Push-Benachrichtigung. Die
- * Geheimnisse (Anthropic-API-Key, Firebase-Service-Account) bleiben
+ * termine (Gmail/Google Kalender, direkt in diesem Worker per eigenem
+ * Google-OAuth angebunden, siehe unten), legt bei Bedarf neue Aufgaben an
+ * und schickt danach eine Push-Benachrichtigung. Die Geheimnisse
+ * (Anthropic-API-Key, Firebase-Service-Account, Google-OAuth-Client) bleiben
  * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
  *
@@ -40,11 +41,12 @@
  *                        Herkünfte, Standard: https://neuverdrahtet.com,https://www.neuverdrahtet.com
  *   MODEL_ID            (Variable, optional) – Standard: claude-opus-4-8
  *                        (günstigere Alternative z.B. claude-haiku-4-5)
- *   FIREBASE_SERVICE_ACCOUNT_JSON (Secret, nur für Push-Benachrichtigungen
- *                        nötig) – kompletter Inhalt einer Firebase-Service-
- *                        Account-JSON-Datei (Firebase-Konsole -> Projekt-
- *                        einstellungen -> Dienstkonten -> Neuen privaten
- *                        Schlüssel generieren), als einzeiliger String.
+ *   FIREBASE_SERVICE_ACCOUNT_JSON (Secret, nur für Push-Benachrichtigungen/
+ *                        Google-Büro-Anbindung nötig) – kompletter Inhalt
+ *                        einer Firebase-Service-Account-JSON-Datei (Firebase-
+ *                        Konsole -> Projekteinstellungen -> Dienstkonten ->
+ *                        Neuen privaten Schlüssel generieren), als
+ *                        einzeiliger String.
  *   KI_BUEROKRAFT_URL  (Variable, nur für den KI-Assistenten-Chat nötig) –
  *                        Basis-URL des cloudflare-worker-ki-buerokraft-Workers,
  *                        z.B. https://neuverdrahtet-ki-buerokraft.<konto>.workers.dev
@@ -53,15 +55,22 @@
  *                        (siehe cloudflare-worker-ki-buerokraft/README.md).
  *                        Ohne diese beiden Variablen läuft der Chat trotzdem,
  *                        kann dann aber keine echten Firmendaten abrufen.
- *   GOOGLE_BUERO_URL   (Variable, optional) – Basis-URL des
- *                        cloudflare-worker-google-buero-Workers, für
- *                        E-Mail-/Kalender-Zugriff (searchEmails/
- *                        searchCalendarEvents) im Chat und im täglichen
- *                        Büro-Check.
- *   GOOGLE_BUERO_API_KEY (Secret, optional) – derselbe API_KEY, den der
- *                        Google-Büro-Worker erwartet. Ohne diese beiden
- *                        Variablen funktionieren alle anderen Funktionen
- *                        unverändert, nur E-Mail/Kalender bleiben aus.
+ *
+ *   Google-Büro-Anbindung (Gmail/Kalender, alles optional - ohne diese
+ *   Variablen funktionieren alle anderen Funktionen unverändert, nur
+ *   searchEmails/searchCalendarEvents bleiben aus):
+ *   GOOGLE_OAUTH_CLIENT_ID     (Secret) – aus der Google-Cloud-Konsole
+ *                        (OAuth-Client, Typ "Web-Anwendung").
+ *   GOOGLE_OAUTH_CLIENT_SECRET (Secret) – aus derselben Stelle.
+ *   OAUTH_SETUP_SECRET  (Secret, frei gewählt) – schützt /oauth/authorize
+ *                        davor, dass jemand anderes die Google-Verbindung
+ *                        kapert.
+ *   GOOGLE_CALENDAR_ID  (Variable, optional) – Standard: "primary".
+ *   In der Google-Cloud-Konsole muss beim OAuth-Client als "Autorisierte
+ *   Weiterleitungs-URI" genau https://<diese-worker-url>/oauth/callback
+ *   eingetragen sein. Einmalige Anmeldung danach: im Browser
+ *   https://<diese-worker-url>/oauth/authorize?setup_key=<OAUTH_SETUP_SECRET>
+ *   aufrufen und das neuverdrahtet-Google-Konto bestätigen.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -1077,10 +1086,8 @@ const KI_BUEROKRAFT_TOOLS = [
   },
   {
     name: 'searchEmails',
-    service: 'google',
-    method: 'GET',
-    path: (i) => '/emails' + buildQuery(i, ['q', 'unread', 'from', 'to', 'subject', 'after', 'before']),
-    description: 'E-Mails im geschäftlichen Gmail-Postfach durchsuchen (max. 25 Treffer, neueste zuerst). "after"/"before" im Format YYYY/MM/DD, "q" ist normale Gmail-Suchsyntax. Nur verfügbar, wenn die separate Google-Büro-Anbindung eingerichtet ist (sonst kommt ein klarer Fehler zurück).',
+    service: 'google', // läuft direkt im Worker (callGoogleTool), kein path/method nötig
+    description: 'E-Mails im geschäftlichen Gmail-Postfach durchsuchen (max. 25 Treffer, neueste zuerst). "after"/"before" im Format YYYY/MM/DD, "q" ist normale Gmail-Suchsyntax. Nur verfügbar, wenn die Google-Anbindung eingerichtet und einmalig per /oauth/authorize verbunden ist (sonst kommt ein klarer Fehler zurück).',
     input_schema: {
       type: 'object',
       properties: {
@@ -1097,10 +1104,8 @@ const KI_BUEROKRAFT_TOOLS = [
   },
   {
     name: 'searchCalendarEvents',
-    service: 'google',
-    method: 'GET',
-    path: (i) => '/calendar/events' + buildQuery(i, ['date_from', 'date_to', 'q']),
-    description: 'Termine im geschäftlichen Google-Kalender abrufen (max. 50 Treffer). Nur verfügbar, wenn die separate Google-Büro-Anbindung eingerichtet ist (sonst kommt ein klarer Fehler zurück).',
+    service: 'google', // läuft direkt im Worker (callGoogleTool), kein path/method nötig
+    description: 'Termine im geschäftlichen Google-Kalender abrufen (max. 50 Treffer). Nur verfügbar, wenn die Google-Anbindung eingerichtet und einmalig per /oauth/authorize verbunden ist (sonst kommt ein klarer Fehler zurück).',
     input_schema: {
       type: 'object',
       properties: { date_from: { type: 'string' }, date_to: { type: 'string' }, q: { type: 'string' } },
@@ -1260,7 +1265,7 @@ Internetrecherche, Kalkulation und Datenpflege:
 // dürfen.
 const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, allowed_callers: ['direct'] };
 
-async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleBueroUrl, googleBueroApiKey }) {
+async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleConfig }) {
   let conversation = messages;
   // Sammelt jeden Tool-Aufruf mit Rohantwort - hilft bei der Fehlersuche, weil
   // das Modell einen Tool-Fehler sonst nur in eigenen (oft zu vagen) Worten
@@ -1319,11 +1324,11 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
 
     conversation = [...conversation, { role: 'assistant', content: data.content }];
 
-    // Zwei getrennte externe APIs möglich (service: 'buerokraft' [Standard]
-    // oder 'google' für Gmail/Kalender) - jedes Werkzeug bekommt einzeln
-    // geprüft, ob die dafür nötige Anbindung eingerichtet ist, statt bei
-    // fehlender Google-Anbindung gleich ALLE Werkzeuge (auch die KI-
-    // Bürokraft-Werkzeuge) zu blockieren.
+    // Google-Werkzeuge (service: 'google') laufen direkt im Worker (siehe
+    // callGoogleTool), alle anderen über die externe KI-Bürokraft-API -
+    // jedes Werkzeug bekommt einzeln geprüft, ob die dafür nötige Anbindung
+    // eingerichtet ist, statt bei fehlender Google-Anbindung gleich ALLE
+    // Werkzeuge (auch die KI-Bürokraft-Werkzeuge) zu blockieren.
     const toolResults = [];
     for (const toolUse of toolUses) {
       const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
@@ -1332,20 +1337,32 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         debugLog.push({ tool: toolUse.name, input: toolUse.input, error: 'Unbekanntes Werkzeug' });
         continue;
       }
-      const istGoogle = tool.service === 'google';
-      const baseUrl = istGoogle ? googleBueroUrl : kiBuerokraftUrl;
-      const apiKeyFuerTool = istGoogle ? googleBueroApiKey : kiBuerokraftApiKey;
-      if (!baseUrl || !apiKeyFuerTool) {
-        const meldung = istGoogle
-          ? 'Die Google-Büro-Anbindung (Gmail/Kalender) ist auf diesem Worker nicht eingerichtet (GOOGLE_BUERO_URL/GOOGLE_BUERO_API_KEY fehlen).'
-          : 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).';
+      if (tool.service === 'google') {
+        if (!googleConfig) {
+          const meldung = 'Die Google-Anbindung (Gmail/Kalender) ist auf diesem Worker nicht eingerichtet (GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET fehlen oder das Google-Konto wurde noch nicht per /oauth/authorize verbunden).';
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: meldung, is_error: true });
+          debugLog.push({ tool: toolUse.name, input: toolUse.input, error: meldung });
+          continue;
+        }
+        try {
+          const ergebnis = await callGoogleTool({ googleConfig, toolName: toolUse.name, input: toolUse.input || {} });
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: JSON.stringify(ergebnis).slice(0, 8000), is_error: false });
+          debugLog.push({ tool: toolUse.name, input: toolUse.input, response: ergebnis });
+        } catch (err) {
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Fehler beim Aufruf: ${err.message}`, is_error: true });
+          debugLog.push({ tool: toolUse.name, input: toolUse.input, error: err.message });
+        }
+        continue;
+      }
+      if (!kiBuerokraftUrl || !kiBuerokraftApiKey) {
+        const meldung = 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).';
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: meldung, is_error: true });
         debugLog.push({ tool: toolUse.name, input: toolUse.input, error: meldung });
         continue;
       }
       try {
         const path = tool.path(toolUse.input || {});
-        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl: baseUrl, kiBuerokraftApiKey: apiKeyFuerTool, tool, input: toolUse.input || {} });
+        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
         toolResults.push({
           type: 'tool_result', tool_use_id: toolUse.id,
           content: JSON.stringify(ergebnis).slice(0, 8000),
@@ -1491,6 +1508,195 @@ async function firestoreListDocuments({ serviceAccount, collection }) {
   return docs;
 }
 
+function toFirestoreValue(v) {
+  if (v === null || v === undefined) return { nullValue: null };
+  if (typeof v === 'string') return { stringValue: v };
+  if (typeof v === 'boolean') return { booleanValue: v };
+  if (typeof v === 'number') return Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+  if (Array.isArray(v)) return { arrayValue: { values: v.map(toFirestoreValue) } };
+  if (typeof v === 'object') return { mapValue: { fields: toFirestoreFields(v) } };
+  return { stringValue: String(v) };
+}
+function toFirestoreFields(obj) {
+  const fields = {};
+  for (const [k, val] of Object.entries(obj)) { if (val !== undefined) fields[k] = toFirestoreValue(val); }
+  return fields;
+}
+
+/** Liest ein einzelnes Firestore-Dokument per REST (null bei 404). */
+async function firestoreGetDoc({ serviceAccount, collection, id }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const url = `https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default)/documents/${collection}/${id}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) bei ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  const data = await res.json();
+  return { id, ...firestoreFieldsToObject(data.fields || {}) };
+}
+
+/** Schreibt (merged, PATCH) ein einzelnes Firestore-Dokument per REST. */
+async function firestoreSetDoc({ serviceAccount, collection, id, data }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const url = `https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default)/documents/${collection}/${id}`;
+  const res = await fetch(url, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ fields: toFirestoreFields(data) }),
+  });
+  if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) beim Schreiben von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+}
+
+// --- Google-Büro (Gmail + Kalender) - läuft bewusst IM Haupt-Worker statt in
+// einem eigenen dritten Worker: erspart eine zusätzliche Worker-zu-Worker-
+// Verbindung samt eigener URL/API-Key nur für diese zwei Werkzeuge. Nutzt
+// denselben Firebase-Service-Account wie Push-Versand/Tagescheck, um den
+// einmalig erzeugten Google-Refresh-Token in Firestore
+// (Collection google_oauth_tokens) zu lesen/schreiben. ---
+
+const GOOGLE_OAUTH_SCOPES = 'https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy';
+const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+const GMAIL_API = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
+
+function base64UrlDecodeToString(b64url) {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+function buildGoogleAuthUrl({ clientId, redirectUri, state }) {
+  const params = new URLSearchParams({
+    client_id: clientId, redirect_uri: redirectUri, response_type: 'code', scope: GOOGLE_OAUTH_SCOPES,
+    access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state: state || '',
+  });
+  return `${GOOGLE_AUTH_URL}?${params.toString()}`;
+}
+
+async function exchangeGoogleCodeForTokens({ clientId, clientSecret, redirectUri, code }) {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri }),
+  });
+  if (!res.ok) throw new Error(`Google-OAuth-Code-Tausch fehlgeschlagen (${res.status}): ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  return res.json();
+}
+
+async function refreshGoogleUserAccessToken({ clientId, clientSecret, refreshToken }) {
+  const res = await fetch(GOOGLE_TOKEN_URL, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId, client_secret: clientSecret }),
+  });
+  if (!res.ok) throw new Error(`Google-Zugriffstoken-Erneuerung fehlgeschlagen (${res.status}): ${(await res.text().catch(() => '')).slice(0, 300)}. Eventuell muss die Google-Verbindung erneut über /oauth/authorize hergestellt werden.`);
+  return (await res.json()).access_token;
+}
+
+/** Liest den gespeicherten Google-Refresh-Token aus Firestore und tauscht ihn gegen ein frisches Zugriffstoken für Gmail/Kalender. */
+async function getGoogleUserAccessToken({ serviceAccount, clientId, clientSecret }) {
+  const tokenDoc = await firestoreGetDoc({ serviceAccount, collection: 'google_oauth_tokens', id: 'neuverdrahtet' });
+  if (!tokenDoc || !tokenDoc.refresh_token) {
+    throw new Error('Google-Konto (Gmail/Kalender) ist noch nicht verbunden. Einmalig /oauth/authorize?setup_key=... im Browser aufrufen.');
+  }
+  return refreshGoogleUserAccessToken({ clientId, clientSecret, refreshToken: tokenDoc.refresh_token });
+}
+
+function buildGmailQuery({ q, unread, from, to, subject, after, before }) {
+  const parts = [];
+  if (q) parts.push(q);
+  if (unread) parts.push('is:unread');
+  if (from) parts.push(`from:${from}`);
+  if (to) parts.push(`to:${to}`);
+  if (subject) parts.push(`subject:${subject}`);
+  if (after) parts.push(`after:${after.replace(/-/g, '/')}`);
+  if (before) parts.push(`before:${before.replace(/-/g, '/')}`);
+  return parts.join(' ');
+}
+
+function getGmailHeader(payload, name) {
+  const h = (payload?.headers || []).find((x) => x.name.toLowerCase() === name.toLowerCase());
+  return h ? h.value : '';
+}
+
+/** Läuft rekursiv durch die MIME-Teile einer Nachricht und liefert reinen Text plus Anhang-Metadaten. */
+function extractGmailBody(payload) {
+  let text = '';
+  let html = '';
+  function walk(part) {
+    if (!part) return;
+    if (part.mimeType === 'text/plain' && part.body?.data) text += base64UrlDecodeToString(part.body.data);
+    else if (part.mimeType === 'text/html' && part.body?.data) html += base64UrlDecodeToString(part.body.data);
+    for (const child of part.parts || []) walk(child);
+  }
+  walk(payload);
+  if (!text && html) text = html.replace(/<style[\s\S]*?<\/style>/gi, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  return text.trim();
+}
+
+function gmailMessageToApi(msg) {
+  return {
+    message_id: msg.id, thread_id: msg.threadId,
+    from: getGmailHeader(msg.payload, 'From'), to: getGmailHeader(msg.payload, 'To'), subject: getGmailHeader(msg.payload, 'Subject'),
+    date: getGmailHeader(msg.payload, 'Date'), snippet: msg.snippet || '', body_text: extractGmailBody(msg.payload).slice(0, 2000), labels: msg.labelIds || [],
+  };
+}
+
+async function gmailFetch(accessToken, path) {
+  const res = await fetch(`${GMAIL_API}${path}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Gmail-API-Fehler (${res.status}) bei ${path}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  return res.json();
+}
+
+async function calendarFetch(accessToken, path) {
+  const res = await fetch(`${CALENDAR_API}${path}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Kalender-API-Fehler (${res.status}) bei ${path}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+  return res.json();
+}
+
+function calendarEventToApi(ev) {
+  return {
+    id: ev.id, title: ev.summary || '', description: ev.description || '', location: ev.location || '',
+    start: ev.start?.dateTime || ev.start?.date || '', end: ev.end?.dateTime || ev.end?.date || '',
+    attendees: (ev.attendees || []).map((a) => a.email), status: ev.status || '',
+  };
+}
+
+/** Führt searchEmails/searchCalendarEvents direkt aus (kein Worker-zu-Worker-Aufruf nötig). */
+async function callGoogleTool({ googleConfig, toolName, input }) {
+  const serviceAccount = JSON.parse(googleConfig.firebaseServiceAccountJson);
+  const accessToken = await getGoogleUserAccessToken({
+    serviceAccount, clientId: googleConfig.clientId, clientSecret: googleConfig.clientSecret,
+  });
+  if (toolName === 'searchEmails') {
+    const gq = buildGmailQuery(input || {});
+    const list = await gmailFetch(accessToken, `/messages?maxResults=25${gq ? `&q=${encodeURIComponent(gq)}` : ''}`);
+    const details = await Promise.all((list.messages || []).map((m) => gmailFetch(accessToken, `/messages/${m.id}?format=full`)));
+    return details.map(gmailMessageToApi);
+  }
+  if (toolName === 'searchCalendarEvents') {
+    const calendarId = googleConfig.calendarId || 'primary';
+    const params = new URLSearchParams({ singleEvents: 'true', orderBy: 'startTime', maxResults: '50' });
+    if (input?.date_from) params.set('timeMin', new Date(input.date_from).toISOString());
+    if (input?.date_to) params.set('timeMax', new Date(input.date_to).toISOString());
+    if (input?.q) params.set('q', input.q);
+    const list = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`);
+    return (list.items || []).map(calendarEventToApi);
+  }
+  throw new Error(`Unbekanntes Google-Werkzeug: ${toolName}`);
+}
+
+/** null, wenn die Google-Anbindung (Gmail/Kalender) nicht eingerichtet ist - dann bleiben nur diese zwei Werkzeuge inaktiv, alles andere läuft normal weiter. */
+function buildGoogleConfig(env) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON || !env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET) return null;
+  return {
+    firebaseServiceAccountJson: env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    clientId: env.GOOGLE_OAUTH_CLIENT_ID,
+    clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+    calendarId: env.GOOGLE_CALENDAR_ID || 'primary',
+  };
+}
+
 // --- Täglicher automatischer Büro-Check (Cloudflare Cron Trigger) ---
 //
 // Läuft ohne Mitarbeiter-Interaktion einmal morgens durch dieselbe
@@ -1530,17 +1736,16 @@ async function runTagescheck(env) {
   }
 
   const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
-  const googleVerfuegbar = !!(env.GOOGLE_BUERO_URL && env.GOOGLE_BUERO_API_KEY);
+  const googleConfig = buildGoogleConfig(env);
   let ergebnis;
   try {
     ergebnis = await callClaudeAssistentChat({
       apiKey: env.ANTHROPIC_API_KEY,
       model: env.MODEL_ID || 'claude-opus-4-8',
-      messages: [{ role: 'user', content: buildTagescheckPrompt(heute, { googleVerfuegbar }) }],
+      messages: [{ role: 'user', content: buildTagescheckPrompt(heute, { googleVerfuegbar: !!googleConfig }) }],
       kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
       kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
-      googleBueroUrl: env.GOOGLE_BUERO_URL,
-      googleBueroApiKey: env.GOOGLE_BUERO_API_KEY,
+      googleConfig,
     });
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
@@ -1579,6 +1784,50 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers });
     }
+
+    // --- Google-OAuth-Einrichtung (einmalig im Browser aufgerufen, siehe
+    // Datei-Kopf) - läuft VOR der normalen POST/APP_SECRET-Prüfung, da das
+    // ein normaler Browser-Redirect (GET) ist, kein API-Aufruf aus der App.
+    // Geschützt über einen eigenen OAUTH_SETUP_SECRET statt des APP_SECRET,
+    // damit niemand sonst versehentlich/böswillig die Google-Verbindung an
+    // sich reißen kann.
+    {
+      const url = new URL(request.url);
+      const teile = url.pathname.split('/').filter(Boolean);
+      if (teile[0] === 'oauth' && teile[1] === 'authorize') {
+        if (!env.OAUTH_SETUP_SECRET || url.searchParams.get('setup_key') !== env.OAUTH_SETUP_SECRET) {
+          return new Response('Ungültiger oder fehlender setup_key.', { status: 403 });
+        }
+        if (!env.GOOGLE_OAUTH_CLIENT_ID) return new Response('GOOGLE_OAUTH_CLIENT_ID fehlt.', { status: 500 });
+        const redirectUri = `${url.origin}/oauth/callback`;
+        const authUrl = buildGoogleAuthUrl({ clientId: env.GOOGLE_OAUTH_CLIENT_ID, redirectUri, state: env.OAUTH_SETUP_SECRET });
+        return Response.redirect(authUrl, 302);
+      }
+      if (teile[0] === 'oauth' && teile[1] === 'callback') {
+        const code = url.searchParams.get('code');
+        const state = url.searchParams.get('state');
+        if (!code || !env.OAUTH_SETUP_SECRET || state !== env.OAUTH_SETUP_SECRET) {
+          return new Response('Ungültige OAuth-Antwort (code/state fehlt oder falsch).', { status: 403 });
+        }
+        if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return new Response('FIREBASE_SERVICE_ACCOUNT_JSON fehlt.', { status: 500 });
+        try {
+          const redirectUri = `${url.origin}/oauth/callback`;
+          const tokens = await exchangeGoogleCodeForTokens({ clientId: env.GOOGLE_OAUTH_CLIENT_ID, clientSecret: env.GOOGLE_OAUTH_CLIENT_SECRET, redirectUri, code });
+          if (!tokens.refresh_token) {
+            return new Response('Google hat keinen Refresh-Token geliefert. Bitte die Verbindung beim Google-Konto unter "Apps mit Kontozugriff" entfernen und /oauth/authorize erneut aufrufen.', { status: 400 });
+          }
+          const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          await firestoreSetDoc({
+            serviceAccount, collection: 'google_oauth_tokens', id: 'neuverdrahtet',
+            data: { refresh_token: tokens.refresh_token, scope: tokens.scope || GOOGLE_OAUTH_SCOPES, connected_at: new Date().toISOString() },
+          });
+          return new Response('Google-Konto erfolgreich mit Werkora verbunden. Dieses Fenster kann geschlossen werden.', { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+        } catch (err) {
+          return new Response(`Fehler beim Verbinden: ${err.message || 'Unbekannter Fehler'}`, { status: 500 });
+        }
+      }
+    }
+
     if (request.method !== 'POST') {
       return new Response('Method not allowed', { status: 405, headers });
     }
@@ -1795,8 +2044,7 @@ export default {
           messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
           kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
           kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
-          googleBueroUrl: env.GOOGLE_BUERO_URL,
-          googleBueroApiKey: env.GOOGLE_BUERO_API_KEY,
+          googleConfig: buildGoogleConfig(env),
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
