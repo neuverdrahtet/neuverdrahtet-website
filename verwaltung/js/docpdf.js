@@ -573,21 +573,21 @@ export async function buildBerichtPdfBlob({
 
   (checklisteAntworten || []).forEach((block) => { y = drawChecklisteBlock(doc, block, marginX, rightX, y, baseFont, maxY); });
 
-  const raeumeGefuellt = (raeume || []).filter((r) => r.raum || r.beschreibung || r.laenge || r.breite);
+  const raeumeGefuellt = (raeume || []).filter((r) => r.raum || r.beschreibung || r.laenge || r.breite || r.hoehe);
   if (raeumeGefuellt.length) {
     if (y > maxY - 20) { doc.addPage(); y = 20; }
     y += 4;
-    const mitMassen = raeumeGefuellt.some((r) => r.laenge || r.breite);
+    const mitMassen = raeumeGefuellt.some((r) => r.laenge || r.breite || r.hoehe);
     doc.autoTable({
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
       head: mitMassen
-        ? [['Raum / Bereich', 'Länge (m)', 'Breite (m)', 'm²', 'Beschreibung / Zustand']]
+        ? [['Raum / Bereich', 'Länge (m)', 'Breite (m)', 'Höhe (m)', 'm²', 'Beschreibung / Zustand']]
         : [['Raum / Bereich', 'Beschreibung / Zustand']],
       body: raeumeGefuellt.map((r) => {
         if (!mitMassen) return [r.raum || '', r.beschreibung || ''];
         const m2 = (Number(r.laenge) || 0) * (Number(r.breite) || 0);
-        return [r.raum || '', r.laenge ? String(r.laenge) : '', r.breite ? String(r.breite) : '', m2 ? m2.toFixed(2) : '', r.beschreibung || ''];
+        return [r.raum || '', r.laenge ? String(r.laenge) : '', r.breite ? String(r.breite) : '', r.hoehe ? String(r.hoehe) : '', m2 ? m2.toFixed(2) : '', r.beschreibung || ''];
       }),
       styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
       headStyles: { fillColor: accentRgb },

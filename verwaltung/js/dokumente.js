@@ -40,6 +40,7 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false, m
             ${mitMassen ? `
               <input type="number" step="0.01" min="0" class="rz-laenge" placeholder="Länge (m)" value="${escapeHtml(r.laenge || '')}" style="width:90px">
               <input type="number" step="0.01" min="0" class="rz-breite" placeholder="Breite (m)" value="${escapeHtml(r.breite || '')}" style="width:90px">
+              <input type="number" step="0.01" min="0" class="rz-hoehe" placeholder="Höhe (m)" value="${escapeHtml(r.hoehe || '')}" style="width:90px">
               <span class="text-mute rz-m2" data-i="${i}" style="width:70px">${(Number(r.laenge) && Number(r.breite)) ? (Number(r.laenge) * Number(r.breite)).toFixed(2) + ' m²' : ''}</span>
             ` : ''}
             <input type="text" class="rz-beschreibung" placeholder="Beschreibung/Zustand" value="${escapeHtml(r.beschreibung || '')}" style="flex:2">
@@ -56,6 +57,7 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false, m
       row.querySelector('.rz-beschreibung').addEventListener('input', (e) => { rows[i].beschreibung = e.target.value; });
       row.querySelector('.rz-laenge')?.addEventListener('input', (e) => { rows[i].laenge = e.target.value; updateM2(rows[i], i); });
       row.querySelector('.rz-breite')?.addEventListener('input', (e) => { rows[i].breite = e.target.value; updateM2(rows[i], i); });
+      row.querySelector('.rz-hoehe')?.addEventListener('input', (e) => { rows[i].hoehe = e.target.value; });
       row.querySelector('.rz-del').addEventListener('click', () => { rows.splice(i, 1); render(); });
     });
     if (mitFotoProZeile) {
@@ -65,13 +67,13 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false, m
         rows[i]._fotoEditor = editor;
       });
     }
-    host.querySelector('.rz-add').addEventListener('click', () => { rows.push({ raum: '', beschreibung: '' }); render(); });
+    host.querySelector('.rz-add').addEventListener('click', () => { rows.push({ raum: '', beschreibung: '', hoehe: '' }); render(); });
   }
   render();
   return {
     getRaeume: () => rows
-      .filter((r) => r.raum || r.beschreibung || r.laenge || r.breite)
-      .map((r) => ({ raum: r.raum, beschreibung: r.beschreibung, laenge: r.laenge, breite: r.breite, fotos: r._fotoEditor ? r._fotoEditor.getFotos() : [] })),
+      .filter((r) => r.raum || r.beschreibung || r.laenge || r.breite || r.hoehe)
+      .map((r) => ({ raum: r.raum, beschreibung: r.beschreibung, laenge: r.laenge, breite: r.breite, hoehe: r.hoehe, fotos: r._fotoEditor ? r._fotoEditor.getFotos() : [] })),
   };
 }
 
