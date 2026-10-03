@@ -8,6 +8,8 @@ import { openWhatsApp } from '../whatsapp.js';
 import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteCustomer, revokeInvite, revokeUserAccess, getCustomerAuthStatus } from '../employeeAuth.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
+import { generateEntityFromStichpunkte } from '../ai.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -564,6 +566,7 @@ export async function render(container, route) {
       title: isEdit ? 'Kunde bearbeiten' : 'Neuer Kunde',
       bodyHtml: `
         <form id="kunde-form">
+          ${!isEdit ? '<div class="flex-row" style="margin-bottom:10px"><button type="button" class="btn btn-sm" id="btn-ki-sprache">✨ Mit KI aus Sprache erstellen</button></div>' : ''}
           <div class="form-grid">
             <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required value="${escapeHtml(data.firma)}"></div>
             <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(data.ansprechpartner || '')}"></div>
@@ -633,6 +636,37 @@ export async function render(container, route) {
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (!isEdit) {
+      body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Kunde per Sprache anlegen',
+          placeholder: 'z.B. "Neuer Kunde Max Mustermann, Musterstraße 5, 45127 Essen, Telefon 0201 1234567" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            const btn = body.querySelector('#btn-ki-sprache');
+            btn.disabled = true;
+            btn.textContent = 'KI erstellt Kundendaten ...';
+            try {
+              const result = await generateEntityFromStichpunkte({ entityType: 'kunde', stichpunkte });
+              const form = body.querySelector('#kunde-form');
+              if (result.firma) form.firma.value = result.firma;
+              if (result.ansprechpartner) form.ansprechpartner.value = result.ansprechpartner;
+              if (result.strasse) form.strasse.value = result.strasse;
+              if (result.plz) form.plz.value = result.plz;
+              if (result.ort) form.ort.value = result.ort;
+              if (result.telefon) form.telefon.value = result.telefon;
+              if (result.email) form.email.value = result.email;
+              if (result.notizen) form.notizen.value = result.notizen;
+              if (result.istPrivatperson) form.istPrivatperson.checked = true;
+              toast('Kundendaten von der KI übernommen - bitte prüfen', 'success');
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+            btn.disabled = false;
+            btn.textContent = '✨ Mit KI aus Sprache erstellen';
+          },
+        });
+      });
+    }
     attachAddressSearch(body.querySelector('input[name="strasse"]'), (r) => {
       const form = body.querySelector('#kunde-form');
       form.strasse.value = r.strasse || form.strasse.value;

@@ -8,7 +8,10 @@
  * Händler/Datum/Betrag/Kategorie zurück, recherchiert für unbepreiste
  * GAEB-Positionen per Web-Search-Tool marktübliche Preise, erzeugt aus
  * einem Baustellen-/Projektfoto passende Social-Media-Texte je Kanal
- * (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), beantwortet als
+ * (Instagram/Facebook/LinkedIn/Google Unternehmensprofil), erstellt aus
+ * gesprochenen/diktierten Stichpunkten strukturierte Daten für neue Kunden,
+ * Projekte, Termine oder Berichte/Protokolle ("Mit KI aus Sprache erstellen"
+ * in den jeweiligen Ansichten, Action "entity-stichpunkte"), beantwortet als
  * interner KI-Assistent (Chat) Fragen zu den echten Firmendaten per
  * Tool-Use-Loop gegen die KI-Bürokraft-API, oder löst eine Firebase-Cloud-
  * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Zusätzlich
@@ -176,6 +179,198 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
       messages: [{ role: 'user', content: userText }],
       output_config: {
         format: { type: 'json_schema', schema: POSITIONEN_SCHEMA },
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') {
+    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  }
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  return JSON.parse(textBlock.text);
+}
+
+/**
+ * Baut das Antwort-Schema für die Sprach-/Stichpunkte-Erfassung von Kunden,
+ * Projekten, Terminen und Berichten (jeweils "Mit KI aus Sprache erstellen"
+ * in den entsprechenden Ansichten) - ein Anthropic-Aufruf pro Erfassung,
+ * Enum-Listen (kundeId/gewerk/typ) stammen aus den bereits in der App
+ * vorhandenen Stammdaten, damit die KI niemals einen erfundenen Datensatz
+ * referenziert.
+ */
+function buildEntityStichpunkteSchema(entityType, kontext) {
+  if (entityType === 'kunde') {
+    return {
+      type: 'object',
+      properties: {
+        firma: { type: 'string' },
+        ansprechpartner: { type: 'string' },
+        strasse: { type: 'string' },
+        plz: { type: 'string' },
+        ort: { type: 'string' },
+        telefon: { type: 'string' },
+        email: { type: 'string' },
+        notizen: { type: 'string' },
+        istPrivatperson: { type: 'boolean' },
+      },
+      required: ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen', 'istPrivatperson'],
+      additionalProperties: false,
+    };
+  }
+  if (entityType === 'projekt') {
+    const kundenIds = (kontext?.kunden || []).map((k) => k.id);
+    const gewerkeIds = (kontext?.gewerke || []).map((g) => g.id);
+    return {
+      type: 'object',
+      properties: {
+        titel: { type: 'string' },
+        beschreibung: { type: 'string' },
+        start: { type: 'string' },
+        ende: { type: 'string' },
+        kundeId: { type: 'string', enum: ['', ...kundenIds] },
+        gewerk: { type: 'string', enum: ['', ...gewerkeIds] },
+      },
+      required: ['titel', 'beschreibung', 'start', 'ende', 'kundeId', 'gewerk'],
+      additionalProperties: false,
+    };
+  }
+  if (entityType === 'termin') {
+    const kundenIds = (kontext?.kunden || []).map((k) => k.id);
+    const typIds = (kontext?.typen || []).map((t) => t.id);
+    return {
+      type: 'object',
+      properties: {
+        titel: { type: 'string' },
+        datum: { type: 'string' },
+        uhrzeit: { type: 'string' },
+        ort: { type: 'string' },
+        notizen: { type: 'string' },
+        kundeId: { type: 'string', enum: ['', ...kundenIds] },
+        typ: { type: 'string', enum: typIds.length ? typIds : [''] },
+      },
+      required: ['titel', 'datum', 'uhrzeit', 'ort', 'notizen', 'kundeId', 'typ'],
+      additionalProperties: false,
+    };
+  }
+  if (entityType === 'bericht') {
+    return {
+      type: 'object',
+      properties: {
+        text: { type: 'string' },
+        raeume: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              raum: { type: 'string' },
+              beschreibung: { type: 'string' },
+              laenge: { type: 'string' },
+              breite: { type: 'string' },
+              hoehe: { type: 'string' },
+            },
+            required: ['raum', 'beschreibung', 'laenge', 'breite', 'hoehe'],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ['text', 'raeume'],
+      additionalProperties: false,
+    };
+  }
+  throw new Error(`Unbekannter entityType: ${entityType}`);
+}
+
+function buildEntityStichpunktePrompt(entityType, heute, kontext) {
+  if (entityType === 'kunde') {
+    return `Du liest aus kurzen Stichpunkten oder einer gesprochenen Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) die Stammdaten EINES NEUEN Kunden heraus.
+
+Regeln:
+- Antworte ausschließlich auf Deutsch, erfinde KEINE Angaben, die nicht genannt wurden - lieber ein Feld leer lassen als zu raten.
+- "firma": Firmenname, oder bei einer Privatperson der vollständige Name.
+- "ansprechpartner": nur befüllen, wenn zusätzlich zur Firma eine separate Kontaktperson genannt wird.
+- "istPrivatperson": true nur, wenn klar eine Privatperson gemeint ist (kein Unternehmen).
+- "strasse"/"plz"/"ort": Adresse, so genau wie genannt.
+- "telefon"/"email": wie genannt, keine Formatierung erfinden.
+- "notizen": alles Weitere, was zum Kunden gesagt wurde und in kein anderes Feld passt.`;
+  }
+  if (entityType === 'projekt') {
+    const kundenListe = (kontext?.kunden || []).map((k) => `- ${k.id}: ${k.firma}`).join('\n') || '(keine Kunden vorhanden)';
+    const gewerkeListe = (kontext?.gewerke || []).map((g) => `- ${g.id}: ${g.titel}`).join('\n') || '(keine Gewerke hinterlegt)';
+    return `Du liest aus kurzen Stichpunkten oder einer gesprochenen Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) die Daten für EIN NEUES Projekt/einen neuen Auftrag heraus.
+
+Heutiges Datum: ${heute}. Löse relative Datumsangaben ("morgen", "nächste Woche", "ab Montag") darauf auf.
+
+Bereits vorhandene Kunden (für "kundeId" GENAU eine dieser IDs verwenden, wenn der genannte Kunde eindeutig zu einem davon passt, sonst leeren String zurückgeben):
+${kundenListe}
+
+Verfügbare Gewerke (für "gewerk" GENAU eine dieser IDs verwenden, wenn eindeutig passend, sonst leeren String):
+${gewerkeListe}
+
+Regeln:
+- Antworte ausschließlich auf Deutsch, erfinde KEINE Angaben, die nicht genannt wurden.
+- "titel": kurzer, prägnanter Projekttitel.
+- "beschreibung": alles Weitere zum Projekt/Auftrag als Fließtext.
+- "start"/"ende": Datum im Format YYYY-MM-DD, "ende" nur bei mehrtägigen Projekten angeben, sonst leer.
+- "kundeId": wie oben beschrieben - NUR eine der gelisteten IDs oder leer, niemals einen Namen eintragen.
+- "gewerk": wie oben beschrieben - NUR eine der gelisteten IDs oder leer.`;
+  }
+  if (entityType === 'termin') {
+    const kundenListe = (kontext?.kunden || []).map((k) => `- ${k.id}: ${k.firma}`).join('\n') || '(keine Kunden vorhanden)';
+    const typenListe = (kontext?.typen || []).map((t) => `- ${t.id}: ${t.titel}`).join('\n') || '(keine Terminarten hinterlegt)';
+    return `Du liest aus kurzen Stichpunkten oder einer gesprochenen Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) die Daten für EINEN NEUEN Termin heraus.
+
+Heutiges Datum: ${heute}. Löse relative Datums-/Zeitangaben ("morgen", "übermorgen", "nächsten Montag", "in zwei Wochen") darauf auf.
+
+Bereits vorhandene Kunden (für "kundeId" GENAU eine dieser IDs verwenden, wenn eindeutig passend, sonst leeren String zurückgeben):
+${kundenListe}
+
+Verfügbare Terminarten (für "typ" GENAU eine dieser IDs verwenden, wenn eindeutig passend, sonst leeren String):
+${typenListe}
+
+Regeln:
+- Antworte ausschließlich auf Deutsch, erfinde KEINE Angaben, die nicht genannt wurden.
+- "titel": kurzer, prägnanter Titel des Termins.
+- "datum": Format YYYY-MM-DD - Pflichtfeld, bei fehlender Angabe das heutige Datum verwenden.
+- "uhrzeit": Format HH:MM (24h), leer lassen falls keine Uhrzeit genannt wurde.
+- "ort": Adresse/Ort, falls genannt, sonst leer.
+- "notizen": alles Weitere zum Termin, das in kein anderes Feld passt.
+- "kundeId"/"typ": wie oben beschrieben - NUR eine der gelisteten IDs oder leer.`;
+  }
+  if (entityType === 'bericht') {
+    return `Du hilfst, aus einer gesprochenen/diktierten Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) den Inhalt für einen Bericht/ein Protokoll (z.B. Aufmaßprotokoll, Mängelprotokoll, Wartungsbericht) zu erstellen.
+
+Regeln:
+- Antworte ausschließlich auf Deutsch.
+- "text": zusammenhängender, gut lesbarer Fließtext der ausgeführten Arbeiten/Beobachtungen - KEINE Anrede, KEIN Briefkopf, KEINE Grußformel (wird an anderer Stelle automatisch ergänzt).
+- "raeume": NUR befüllen, wenn einzelne Räume mit Maßen genannt werden (z.B. "Wohnzimmer 5 mal 4 Meter, Höhe 2,50"). Je Zeile: "raum" (Bezeichnung), "beschreibung" (zusätzliche Notiz zur Zeile, sonst leer), "laenge"/"breite"/"hoehe" in Metern als Zahl-Text (z.B. "5" oder "2.5"), leer lassen falls eine Maßangabe fehlt. Werden keine Räume/Maße genannt, gib ein leeres Array zurück.`;
+  }
+  throw new Error(`Unbekannter entityType: ${entityType}`);
+}
+
+async function callClaudeEntityStichpunkte({ apiKey, model, entityType, stichpunkte, heute, kontext }) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system: buildEntityStichpunktePrompt(entityType, heute, kontext),
+      messages: [{ role: 'user', content: stichpunkte }],
+      output_config: {
+        format: { type: 'json_schema', schema: buildEntityStichpunkteSchema(entityType, kontext) },
       },
     }),
   });
@@ -2020,6 +2215,37 @@ export default {
           model: env.MODEL_ID || 'claude-opus-4-8',
           stichpunkte,
           fileDataUrl: body.fileDataUrl,
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'entity-stichpunkte') {
+      const ENTITY_TYPES = ['kunde', 'projekt', 'termin', 'bericht'];
+      if (!ENTITY_TYPES.includes(body.entityType)) {
+        return new Response(JSON.stringify({ error: 'Feld "entityType" fehlt oder ungültig.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!body.stichpunkte || typeof body.stichpunkte !== 'string') {
+        return new Response(JSON.stringify({ error: 'Feld "stichpunkte" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const result = await callClaudeEntityStichpunkte({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          entityType: body.entityType,
+          stichpunkte: body.stichpunkte,
+          heute: body.heute || new Date().toISOString().slice(0, 10),
+          kontext: body.kontext || {},
         });
         return new Response(JSON.stringify(result), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },

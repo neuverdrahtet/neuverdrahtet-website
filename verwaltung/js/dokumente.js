@@ -6,7 +6,8 @@ import { openEmailComposer } from './emailsend.js';
 import { sendDocumentViaWhatsApp } from './whatsapp.js';
 import { mountSignaturePad } from './signature.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage, deleteBlobFromStorage } from './blobstore.js';
-import { mountVoiceRecorder } from './voicenote.js';
+import { mountVoiceRecorder, openStichpunkteSprachModal } from './voicenote.js';
+import { generateEntityFromStichpunkte } from './ai.js';
 
 function nowHHMM() {
   return new Date().toTimeString().slice(0, 5);
@@ -74,6 +75,12 @@ function mountRaeumeEditor(host, { mitMassen = false, mitFotoProZeile = false, m
     getRaeume: () => rows
       .filter((r) => r.raum || r.beschreibung || r.laenge || r.breite || r.hoehe)
       .map((r) => ({ raum: r.raum, beschreibung: r.beschreibung, laenge: r.laenge, breite: r.breite, hoehe: r.hoehe, fotos: r._fotoEditor ? r._fotoEditor.getFotos() : [] })),
+    // Für "Mit KI aus Sprache erstellen" (per Stichpunkte erkannte Räume/Maße
+    // zusätzlich zu bereits vorhandenen, von Hand eingegebenen Zeilen anhängen).
+    addRaeume: (neueRows) => {
+      rows.push(...neueRows.map((r) => ({ raum: r.raum || '', beschreibung: r.beschreibung || '', laenge: r.laenge || '', breite: r.breite || '', hoehe: r.hoehe || '' })));
+      render();
+    },
   };
 }
 
@@ -480,6 +487,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <div id="ber-material-picker"></div>
         </div>
         <div id="ber-abschnitte-host"></div>
+        <div class="flex-row" style="margin:6px 0 10px"><button type="button" class="btn btn-sm" id="btn-ber-ki-sprache">✨ Mit KI aus Sprache erstellen</button></div>
         <div class="field"><label>Text (bearbeitbar)</label><textarea id="ber-text" style="min-height:260px"></textarea></div>
         <div id="ber-checkliste-host"></div>
         <div class="divider"></div>
@@ -611,6 +619,27 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     vorlageSelect.addEventListener('change', fillText);
     fillText();
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-ber-ki-sprache').addEventListener('click', () => {
+      openStichpunkteSprachModal({
+        title: 'Bericht per Sprache erstellen',
+        placeholder: 'z.B. "Wohnzimmer 5 mal 4 Meter, Höhe 2,50, neue Steckdosen gesetzt, Schlitze verputzt" - sprechen oder tippen',
+        onSubmit: async (stichpunkte) => {
+          const btn = body.querySelector('#btn-ber-ki-sprache');
+          btn.disabled = true;
+          btn.textContent = 'KI erstellt Berichtsinhalt ...';
+          try {
+            const result = await generateEntityFromStichpunkte({ entityType: 'bericht', stichpunkte });
+            if (result.text) appendToText(result.text);
+            if (Array.isArray(result.raeume) && result.raeume.length) raeumeEditor.addRaeume(result.raeume);
+            toast('Berichtsinhalt von der KI übernommen - bitte prüfen', 'success');
+          } catch (err) {
+            toast(err.message, 'danger');
+          }
+          btn.disabled = false;
+          btn.textContent = '✨ Mit KI aus Sprache erstellen';
+        },
+      });
+    });
 
     function currentDatumIso() {
       return new Date(`${datumInput.value || todayISO()}T${uhrzeitInput.value || '00:00'}:00`).toISOString();

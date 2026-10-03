@@ -9,6 +9,8 @@ import { renderNachkalkulation } from '../nachkalkulation.js';
 import { renderTeamchat } from '../teamchat.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
+import { generateEntityFromStichpunkte } from '../ai.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
@@ -575,6 +577,7 @@ export async function render(container, opts = {}) {
       wide: true,
       bodyHtml: `
         <form id="proj-form">
+          ${!isEdit ? '<div class="flex-row" style="margin-bottom:10px"><button type="button" class="btn btn-sm" id="btn-ki-sprache">✨ Mit KI aus Sprache erstellen</button></div>' : ''}
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Kunde</label>
@@ -653,6 +656,41 @@ export async function render(container, opts = {}) {
       renderMitarbeiterChecklist(e.target.value, checkedIds);
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (!isEdit) {
+      body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Projekt per Sprache anlegen',
+          placeholder: 'z.B. "Neues Projekt für Mustermann GmbH, Elektroinstallation Neubau, Start nächsten Montag" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            const btn = body.querySelector('#btn-ki-sprache');
+            btn.disabled = true;
+            btn.textContent = 'KI erstellt Projektdaten ...';
+            try {
+              const result = await generateEntityFromStichpunkte({
+                entityType: 'projekt',
+                stichpunkte,
+                kontext: {
+                  kunden: kunden.map((k) => ({ id: k.id, firma: k.firma })),
+                  gewerke: GEWERKE.map((g) => ({ id: g.id, titel: g.titel })),
+                },
+              });
+              const form = body.querySelector('#proj-form');
+              if (result.titel) form.titel.value = result.titel;
+              if (result.beschreibung) form.beschreibung.value = result.beschreibung;
+              if (result.start) form.start.value = result.start;
+              if (result.ende) form.ende.value = result.ende;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
+              if (result.gewerk) form.gewerk.value = result.gewerk;
+              toast('Projektdaten von der KI übernommen - bitte prüfen', 'success');
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+            btn.disabled = false;
+            btn.textContent = '✨ Mit KI aus Sprache erstellen';
+          },
+        });
+      });
+    }
     body.querySelector('#btn-proj-neuer-kunde').addEventListener('click', () => {
       openKundeSchnellanlage({
         onCreated: (neuerKunde) => {

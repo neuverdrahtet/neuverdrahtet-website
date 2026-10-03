@@ -6,6 +6,8 @@ import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
 import { mountKarte, KARTE_TAB_HTML } from '../karte.js';
 import { openStatusManager } from '../statusManager.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
+import { generateEntityFromStichpunkte } from '../ai.js';
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
@@ -772,6 +774,7 @@ export async function render(container, route, { autoSync = true } = {}) {
         </div>
         <form id="pt-form">
           <div class="form-grid">
+            ${!isEdit ? '<div class="field col-span-2"><button type="button" class="btn btn-sm" id="btn-ki-sprache" style="align-self:flex-start">✨ Mit KI aus Sprache erstellen</button></div>' : ''}
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Art</label>
               <select name="typ">${TERMIN_TYPEN.map((tt) => `<option value="${tt.id}" ${tt.id === (data.typ || 'termin') ? 'selected' : ''}>${escapeHtml(tt.titel)}</option>`).join('')}</select>
@@ -897,6 +900,45 @@ export async function render(container, route, { autoSync = true } = {}) {
       toast(`Vorschlag: ${vorschlag.datum} um ${vorschlag.uhrzeit} Uhr`, 'success');
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (!isEdit) {
+      body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Termin per Sprache anlegen',
+          placeholder: 'z.B. "Termin morgen 14 Uhr bei Mustermann GmbH, E-Check Wohnhaus" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            const btn = body.querySelector('#btn-ki-sprache');
+            btn.disabled = true;
+            btn.textContent = 'KI erstellt Termindaten ...';
+            try {
+              const result = await generateEntityFromStichpunkte({
+                entityType: 'termin',
+                stichpunkte,
+                kontext: {
+                  kunden: kunden.map((k) => ({ id: k.id, firma: k.firma })),
+                  typen: TERMIN_TYPEN.map((t) => ({ id: t.id, titel: t.titel })),
+                },
+              });
+              const form = body.querySelector('#pt-form');
+              if (result.titel) form.titel.value = result.titel;
+              if (result.datum) form.datum.value = result.datum;
+              if (result.uhrzeit) form.uhrzeit.value = result.uhrzeit;
+              if (result.ort) form.ort.value = result.ort;
+              if (result.notizen) form.notizen.value = result.notizen;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
+              if (result.typ) {
+                form.typ.value = result.typ;
+                form.typ.dispatchEvent(new Event('change'));
+              }
+              toast('Termindaten von der KI übernommen - bitte prüfen', 'success');
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+            btn.disabled = false;
+            btn.textContent = '✨ Mit KI aus Sprache erstellen';
+          },
+        });
+      });
+    }
     const ortInput = body.querySelector('input[name="ort"]');
     attachAddressSearch(ortInput, (r) => {
       ortInput.value = r.label;
