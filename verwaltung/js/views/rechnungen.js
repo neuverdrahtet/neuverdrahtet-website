@@ -11,6 +11,7 @@ import { generateAngebotFromStichpunkte, extractAngebotFromFremdPdf } from '../a
 import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
 import * as lexoffice from '../lexoffice.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 import * as journal from '../journal.js';
@@ -824,8 +825,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
 
     let uebernommeneZeitIds = [];
     if (!locked) {
-      body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
-        const stichpunkte = window.prompt('Stichpunkte für die Rechnung:');
+      async function uebernehmeStichpunkteRechnung(stichpunkte) {
         if (!stichpunkte || !stichpunkte.trim()) return;
         const btn = body.querySelector('#btn-ki-erstellen');
         btn.disabled = true;
@@ -850,6 +850,13 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         }
         btn.disabled = false;
         btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
+      }
+      body.querySelector('#btn-ki-erstellen').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Stichpunkte für die Rechnung',
+          placeholder: 'Stichpunkte für die Rechnung - sprechen oder tippen',
+          onSubmit: uebernehmeStichpunkteRechnung,
+        });
       });
 
       body.querySelector('#btn-zeit-uebernehmen').addEventListener('click', async () => {

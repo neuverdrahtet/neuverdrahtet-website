@@ -4,6 +4,8 @@
 // Backend nötig. Ist die API im Browser nicht verfügbar, bleibt trotzdem ein
 // normales, frei editierbares Textfeld übrig (kein Absturz, keine
 // Funktionslücke, nur ohne automatisches Diktat).
+import { openModal } from './ui.js';
+
 export function getSpeechRecognitionCtor() {
   return window.SpeechRecognition || window.webkitSpeechRecognition || null;
 }
@@ -101,4 +103,34 @@ export function mountVoiceRecorder(host, { placeholder = 'Sprachnotiz aufnehmen 
     getText: () => textarea.value.trim(),
     stop: () => { if (recording) { recording = false; recognition?.stop(); } },
   };
+}
+
+/**
+ * Öffnet ein Modal mit Sprachaufnahme (+ frei editierbarem Textfeld) für
+ * Stichpunkte, die danach an die KI übergeben werden (z.B. "Mit KI aus
+ * Stichpunkten erstellen" bei Angebot/Rechnung/Auftragsbestätigung/
+ * Formularen) - ersetzt dort ein einfaches window.prompt()-Textfenster.
+ * onSubmit bekommt den eingesprochenen/eingegebenen Text; wird bei leerem
+ * Text nicht aufgerufen (wie beim bisherigen window.prompt-Verhalten).
+ */
+export function openStichpunkteSprachModal({ title = 'Stichpunkte', placeholder, onSubmit }) {
+  const { body, close } = openModal({
+    title,
+    bodyHtml: `
+      <div id="sp-voice-host"></div>
+      <div class="modal-actions">
+        <span class="spacer"></span>
+        <button type="button" class="btn" id="sp-cancel">Abbrechen</button>
+        <button type="button" class="btn btn-primary" id="sp-submit">Übernehmen</button>
+      </div>
+    `,
+  });
+  const recorder = mountVoiceRecorder(body.querySelector('#sp-voice-host'), { placeholder });
+  body.querySelector('#sp-cancel').addEventListener('click', () => { recorder.stop(); close(); });
+  body.querySelector('#sp-submit').addEventListener('click', () => {
+    const text = recorder.getText();
+    recorder.stop();
+    close();
+    if (text) onSubmit(text);
+  });
 }

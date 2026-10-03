@@ -8,6 +8,7 @@ import { openEmailComposer } from '../emailsend.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte, extractAngebotFromFremdPdf, rechercherePreiseFuerPositionen, chatMitAssistent } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { buildGaebBlob, gaebFilename, parseGaebXml } from '../gaeb.js';
 import { mountSignaturePad } from '../signature.js';
@@ -672,8 +673,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       });
     });
 
-    body.querySelector('#btn-ki-erstellen').addEventListener('click', async () => {
-      const stichpunkte = window.prompt('Stichpunkte für das Angebot (z.B. "3 Steckdosen Wohnzimmer, 1 neuer Sicherungskasten, Verkabelung Garage"):');
+    async function uebernehmeStichpunkteAngebot(stichpunkte) {
       if (!stichpunkte || !stichpunkte.trim()) return;
       const btn = body.querySelector('#btn-ki-erstellen');
       btn.disabled = true;
@@ -703,6 +703,13 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       }
       btn.disabled = false;
       btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
+    }
+    body.querySelector('#btn-ki-erstellen').addEventListener('click', () => {
+      openStichpunkteSprachModal({
+        title: 'Stichpunkte für das Angebot',
+        placeholder: 'z.B. "3 Steckdosen Wohnzimmer, 1 neuer Sicherungskasten, Verkabelung Garage" - sprechen oder tippen',
+        onSubmit: uebernehmeStichpunkteAngebot,
+      });
     });
 
     body.querySelector('#btn-ki-preise').addEventListener('click', async () => {
