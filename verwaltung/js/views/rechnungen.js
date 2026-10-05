@@ -653,7 +653,7 @@ export async function render(container, route) {
           ${!locked ? `
             <div class="flex-row flex-wrap" style="margin-bottom:10px">
               <button type="button" class="btn btn-sm" id="btn-zeit-uebernehmen">⏱️ Offene Zeiterfassung übernehmen</button>
-              <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Stichpunkten erstellen</button>
+              <button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Sprache erstellen</button>
             </div>
           ` : ''}
           <div id="pos-host"></div>
@@ -849,7 +849,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           toast(err.message, 'danger');
         }
         btn.disabled = false;
-        btn.textContent = '✨ Mit KI aus Stichpunkten erstellen';
+        btn.textContent = '✨ Mit KI aus Sprache erstellen';
       }
       body.querySelector('#btn-ki-erstellen').addEventListener('click', () => {
         openStichpunkteSprachModal({

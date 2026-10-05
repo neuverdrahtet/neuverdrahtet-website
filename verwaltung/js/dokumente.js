@@ -450,12 +450,23 @@ export async function saveDokument({ bezugTyp, bezugId, kategorie, name, mime, b
 export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = DOKUMENT_KATEGORIEN, title = 'Dokumente', berichtContext = null, onProjektDatenGeaendert = null } = {}) {
   const zeigeBerichtsVorlage = berichtContext && kategorien.some((k) => k.id === 'bericht');
 
-  async function openBerichtVorlage() {
+  // brief=true: direkter Einstieg "✉️ Brief per Sprache erstellen" (eigener
+  // Button, siehe load()) - wählt die Brief-Vorlage vor und öffnet die
+  // Sprachaufnahme sofort, statt erst die Vorlage aus der Liste wählen zu
+  // müssen (Brief ist technisch dieselbe "Bericht aus Vorlage"-Funktion wie
+  // z.B. ein Aufmaßprotokoll, nur mit anderer Vorlage).
+  async function openBerichtVorlage({ brief = false } = {}) {
     const [vorlagenAlle, katalog] = await Promise.all([getAll('vorlagen'), getAll('katalog')]);
     const vorlagen = vorlagenAlle.filter((v) => v.typ === 'dokumentation');
     if (vorlagen.length === 0) {
       toast('Noch keine Dokumentations-Vorlage angelegt (siehe Menü Vorlagen).', 'danger');
       return;
+    }
+    const briefVorlage = brief
+      ? vorlagen.find((v) => v.id === 'vorlage-brief') || vorlagen.find((v) => (v.name || '').toLowerCase().includes('brief'))
+      : null;
+    if (brief && !briefVorlage) {
+      toast('Keine Brief-Vorlage gefunden - bitte Vorlage unten manuell auswählen.', 'danger');
     }
     const settings = berichtContext.settings || {};
     const kunde = berichtContext.kunde || null;
@@ -466,12 +477,12 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     const zeitPresets = ['0.25', '0.5', '0.75', '1', '1.5', '2', '2.5', '3', '4', '5', '6', '7', '8'];
 
     const { body, close } = openModal({
-      title: 'Bericht aus Vorlage erstellen',
+      title: brief ? 'Brief erstellen' : 'Bericht aus Vorlage erstellen',
       wide: true,
       bodyHtml: `
         <div class="form-grid">
           <div class="field col-span-2"><label>Vorlage</label>
-            <select id="ber-vorlage">${vorlagen.map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('')}</select>
+            <select id="ber-vorlage">${vorlagen.map((v) => `<option value="${v.id}" ${briefVorlage && v.id === briefVorlage.id ? 'selected' : ''}>${escapeHtml(v.name)}</option>`).join('')}</select>
           </div>
           <div class="field col-span-2"><label>Titel</label><input id="ber-titel" type="text"></div>
           <div class="field"><label>Datum</label><input id="ber-datum" type="date" value="${todayISO()}"></div>
@@ -619,10 +630,12 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     vorlageSelect.addEventListener('change', fillText);
     fillText();
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    body.querySelector('#btn-ber-ki-sprache').addEventListener('click', () => {
+    const oeffneSprachaufnahme = () => {
       openStichpunkteSprachModal({
-        title: 'Bericht per Sprache erstellen',
-        placeholder: 'z.B. "Wohnzimmer 5 mal 4 Meter, Höhe 2,50, neue Steckdosen gesetzt, Schlitze verputzt" - sprechen oder tippen',
+        title: brief ? 'Brief per Sprache erstellen' : 'Bericht per Sprache erstellen',
+        placeholder: brief
+          ? 'z.B. "An Mustermann GmbH, es geht um die Rechnung vom 1. März, Zahlungsfrist bis Monatsende" - sprechen oder tippen'
+          : 'z.B. "Wohnzimmer 5 mal 4 Meter, Höhe 2,50, neue Steckdosen gesetzt, Schlitze verputzt" - sprechen oder tippen',
         onSubmit: async (stichpunkte) => {
           const btn = body.querySelector('#btn-ber-ki-sprache');
           btn.disabled = true;
@@ -639,7 +652,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           btn.textContent = '✨ Mit KI aus Sprache erstellen';
         },
       });
-    });
+    };
+    body.querySelector('#btn-ber-ki-sprache').addEventListener('click', oeffneSprachaufnahme);
+    if (brief && briefVorlage) oeffneSprachaufnahme();
 
     function currentDatumIso() {
       return new Date(`${datumInput.value || todayISO()}T${uhrzeitInput.value || '00:00'}:00`).toISOString();
@@ -910,6 +925,7 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
         <h2 style="font-size:14px;margin:0">${escapeHtml(title)}</h2>
         <div class="flex-row">
           ${zeigeBerichtsVorlage ? '<button type="button" class="btn btn-sm" id="btn-bericht-vorlage">📝 Bericht aus Vorlage</button>' : ''}
+          ${zeigeBerichtsVorlage ? '<button type="button" class="btn btn-sm" id="btn-brief-sprache">✉️ Brief per Sprache erstellen</button>' : ''}
           ${zeigeBerichtsVorlage ? '<button type="button" class="btn btn-sm" id="btn-sprachnotiz">🎙️ Sprachnotiz</button>' : ''}
           <select id="dok-kategorie" class="btn-sm" style="border:1px solid var(--border);border-radius:8px;padding:5px 8px;">
             ${kategorien.map((k) => `<option value="${k.id}">${escapeHtml(k.titel)}</option>`).join('')}
@@ -937,7 +953,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
     `;
 
     const berichtBtn = host.querySelector('#btn-bericht-vorlage');
-    if (berichtBtn) berichtBtn.addEventListener('click', openBerichtVorlage);
+    if (berichtBtn) berichtBtn.addEventListener('click', () => openBerichtVorlage());
+    const briefSpracheBtn = host.querySelector('#btn-brief-sprache');
+    if (briefSpracheBtn) briefSpracheBtn.addEventListener('click', () => openBerichtVorlage({ brief: true }));
     const sprachnotizBtn = host.querySelector('#btn-sprachnotiz');
     if (sprachnotizBtn) sprachnotizBtn.addEventListener('click', openSprachnotizModal);
 
