@@ -3,6 +3,8 @@ import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbe
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
+import { generateEntityFromStichpunkte } from '../ai.js';
 
 const PRIORITAETEN = [
   { id: 'niedrig', titel: 'Niedrig' },
@@ -156,6 +158,7 @@ export async function render(container) {
       title: isEdit ? 'Aufgabe bearbeiten' : 'Neue Aufgabe',
       bodyHtml: `
         <form id="aufg-form">
+          ${!isEdit ? '<div class="flex-row" style="margin-bottom:10px"><button type="button" class="btn btn-sm" id="btn-ki-sprache">✨ Mit KI aus Sprache erstellen</button></div>' : ''}
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Zugewiesen an</label>
@@ -186,6 +189,43 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    if (!isEdit) {
+      body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Aufgabe per Sprache anlegen',
+          placeholder: 'z.B. "Bis Freitag Material für Projekt Mustermann bestellen" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            const btn = body.querySelector('#btn-ki-sprache');
+            btn.disabled = true;
+            btn.textContent = 'KI erstellt Aufgabe ...';
+            try {
+              const result = await generateEntityFromStichpunkte({
+                entityType: 'aufgabe',
+                stichpunkte,
+                kontext: {
+                  mitarbeiter: mitarbeiter.map((m) => ({ id: m.id, name: m.name })),
+                  kunden: kunden.map((k) => ({ id: k.id, firma: k.firma })),
+                  projekte: projekte.map((p) => ({ id: p.id, titel: p.titel })),
+                },
+              });
+              const form = body.querySelector('#aufg-form');
+              if (result.titel) form.titel.value = result.titel;
+              if (result.beschreibung) form.beschreibung.value = result.beschreibung;
+              if (result.faelligAm) form.faelligAm.value = result.faelligAm;
+              if (result.prioritaet) form.prioritaet.value = result.prioritaet;
+              if (result.zugewiesenAn && mitarbeiter.some((m) => m.id === result.zugewiesenAn)) form.zugewiesenAn.value = result.zugewiesenAn;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
+              if (result.projektId && projekte.some((p) => p.id === result.projektId)) form.projektId.value = result.projektId;
+              toast('Aufgabendaten von der KI übernommen - bitte prüfen', 'success');
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+            btn.disabled = false;
+            btn.textContent = '✨ Mit KI aus Sprache erstellen';
+          },
+        });
+      });
+    }
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Aufgabe "${data.titel}" in den Papierkorb verschieben?`)) return;

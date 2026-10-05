@@ -201,11 +201,11 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
 
 /**
  * Baut das Antwort-Schema für die Sprach-/Stichpunkte-Erfassung von Kunden,
- * Projekten, Terminen und Berichten (jeweils "Mit KI aus Sprache erstellen"
- * in den entsprechenden Ansichten) - ein Anthropic-Aufruf pro Erfassung,
- * Enum-Listen (kundeId/gewerk/typ) stammen aus den bereits in der App
- * vorhandenen Stammdaten, damit die KI niemals einen erfundenen Datensatz
- * referenziert.
+ * Projekten, Terminen, Aufgaben und Berichten (jeweils "Mit KI aus Sprache
+ * erstellen" in den entsprechenden Ansichten) - ein Anthropic-Aufruf pro
+ * Erfassung, Enum-Listen (kundeId/gewerk/typ/zugewiesenAn) stammen aus den
+ * bereits in der App vorhandenen Stammdaten, damit die KI niemals einen
+ * erfundenen Datensatz referenziert.
  */
 function buildEntityStichpunkteSchema(entityType, kontext) {
   if (entityType === 'kunde') {
@@ -258,6 +258,25 @@ function buildEntityStichpunkteSchema(entityType, kontext) {
         typ: { type: 'string', enum: typIds.length ? typIds : [''] },
       },
       required: ['titel', 'datum', 'uhrzeit', 'ort', 'notizen', 'kundeId', 'typ'],
+      additionalProperties: false,
+    };
+  }
+  if (entityType === 'aufgabe') {
+    const mitarbeiterIds = (kontext?.mitarbeiter || []).map((m) => m.id);
+    const kundenIds = (kontext?.kunden || []).map((k) => k.id);
+    const projektIds = (kontext?.projekte || []).map((p) => p.id);
+    return {
+      type: 'object',
+      properties: {
+        titel: { type: 'string' },
+        beschreibung: { type: 'string' },
+        faelligAm: { type: 'string' },
+        prioritaet: { type: 'string', enum: ['niedrig', 'normal', 'hoch'] },
+        zugewiesenAn: { type: 'string', enum: ['', ...mitarbeiterIds] },
+        kundeId: { type: 'string', enum: ['', ...kundenIds] },
+        projektId: { type: 'string', enum: ['', ...projektIds] },
+      },
+      required: ['titel', 'beschreibung', 'faelligAm', 'prioritaet', 'zugewiesenAn', 'kundeId', 'projektId'],
       additionalProperties: false,
     };
   }
@@ -344,6 +363,31 @@ Regeln:
 - "ort": Adresse/Ort, falls genannt, sonst leer.
 - "notizen": alles Weitere zum Termin, das in kein anderes Feld passt.
 - "kundeId"/"typ": wie oben beschrieben - NUR eine der gelisteten IDs oder leer.`;
+  }
+  if (entityType === 'aufgabe') {
+    const mitarbeiterListe = (kontext?.mitarbeiter || []).map((m) => `- ${m.id}: ${m.name}`).join('\n') || '(keine Mitarbeiter hinterlegt)';
+    const kundenListe = (kontext?.kunden || []).map((k) => `- ${k.id}: ${k.firma}`).join('\n') || '(keine Kunden vorhanden)';
+    const projekteListe = (kontext?.projekte || []).map((p) => `- ${p.id}: ${p.titel}`).join('\n') || '(keine Projekte vorhanden)';
+    return `Du liest aus kurzen Stichpunkten oder einer gesprochenen Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) die Daten für EINE NEUE Aufgabe heraus.
+
+Heutiges Datum: ${heute}. Löse relative Datumsangaben ("morgen", "bis Freitag", "nächste Woche") darauf auf.
+
+Bereits vorhandene Mitarbeiter (für "zugewiesenAn" GENAU eine dieser IDs verwenden, wenn eindeutig genannt, sonst leeren String zurückgeben):
+${mitarbeiterListe}
+
+Bereits vorhandene Kunden (für "kundeId" GENAU eine dieser IDs verwenden, wenn eindeutig passend, sonst leeren String):
+${kundenListe}
+
+Bereits vorhandene Projekte (für "projektId" GENAU eine dieser IDs verwenden, wenn eindeutig passend, sonst leeren String):
+${projekteListe}
+
+Regeln:
+- Antworte ausschließlich auf Deutsch, erfinde KEINE Angaben, die nicht genannt wurden.
+- "titel": kurzer, prägnanter Titel der Aufgabe.
+- "beschreibung": alles Weitere zur Aufgabe als Fließtext.
+- "faelligAm": Datum im Format YYYY-MM-DD, leer lassen falls keine Frist genannt wurde.
+- "prioritaet": "niedrig"/"normal"/"hoch" - "normal" als Standard, falls keine Dringlichkeit genannt wird.
+- "zugewiesenAn"/"kundeId"/"projektId": wie oben beschrieben - NUR eine der gelisteten IDs oder leer.`;
   }
   if (entityType === 'bericht') {
     return `Du hilfst, aus einer gesprochenen/diktierten Beschreibung eines Mitarbeiters eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) den Inhalt für einen Bericht/ein Protokoll (z.B. Aufmaßprotokoll, Mängelprotokoll, Wartungsbericht) zu erstellen.
@@ -2227,7 +2271,7 @@ export default {
     }
 
     if (body.action === 'entity-stichpunkte') {
-      const ENTITY_TYPES = ['kunde', 'projekt', 'termin', 'bericht'];
+      const ENTITY_TYPES = ['kunde', 'projekt', 'termin', 'aufgabe', 'bericht'];
       if (!ENTITY_TYPES.includes(body.entityType)) {
         return new Response(JSON.stringify({ error: 'Feld "entityType" fehlt oder ungültig.' }), {
           status: 400, headers: { ...headers, 'Content-Type': 'application/json' },

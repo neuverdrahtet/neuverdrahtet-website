@@ -37,6 +37,7 @@ const routeLoaders = {
   angebote: () => import('./views/angebote.js'),
   auftragsbestaetigung: () => import('./views/auftragsbestaetigung.js'),
   rechnungen: () => import('./views/rechnungen.js'),
+  briefe: () => import('./views/briefe.js'),
   mahnungen: () => import('./views/mahnungen.js'),
   einstellungen: () => import('./views/einstellungen.js'),
   zeiterfassung: () => import('./views/zeiterfassung.js'),

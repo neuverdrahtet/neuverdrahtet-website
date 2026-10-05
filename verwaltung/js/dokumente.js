@@ -410,6 +410,13 @@ export const DOKUMENT_KATEGORIEN = [
 
 export const KUNDE_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['rechnung', 'angebot', 'vertrag', 'bericht', 'sonstiges'].includes(k.id));
 
+// Für die eigenständige "Briefe"-Ansicht (verwaltung/js/views/briefe.js) -
+// allgemeine Geschäftsbriefe/Dokumente, die NICHT an einen bestimmten Kunden
+// oder ein Projekt gebunden sind (dafür weiterhin die Dokumente-Sektion in
+// der jeweiligen Kunden-/Projektakte nutzen, dort bleiben sie zusammen mit
+// den übrigen Unterlagen dieses Kunden/Projekts).
+export const FIRMA_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['bericht', 'vertrag', 'sonstiges'].includes(k.id));
+
 function katLabel(id) {
   return DOKUMENT_KATEGORIEN.find((k) => k.id === id)?.titel || 'Sonstiges';
 }

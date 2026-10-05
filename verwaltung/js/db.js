@@ -2371,6 +2371,7 @@ export const ROUTE_ROLLEN = {
   angebote: ['admin', 'buero'],
   auftragsbestaetigung: ['admin', 'buero'],
   rechnungen: ['admin', 'buero'],
+  briefe: ['admin', 'buero'],
   mahnungen: ['admin', 'buero'],
   ausgaben: ['admin', 'buero'],
   postfach: ['admin', 'buero'],
