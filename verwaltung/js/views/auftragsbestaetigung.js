@@ -10,6 +10,8 @@ import { mountTextbausteinPicker } from '../textbausteine.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
+import { generateAngebotFromStichpunkte } from '../ai.js';
+import { openStichpunkteSprachModal } from '../voicenote.js';
 
 const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt', storniert: 'Storniert' };
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success', storniert: 'badge-danger' };
@@ -231,6 +233,7 @@ export async function render(container, route) {
             </div>` : ''}
           </div>
           <div class="divider"></div>
+          ${!isEdit ? '<div class="flex-row" style="margin-bottom:10px"><button type="button" class="btn btn-sm" id="btn-ki-erstellen">✨ Mit KI aus Sprache erstellen</button></div>' : ''}
           <div id="pos-host"></div>
           <div id="tb-picker-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
@@ -272,13 +275,43 @@ export async function render(container, route) {
       itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
     });
 
-    const editor = createPositionsEditor({
+    let editor = createPositionsEditor({
       host: body.querySelector('#pos-host'),
       katalog,
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
     });
+    if (!isEdit) {
+      body.querySelector('#btn-ki-erstellen').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Stichpunkte für die Auftragsbestätigung',
+          placeholder: 'z.B. "3 Steckdosen Wohnzimmer, 1 neuer Sicherungskasten, Verkabelung Garage" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            if (!stichpunkte || !stichpunkte.trim()) return;
+            const btn = body.querySelector('#btn-ki-erstellen');
+            btn.disabled = true;
+            btn.textContent = 'KI erstellt Vorschlag ...';
+            try {
+              const kundeId = kundePicker.getValue();
+              const kunde = kundenById[kundeId];
+              const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog });
+              if (result.betreff && !body.querySelector('input[name="betreff"]').value) body.querySelector('input[name="betreff"]').value = result.betreff;
+              const neuePositionen = [...editor.getPositionen(), ...(result.positionen || []).map((p) => ({ ...p, id: uid() }))];
+              editor = createPositionsEditor({
+                host: body.querySelector('#pos-host'), katalog, positionen: neuePositionen,
+                defaultSteuersatz: settings.standardSteuersatz, vorlagen,
+              });
+              toast(`${(result.positionen || []).length} Positionen von der KI übernommen`, 'success');
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+            btn.disabled = false;
+            btn.textContent = '✨ Mit KI aus Sprache erstellen';
+          },
+        });
+      });
+    }
 
     mountTextbausteinPicker(body.querySelector('#tb-picker-host'), {
       textbausteine, kategorie: 'angebot',
