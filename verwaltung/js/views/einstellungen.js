@@ -7,6 +7,7 @@ import * as lexoffice from '../lexoffice.js';
 import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
+import { isStandalone, canPromptInstall, isIos, onInstallAvailabilityChange, promptInstall } from '../installPrompt.js';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -61,6 +62,49 @@ const NAV = [
     { id: 'daten', icon: '💾', label: 'Datensicherung / Geräte-Sync' },
   ] },
 ];
+
+/**
+ * Zeigt, je nach Gerät/Browser, den passenden Weg, Werkora auf DIESEM Gerät
+ * als App zu installieren (Home-Bildschirm/Desktop) - Chrome/Edge/Android
+ * bieten dafür einen echten Install-Dialog (beforeinstallprompt), Safari/iOS
+ * und andere Browser nur den manuellen "Zum Home-Bildschirm"-Weg.
+ */
+function renderInstallSection(host) {
+  function draw() {
+    if (isStandalone()) {
+      host.innerHTML = '<p class="hint">✅ Bereits als App installiert.</p>';
+      return;
+    }
+    if (canPromptInstall()) {
+      host.innerHTML = `
+        <p class="hint">Startet danach wie eine eigene App, ohne Browser-Adressleiste, mit eigenem Icon auf dem Home-Bildschirm/Desktop.</p>
+        <button type="button" class="btn btn-primary" id="btn-install">📲 Jetzt installieren</button>
+      `;
+      host.querySelector('#btn-install').addEventListener('click', async () => {
+        const outcome = await promptInstall();
+        if (outcome === 'accepted') toast('Wird installiert ...', 'success');
+        draw();
+      });
+      return;
+    }
+    if (isIos()) {
+      host.innerHTML = `
+        <p class="hint">Auf dem iPhone/iPad geht das nur manuell über Safari (nicht in Chrome/Firefox verfügbar):</p>
+        <ol style="margin:0 0 0 18px;padding:0">
+          <li>Diese Seite in <strong>Safari</strong> öffnen</li>
+          <li>Unten das <strong>Teilen-Symbol</strong> (Quadrat mit Pfeil nach oben) antippen</li>
+          <li><strong>"Zum Home-Bildschirm"</strong> auswählen</li>
+        </ol>
+      `;
+      return;
+    }
+    host.innerHTML = `
+      <p class="hint">Im Browser-Menü (meist drei Punkte oben rechts) nach <strong>"App installieren"</strong> bzw. <strong>"Zum Startbildschirm hinzufügen"</strong> suchen.</p>
+    `;
+  }
+  draw();
+  onInstallAvailabilityChange(draw);
+}
 
 export async function render(container) {
   const settings = await getSettings();
@@ -466,7 +510,10 @@ export async function render(container) {
         </div>
 
         <div class="card settings-panel" data-panel="daten" hidden>
-          <h2>Datensicherung / Geräte-Sync</h2>
+          <h2>App auf diesem Gerät installieren</h2>
+          <div id="install-host"></div>
+
+          <h2 style="margin-top:28px">Datensicherung / Geräte-Sync</h2>
           <p class="hint">Alle Daten werden nur lokal in diesem Browser gespeichert. Über Export/Import können Daten als Datei zwischen Geräten oder mit Mitarbeitern ausgetauscht werden.</p>
           <div class="flex-row flex-wrap">
             <button class="btn" id="btn-export">Daten exportieren (JSON)</button>
@@ -1073,6 +1120,8 @@ export async function render(container) {
     await setSettings({ passcode: (fd.get('passcode') || '').toString().trim() });
     toast('Zugangscode gespeichert. Wird nach Neuladen aktiv.', 'success');
   });
+
+  renderInstallSection(container.querySelector('#install-host'));
 
   container.querySelector('#btn-export').addEventListener('click', async () => {
     const data = await exportAll();

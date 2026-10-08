@@ -9,6 +9,10 @@ import { closeAllModals, wireScrollFades } from './ui.js';
 import { trySyncPendingUploads } from './blobstore.js';
 import { preloadGis } from './google.js';
 import { preload as preloadMetaSocial } from './metaSocial.js';
+// Nur importiert, damit der beforeinstallprompt-Listener von Anfang an
+// registriert ist (siehe installPrompt.js) - der Event kann schon vor dem
+// ersten Aufruf der Einstellungen-Ansicht feuern.
+import './installPrompt.js';
 
 // Views werden erst beim tatsächlichen Aufruf ihrer Route per dynamic
 // import() nachgeladen (statt alle 22 Module beim Start zu laden) - spart

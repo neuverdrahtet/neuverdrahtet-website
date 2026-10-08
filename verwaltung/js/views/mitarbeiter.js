@@ -4,6 +4,13 @@ import { openModal, confirmDelete } from '../ui.js';
 import { renderDokumenteSection } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteEmployee, revokeInvite, revokeUserAccess, getEmployeeAuthStatus } from '../employeeAuth.js';
+import { openWhatsApp } from '../whatsapp.js';
+
+/** Fertiger Einladungstext mit Link + Registrierungs-/Installationshinweis - erspart es, das bei jeder Einladung von Hand zu formulieren. */
+function buildEinladungstext(name, email) {
+  const appUrl = new URL('./', window.location.href).href;
+  return `Hallo${name ? ' ' + name : ''}, du hast jetzt Zugang zu unserer Werkora-Software:\n\n${appUrl}\n\nBitte dort auf "Als eingeladener Mitarbeiter registrieren" klicken und mit deiner E-Mail (${email}) ein Passwort festlegen.\n\nTipp: Danach die Seite zum Home-Bildschirm hinzufügen (Teilen-Symbol → "Zum Home-Bildschirm" bzw. Browser-Menü → "App installieren"), dann startet Werkora wie eine normale App.`;
+}
 
 const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
 const ABWESENHEIT_TYPEN = ['urlaub', 'krank', 'schulung'];
@@ -581,10 +588,25 @@ export async function render(container) {
           draw();
         });
       } else if (status.status === 'invited') {
+        const text = buildEinladungstext(data.name, status.email);
         host.innerHTML = `
           <p class="hint">📧 Eingeladen mit <strong>${escapeHtml(status.email)}</strong> – wartet auf Registrierung durch den Mitarbeiter.</p>
-          <button type="button" class="btn btn-sm" id="btn-revoke-invite">Einladung zurückziehen</button>
+          <textarea id="einladung-text" readonly style="min-height:120px;font-size:12px">${escapeHtml(text)}</textarea>
+          <div class="flex-row flex-wrap" style="margin-top:6px">
+            <button type="button" class="btn btn-sm" id="btn-einladung-kopieren">📋 Text kopieren</button>
+            ${data.telefon ? '<button type="button" class="btn btn-sm" id="btn-einladung-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+            <button type="button" class="btn btn-sm" id="btn-revoke-invite">Einladung zurückziehen</button>
+          </div>
         `;
+        host.querySelector('#btn-einladung-kopieren').addEventListener('click', async () => {
+          try {
+            await navigator.clipboard.writeText(text);
+            toast('Text kopiert', 'success');
+          } catch {
+            toast('Kopieren nicht möglich – bitte den Text manuell markieren.', 'danger');
+          }
+        });
+        host.querySelector('#btn-einladung-whatsapp')?.addEventListener('click', () => openWhatsApp(data.telefon, text));
         host.querySelector('#btn-revoke-invite').addEventListener('click', async () => {
           await revokeInvite(status.email);
           toast('Einladung zurückgezogen', 'success');
