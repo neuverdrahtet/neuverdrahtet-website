@@ -268,6 +268,7 @@ export async function render(container) {
             <div class="field"><label>Kunde</label>
               <div class="flex-row" style="gap:6px">
                 <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+                <button type="button" class="btn btn-sm" id="btn-card-kunde-bearbeiten" title="Daten des ausgewählten Kunden ergänzen (z.B. Adresse)" ${data.kundeId ? '' : 'hidden'}>✏️</button>
                 <button type="button" class="btn btn-sm" id="btn-card-neuer-kunde" title="Neuen Kunden anlegen">+ Neu</button>
               </div>
             </div>
@@ -288,13 +289,30 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    const kundeSelect = body.querySelector('select[name="kundeId"]');
+    const bearbeitenBtn = body.querySelector('#btn-card-kunde-bearbeiten');
+    kundeSelect.addEventListener('change', () => { bearbeitenBtn.hidden = !kundeSelect.value; });
     body.querySelector('#btn-card-neuer-kunde').addEventListener('click', () => {
       openKundeSchnellanlage({
         onCreated: (neuerKunde) => {
           kunden.push(neuerKunde);
           kundenById[neuerKunde.id] = neuerKunde;
-          const select = body.querySelector('select[name="kundeId"]');
-          select.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
+          kundeSelect.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
+          bearbeitenBtn.hidden = false;
+        },
+      });
+    });
+    bearbeitenBtn.addEventListener('click', () => {
+      const bestehenderKunde = kundenById[kundeSelect.value];
+      if (!bestehenderKunde) return;
+      openKundeSchnellanlage({
+        kunde: bestehenderKunde,
+        onUpdated: (aktualisierterKunde) => {
+          const idx = kunden.findIndex((k) => k.id === aktualisierterKunde.id);
+          if (idx !== -1) kunden[idx] = aktualisierterKunde;
+          kundenById[aktualisierterKunde.id] = aktualisierterKunde;
+          const option = Array.from(kundeSelect.options).find((o) => o.value === aktualisierterKunde.id);
+          if (option) option.textContent = aktualisierterKunde.firma;
         },
       });
     });

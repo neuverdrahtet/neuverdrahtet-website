@@ -168,6 +168,92 @@ async function firestoreWriteDoc({ accessToken, projectId, collection, id, data 
   return res.json();
 }
 
+function firestoreValueToJs(v) {
+  if (!v) return null;
+  if ('stringValue' in v) return v.stringValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return v.doubleValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('nullValue' in v) return null;
+  if ('arrayValue' in v) return (v.arrayValue.values || []).map(firestoreValueToJs);
+  if ('mapValue' in v) return firestoreFieldsToObject(v.mapValue.fields || {});
+  return null;
+}
+
+function firestoreFieldsToObject(fields) {
+  const obj = {};
+  for (const [k, v] of Object.entries(fields || {})) obj[k] = firestoreValueToJs(v);
+  return obj;
+}
+
+async function firestoreGetDoc({ accessToken, projectId, collection, id }) {
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}/${id}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Firestore-Fehler (${res.status}) bei ${collection}/${id}: ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  return firestoreFieldsToObject(data.fields || {});
+}
+
+/**
+ * Aktualisiert NUR die angegebenen Felder eines Dokuments (updateMask) -
+ * anders als firestoreWriteDoc KEIN Überschreiben des gesamten Dokuments.
+ * Wichtig für einstellungen/global, das sämtliche übrigen Firmeneinstellungen
+ * (Firmenname, Logo, weitere Nummernkreise, ...) in einem einzigen Dokument
+ * hält - ein volles Überschreiben würde die alle löschen.
+ */
+async function firestorePatchFields({ accessToken, projectId, collection, id, fields }) {
+  const maskParams = Object.keys(fields).map((k) => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  const url = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/${collection}/${id}?${maskParams}`;
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ fields: toFirestoreFields(fields) }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Firestore-Fehler (${res.status}) bei ${collection}/${id}: ${text.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+/** 1:1 dieselbe Logik wie nextDailyNummer() in verwaltung/js/utils.js - Tageszähler, der bei neuem Datum auf 1 zurückspringt. */
+function nextDailyNummer(prefix, state) {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const heute = `${yyyy}-${mm}-${dd}`;
+  const zaehler = state.datum === heute ? (Number(state.zaehler) || 0) + 1 : 1;
+  const nummer = `${prefix || ''}${yyyy}${dd}${mm}${String(zaehler).padStart(2, '0')}`;
+  return { nummer, datum: heute, zaehler };
+}
+
+/**
+ * Vergibt eine neue Kundennummer nach demselben Schema wie die Verwaltungs-
+ * Software (kunden.js) - liest/aktualisiert denselben Zähler in den globalen
+ * Einstellungen, damit keine Dopplungen zwischen App und Website-Leads
+ * entstehen. Best-Effort: bei zeitgleich eintreffenden Leads ist ein seltener
+ * doppelter Zählerschritt möglich (keine echte Transaktion) - für die geringe
+ * Lead-Frequenz unkritisch. Schlägt die Vergabe fehl, wird der Kunde trotzdem
+ * angelegt, nur ohne Nummer (Nummer lässt sich jederzeit nachtragen) - ein
+ * einzelner Lead darf daran nicht komplett scheitern.
+ */
+async function vergebeKundennummer({ accessToken, projectId }) {
+  try {
+    const settings = (await firestoreGetDoc({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+    const { nummer, datum, zaehler } = nextDailyNummer('', { datum: settings.kundeNummerDatum, zaehler: settings.kundeNummerZaehler });
+    await firestorePatchFields({ accessToken, projectId, collection: 'einstellungen', id: 'global', fields: { kundeNummerDatum: datum, kundeNummerZaehler: zaehler } });
+    return nummer;
+  } catch (err) {
+    console.error('Kundennummer-Vergabe fehlgeschlagen, Kunde wird ohne Nummer angelegt:', err);
+    return '';
+  }
+}
+
 // --- Kunden-Farbe (1:1 Logik aus verwaltung/js/utils.js farbeAusText() +
 // die KUNDEN_FARBEN-Palette aus kunden.js/leadpipeline.js übernommen). ---
 
@@ -367,7 +453,8 @@ async function legeLeadAn({ env, kunde, projekt }) {
   const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
   const kundeId = crypto.randomUUID();
   const projektId = crypto.randomUUID();
-  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
+  const kundennummer = await vergebeKundennummer({ accessToken, projectId: serviceAccount.project_id });
+  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, kundennummer, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: { ...projekt, kundeId } });
   await sendeLeadBenachrichtigung(env, [
     `📩 Neuer Lead: ${kunde.firma}`,
@@ -479,6 +566,12 @@ export default {
 
     try {
       const vollerName = `${kontakt.vorname} ${kontakt.nachname}`.trim();
+      // PLZ/Ort liegen je nach Formular an unterschiedlichen Stellen im
+      // Payload (Wallbox-Fragebogen: antworten.plz/ort, Elektro-Kostenrechner:
+      // kontakt.plz/ort) - bisher wurden beide nur als Freitext in der
+      // Beschreibung mitgeschickt, nie als eigene Kunden-Felder.
+      const plz = istElektroKomplett ? (kontakt.plz || '') : (body.antworten?.plz || '');
+      const ort = istElektroKomplett ? (kontakt.ort || '') : (body.antworten?.ort || '');
       await legeLeadAn({
         env,
         kunde: {
@@ -486,6 +579,7 @@ export default {
           ansprechpartner: '',
           telefon: kontakt.telefon || '',
           email: kontakt.email,
+          plz, ort,
           status: 'lead',
           // s. Kommentar im "kontakt"-Zweig oben - dieselbe Beschreibung wie im
           // Projekt auch hier im Kunden-Notizfeld für die Lead-Pipeline-Ansicht.

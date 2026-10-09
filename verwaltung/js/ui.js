@@ -1,6 +1,6 @@
-import { el, escapeHtml, debounce, uid, toast, farbeAusText } from './utils.js';
+import { el, escapeHtml, debounce, uid, toast, farbeAusText, nextDailyNummer } from './utils.js';
 import { searchAddress } from './geocode.js';
-import { put } from './db.js';
+import { put, getSettings, setSettings } from './db.js';
 
 // Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
 // (Tabellen, Positionstabellen, Plantafel-Gantt, Tag-Kalender, Kanban) - macht
@@ -328,24 +328,26 @@ const KUNDE_SCHNELL_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44
  * eigenen lokalen Listen (kunden/kundenById) einzutragen, da diese pro
  * Ansicht unterschiedlich gehalten werden.
  */
-export function openKundeSchnellanlage({ onCreated } = {}) {
+export function openKundeSchnellanlage({ kunde, onCreated, onUpdated } = {}) {
+  const isEdit = !!kunde;
+  const data = kunde || { firma: '', ansprechpartner: '', telefon: '', email: '', strasse: '', plz: '', ort: '' };
   const { body, close } = openModal({
-    title: 'Neuer Kunde',
+    title: isEdit ? 'Kunde bearbeiten' : 'Neuer Kunde',
     bodyHtml: `
       <form id="kunde-schnell-form">
         <div class="form-grid">
-          <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required></div>
-          <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner"></div>
-          <div class="field"><label>Telefon</label><input name="telefon"></div>
-          <div class="field col-span-2"><label>E-Mail</label><input type="email" name="email"></div>
-          <div class="field col-span-2"><label>Straße, Nr.</label><input name="strasse" autocomplete="off"></div>
-          <div class="field"><label>PLZ</label><input name="plz"></div>
-          <div class="field"><label>Ort</label><input name="ort"></div>
+          <div class="field col-span-2"><label>Firma / Name *</label><input name="firma" required value="${escapeHtml(data.firma || '')}"></div>
+          <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(data.ansprechpartner || '')}"></div>
+          <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
+          <div class="field col-span-2"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
+          <div class="field col-span-2"><label>Straße, Nr.</label><input name="strasse" autocomplete="off" value="${escapeHtml(data.strasse || '')}"></div>
+          <div class="field"><label>PLZ</label><input name="plz" value="${escapeHtml(data.plz || '')}"></div>
+          <div class="field"><label>Ort</label><input name="ort" value="${escapeHtml(data.ort || '')}"></div>
         </div>
         <div class="modal-actions">
           <span class="spacer"></span>
           <button type="button" class="btn" id="ks-cancel">Abbrechen</button>
-          <button type="submit" class="btn btn-primary">Anlegen</button>
+          <button type="submit" class="btn btn-primary">${isEdit ? 'Speichern' : 'Anlegen'}</button>
         </div>
       </form>
     `,
@@ -364,26 +366,42 @@ export function openKundeSchnellanlage({ onCreated } = {}) {
     if (!firma) return;
     const submitBtn = body.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    const neuerKunde = {
-      id: uid(), firma,
+    const felder = {
+      firma,
       ansprechpartner: (fd.get('ansprechpartner') || '').toString().trim(),
       telefon: (fd.get('telefon') || '').toString().trim(),
       email: (fd.get('email') || '').toString().trim(),
       strasse: (fd.get('strasse') || '').toString().trim(),
       plz: (fd.get('plz') || '').toString().trim(),
       ort: (fd.get('ort') || '').toString().trim(),
-      notizen: '', kundennummer: '', farbe: farbeAusText(firma, KUNDE_SCHNELL_FARBEN), status: 'kunde',
     };
+    // Im Bearbeiten-Modus bleiben Felder erhalten, die diese schlanke Maske
+    // nicht zeigt (Notizen, Kundennummer, Status, ...) - nur die hier
+    // gezeigten Felder werden überschrieben, nicht der ganze Datensatz.
+    let gespeicherterKunde;
+    if (isEdit) {
+      gespeicherterKunde = { ...data, ...felder };
+    } else {
+      // Automatische Kundennummer wie in der vollen Kunden-Ansicht (kunden.js)
+      // - bleibt dort jederzeit änderbar, hier nur die erste Vergabe.
+      const currentSettings = await getSettings();
+      const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
+        '', { datum: currentSettings.kundeNummerDatum, zaehler: currentSettings.kundeNummerZaehler }
+      );
+      await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
+      gespeicherterKunde = { id: uid(), ...felder, notizen: '', kundennummer: autoNummer, farbe: farbeAusText(firma, KUNDE_SCHNELL_FARBEN), status: 'kunde' };
+    }
     try {
-      await put('kunden', neuerKunde);
+      await put('kunden', gespeicherterKunde);
     } catch (err) {
-      toast(`Kunde anlegen fehlgeschlagen: ${err.message}`, 'danger');
+      toast(`Kunde ${isEdit ? 'speichern' : 'anlegen'} fehlgeschlagen: ${err.message}`, 'danger');
       submitBtn.disabled = false;
       return;
     }
-    toast('Kunde angelegt', 'success');
+    toast(isEdit ? 'Kunde aktualisiert' : 'Kunde angelegt', 'success');
     close();
-    if (onCreated) onCreated(neuerKunde);
+    if (isEdit) { if (onUpdated) onUpdated(gespeicherterKunde); }
+    else if (onCreated) onCreated(gespeicherterKunde);
   });
 }
 
