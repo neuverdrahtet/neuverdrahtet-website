@@ -381,8 +381,10 @@ export async function render(container) {
             ${bestehenderKunde ? `<p class="hint">Zu dieser E-Mail-Adresse existiert bereits der Kunde <strong>${escapeHtml(bestehenderKunde.firma)}</strong> – es wird kein neuer Kunde angelegt, nur ein neues Projekt für diesen Kunden.</p>` : ''}
             <div class="form-grid">
               <div class="field col-span-2"><label>Firma/Name *</label><input name="firma" required value="${escapeHtml(bestehenderKunde?.firma || vorschlagName)}" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner" value="${escapeHtml(bestehenderKunde?.ansprechpartner || '')}" ${bestehenderKunde ? 'disabled' : ''}></div>
               <div class="field"><label>E-Mail</label><input name="email" value="${escapeHtml(vorschlagEmail)}" ${bestehenderKunde ? 'disabled' : ''}></div>
               <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(vorschlagTelefon)}" ${bestehenderKunde ? 'disabled' : ''}></div>
+              <div class="field col-span-2"><label>Notizen (Kunde)</label><textarea name="notizen" rows="3" ${bestehenderKunde ? 'disabled' : ''}>${escapeHtml(bestehenderKunde?.notizen || kiKontakt?.anliegen || '')}</textarea></div>
               <div class="field col-span-2"><label>Projekt-Titel *</label><input name="titel" required value="${escapeHtml(kiKontakt?.anliegen || message.subject || '')}"></div>
             </div>
             <div class="modal-actions">
@@ -411,10 +413,12 @@ export async function render(container) {
               '', { datum: currentSettings.kundeNummerDatum, zaehler: currentSettings.kundeNummerZaehler }
             );
             const neuerKunde = {
-              id: uid(), firma, ansprechpartner: '', strasse: '', plz: '', ort: '',
+              id: uid(), firma, strasse: '', plz: '', ort: '',
+              ansprechpartner: (fd.get('ansprechpartner') || '').toString().trim(),
               telefon: (fd.get('telefon') || '').toString().trim(),
               email: (fd.get('email') || '').toString().trim(),
-              notizen: '', kundennummer: autoNummer,
+              notizen: (fd.get('notizen') || '').toString().trim(),
+              kundennummer: autoNummer,
             };
             await put('kunden', neuerKunde);
             await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
