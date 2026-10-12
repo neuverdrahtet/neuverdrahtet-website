@@ -82,13 +82,22 @@ const RECHNUNG_OFFEN_STATUS = ['offen', 'teilbezahlt'];
 const AUSGABEN_KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 
 function jsonResponse(data, status = 200) {
-  return new Response(JSON.stringify(data), {
+  // Bei 204 (No Content, z.B. OPTIONS-Preflight) darf laut HTTP-Spezifikation
+  // KEIN Body gesendet werden - sonst können strikte Clients (z.B. der
+  // Verbindungstest eines MCP-Connectors) die Antwort als ungültig werten.
+  const body = status === 204 || data === null ? null : JSON.stringify(data);
+  return new Response(body, {
     status,
     headers: {
-      'Content-Type': 'application/json',
+      ...(body !== null ? { 'Content-Type': 'application/json' } : {}),
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      // "*" statt einer festen Liste - u.a. damit künftige/zusätzliche
+      // MCP-Header (Mcp-Protocol-Version, Mcp-Session-Id, ...) nicht bei
+      // jeder Erweiterung erneut hier nachgetragen werden müssen. Unkritisch,
+      // da kein Access-Control-Allow-Credentials gesetzt ist (kein Cookie-
+      // basierter Zugriff, nur ein Bearer-Token im Header).
+      'Access-Control-Allow-Headers': '*',
     },
   });
 }
