@@ -356,13 +356,32 @@ async function firestoreUpdate({ accessToken, projectId, collection, id, data })
   return docToPlain(await res.json());
 }
 
+// WICHTIG: Werkora (verwaltung/js/db.js) speichert ALLE Einstellungen als
+// Felder in einem EINZIGEN Dokument "einstellungen/global" - NICHT als
+// eigenes Dokument pro Schlüssel. Die frühere Version dieser Funktionen las/
+// schrieb fälschlich "einstellungen/{key}" (eigenes Dokument je Schlüssel),
+// das es in der echten Datenbank nie gab - dadurch hat z.B. die
+// Angebotsnummer-Vergabe hier (angebotNummerDatum/-Zaehler) nie den
+// tatsächlichen, von der App gepflegten Zähler gelesen/geschrieben, sondern
+// einen eigenen, komplett getrennten Zähler an falscher Stelle - mit dem
+// Risiko doppelt vergebener Angebotsnummern zwischen App und API.
 async function getSettingValue({ accessToken, projectId, key, fallback }) {
-  const doc = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: key });
-  return doc && doc.value !== undefined ? doc.value : fallback;
+  const doc = await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' });
+  const value = doc ? doc[key] : undefined;
+  return value !== undefined ? value : fallback;
 }
 
 async function setSettingValue({ accessToken, projectId, key, value }) {
-  await firestoreCreate({ accessToken, projectId, collection: 'einstellungen', id: key, data: { key, value } });
+  // updateMask (über firestoreUpdate) ändert NUR dieses eine Feld - ein
+  // volles Überschreiben des Dokuments würde sämtliche übrigen
+  // Firmeneinstellungen (Firmenname, Logo, weitere Nummernkreise, ...)
+  // löschen, die in diesem einen Dokument zusammen mit allem anderen liegen.
+  const updated = await firestoreUpdate({ accessToken, projectId, collection: 'einstellungen', id: 'global', data: { [key]: value } });
+  if (updated === null) {
+    // Dokument existiert noch gar nicht (z.B. ganz frisches Projekt ohne je
+    // gespeicherte Einstellung) - dann einmalig mit genau diesem Feld anlegen.
+    await firestoreCreate({ accessToken, projectId, collection: 'einstellungen', id: 'global', data: { [key]: value } });
+  }
 }
 
 // --- KI-Aktionsprotokoll (Vorgabe Abschnitt 29) ---
