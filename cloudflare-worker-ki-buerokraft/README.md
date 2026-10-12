@@ -331,6 +331,40 @@ Jede Checkliste weist selbst darauf hin, solange das noch fehlt.
 drei weitere Cron-Trigger manuell eingetragen werden: `0 6 * * 1-5`, `0 10 * * 1-5`,
 `0 14 * * 1-5` (siehe Tabelle oben).
 
+## MCP-Server (Claude.ai / Claude Desktop als Custom Connector)
+
+Zusätzlich zur REST-API oben spricht dieser Worker unter dem Pfad `/mcp` auch
+das **Model Context Protocol (MCP)** - damit lässt er sich in Claude.ai oder
+der Claude-Desktop-App als "Custom Connector" einbinden und direkt im Chat
+nutzen ("Erstelle ein Angebot für Mustermann GmbH, 3 Steckdosen Wohnzimmer").
+
+**Sicherheitsgrenze (bewusst, siehe "Wichtige Abweichungen" oben):** nur
+**Lesen + Neuanlegen**. Kein MCP-Tool zum Bearbeiten/Löschen/Versenden von
+bereits vorhandenen echten Datensätzen - dafür bleibt Werkora selbst (mit
+Freigabe-Center) die einzige Stelle. Rechnungen bleiben komplett lesend
+(GoBD-Sperre). Angebote landen immer als Entwurf, nie automatisch versendet.
+
+Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
+Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
+Mitarbeiter durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
+sowie neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben anlegen.
+
+**Einrichtung in Claude.ai:**
+
+1. Einstellungen → Connectors → **Custom Connector hinzufügen**.
+2. **URL**: `https://<deine-worker-url>/mcp`
+3. Als Authentifizierung einen Header setzen: `Authorization: Bearer <dein API_KEY>`
+   (derselbe Schlüssel wie oben bei `API_KEY`).
+4. Verbinden - Claude listet danach automatisch alle Tools auf.
+
+**Technischer Hintergrund:** läuft im zustandslosen JSON-Antwortmodus des
+MCP-"Streamable HTTP"-Transports (keine Sitzungs-ID, keine Server-Sent-
+Events) - jeder Aufruf ist in sich geschlossen, passt zu einem
+zustandslosen Cloudflare Worker. Von Hand nach der offiziellen
+`@modelcontextprotocol/sdk`-Referenzimplementierung nachgebaut (ohne die
+SDK selbst als Abhängigkeit), damit der Worker weiterhin als einzelne
+Datei per Dashboard-Quick-Edit deploybar bleibt (kein npm-Build nötig).
+
 ## Deployment (Cloudflare Dashboard, wie bei den anderen Workern)
 
 1. Cloudflare Dashboard öffnen → **Workers & Pages** → **Anwendung erstellen** →

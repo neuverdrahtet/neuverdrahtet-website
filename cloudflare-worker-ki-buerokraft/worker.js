@@ -26,6 +26,12 @@
  * scheduled()-Handler ganz unten und README.md, Abschnitt "Automatischer
  * Büroablauf".
  *
+ * Zusätzlich: ein MCP-Server (Model Context Protocol) unter POST /mcp, über
+ * den sich dieser Worker als "Custom Connector" in Claude.ai/Claude Desktop
+ * einbinden lässt (gleicher API_KEY, siehe README.md Abschnitt
+ * "MCP-Server") - bewusst nur Lesen + Neuanlegen, keine Tools zum
+ * Bearbeiten/Löschen/Versenden vorhandener Datensätze.
+ *
  * Zusätzlich (weil in der Vorgabe als "erlaubt" gelistet, aber nicht in der
  * 14er-Liste): PATCH /customers/{id}, GET/PATCH /leads, PATCH /tasks/{id}
  * (z.B. Status "completed").
@@ -881,13 +887,750 @@ async function runBueroCheck(env, checkpoint) {
   });
 }
 
+// =====================================================================
+// MCP-Server (Model Context Protocol) - lässt sich als "Custom Connector"
+// in Claude.ai/Claude Desktop einbinden, um direkt im Chat mit echten
+// Werkora-Daten zu arbeiten. Läuft im selben Worker wie die REST-API oben
+// (gleicher API_KEY als "Authorization: Bearer <Schlüssel>"-Header beim
+// Einrichten des Connectors, gleiche Firestore-Anbindung) - KEIN
+// separater Worker.
+//
+// Bewusste Sicherheitsgrenze (siehe Dateikopf-Kommentar "WICHTIGE
+// ABWEICHUNGEN" oben): nur LESEN + NEUANLEGEN. Kein Tool zum Bearbeiten/
+// Löschen/Versenden von bereits vorhandenen echten Datensätzen - dafür
+// bleibt Werkora selbst (mit Freigabe-Center/Bestätigungsdialogen) die
+// einzige Stelle. Rechnungen bleiben komplett lesend (GoBD-Sperre, siehe
+// POST /invoices oben).
+//
+// Zustandsloser JSON-Antwortmodus (keine SSE/Session-IDs): jeder Request
+// ist in sich geschlossen - einfacher zu betreiben als die stream-basierte
+// Variante (siehe MCP-Spezifikation "Streamable HTTP"-Transport) und passt
+// zu einem zustandslosen Cloudflare Worker ohne eigenen Server-Prozess.
+// =====================================================================
+
+const MCP_SUPPORTED_PROTOCOL_VERSIONS = ['2025-11-25', '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'];
+const MCP_DEFAULT_PROTOCOL_VERSION = '2025-06-18';
+const MCP_SERVER_INFO = { name: 'werkora-mcp-server', version: '1.0.0', title: 'Werkora' };
+
+function mcpJsonRpcResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Mcp-Protocol-Version',
+    },
+  });
+}
+
+function mcpJsonRpcError(id, code, message, status = 200) {
+  return mcpJsonRpcResponse({ jsonrpc: '2.0', id: id ?? null, error: { code, message } }, status);
+}
+
+function mcpJsonRpcResult(id, result) {
+  return mcpJsonRpcResponse({ jsonrpc: '2.0', id, result });
+}
+
+/** Erfolgsergebnis eines Tool-Aufrufs - als lesbar formatiertes JSON im Text-Content (MCP kennt kein separates "JSON-Content" - structuredContent wäre zusätzlich möglich, reicht hier aber nicht, da Claude ohnehin den Text liest). */
+function mcpToolSuccess(data) {
+  return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+}
+
+function mcpToolError(message) {
+  return { content: [{ type: 'text', text: message }], isError: true };
+}
+
+// --- Tool-Definitionen (JSON Schema, wie vom MCP-Protokoll für tools/list erwartet) ---
+
+const MCP_TOOLS = [
+  {
+    name: 'werkora_search_customers',
+    description: 'Durchsucht Kunden nach Name, E-Mail, Telefon, PLZ oder Ort. Ohne Filter werden alle Kunden geliefert.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Teilstring aus Firma oder Ansprechpartner' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        postal_code: { type: 'string', description: 'Exakte PLZ' },
+        city: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'werkora_get_customer',
+    description: 'Liest einen einzelnen Kunden anhand seiner ID.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { customer_id: { type: 'string' } }, required: ['customer_id'] },
+  },
+  {
+    name: 'werkora_create_customer',
+    description: 'Legt einen neuen Kunden an (Status "lead"). Prüft NICHT auf Dubletten per E-Mail/Telefon - vorher mit werkora_search_customers prüfen.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        company: { type: 'string', description: 'Firma oder vollständiger Name bei Privatperson' },
+        contact_person: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+      },
+      required: ['company'],
+    },
+  },
+  {
+    name: 'werkora_search_leads',
+    description: 'Durchsucht Kunden mit einem bestimmten Status (Standard: "lead", d.h. noch kein zahlender Kunde). Leads sind in Werkora technisch Kunden mit Status-Feld, keine eigene Tabelle.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { status: { type: 'string', description: 'Standard: lead' } } },
+  },
+  {
+    name: 'werkora_create_lead',
+    description: 'Legt einen neuen Lead an oder vermerkt Lead-Infos an einem bestehenden Kunden (customer_id angeben). Ohne customer_id wird ein neuer Kunde mit Status "lead" angelegt.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string', description: 'Vorhandenen Kunden verwenden statt neuen anzulegen' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        trade: { type: 'string', description: 'Gewerk' },
+        source: { type: 'string' },
+        priority: { type: 'string' },
+        estimated_value: { type: 'number' },
+        next_action: { type: 'string' },
+        next_action_date: { type: 'string', description: 'YYYY-MM-DD' },
+        status: { type: 'string' },
+      },
+    },
+  },
+  {
+    name: 'werkora_search_projects',
+    description: 'Durchsucht Projekte/Aufträge, optional gefiltert nach Kunde oder Status.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { customer_id: { type: 'string' }, status: { type: 'string' } } },
+  },
+  {
+    name: 'werkora_get_project',
+    description: 'Liest ein einzelnes Projekt anhand seiner ID.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { project_id: { type: 'string' } }, required: ['project_id'] },
+  },
+  {
+    name: 'werkora_search_tasks',
+    description: 'Durchsucht Aufgaben, optional gefiltert nach Status, Priorität, Fälligkeitsdatum, Kunde, Projekt oder zugewiesenem Mitarbeiter.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+        priority: { type: 'string' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_to: { type: 'string' },
+        limit: { type: 'number', description: 'Max. Anzahl, Standard/Maximum 100' },
+      },
+    },
+  },
+  {
+    name: 'werkora_create_task',
+    description: 'Legt eine neue Aufgabe an.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string', description: 'niedrig/normal/hoch' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_to: { type: 'string', description: 'Mitarbeiter-ID' },
+      },
+      required: ['title'],
+    },
+  },
+  {
+    name: 'werkora_search_appointments',
+    description: 'Durchsucht Termine, optional gefiltert nach Kunde, Projekt oder Zeitraum.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: { customer_id: { type: 'string' }, project_id: { type: 'string' }, date_from: { type: 'string' }, date_to: { type: 'string' } },
+    },
+  },
+  {
+    name: 'werkora_create_appointment',
+    description: 'Legt einen neuen Termin an. Bei exakt gleichem Titel+Startzeit (+Kunde, falls angegeben) wird statt eines Duplikats der bereits vorhandene Termin zurückgegeben.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string' },
+        start: { type: 'string', description: 'ISO-Datum/-Zeit, z.B. 2026-10-15T09:00' },
+        end: { type: 'string' },
+        address: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_employee_ids: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['title', 'start'],
+    },
+  },
+  {
+    name: 'werkora_search_quotes',
+    description: 'Durchsucht Angebote, optional gefiltert nach Kunde, Projekt, Status oder Zeitraum.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        status: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'werkora_get_quote',
+    description: 'Liest ein einzelnes Angebot anhand seiner ID.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { quote_id: { type: 'string' } }, required: ['quote_id'] },
+  },
+  {
+    name: 'werkora_create_quote',
+    description: 'Legt ein NEUES Angebot als Entwurf an (Status "entwurf") - wird nie automatisch versendet, das bleibt manuelle Freigabe in Werkora.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        title: { type: 'string' },
+        items: {
+          type: 'array',
+          description: 'Positionen des Angebots',
+          items: {
+            type: 'object',
+            properties: {
+              article_id: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              unit: { type: 'string', description: 'z.B. Std., Stk., m, pauschal' },
+              quantity: { type: 'number' },
+              unit_price_net: { type: 'number' },
+              vat_rate: { type: 'number', description: 'Prozent, Standard 19' },
+            },
+          },
+        },
+      },
+      required: ['customer_id'],
+    },
+  },
+  {
+    name: 'werkora_search_invoices',
+    description: 'Durchsucht Rechnungen (nur Lesen - Rechnungen werden über diese Schnittstelle grundsätzlich nicht angelegt/geändert, GoBD-Sperre).',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', description: 'z.B. offen, teilbezahlt, bezahlt, storniert, overdue' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        paid_date_from: { type: 'string' },
+        paid_date_to: { type: 'string' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'werkora_get_invoice',
+    description: 'Liest eine einzelne Rechnung anhand ihrer ID.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: { invoice_id: { type: 'string' } }, required: ['invoice_id'] },
+  },
+  {
+    name: 'werkora_search_expenses',
+    description: 'Durchsucht Ausgaben/Belege.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        incomplete: { type: 'boolean', description: 'Nur Ausgaben ohne erfassten Betrag (0 €)' },
+        offset: { type: 'number' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'werkora_create_expense',
+    description: 'Erfasst eine neue Ausgabe (ohne Beleg-Foto - das bleibt in Werkora selbst).',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        date: { type: 'string', description: 'YYYY-MM-DD' },
+        category: { type: 'string', description: `Eine von: ${AUSGABEN_KATEGORIEN.join(', ')}` },
+        description: { type: 'string' },
+        supplier: { type: 'string' },
+        amount_net: { type: 'number' },
+        amount_gross: { type: 'number' },
+        vat_rate: { type: 'number', description: 'Prozent, Standard 19' },
+        paid_with: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+      },
+      required: ['date', 'category'],
+    },
+  },
+  {
+    name: 'werkora_search_time_entries',
+    description: 'Durchsucht erfasste Arbeitszeiten (Zeiterfassung) inkl. Summe der Minuten für den gefundenen Zeitraum - nur Lesen (Erfassung läuft per Timer/manuell in Werkora selbst).',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project_id: { type: 'string' },
+        employee_id: { type: 'string' },
+        date_from: { type: 'string' },
+        date_to: { type: 'string' },
+        offset: { type: 'number' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'werkora_search_articles',
+    description: 'Durchsucht den Artikel-/Leistungskatalog.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: '"article" oder "service" - ohne Angabe beide' },
+        trade: { type: 'string' },
+        low_stock: { type: 'boolean' },
+        limit: { type: 'number' },
+      },
+    },
+  },
+  {
+    name: 'werkora_search_employees',
+    description: 'Listet Mitarbeiter (nur unkritische Stammdaten wie Name/Rolle/Telefon/E-Mail, keine Gehalts-/Steuerdaten) - nur Lesen.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'werkora_get_dashboard',
+    description: 'Liefert eine Kennzahlen-Übersicht: neue Leads, offene/überfällige Aufgaben, heutige Termine, offene Angebote (Anzahl+Wert), offene/überfällige Rechnungen (Anzahl+Wert).',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: { type: 'object', properties: {} },
+  },
+];
+
+/**
+ * Führt ein MCP-Tool aus - dieselbe Fach-/Filterlogik wie die jeweiligen
+ * REST-Routen oben (bewusst dieselben Firestore-Collections/-Mapper
+ * wiederverwendet statt eigener Parallellogik), nur als direkter
+ * Funktionsaufruf statt über HTTP, und ohne jedes Update/Delete-Tool.
+ */
+async function callWerkoraMcpTool(name, args, ctx) {
+  const { accessToken, projectId } = ctx;
+  args = args || {};
+
+  switch (name) {
+    case 'werkora_search_customers': {
+      let kunden = await firestoreList({ accessToken, projectId, collection: 'kunden' });
+      if (args.email) kunden = kunden.filter((k) => (k.email || '').toLowerCase().includes(String(args.email).toLowerCase()));
+      if (args.phone) kunden = kunden.filter((k) => (k.telefon || '').replace(/\s+/g, '').includes(String(args.phone).replace(/\s+/g, '')));
+      if (args.name) kunden = kunden.filter((k) => (k.firma || '').toLowerCase().includes(String(args.name).toLowerCase()) || (k.ansprechpartner || '').toLowerCase().includes(String(args.name).toLowerCase()));
+      if (args.postal_code) kunden = kunden.filter((k) => (k.plz || '') === args.postal_code);
+      if (args.city) kunden = kunden.filter((k) => (k.ort || '').toLowerCase().includes(String(args.city).toLowerCase()));
+      await logAction(ctx, { action: 'mcp.customers.search', status: 'success' });
+      return mcpToolSuccess(kunden.map(customerToApi));
+    }
+    case 'werkora_get_customer': {
+      if (!args.customer_id) return mcpToolError('Feld "customer_id" ist erforderlich.');
+      const k = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+      if (!k) return mcpToolError('Kunde wurde nicht gefunden.');
+      return mcpToolSuccess(customerToApi(k));
+    }
+    case 'werkora_create_customer': {
+      if (!args.company) return mcpToolError('Feld "company" ist erforderlich.');
+      const id = crypto.randomUUID();
+      const data = {
+        id, firma: args.company, ansprechpartner: args.contact_person || '', telefon: args.phone || '', email: args.email || '',
+        strasse: '', plz: '', ort: '', notizen: '', status: 'lead', farbe: farbeAusText(id, KUNDEN_FARBEN), createdAt: new Date().toISOString(),
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'kunden', id, data });
+      await logAction(ctx, { action: 'mcp.customers.create', entityType: 'kunden', entityId: id, newValue: data, status: 'success' });
+      await fireWebhook(ctx, 'customer.created', customerToApi(created));
+      return mcpToolSuccess(customerToApi(created));
+    }
+    case 'werkora_search_leads': {
+      let kunden = await firestoreList({ accessToken, projectId, collection: 'kunden' });
+      kunden = kunden.filter((k) => (args.status ? (k.status || '') === args.status : (k.status || '') === 'lead'));
+      await logAction(ctx, { action: 'mcp.leads.search', status: 'success' });
+      return mcpToolSuccess(kunden.map(customerToApi));
+    }
+    case 'werkora_create_lead': {
+      const kundenStatusSpalten = await firestoreList({ accessToken, projectId, collection: 'kundenStatus' });
+      let kunde = null;
+      if (args.customer_id) {
+        kunde = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+        if (!kunde) return mcpToolError('customer_id verweist auf keinen vorhandenen Kunden.');
+      }
+      const leadInfoZeilen = [
+        args.title ? `Lead: ${args.title}` : null,
+        args.description || null,
+        args.trade ? `Gewerk: ${args.trade}` : null,
+        args.source ? `Quelle: ${args.source}` : null,
+        args.priority ? `Priorität: ${args.priority}` : null,
+        args.estimated_value ? `Geschätzter Wert: ${args.estimated_value} €` : null,
+        args.next_action ? `Nächster Schritt: ${args.next_action}${args.next_action_date ? ' (' + args.next_action_date + ')' : ''}` : null,
+      ].filter(Boolean).join('\n');
+      const gewuenschterStatus = args.status && kundenStatusSpalten.some((s) => s.id === args.status) ? args.status : 'lead';
+      const hinweis = leadStatusHinweis(args.status, kundenStatusSpalten);
+      const notizZusatz = [leadInfoZeilen, hinweis].filter(Boolean).join('\n');
+      if (kunde) {
+        const changes = { status: gewuenschterStatus, notizen: [kunde.notizen, notizZusatz].filter(Boolean).join('\n\n') };
+        const updated = await firestoreUpdate({ accessToken, projectId, collection: 'kunden', id: kunde.id, data: changes });
+        await logAction(ctx, { action: 'mcp.leads.create', entityType: 'kunden', entityId: kunde.id, newValue: changes, status: 'success' });
+        await fireWebhook(ctx, 'lead.created', customerToApi(updated));
+        return mcpToolSuccess({ ...customerToApi(updated), lead_note: hinweis || undefined });
+      }
+      if (!args.title && !leadInfoZeilen) return mcpToolError('Ohne customer_id wird mindestens "title" benötigt, um einen neuen Kunden für den Lead anzulegen.');
+      const id = crypto.randomUUID();
+      const data = {
+        id, firma: args.title || 'Neuer Lead', ansprechpartner: '', telefon: '', email: '',
+        status: gewuenschterStatus, notizen: notizZusatz, farbe: farbeAusText(id, KUNDEN_FARBEN), createdAt: new Date().toISOString(),
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'kunden', id, data });
+      await logAction(ctx, { action: 'mcp.leads.create', entityType: 'kunden', entityId: id, newValue: data, status: 'success' });
+      await fireWebhook(ctx, 'lead.created', customerToApi(created));
+      return mcpToolSuccess({ ...customerToApi(created), lead_note: hinweis || undefined });
+    }
+    case 'werkora_search_projects': {
+      let projekte = await firestoreList({ accessToken, projectId, collection: 'projekte' });
+      if (args.customer_id) projekte = projekte.filter((p) => p.kundeId === args.customer_id);
+      if (args.status) projekte = projekte.filter((p) => p.status === args.status);
+      await logAction(ctx, { action: 'mcp.projects.search', status: 'success' });
+      return mcpToolSuccess(projekte.map(projectToApi));
+    }
+    case 'werkora_get_project': {
+      if (!args.project_id) return mcpToolError('Feld "project_id" ist erforderlich.');
+      const p = await firestoreGet({ accessToken, projectId, collection: 'projekte', id: args.project_id });
+      if (!p) return mcpToolError('Projekt wurde nicht gefunden.');
+      return mcpToolSuccess(projectToApi(p));
+    }
+    case 'werkora_search_tasks': {
+      let aufgaben = await firestoreList({ accessToken, projectId, collection: 'aufgaben' });
+      if (args.status) aufgaben = aufgaben.filter((a) => a.status === args.status);
+      if (args.priority) aufgaben = aufgaben.filter((a) => a.prioritaet === args.priority);
+      if (args.due_date) aufgaben = aufgaben.filter((a) => a.faelligAm === args.due_date);
+      if (args.customer_id) aufgaben = aufgaben.filter((a) => a.kundeId === args.customer_id);
+      if (args.project_id) aufgaben = aufgaben.filter((a) => a.projektId === args.project_id);
+      if (args.assigned_to) aufgaben = aufgaben.filter((a) => a.zugewiesenAn === args.assigned_to);
+      await logAction(ctx, { action: 'mcp.tasks.search', status: 'success' });
+      const taskLimit = Math.min(Number(args.limit) || 100, 100);
+      return mcpToolSuccess(aufgaben.slice(0, taskLimit).map(taskToApi));
+    }
+    case 'werkora_create_task': {
+      if (!args.title) return mcpToolError('Feld "title" ist erforderlich.');
+      const id = crypto.randomUUID();
+      const data = {
+        id, titel: args.title, beschreibung: args.description || '', prioritaet: args.priority || 'normal',
+        status: 'offen', faelligAm: args.due_date || '', kundeId: args.customer_id || '', projektId: args.project_id || '',
+        zugewiesenAn: args.assigned_to || '', createdAt: new Date().toISOString(), erledigtAm: '',
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'aufgaben', id, data });
+      await logAction(ctx, { action: 'mcp.tasks.create', entityType: 'aufgaben', entityId: id, newValue: data, status: 'success' });
+      return mcpToolSuccess(taskToApi(created));
+    }
+    case 'werkora_search_appointments': {
+      let termine = await firestoreList({ accessToken, projectId, collection: 'termine' });
+      if (args.customer_id) termine = termine.filter((t) => t.kundeId === args.customer_id);
+      if (args.project_id) termine = termine.filter((t) => t.projektId === args.project_id);
+      if (args.date_from) termine = termine.filter((t) => (t.start || '') >= args.date_from);
+      if (args.date_to) termine = termine.filter((t) => (t.start || '') <= args.date_to);
+      await logAction(ctx, { action: 'mcp.appointments.search', status: 'success' });
+      return mcpToolSuccess(termine.map(appointmentToApi));
+    }
+    case 'werkora_create_appointment': {
+      if (!args.title || !args.start) return mcpToolError('Felder "title" und "start" sind erforderlich.');
+      const bestehende = await firestoreList({ accessToken, projectId, collection: 'termine' });
+      const dupe = bestehende.find((t) => (t.titel || '').trim().toLowerCase() === (args.title || '').trim().toLowerCase()
+        && t.start === args.start && (!args.customer_id || t.kundeId === args.customer_id));
+      if (dupe) {
+        await logAction(ctx, { action: 'mcp.appointments.create.deduped', entityType: 'termine', entityId: dupe.id, status: 'success' });
+        return mcpToolSuccess(appointmentToApi(dupe));
+      }
+      const id = crypto.randomUUID();
+      const data = {
+        id, titel: args.title, typ: 'termin', kundeId: args.customer_id || '', projektId: args.project_id || '',
+        start: args.start, ende: args.end || '', ort: args.address || '',
+        mitarbeiterIds: Array.isArray(args.assigned_employee_ids) ? args.assigned_employee_ids : [], notizen: args.notes || '',
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'termine', id, data });
+      await logAction(ctx, { action: 'mcp.appointments.create', entityType: 'termine', entityId: id, newValue: data, status: 'success' });
+      await fireWebhook(ctx, 'appointment.created', appointmentToApi(created));
+      return mcpToolSuccess(appointmentToApi(created));
+    }
+    case 'werkora_search_quotes': {
+      let angebote = await firestoreList({ accessToken, projectId, collection: 'angebote' });
+      if (args.customer_id) angebote = angebote.filter((a) => a.kundeId === args.customer_id);
+      if (args.project_id) angebote = angebote.filter((a) => a.projektId === args.project_id);
+      if (args.status) angebote = angebote.filter((a) => quoteToApi(a).status === args.status);
+      if (args.date_from) angebote = angebote.filter((a) => (a.datum || '') >= args.date_from);
+      if (args.date_to) angebote = angebote.filter((a) => (a.datum || '') <= args.date_to);
+      await logAction(ctx, { action: 'mcp.quotes.search', status: 'success' });
+      const quoteLimit = Math.min(Number(args.limit) || 100, 100);
+      return mcpToolSuccess(angebote.slice(0, quoteLimit).map(quoteToApi));
+    }
+    case 'werkora_get_quote': {
+      if (!args.quote_id) return mcpToolError('Feld "quote_id" ist erforderlich.');
+      const a = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: args.quote_id });
+      if (!a) return mcpToolError('Angebot wurde nicht gefunden.');
+      return mcpToolSuccess(quoteToApi(a));
+    }
+    case 'werkora_create_quote': {
+      if (!args.customer_id) return mcpToolError('Feld "customer_id" ist erforderlich.');
+      const kunde = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+      if (!kunde) return mcpToolError('customer_id verweist auf keinen vorhandenen Kunden.');
+      const positionen = (Array.isArray(args.items) ? args.items : []).map((it) => ({
+        id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '',
+        einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19,
+      }));
+      const totals = calcTotals(positionen);
+      const [prefix, datum, zaehler] = await Promise.all([
+        getSettingValue({ accessToken, projectId, key: 'angebotPrefix', fallback: 'AN-' }),
+        getSettingValue({ accessToken, projectId, key: 'angebotNummerDatum', fallback: '' }),
+        getSettingValue({ accessToken, projectId, key: 'angebotNummerZaehler', fallback: 0 }),
+      ]);
+      const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(prefix, { datum, zaehler });
+      await Promise.all([
+        setSettingValue({ accessToken, projectId, key: 'angebotNummerDatum', value: nDatum }),
+        setSettingValue({ accessToken, projectId, key: 'angebotNummerZaehler', value: nZaehler }),
+      ]);
+      const id = crypto.randomUUID();
+      const data = {
+        id, nummer, kundeId: args.customer_id, projektId: args.project_id || '', datum: todayISO(),
+        status: 'entwurf', betreff: args.title || '', notizen: 'Von der KI-Bürokraft (MCP) als Entwurf angelegt.', positionen,
+        netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto, createdAt: new Date().toISOString(),
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'angebote', id, data });
+      await logAction(ctx, { action: 'mcp.quotes.create', entityType: 'angebote', entityId: id, newValue: data, status: 'success' });
+      await fireWebhook(ctx, 'quote.created', quoteToApi(created));
+      return mcpToolSuccess(quoteToApi(created));
+    }
+    case 'werkora_search_invoices': {
+      let rechnungen = await firestoreList({ accessToken, projectId, collection: 'rechnungen' });
+      if (args.status) rechnungen = rechnungen.filter((r) => quoteToApiInvoiceStatus(r) === args.status);
+      if (args.customer_id) rechnungen = rechnungen.filter((r) => r.kundeId === args.customer_id);
+      if (args.project_id) rechnungen = rechnungen.filter((r) => r.projektId === args.project_id);
+      if (args.date_from) rechnungen = rechnungen.filter((r) => (r.datum || '') >= args.date_from);
+      if (args.date_to) rechnungen = rechnungen.filter((r) => (r.datum || '') <= args.date_to);
+      if (args.paid_date_from) rechnungen = rechnungen.filter((r) => (r.bezahltAm || '') >= args.paid_date_from);
+      if (args.paid_date_to) rechnungen = rechnungen.filter((r) => (r.bezahltAm || '') <= args.paid_date_to);
+      await logAction(ctx, { action: 'mcp.invoices.search', status: 'success' });
+      const invoiceLimit = Math.min(Number(args.limit) || 100, 100);
+      return mcpToolSuccess(rechnungen.slice(0, invoiceLimit).map(invoiceToApi));
+    }
+    case 'werkora_get_invoice': {
+      if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
+      const r = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!r) return mcpToolError('Rechnung wurde nicht gefunden.');
+      return mcpToolSuccess(invoiceToApi(r));
+    }
+    case 'werkora_search_expenses': {
+      let ausgaben = await firestoreList({ accessToken, projectId, collection: 'ausgaben' });
+      if (args.incomplete) ausgaben = ausgaben.filter((a) => !Number(a.betragBrutto));
+      ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+      await logAction(ctx, { action: 'mcp.expenses.search', status: 'success' });
+      const offset = Math.max(0, Number(args.offset) || 0);
+      const expenseLimit = Math.min(Number(args.limit) || 100, 100);
+      const seite = ausgaben.slice(offset, offset + expenseLimit);
+      return mcpToolSuccess({ items: seite.map(expenseToApi), total: ausgaben.length, offset, limit: expenseLimit, has_more: offset + expenseLimit < ausgaben.length });
+    }
+    case 'werkora_create_expense': {
+      if (!args.date || !args.category) return mcpToolError('Felder "date" und "category" sind erforderlich.');
+      if (!AUSGABEN_KATEGORIEN.includes(args.category)) return mcpToolError(`Feld "category" muss einer von ${AUSGABEN_KATEGORIEN.join(', ')} sein.`);
+      if (args.amount_net === undefined && args.amount_gross === undefined) return mcpToolError('Feld "amount_net" oder "amount_gross" ist erforderlich.');
+      const steuersatz = args.vat_rate !== undefined ? Number(args.vat_rate) : 19;
+      const betragNetto = args.amount_net !== undefined ? Number(args.amount_net) : Math.round((Number(args.amount_gross) / (1 + steuersatz / 100)) * 100) / 100;
+      const betragBrutto = args.amount_gross !== undefined ? Number(args.amount_gross) : Math.round(betragNetto * (1 + steuersatz / 100) * 100) / 100;
+      const id = crypto.randomUUID();
+      const data = {
+        id, datum: args.date, kategorie: args.category, beschreibung: args.description || '', lieferant: args.supplier || '',
+        betragNetto, steuersatz, betragBrutto, bezahltMit: args.paid_with || 'überweisung',
+        kundeId: args.customer_id || '', projektId: args.project_id || '', beleg: null,
+        bezahlstatus: 'bezahlt', faelligAm: '', bezahltAm: '', istInvestition: false, kalkKategorie: '',
+        createdAt: new Date().toISOString(),
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'ausgaben', id, data });
+      await logAction(ctx, { action: 'mcp.expenses.create', entityType: 'ausgaben', entityId: id, newValue: data, status: 'success' });
+      return mcpToolSuccess(expenseToApi(created));
+    }
+    case 'werkora_search_time_entries': {
+      let eintraege = await firestoreList({ accessToken, projectId, collection: 'zeiterfassung' });
+      if (args.project_id) eintraege = eintraege.filter((z) => z.projektId === args.project_id);
+      if (args.employee_id) eintraege = eintraege.filter((z) => z.mitarbeiterId === args.employee_id);
+      if (args.date_from) eintraege = eintraege.filter((z) => (z.datum || '') >= args.date_from);
+      if (args.date_to) eintraege = eintraege.filter((z) => (z.datum || '') <= args.date_to);
+      await logAction(ctx, { action: 'mcp.time-entries.search', status: 'success' });
+      const sumMinutes = eintraege.reduce((s, z) => s + (Number(z.dauerMinuten) || 0), 0);
+      eintraege.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+      const offset = Math.max(0, Number(args.offset) || 0);
+      const limit = Math.min(Number(args.limit) || 100, 100);
+      const seite = eintraege.slice(offset, offset + limit);
+      return mcpToolSuccess({ items: seite.map(timeEntryToApi), total: eintraege.length, sum_minutes: sumMinutes, offset, limit, has_more: offset + limit < eintraege.length });
+    }
+    case 'werkora_search_articles': {
+      let katalog = await firestoreList({ accessToken, projectId, collection: 'katalog' });
+      if (args.type === 'article') katalog = katalog.filter((k) => k.typ === 'artikel');
+      if (args.type === 'service') katalog = katalog.filter((k) => k.typ === 'leistung');
+      if (args.trade) katalog = katalog.filter((k) => k.gewerk === args.trade);
+      if (args.low_stock) katalog = katalog.filter((k) => k.bestandTracking && Number(k.bestand ?? 0) <= Number(k.mindestbestand ?? 0));
+      await logAction(ctx, { action: 'mcp.articles.search', status: 'success' });
+      const limit = Math.min(Number(args.limit) || 100, 100);
+      return mcpToolSuccess(katalog.slice(0, limit).map(articleToApi));
+    }
+    case 'werkora_search_employees': {
+      const [mitarbeiter, termine] = await Promise.all([
+        firestoreList({ accessToken, projectId, collection: 'mitarbeiter' }),
+        firestoreList({ accessToken, projectId, collection: 'termine' }),
+      ]);
+      const heute = todayISO();
+      const onLeaveIds = new Set(termine.filter((t) => t.typ === 'urlaub' && (t.start || '').slice(0, 10) <= heute && (t.ende || t.start || '').slice(0, 10) >= heute).flatMap((t) => t.mitarbeiterIds || []));
+      await logAction(ctx, { action: 'mcp.employees.search', status: 'success' });
+      return mcpToolSuccess(mitarbeiter.map((m) => employeeToApi(m, onLeaveIds.has(m.id))));
+    }
+    case 'werkora_get_dashboard': {
+      const [kunden, aufgaben, termine, angebote, rechnungen] = await Promise.all([
+        firestoreList({ accessToken, projectId, collection: 'kunden' }),
+        firestoreList({ accessToken, projectId, collection: 'aufgaben' }),
+        firestoreList({ accessToken, projectId, collection: 'termine' }),
+        firestoreList({ accessToken, projectId, collection: 'angebote' }),
+        firestoreList({ accessToken, projectId, collection: 'rechnungen' }),
+      ]);
+      const heute = todayISO();
+      const offeneAufgaben = aufgaben.filter((a) => !AUFGABEN_STATUS_GESCHLOSSEN.includes(a.status));
+      const offeneAngebote = angebote.filter((a) => a.status === 'versendet' || a.status === 'entwurf');
+      const offeneRechnungen = rechnungen.filter((r) => RECHNUNG_OFFEN_STATUS.includes(r.status));
+      await logAction(ctx, { action: 'mcp.dashboard', status: 'success' });
+      return mcpToolSuccess({
+        new_leads: kunden.filter((k) => (k.status || '') === 'lead').length,
+        open_tasks: offeneAufgaben.length,
+        overdue_tasks: offeneAufgaben.filter((a) => a.faelligAm && a.faelligAm < heute).length,
+        appointments_today: termine.filter((t) => (t.start || '').slice(0, 10) === heute).length,
+        quotes_open: offeneAngebote.length,
+        quotes_total_value: Math.round(offeneAngebote.reduce((s, a) => s + (a.brutto || 0), 0) * 100) / 100,
+        invoices_open: offeneRechnungen.length,
+        invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0) * 100) / 100,
+        invoices_overdue: offeneRechnungen.filter((r) => r.faelligAm && r.faelligAm < heute).length,
+      });
+    }
+    default:
+      return mcpToolError(`Unbekanntes Tool: "${name}".`);
+  }
+}
+
+/**
+ * Implementiert den "Streamable HTTP"-Transport des MCP-Protokolls im
+ * zustandslosen JSON-Antwortmodus (keine Server-Sent-Events, keine
+ * Sitzungs-ID) - siehe Kommentar oben. Verhalten 1:1 an der offiziellen
+ * @modelcontextprotocol/sdk (WebStandardStreamableHTTPServerTransport)
+ * orientiert, hier ohne die SDK-Abhängigkeit von Hand nachgebaut, damit
+ * der Worker weiterhin als einzelne Datei per Quick-Edit deploybar bleibt.
+ */
+async function handleMcpRequest(request, ctx) {
+  if (request.method === 'GET' || request.method === 'DELETE') {
+    return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null }), {
+      status: 405,
+      headers: { Allow: 'POST, OPTIONS', 'Content-Type': 'application/json' },
+    });
+  }
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'Method not allowed.' }, id: null }), {
+      status: 405,
+      headers: { Allow: 'POST, OPTIONS', 'Content-Type': 'application/json' },
+    });
+  }
+
+  const acceptHeader = request.headers.get('accept') || '';
+  if (!acceptHeader.includes('application/json') && acceptHeader !== '*/*' && acceptHeader !== '') {
+    // Manche MCP-Clients senden nur "application/json" statt beider Typen -
+    // anders als die SDK-Referenz (die beide verlangt) lehnen wir hier nur
+    // ab, wenn WEDER json NOCH */* NOCH ein leerer Header vorliegt, um mit
+    // möglichst vielen Clients kompatibel zu bleiben (reiner JSON-Antwort-
+    // Modus braucht ohnehin kein text/event-stream).
+  }
+
+  let rawMessage;
+  try {
+    rawMessage = await request.json();
+  } catch {
+    return mcpJsonRpcError(null, -32700, 'Parse error: Invalid JSON', 400);
+  }
+
+  const messages = Array.isArray(rawMessage) ? rawMessage : [rawMessage];
+  const requests = messages.filter((m) => m && typeof m.method === 'string' && m.id !== undefined);
+  const notifications = messages.filter((m) => m && typeof m.method === 'string' && m.id === undefined);
+
+  // Reine Notifications (z.B. "notifications/initialized") erwarten keine
+  // inhaltliche Antwort - 202 ohne Body, wie von der Spezifikation verlangt.
+  if (requests.length === 0) {
+    return new Response(null, { status: 202 });
+  }
+
+  async function handleOne(msg) {
+    const { id, method, params } = msg;
+    if (method === 'initialize') {
+      const requested = params?.protocolVersion;
+      const protocolVersion = MCP_SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : MCP_DEFAULT_PROTOCOL_VERSION;
+      return { jsonrpc: '2.0', id, result: { protocolVersion, capabilities: { tools: {} }, serverInfo: MCP_SERVER_INFO } };
+    }
+    if (method === 'tools/list') {
+      return { jsonrpc: '2.0', id, result: { tools: MCP_TOOLS } };
+    }
+    if (method === 'tools/call') {
+      const toolName = params?.name;
+      const toolArgs = params?.arguments;
+      if (!toolName || !MCP_TOOLS.some((t) => t.name === toolName)) {
+        return { jsonrpc: '2.0', id, result: mcpToolError(`Unbekanntes Tool: "${toolName}". Verfügbare Tools über tools/list abrufen.`) };
+      }
+      try {
+        const result = await callWerkoraMcpTool(toolName, toolArgs, ctx);
+        return { jsonrpc: '2.0', id, result };
+      } catch (err) {
+        return { jsonrpc: '2.0', id, result: mcpToolError(`Fehler beim Ausführen von "${toolName}": ${err.message || 'Unbekannter Fehler'}`) };
+      }
+    }
+    if (method === 'ping') {
+      return { jsonrpc: '2.0', id, result: {} };
+    }
+    return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
+  }
+
+  const responses = await Promise.all(requests.map(handleOne));
+  if (responses.length === 1) return mcpJsonRpcResponse(responses[0]);
+  return mcpJsonRpcResponse(responses);
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen, kein Netzwerk).
 export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
   customerToApi, apiToCustomer, taskToApi, appointmentToApi, projectToApi, quoteToApi, invoiceToApi,
   nextDailyNummer, calcTotals, leadStatusHinweis, addDaysISO, buildBueroChecklist,
   orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
-  stockMovementToApi,
+  stockMovementToApi, MCP_TOOLS, callWerkoraMcpTool, handleMcpRequest,
 };
 
 export default {
@@ -915,6 +1658,10 @@ export default {
       return errorResponse('SERVER_ERROR', err.message || 'Unbekannter Fehler bei der Firebase-Authentifizierung.', 500);
     }
     const { accessToken, projectId } = ctx;
+
+    if (teile[0] === 'mcp') {
+      return handleMcpRequest(request, ctx);
+    }
 
     if (request.method === 'DELETE') {
       return blocked(ctx, `${teile[0] || 'unknown'}.delete`, 'Löschen ist über diese API grundsätzlich nicht erlaubt (siehe Sicherheitsregeln in der Vorgabe, Abschnitt 31).', teile[0], teile[1]);
