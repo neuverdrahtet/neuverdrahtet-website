@@ -340,22 +340,32 @@ nutzen ("Erstelle ein Angebot für Mustermann GmbH, 3 Steckdosen Wohnzimmer").
 
 **Sicherheitsgrenze (bewusst, siehe "Wichtige Abweichungen" oben):** Lesen,
 Neuanlegen und das Ändern einzelner Felder bestehender Kunden/Aufgaben/
-Termine/Entwurfs-Angebote/Ausgaben - jeweils dieselben Felder/Regeln wie
-die REST-PATCH-Routen oben. **Kein** Lösch-Tool, **kein** Status-/
-Freigabewechsel (Versand/Annahme/Zahlung) und **kein** Anlegen von
-Rechnungen - dafür bleibt Werkora selbst (mit Freigabe-Center) die
-einzige Stelle. Rechnungen bleiben komplett lesend (GoBD-Sperre). Angebote
-landen immer als Entwurf, nie automatisch versendet, und sind nach dem
-Versenden/Beantworten per KI nicht mehr änderbar.
+Termine/Entwurfs-Angebote/Ausgaben/Entwurfs-Rechnungen - jeweils dieselben
+Felder/Regeln wie die REST-PATCH-Routen oben bzw. (bei Rechnungen) dieselbe
+Logik wie in Werkora selbst. **Kein** Lösch-Tool. Angebote landen immer als
+Entwurf, nie automatisch versendet, und sind nach dem Versenden/Beantworten
+per KI nicht mehr änderbar - echter Versand/Freigabe bleibt Werkora
+vorbehalten.
+
+Rechnungen sind seit Oktober 2026 nicht mehr komplett lesend: neue
+Rechnungen landen ebenfalls als Entwurf (`versendet: false`, wie bei
+Angeboten), können bezahlt markiert werden (erzeugt automatisch die
+passenden Buchungssätze, 1:1 aus `journal.js` portiert) und eine bereits
+versendete (GoBD-gesperrte) Rechnung lässt sich nur per Storno + neue
+Ersatzrechnung korrigieren - kein Direkt-Edit einer versendeten Rechnung,
+genau wie in Werkora selbst.
 
 Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
 Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
 Mitarbeiter durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
-neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben anlegen, sowie
-bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben ändern
-(`werkora_update_customer`, `werkora_update_task`,
-`werkora_update_appointment`, `werkora_update_quote`,
-`werkora_update_expense`).
+neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben/Rechnungen anlegen,
+bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben/
+Entwurfs-Rechnungen ändern (`werkora_update_customer`,
+`werkora_update_task`, `werkora_update_appointment`,
+`werkora_update_quote`, `werkora_update_expense`,
+`werkora_update_invoice`), sowie `werkora_mark_invoice_paid` und
+`werkora_cancel_invoice` (Storno, optional mit automatischer
+Ersatzrechnung).
 
 **Einrichtung in Claude.ai:**
 

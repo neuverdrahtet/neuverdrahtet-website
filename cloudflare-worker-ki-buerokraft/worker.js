@@ -242,6 +242,81 @@ function nextDailyNummer(prefix, state = {}) {
   return { nummer, datum: heute, zaehler };
 }
 
+// --- Buchhaltungs-Journal (1:1 aus verwaltung/js/journal.js portiert, für
+// werkora_mark_invoice_paid/werkora_cancel_invoice - hält die automatisch
+// erzeugten Buchungssätze einer Rechnung mit ihrem Bezahlstatus synchron,
+// exakt wie Werkora selbst das tut. Ersetzt keine Steuerberatung. ---
+
+function findKonto(konten, id, nummer) {
+  return konten.find((k) => k.id === id) || (nummer ? konten.find((k) => k.nummer === nummer) : null) || null;
+}
+
+function effektiverSteuersatz(netto, steuer) {
+  if (!netto) return 19;
+  const satz = Math.round((steuer / netto) * 100);
+  return satz === 7 ? 7 : 19;
+}
+
+function bankOderKasse(konten, settings, zahlungsart) {
+  const id = zahlungsart === 'bar' ? settings.kontoKasseId : settings.kontoBankId;
+  const fallbackNummer = zahlungsart === 'bar' ? '1000' : '1200';
+  return findKonto(konten, id, fallbackNummer);
+}
+
+function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
+  if (r.status !== 'bezahlt') return [];
+  const geldKonto = bankOderKasse(konten, settings, r.zahlungsart);
+  if (!geldKonto) return [];
+  const datum = r.bezahltAm || r.datum;
+  const belegtext = `Rechnung ${r.nummer}`;
+  const quelle = { typ: 'rechnung', id: r.id };
+  const buchungen = [];
+
+  let netto = r.netto;
+  let steuer = r.steuer;
+  if (r.skontoGenutzt && r.skontoProzent > 0) {
+    const faktor = 1 - r.skontoProzent / 100;
+    netto = Math.round(r.netto * faktor * 100) / 100;
+    steuer = Math.round(r.steuer * faktor * 100) / 100;
+  }
+
+  const steuerfrei = r.steuerart && r.steuerart !== 'regel';
+  const satz = effektiverSteuersatz(r.netto, r.steuer);
+  const erloesKonto = steuerfrei
+    ? findKonto(konten, 'konto-8125', '8125')
+    : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
+  if (erloesKonto && netto) {
+    buchungen.push({
+      id: crypto.randomUUID(), datum, text: r.skontoGenutzt ? `${belegtext} (abzgl. ${r.skontoProzent}% Skonto)` : belegtext,
+      sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
+      betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+    });
+  }
+  if (steuer) {
+    const ustKonto = findKonto(konten, satz === 7 ? 'konto-1771' : 'konto-1776', satz === 7 ? '1771' : '1776');
+    if (ustKonto) {
+      buchungen.push({
+        id: crypto.randomUUID(), datum, text: `${belegtext} (USt.)`, sollKontoId: geldKonto.id, habenKontoId: ustKonto.id,
+        betrag: Math.round(steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+      });
+    }
+  }
+  return buchungen;
+}
+
+async function ersetzeAutomatischeBuchungen({ accessToken, projectId, quelleTyp, quelleId, neueBuchungen }) {
+  const alle = await firestoreList({ accessToken, projectId, collection: 'buchungen' });
+  const bestehende = alle.filter((b) => !b.manuell && b.quelle?.typ === quelleTyp && b.quelle?.id === quelleId);
+  for (const b of bestehende) await firestoreDelete({ accessToken, projectId, collection: 'buchungen', id: b.id });
+  for (const b of neueBuchungen) await firestoreCreate({ accessToken, projectId, collection: 'buchungen', id: b.id, data: b });
+}
+
+async function syncBuchungFuerRechnung({ accessToken, projectId, rechnung, settingsDoc }) {
+  const konten = await firestoreList({ accessToken, projectId, collection: 'konten' });
+  const neueBuchungen = erzeugeBuchungenFuerRechnung(rechnung, { konten, settings: settingsDoc || {} });
+  await ersetzeAutomatischeBuchungen({ accessToken, projectId, quelleTyp: 'rechnung', quelleId: rechnung.id, neueBuchungen });
+}
+
 // --- Google-Service-Account-JWT-Flow (1:1 aus cloudflare-worker-kostenschaetzer/worker.js) ---
 
 function base64UrlEncode(data) {
@@ -363,6 +438,21 @@ async function firestoreUpdate({ accessToken, projectId, collection, id, data })
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) beim Aktualisieren von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
   return docToPlain(await res.json());
+}
+
+/**
+ * NUR für internen Gebrauch durch die Buchhaltungs-Journal-Synchronisierung
+ * (siehe ersetzeAutomatischeBuchungen) - löscht gezielt automatisch erzeugte
+ * Buchungssätze, wenn sich der Bezahlstatus einer Rechnung ändert (genau wie
+ * journal.js das in der echten App tut). KEIN allgemeines Lösch-Werkzeug,
+ * nicht über MCP/REST für Nutzerdaten erreichbar - die Sicherheitsregel
+ * "kein Löschen" (siehe Kopf-Kommentar) gilt weiterhin für alle Kollektionen
+ * außer diesen intern erzeugten Buchungssatz-Zeilen.
+ */
+async function firestoreDelete({ accessToken, projectId, collection, id }) {
+  const url = `${firestoreBaseUrl(projectId, collection)}/${id}`;
+  const res = await fetch(url, { method: 'DELETE', headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok && res.status !== 404) throw new Error(`Firestore-Fehler (${res.status}) beim Löschen von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
 }
 
 // WICHTIG: Werkora (verwaltung/js/db.js) speichert ALLE Einstellungen als
@@ -576,6 +666,12 @@ function invoiceToApi(r) {
     vat_total: r.steuer || 0,
     gross_total: r.brutto || 0,
     paid_at: r.bezahltAm || '',
+    // "locked" = bereits versendet und damit GoBD-gesperrt (nur noch per
+    // Storno korrigierbar, kein Direkt-Edit mehr) - genau wie in Werkora
+    // selbst (siehe rechnungen.js "locked"/versendet).
+    locked: !!r.versendet,
+    storno_of_number: r.stornoVonNummer || '',
+    cancelled_by_number: r.storniertDurchNummer || '',
   };
 }
 
@@ -1381,6 +1477,85 @@ const MCP_TOOLS = [
       required: ['expense_id'],
     },
   },
+  {
+    name: 'werkora_create_invoice',
+    description: 'Legt eine neue Rechnung als Entwurf an (Status "offen", versendet: false - wie bei Angeboten noch nicht GoBD-gesperrt, in Werkora vor dem Versenden noch änderbar). Entweder aus einem angenommenen Angebot (quote_id - übernimmt Kunde/Projekt/Positionen davon) oder frei mit customer_id + items.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        quote_id: { type: 'string', description: 'Angebot, aus dem Kunde/Projekt/Positionen übernommen werden - wenn gesetzt, sind customer_id/items optional' },
+        customer_id: { type: 'string', description: 'Erforderlich, wenn quote_id nicht gesetzt ist' },
+        project_id: { type: 'string' },
+        title: { type: 'string' },
+        items: {
+          type: 'array',
+          description: 'Erforderlich, wenn quote_id nicht gesetzt ist - sonst optional, überschreibt die Positionen des Angebots',
+          items: {
+            type: 'object',
+            properties: {
+              article_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
+              quantity: { type: 'number' }, unit: { type: 'string' }, unit_price_net: { type: 'number' }, vat_rate: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    name: 'werkora_update_invoice',
+    description: 'Ändert eine bestehende Rechnung - nur solange sie noch nicht versendet wurde (locked: false). Eine bereits versendete Rechnung ist GoBD-gesperrt und kann nur per werkora_cancel_invoice (Storno + neue Ersatzrechnung) korrigiert werden.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string' },
+        title: { type: 'string' },
+        project_id: { type: 'string' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD' },
+        items: {
+          type: 'array',
+          description: 'Ersetzt ALLE Positionen der Rechnung (keine Teilaktualisierung einzelner Positionen)',
+          items: {
+            type: 'object',
+            properties: {
+              article_id: { type: 'string' }, title: { type: 'string' }, description: { type: 'string' },
+              quantity: { type: 'number' }, unit: { type: 'string' }, unit_price_net: { type: 'number' }, vat_rate: { type: 'number' },
+            },
+          },
+        },
+      },
+      required: ['invoice_id'],
+    },
+  },
+  {
+    name: 'werkora_mark_invoice_paid',
+    description: 'Markiert eine Rechnung als bezahlt und erzeugt automatisch die passenden Buchungssätze (Bank/Kasse gegen Erlös- und Umsatzsteuer-Konto, abhängig von Zahlungsart und Steuersatz) - genau wie Werkora selbst das beim Abhaken einer Zahlung tut.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string' },
+        paid_at: { type: 'string', description: 'YYYY-MM-DD, Standard: heute' },
+        payment_method: { type: 'string', description: '"ueberweisung" (Standard), "bar", oder ein anderer in Werkora genutzter Wert' },
+      },
+      required: ['invoice_id'],
+    },
+  },
+  {
+    name: 'werkora_cancel_invoice',
+    description: 'Storniert eine bereits versendete (GoBD-gesperrte) Rechnung: legt eine neue Stornorechnung mit negativen Beträgen an (verknüpft mit der Originalrechnung) und markiert das Original als storniert. Entfernt dabei automatisch ggf. vorhandene Buchungssätze. Optional wird direkt eine korrigierte Ersatzrechnung mit denselben Positionen als neuer Entwurf angelegt, die dann noch angepasst werden kann.',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string' },
+        reason: { type: 'string', description: 'z.B. "Fehler in der Rechnung", "Preis-/Positionskorrektur nötig", "Doppelt erstellt"' },
+        create_replacement: { type: 'boolean', description: 'Wenn true, wird direkt eine neue Entwurfs-Rechnung mit denselben Positionen angelegt (zum Korrigieren)' },
+      },
+      required: ['invoice_id', 'reason'],
+    },
+  },
 ];
 
 /**
@@ -1772,6 +1947,140 @@ async function callWerkoraMcpTool(name, args, ctx) {
       const updated = await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: args.expense_id, data: changes });
       await logAction(ctx, { action: 'mcp.expenses.update', entityType: 'ausgaben', entityId: args.expense_id, oldValue: existing, newValue: changes, status: 'success' });
       return mcpToolSuccess(expenseToApi(updated));
+    }
+    case 'werkora_create_invoice': {
+      let kundeId, projektId, betreff, positionen;
+      if (args.quote_id) {
+        const angebot = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: args.quote_id });
+        if (!angebot) return mcpToolError('quote_id verweist auf kein vorhandenes Angebot.');
+        kundeId = args.customer_id || angebot.kundeId;
+        projektId = args.project_id !== undefined ? args.project_id : (angebot.projektId || '');
+        betreff = args.title !== undefined ? args.title : (angebot.betreff || '');
+        positionen = Array.isArray(args.items) && args.items.length
+          ? args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }))
+          : (angebot.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
+      } else {
+        if (!args.customer_id) return mcpToolError('Entweder "quote_id" oder "customer_id" + "items" ist erforderlich.');
+        const kunde = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+        if (!kunde) return mcpToolError('customer_id verweist auf keinen vorhandenen Kunden.');
+        if (!Array.isArray(args.items) || !args.items.length) return mcpToolError('Feld "items" ist erforderlich, wenn keine quote_id angegeben ist.');
+        kundeId = args.customer_id;
+        projektId = args.project_id || '';
+        betreff = args.title || '';
+        positionen = args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }));
+      }
+      const totals = calcTotals(positionen);
+      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+      const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
+      await Promise.all([
+        setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
+        setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
+      ]);
+      const id = crypto.randomUUID();
+      const data = {
+        id, nummer, kundeId, projektId, angebotId: args.quote_id || null, auftragsbestaetigungId: null,
+        datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
+        status: 'offen', betreff, notizen: 'Von der KI-Bürokraft als Entwurf angelegt.', positionen, bezahltAm: '',
+        createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
+        steuerart: settingsDoc.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
+        verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: 'ueberweisung',
+        unterschriftKunde: '', unterschriftMitarbeiter: '',
+        netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id, data });
+      await logAction(ctx, { action: 'mcp.invoices.create', entityType: 'rechnungen', entityId: id, newValue: data, status: 'success' });
+      return mcpToolSuccess(invoiceToApi(created));
+    }
+    case 'werkora_update_invoice': {
+      if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
+      if (existing.versendet) return mcpToolError('Diese Rechnung wurde bereits versendet und ist GoBD-gesperrt - Änderungen nur per werkora_cancel_invoice (Storno + neue Ersatzrechnung) möglich.');
+      const changes = {};
+      if (args.title !== undefined) changes.betreff = args.title;
+      if (args.project_id !== undefined) changes.projektId = args.project_id;
+      if (args.due_date !== undefined) changes.faelligAm = args.due_date;
+      if (Array.isArray(args.items)) {
+        const positionen = args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }));
+        const totals = calcTotals(positionen);
+        changes.positionen = positionen; changes.netto = totals.netto; changes.steuer = totals.steuer; changes.brutto = totals.brutto;
+      }
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
+      await logAction(ctx, { action: 'mcp.invoices.update', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(invoiceToApi(updated));
+    }
+    case 'werkora_mark_invoice_paid': {
+      if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
+      if (existing.status === 'storniert') return mcpToolError('Eine stornierte Rechnung kann nicht als bezahlt markiert werden.');
+      const changes = { status: 'bezahlt', bezahltAm: args.paid_at || todayISO() };
+      if (args.payment_method) changes.zahlungsart = args.payment_method;
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
+      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: updated, settingsDoc });
+      await logAction(ctx, { action: 'mcp.invoices.mark_paid', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(invoiceToApi(updated));
+    }
+    case 'werkora_cancel_invoice': {
+      if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
+      if (!args.reason) return mcpToolError('Feld "reason" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
+      if (existing.status === 'storniert') return mcpToolError('Diese Rechnung ist bereits storniert.');
+      if (!existing.versendet) return mcpToolError('Diese Rechnung wurde noch nicht versendet - für einen Entwurf einfach werkora_update_invoice nutzen statt zu stornieren.');
+      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+      const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
+      await Promise.all([
+        setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
+        setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
+      ]);
+      const stornoPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID(), menge: -(Number(p.menge) || 0) }));
+      const stornoTotals = calcTotals(stornoPositionen);
+      const stornoId = crypto.randomUUID();
+      const storno = {
+        id: stornoId, nummer: stornoNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: null, auftragsbestaetigungId: null,
+        datum: todayISO(), leistungsdatum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${existing.nummer}`,
+        notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
+        versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: existing.nummer, storniertDurchNummer: '',
+        netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
+        steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
+        verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
+        unterschriftKunde: '', unterschriftMitarbeiter: '',
+        stornoGrund: 'sonstiges', stornoGrundText: args.reason,
+      };
+      const createdStorno = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: stornoId, data: storno });
+      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: createdStorno, settingsDoc });
+      const stornierteOriginal = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: { status: 'storniert', storniertDurchNummer: stornoNummer } });
+      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: stornierteOriginal, settingsDoc });
+      await logAction(ctx, { action: 'mcp.invoices.cancel', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: { status: 'storniert', storniertDurchNummer: stornoNummer }, status: 'success' });
+
+      let replacement = null;
+      if (args.create_replacement) {
+        const { nummer: repNummer, datum: rDatum, zaehler: rZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: nDatum, zaehler: nZaehler });
+        await Promise.all([
+          setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: rDatum }),
+          setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: rZaehler }),
+        ]);
+        const repPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
+        const repTotals = calcTotals(repPositionen);
+        const repId = crypto.randomUUID();
+        const repData = {
+          id: repId, nummer: repNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: existing.angebotId || null, auftragsbestaetigungId: existing.auftragsbestaetigungId || null,
+          datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
+          status: 'offen', betreff: existing.betreff || '', notizen: `Ersatzrechnung für stornierte Rechnung ${existing.nummer} - Positionen zur Korrektur übernommen, bitte prüfen.`,
+          positionen: repPositionen, bezahltAm: '', createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
+          steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
+          verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
+          unterschriftKunde: '', unterschriftMitarbeiter: '',
+          netto: repTotals.netto, steuer: repTotals.steuer, brutto: repTotals.brutto,
+        };
+        const createdRep = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: repId, data: repData });
+        await logAction(ctx, { action: 'mcp.invoices.create_replacement', entityType: 'rechnungen', entityId: repId, newValue: repData, status: 'success' });
+        replacement = invoiceToApi(createdRep);
+      }
+      return mcpToolSuccess({ cancelled: invoiceToApi(stornierteOriginal), storno: invoiceToApi(createdStorno), replacement });
     }
     default:
       return mcpToolError(`Unbekanntes Tool: "${name}".`);
