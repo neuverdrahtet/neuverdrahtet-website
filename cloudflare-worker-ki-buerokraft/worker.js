@@ -924,11 +924,15 @@ async function runBueroCheck(env, checkpoint) {
 // separater Worker.
 //
 // Bewusste Sicherheitsgrenze (siehe Dateikopf-Kommentar "WICHTIGE
-// ABWEICHUNGEN" oben): nur LESEN + NEUANLEGEN. Kein Tool zum Bearbeiten/
-// Löschen/Versenden von bereits vorhandenen echten Datensätzen - dafür
-// bleibt Werkora selbst (mit Freigabe-Center/Bestätigungsdialogen) die
-// einzige Stelle. Rechnungen bleiben komplett lesend (GoBD-Sperre, siehe
-// POST /invoices oben).
+// ABWEICHUNGEN" oben): LESEN, NEUANLEGEN und das Ändern einzelner Felder
+// (Kunden-Stammdaten, Aufgaben, Termine, Entwurfs-Angebote, Ausgaben) -
+// jeweils dieselben Felder/Regeln wie die REST-PATCH-Routen oben (z.B.
+// Angebote nur im Entwurfsstatus änderbar). KEIN Lösch-Tool, KEIN
+// Status-/Freigabewechsel (Versand/Annahme/Zahlung) und KEIN Anlegen von
+// Rechnungen oder Löschen jeglicher Art - dafür bleibt Werkora selbst
+// (mit Freigabe-Center/Bestätigungsdialogen) die einzige Stelle.
+// Rechnungen bleiben komplett lesend (GoBD-Sperre, siehe POST /invoices
+// oben).
 //
 // Zustandsloser JSON-Antwortmodus (keine SSE/Session-IDs): jeder Request
 // ist in sich geschlossen - einfacher zu betreiben als die stream-basierte
@@ -1261,13 +1265,127 @@ const MCP_TOOLS = [
     annotations: { readOnlyHint: true, idempotentHint: true },
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'werkora_update_customer',
+    description: 'Ändert Stammdaten eines bestehenden Kunden/Leads (z.B. Telefonnummer, E-Mail, Adresse, Notizen). Nur übergebene Felder werden geändert. Kein Löschen möglich, Status (Lead/Kunde/verloren) kann darüber nicht geändert werden.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        customer_id: { type: 'string' },
+        company: { type: 'string' },
+        contact_name: { type: 'string' },
+        email: { type: 'string' },
+        phone: { type: 'string' },
+        street: { type: 'string' },
+        postal_code: { type: 'string' },
+        city: { type: 'string' },
+        notes: { type: 'string' },
+        type: { type: 'string', description: '"private" oder "company"' },
+      },
+      required: ['customer_id'],
+    },
+  },
+  {
+    name: 'werkora_update_task',
+    description: 'Ändert eine bestehende Aufgabe (z.B. als erledigt markieren, Fälligkeitsdatum/Priorität/Zuständigkeit ändern). Nur übergebene Felder werden geändert. Kein Löschen möglich.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_id: { type: 'string' },
+        title: { type: 'string' },
+        description: { type: 'string' },
+        priority: { type: 'string', description: 'z.B. niedrig, normal, hoch' },
+        status: { type: 'string', description: '"completed" markiert die Aufgabe als erledigt (setzt auch das Erledigt-Datum), sonst exakter Werkora-Statuswert' },
+        due_date: { type: 'string', description: 'YYYY-MM-DD' },
+        assigned_to: { type: 'string', description: 'Mitarbeiter-ID' },
+      },
+      required: ['task_id'],
+    },
+  },
+  {
+    name: 'werkora_update_appointment',
+    description: 'Ändert einen bestehenden Termin (z.B. verschieben, Adresse/Notizen anpassen, zugeordnete Mitarbeiter ändern). Nur übergebene Felder werden geändert. Kein Löschen möglich.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        appointment_id: { type: 'string' },
+        title: { type: 'string' },
+        start: { type: 'string', description: 'ISO-Zeitstempel' },
+        end: { type: 'string', description: 'ISO-Zeitstempel' },
+        address: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+        assigned_employee_ids: { type: 'array', items: { type: 'string' } },
+        notes: { type: 'string' },
+      },
+      required: ['appointment_id'],
+    },
+  },
+  {
+    name: 'werkora_update_quote',
+    description: 'Ändert ein bestehendes Angebot - nur solange es noch im Status Entwurf ist (ein bereits versendetes/beantwortetes Angebot kann nicht mehr per KI geändert werden, dafür Werkora selbst nutzen). Kein Löschen möglich, Versand/Freigabe bleibt weiterhin Werkora vorbehalten.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        quote_id: { type: 'string' },
+        title: { type: 'string' },
+        project_id: { type: 'string' },
+        items: {
+          type: 'array',
+          description: 'Ersetzt ALLE Positionen des Angebots (keine Teilaktualisierung einzelner Positionen)',
+          items: {
+            type: 'object',
+            properties: {
+              article_id: { type: 'string' },
+              title: { type: 'string' },
+              description: { type: 'string' },
+              quantity: { type: 'number' },
+              unit: { type: 'string' },
+              unit_price_net: { type: 'number' },
+              vat_rate: { type: 'number' },
+            },
+          },
+        },
+      },
+      required: ['quote_id'],
+    },
+  },
+  {
+    name: 'werkora_update_expense',
+    description: 'Ändert eine bestehende Ausgabe/Beleg (z.B. Betrag, Kategorie, Lieferant korrigieren). Nur übergebene Felder werden geändert. Kein Löschen möglich.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        expense_id: { type: 'string' },
+        date: { type: 'string', description: 'YYYY-MM-DD' },
+        category: { type: 'string', description: `Eine von: ${AUSGABEN_KATEGORIEN.join(', ')}` },
+        description: { type: 'string' },
+        supplier: { type: 'string' },
+        amount_net: { type: 'number' },
+        amount_gross: { type: 'number' },
+        vat_rate: { type: 'number' },
+        paid_with: { type: 'string' },
+        customer_id: { type: 'string' },
+        project_id: { type: 'string' },
+      },
+      required: ['expense_id'],
+    },
+  },
 ];
 
 /**
  * Führt ein MCP-Tool aus - dieselbe Fach-/Filterlogik wie die jeweiligen
  * REST-Routen oben (bewusst dieselben Firestore-Collections/-Mapper
  * wiederverwendet statt eigener Parallellogik), nur als direkter
- * Funktionsaufruf statt über HTTP, und ohne jedes Update/Delete-Tool.
+ * Funktionsaufruf statt über HTTP. Update-Tools decken nur, was die
+ * REST-PATCH-Routen auch erlauben (z.B. Angebote nur im Entwurfsstatus,
+ * kein Status-/Freigabewechsel) - weiterhin KEIN Lösch-Tool und
+ * Rechnungen bleiben komplett lesend (GoBD-Sperre).
  */
 async function callWerkoraMcpTool(name, args, ctx) {
   const { accessToken, projectId } = ctx;
@@ -1567,6 +1685,87 @@ async function callWerkoraMcpTool(name, args, ctx) {
         invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0) * 100) / 100,
         invoices_overdue: offeneRechnungen.filter((r) => r.faelligAm && r.faelligAm < heute).length,
       });
+    }
+    case 'werkora_update_customer': {
+      if (!args.customer_id) return mcpToolError('Feld "customer_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+      if (!existing) return mcpToolError('Kunde wurde nicht gefunden.');
+      const changes = apiToCustomer(args, {});
+      delete changes.id;
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'kunden', id: args.customer_id, data: changes });
+      await logAction(ctx, { action: 'mcp.customers.update', entityType: 'kunden', entityId: args.customer_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(customerToApi(updated));
+    }
+    case 'werkora_update_task': {
+      if (!args.task_id) return mcpToolError('Feld "task_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'aufgaben', id: args.task_id });
+      if (!existing) return mcpToolError('Aufgabe wurde nicht gefunden.');
+      const changes = {};
+      if (args.status === 'completed') { changes.status = 'erledigt'; changes.erledigtAm = todayISO(); }
+      else if (args.status) changes.status = args.status;
+      if (args.title !== undefined) changes.titel = args.title;
+      if (args.description !== undefined) changes.beschreibung = args.description;
+      if (args.priority !== undefined) changes.prioritaet = args.priority;
+      if (args.due_date !== undefined) changes.faelligAm = args.due_date;
+      if (args.assigned_to !== undefined) changes.zugewiesenAn = args.assigned_to;
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'aufgaben', id: args.task_id, data: changes });
+      await logAction(ctx, { action: 'mcp.tasks.update', entityType: 'aufgaben', entityId: args.task_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(taskToApi(updated));
+    }
+    case 'werkora_update_appointment': {
+      if (!args.appointment_id) return mcpToolError('Feld "appointment_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'termine', id: args.appointment_id });
+      if (!existing) return mcpToolError('Termin wurde nicht gefunden.');
+      const changes = {};
+      if (args.title !== undefined) changes.titel = args.title;
+      if (args.start !== undefined) changes.start = args.start;
+      if (args.end !== undefined) changes.ende = args.end;
+      if (args.address !== undefined) changes.ort = args.address;
+      if (args.customer_id !== undefined) changes.kundeId = args.customer_id;
+      if (args.project_id !== undefined) changes.projektId = args.project_id;
+      if (args.assigned_employee_ids !== undefined) changes.mitarbeiterIds = Array.isArray(args.assigned_employee_ids) ? args.assigned_employee_ids : [];
+      if (args.notes !== undefined) changes.notizen = args.notes;
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'termine', id: args.appointment_id, data: changes });
+      await logAction(ctx, { action: 'mcp.appointments.update', entityType: 'termine', entityId: args.appointment_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(appointmentToApi(updated));
+    }
+    case 'werkora_update_quote': {
+      if (!args.quote_id) return mcpToolError('Feld "quote_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: args.quote_id });
+      if (!existing) return mcpToolError('Angebot wurde nicht gefunden.');
+      if (existing.status !== 'entwurf') return mcpToolError('Nur Angebote im Status Entwurf können geändert werden - dieses wurde bereits versendet/beantwortet. Änderungen dafür direkt in Werkora vornehmen.');
+      const changes = {};
+      if (args.title !== undefined) changes.betreff = args.title;
+      if (args.project_id !== undefined) changes.projektId = args.project_id;
+      if (Array.isArray(args.items)) {
+        const positionen = args.items.map((it) => ({
+          id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '',
+          einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19,
+        }));
+        const totals = calcTotals(positionen);
+        changes.positionen = positionen;
+        changes.netto = totals.netto;
+        changes.steuer = totals.steuer;
+        changes.brutto = totals.brutto;
+      }
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'angebote', id: args.quote_id, data: changes });
+      await logAction(ctx, { action: 'mcp.quotes.update', entityType: 'angebote', entityId: args.quote_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(quoteToApi(updated));
+    }
+    case 'werkora_update_expense': {
+      if (!args.expense_id) return mcpToolError('Feld "expense_id" ist erforderlich.');
+      const existing = await firestoreGet({ accessToken, projectId, collection: 'ausgaben', id: args.expense_id });
+      if (!existing) return mcpToolError('Ausgabe wurde nicht gefunden.');
+      if (args.category !== undefined && !AUSGABEN_KATEGORIEN.includes(args.category)) return mcpToolError(`Feld "category" muss einer von ${AUSGABEN_KATEGORIEN.join(', ')} sein.`);
+      const changes = apiToExpenseChanges(args, existing);
+      if (Object.keys(changes).length === 0) return mcpToolError('Keine bekannten Felder zum Aktualisieren übergeben.');
+      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: args.expense_id, data: changes });
+      await logAction(ctx, { action: 'mcp.expenses.update', entityType: 'ausgaben', entityId: args.expense_id, oldValue: existing, newValue: changes, status: 'success' });
+      return mcpToolSuccess(expenseToApi(updated));
     }
     default:
       return mcpToolError(`Unbekanntes Tool: "${name}".`);

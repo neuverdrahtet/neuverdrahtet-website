@@ -338,16 +338,24 @@ das **Model Context Protocol (MCP)** - damit lässt er sich in Claude.ai oder
 der Claude-Desktop-App als "Custom Connector" einbinden und direkt im Chat
 nutzen ("Erstelle ein Angebot für Mustermann GmbH, 3 Steckdosen Wohnzimmer").
 
-**Sicherheitsgrenze (bewusst, siehe "Wichtige Abweichungen" oben):** nur
-**Lesen + Neuanlegen**. Kein MCP-Tool zum Bearbeiten/Löschen/Versenden von
-bereits vorhandenen echten Datensätzen - dafür bleibt Werkora selbst (mit
-Freigabe-Center) die einzige Stelle. Rechnungen bleiben komplett lesend
-(GoBD-Sperre). Angebote landen immer als Entwurf, nie automatisch versendet.
+**Sicherheitsgrenze (bewusst, siehe "Wichtige Abweichungen" oben):** Lesen,
+Neuanlegen und das Ändern einzelner Felder bestehender Kunden/Aufgaben/
+Termine/Entwurfs-Angebote/Ausgaben - jeweils dieselben Felder/Regeln wie
+die REST-PATCH-Routen oben. **Kein** Lösch-Tool, **kein** Status-/
+Freigabewechsel (Versand/Annahme/Zahlung) und **kein** Anlegen von
+Rechnungen - dafür bleibt Werkora selbst (mit Freigabe-Center) die
+einzige Stelle. Rechnungen bleiben komplett lesend (GoBD-Sperre). Angebote
+landen immer als Entwurf, nie automatisch versendet, und sind nach dem
+Versenden/Beantworten per KI nicht mehr änderbar.
 
 Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
 Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
 Mitarbeiter durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
-sowie neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben anlegen.
+neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben anlegen, sowie
+bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben ändern
+(`werkora_update_customer`, `werkora_update_task`,
+`werkora_update_appointment`, `werkora_update_quote`,
+`werkora_update_expense`).
 
 **Einrichtung in Claude.ai:**
 
