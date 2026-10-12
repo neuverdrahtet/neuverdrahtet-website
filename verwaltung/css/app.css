@@ -62,7 +62,7 @@
   --success-bg: rgba(53, 208, 143, 0.15);
   --warn: #ffb648;
   --warn-bg: rgba(255, 182, 72, 0.15);
-  --shadow: 0 0 20px rgba(255, 171, 61, 0.08), 0 4px 14px rgba(0, 0, 0, 0.5);
+  --shadow: 0 0 24px rgba(255, 171, 61, 0.1), 0 4px 18px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 :root[data-theme="jarvis"] .sidebar-brand,
@@ -73,10 +73,32 @@
   letter-spacing: .02em;
 }
 :root[data-theme="jarvis"] .sidebar-nav a.active {
-  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.45);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.5);
 }
 :root[data-theme="jarvis"] .btn-primary {
-  box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.3);
+  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.35);
+}
+/* Ambiente-Glow im Hintergrund statt flacher Fläche, wie bei den
+   Referenzbildern - reine Deko-Ebene auf body, verändert kein Layout. */
+:root[data-theme="jarvis"] body {
+  background:
+    radial-gradient(ellipse 1700px 1100px at 15% 0%, rgba(255, 171, 61, 0.22), transparent 70%),
+    radial-gradient(ellipse 1500px 1000px at 100% 100%, rgba(74, 127, 214, 0.18), transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
+}
+/* Große Kartenflächen bekommen echtes Glas (transparenter Hintergrund +
+   Weichzeichner), damit der Ambiente-Glow von body durchscheint - wie bei
+   den Referenzbildern. Bewusst nur auf .card/.kpi-card (die großen,
+   namensgebenden Blöcke), nicht auf jedes Formularfeld/jede Tabellenzeile -
+   dort bleibt es aus Lesbarkeitsgründen deckend. */
+:root[data-theme="jarvis"] .card,
+:root[data-theme="jarvis"] .kpi-card {
+  background: rgba(15, 18, 24, 0.38);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-color: rgba(var(--accent-rgb), 0.22);
+  box-shadow: 0 0 1px rgba(var(--accent-rgb), 0.35), 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
 * { box-sizing: border-box; }
