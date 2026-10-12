@@ -10,6 +10,7 @@
   --bg: #f5f6f8;
   --card: #ffffff;
   --card-2: #f7f8fa;
+  --modal-bg: #ffffff;
   --border: #dfe3e8;
   --text: #1b1c20;
   --text-mute: #6b6e78;
@@ -28,6 +29,7 @@
   --bg: #0b0b0d;
   --card: #1e1e24;
   --card-2: #17171b;
+  --modal-bg: #1e1e24;
   --border: #2c2c33;
   --text: #f1f1f3;
   --text-mute: #9497a1;
@@ -53,6 +55,7 @@
   --bg: #12152b;
   --card: rgba(255, 255, 255, 0.06);
   --card-2: rgba(255, 255, 255, 0.03);
+  --modal-bg: #1b1f3d;
   --border: rgba(255, 255, 255, 0.13);
   --text: #f3f4fb;
   --text-mute: #b7bbd9;
@@ -112,6 +115,7 @@
   --bg: #171b36;
   --card: rgba(255, 255, 255, 0.07);
   --card-2: rgba(255, 255, 255, 0.04);
+  --modal-bg: #1b1f3d;
   --border: rgba(255, 255, 255, 0.14);
   --text: #f3f4fb;
   --text-mute: #b7bbd9;
@@ -186,7 +190,7 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
   z-index: 1000;
 }
 .lock-box {
-  background: var(--card);
+  background: var(--modal-bg);
   padding: 32px 28px;
   border-radius: var(--radius);
   width: 320px;
@@ -691,7 +695,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   z-index: 500;
 }
 .modal {
-  background: var(--card);
+  background: var(--modal-bg);
   border-radius: var(--radius);
   width: 100%;
   max-width: 640px;
@@ -788,7 +792,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   left: 0; right: 0; top: 100%;
   z-index: 20;
   margin-top: 2px;
-  background: var(--card);
+  background: var(--modal-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: var(--shadow);
@@ -1648,7 +1652,7 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   z-index: 900;
 }
 .toast {
-  background: var(--card);
+  background: var(--modal-bg);
   border: 1px solid var(--border);
   color: #fff;
   padding: 10px 16px;
