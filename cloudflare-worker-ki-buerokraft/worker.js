@@ -1669,18 +1669,6 @@ export default {
     const authHeader = request.headers.get('Authorization') || '';
     const gesendeterSchluessel = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (gesendeterSchluessel !== env.API_KEY) {
-      // TEMPORÄRES Debug-Logging zur Fehlersuche bei 401 - loggt NIE den
-      // vollen Schlüssel, nur Längen/letzte Zeichen zum Abgleich. Nach
-      // Behebung des Verbindungsproblems wieder entfernen.
-      console.log('MCP-Auth-Debug', {
-        headerVorhanden: !!authHeader,
-        headerLaenge: authHeader.length,
-        beginntMitBearer: /^Bearer\s+/i.test(authHeader),
-        gesendetLaenge: gesendeterSchluessel.length,
-        erwartetLaenge: env.API_KEY.length,
-        gesendetLetzte4: gesendeterSchluessel.slice(-4),
-        erwartetLetzte4: env.API_KEY.slice(-4),
-      });
       return errorResponse('UNAUTHORIZED', 'Ungültiger oder fehlender API-Schlüssel (Authorization: Bearer <Schlüssel>).', 401);
     }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).', 500);
