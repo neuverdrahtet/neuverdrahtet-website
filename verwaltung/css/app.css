@@ -101,6 +101,47 @@
   box-shadow: 0 0 1px rgba(var(--accent-rgb), 0.35), 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
+/* Dashboard-Startseite hat unabhängig vom gewählten Theme (Hell/Dunkel/
+   Jarvis) immer diesen blau-violetten Glas-Look - eigener CSS-Variablen-
+   Scope auf dem Routen-Container (siehe main.js router(), setzt
+   #view[data-route]), genau nach demselben Muster wie die :root[data-theme]-
+   Blöcke oben. #view[data-route="dashboard"] gewinnt gegen
+   :root[data-theme="jarvis"] .card allein durch höhere Selektor-
+   Spezifität (ID-Selektor), keine !important nötig. */
+#view[data-route="dashboard"] {
+  --bg: #171b36;
+  --card: rgba(255, 255, 255, 0.07);
+  --card-2: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.14);
+  --text: #f3f4fb;
+  --text-mute: #b7bbd9;
+  --accent: #8b7bf7;
+  --accent-2: #6d5ce8;
+  --accent-rgb: 139, 123, 247;
+  --sidebar-active: #8b7bf7;
+  --danger: #ff6b8a;
+  --danger-bg: rgba(255, 107, 138, 0.18);
+  --success: #3ddc97;
+  --success-bg: rgba(61, 220, 151, 0.18);
+  --warn: #ffb648;
+  --warn-bg: rgba(255, 182, 72, 0.18);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+  background:
+    radial-gradient(ellipse 1300px 850px at 8% -5%, rgba(99, 102, 241, 0.35), transparent 62%),
+    radial-gradient(ellipse 1100px 750px at 100% 105%, rgba(236, 72, 153, 0.2), transparent 62%),
+    linear-gradient(160deg, #161a30 0%, #201a3a 55%, #171d38 100%);
+  min-height: 100vh;
+}
+#view[data-route="dashboard"] .card,
+#view[data-route="dashboard"] .kpi-card {
+  background: var(--card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-color: var(--border);
+  box-shadow: var(--shadow);
+}
+
 * { box-sizing: border-box; }
 
 html, body {

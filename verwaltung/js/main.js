@@ -149,6 +149,7 @@ async function router() {
   // Nachladens eines Moduls bereits zur nächsten Route weiterklickt - dann
   // rendert nur noch die zuletzt angeforderte Route ihr Ergebnis.
   const token = ++routerToken;
+  viewEl.dataset.route = routeKey;
   viewEl.innerHTML = '';
   try {
     const mod = await routeLoaders[routeKey]();
