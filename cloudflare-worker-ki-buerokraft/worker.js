@@ -1005,9 +1005,14 @@ const MCP_TOOLS = [
       type: 'object',
       properties: {
         company: { type: 'string', description: 'Firma oder vollständiger Name bei Privatperson' },
-        contact_person: { type: 'string' },
+        contact_name: { type: 'string' },
         email: { type: 'string' },
         phone: { type: 'string' },
+        street: { type: 'string' },
+        postal_code: { type: 'string' },
+        city: { type: 'string' },
+        notes: { type: 'string' },
+        type: { type: 'string', description: '"private" oder "company"' },
       },
       required: ['company'],
     },
@@ -1412,8 +1417,9 @@ async function callWerkoraMcpTool(name, args, ctx) {
       if (!args.company) return mcpToolError('Feld "company" ist erforderlich.');
       const id = crypto.randomUUID();
       const data = {
-        id, firma: args.company, ansprechpartner: args.contact_person || '', telefon: args.phone || '', email: args.email || '',
-        strasse: '', plz: '', ort: '', notizen: '', status: 'lead', farbe: farbeAusText(id, KUNDEN_FARBEN), createdAt: new Date().toISOString(),
+        id, firma: args.company, ansprechpartner: args.contact_name || '', telefon: args.phone || '', email: args.email || '',
+        strasse: args.street || '', plz: args.postal_code || '', ort: args.city || '', notizen: args.notes || '',
+        istPrivatperson: args.type === 'private', status: 'lead', farbe: farbeAusText(id, KUNDEN_FARBEN), createdAt: new Date().toISOString(),
       };
       const created = await firestoreCreate({ accessToken, projectId, collection: 'kunden', id, data });
       await logAction(ctx, { action: 'mcp.customers.create', entityType: 'kunden', entityId: id, newValue: data, status: 'success' });
