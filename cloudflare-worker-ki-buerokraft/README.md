@@ -357,7 +357,7 @@ genau wie in Werkora selbst.
 
 Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
 Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
-Mitarbeiter durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
+Mitarbeiter/Postfach durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
 neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben/Rechnungen anlegen,
 bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben/
 Entwurfs-Rechnungen ändern (`werkora_update_customer`,

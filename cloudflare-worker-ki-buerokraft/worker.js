@@ -1361,6 +1361,18 @@ const MCP_TOOLS = [
     inputSchema: { type: 'object', properties: {} },
   },
   {
+    name: 'werkora_search_messages',
+    description: 'Durchsucht das Postfach (E-Mails, neueste zuerst) - nur Lesen, nur Absender/Betreff/Datum/kurzer Ausschnitt (max. 140 Zeichen), nicht der volle Nachrichtentext.',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        unread_only: { type: 'boolean', description: 'Nur ungelesene Nachrichten' },
+        limit: { type: 'number', description: 'Max. Anzahl, Standard/Maximum 50' },
+      },
+    },
+  },
+  {
     name: 'werkora_get_dashboard',
     description: 'Liefert eine Kennzahlen-Übersicht: neue Leads, offene/überfällige Aufgaben, heutige Termine, offene Angebote (Anzahl+Wert), offene/überfällige Rechnungen (Anzahl+Wert).',
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -1841,6 +1853,21 @@ async function callWerkoraMcpTool(name, args, ctx) {
       const onLeaveIds = new Set(termine.filter((t) => t.typ === 'urlaub' && (t.start || '').slice(0, 10) <= heute && (t.ende || t.start || '').slice(0, 10) >= heute).flatMap((t) => t.mitarbeiterIds || []));
       await logAction(ctx, { action: 'mcp.employees.search', status: 'success' });
       return mcpToolSuccess(mitarbeiter.map((m) => employeeToApi(m, onLeaveIds.has(m.id))));
+    }
+    case 'werkora_search_messages': {
+      let emails = await firestoreList({ accessToken, projectId, collection: 'emails' });
+      emails.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+      if (args.unread_only) emails = emails.filter((m) => !!m.unread);
+      const msgLimit = Math.min(Number(args.limit) || 50, 50);
+      await logAction(ctx, { action: 'mcp.messages.search', status: 'success' });
+      return mcpToolSuccess(emails.slice(0, msgLimit).map((m) => ({
+        id: m.id,
+        from: (m.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || m.from || '',
+        subject: m.subject || '',
+        unread: !!m.unread,
+        date: m.dateSort || m.date || '',
+        snippet: (m.text || '').slice(0, 140),
+      })));
     }
     case 'werkora_get_dashboard': {
       const [kunden, aufgaben, termine, angebote, rechnungen] = await Promise.all([
