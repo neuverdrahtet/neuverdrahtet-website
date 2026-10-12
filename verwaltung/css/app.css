@@ -177,6 +177,15 @@ input, select, textarea {
   border-color: var(--border);
 }
 input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.8; }
+/* Das <select>-Feld selbst zieht Hintergrund/Textfarbe automatisch aus den
+   Theme-Variablen oben mit, die aufklappende Options-Liste aber ist ein
+   natives Browser-Element, das nur die Textfarbe erbt, nicht zwingend den
+   Hintergrund - ohne das hier wird im dunklen/Jarvis-Theme heller Text auf
+   hellem System-Hintergrund gerendert und ist unlesbar. */
+select option {
+  background: var(--modal-bg);
+  color: var(--text);
+}
 
 /* Lock screen */
 .lock-screen[hidden] { display: none; }
