@@ -8,6 +8,7 @@ import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 import { isStandalone, canPromptInstall, isIos, onInstallAvailabilityChange, promptInstall } from '../installPrompt.js';
+import { ensureJarvisFont } from '../main.js';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -113,6 +114,7 @@ export async function render(container) {
   const marken = await getAll('marken');
   marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const isLight = settings.theme === 'light';
+  const currentTheme = settings.theme === 'dark' ? 'dark' : settings.theme === 'jarvis' ? 'jarvis' : 'light';
   const pushCapable = push.isBrowserCapable();
   const pushPermission = push.permissionState();
   const pushSubscribed = pushCapable ? await push.isSubscribed() : false;
@@ -121,12 +123,11 @@ export async function render(container) {
     <div class="view-header">
       <h1>Einstellungen</h1>
       <div class="actions">
-        <label class="theme-switch" title="Hell-/Dunkelmodus">
-          <span>☀️</span>
-          <input type="checkbox" id="theme-toggle" ${isLight ? 'checked' : ''}>
-          <span class="theme-switch-track"></span>
-          <span>🌙</span>
-        </label>
+        <div class="theme-switch-group" role="group" aria-label="Design">
+          <button type="button" class="btn btn-sm theme-opt" data-theme-choice="light" aria-pressed="${currentTheme === 'light'}">☀️ Hell</button>
+          <button type="button" class="btn btn-sm theme-opt" data-theme-choice="dark" aria-pressed="${currentTheme === 'dark'}">🌙 Dunkel</button>
+          <button type="button" class="btn btn-sm theme-opt" data-theme-choice="jarvis" aria-pressed="${currentTheme === 'jarvis'}">🤖 Jarvis</button>
+        </div>
       </div>
     </div>
 
@@ -581,11 +582,15 @@ export async function render(container) {
   const allIds = NAV.flatMap((g) => g.items.map((i) => i.id));
   showPanel(allIds.includes(lastPanel) ? lastPanel : firstPanelId);
 
-  container.querySelector('#theme-toggle').addEventListener('change', async (e) => {
-    const theme = e.target.checked ? 'light' : 'dark';
-    await setSettings({ theme });
-    document.documentElement.dataset.theme = theme;
-    toast('Darstellung gespeichert', 'success');
+  container.querySelectorAll('.theme-opt').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const theme = btn.dataset.themeChoice;
+      await setSettings({ theme });
+      document.documentElement.dataset.theme = theme;
+      if (theme === 'jarvis') ensureJarvisFont();
+      container.querySelectorAll('.theme-opt').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      toast('Darstellung gespeichert', 'success');
+    });
   });
 
   const tbListHost = container.querySelector('#tb-list');

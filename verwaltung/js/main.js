@@ -196,9 +196,22 @@ function applyRoleToNav() {
 
 window.addEventListener('hashchange', router);
 
+/** Lädt die Orbitron-Schrift (für das Jarvis-Theme) nur bei Bedarf nach,
+ * statt sie allen Nutzern unabhängig vom gewählten Theme aufzuzwingen. */
+export function ensureJarvisFont() {
+  if (document.getElementById('jarvis-font-link')) return;
+  const link = document.createElement('link');
+  link.id = 'jarvis-font-link';
+  link.rel = 'stylesheet';
+  link.href = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap';
+  document.head.appendChild(link);
+}
+
 export async function applyTheme() {
   const settings = await getSettings();
-  document.documentElement.dataset.theme = settings.theme === 'dark' ? 'dark' : 'light';
+  const theme = settings.theme === 'dark' ? 'dark' : settings.theme === 'jarvis' ? 'jarvis' : 'light';
+  document.documentElement.dataset.theme = theme;
+  if (theme === 'jarvis') ensureJarvisFont();
 }
 
 async function boot() {
