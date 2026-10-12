@@ -1,5 +1,5 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr } from '../utils.js';
+import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText } from '../utils.js';
 import * as google from '../google.js';
 import { syncCalendar } from '../googlesync.js';
 
@@ -26,6 +26,7 @@ const WEATHER_ICON = {
   95: '⛈️', 96: '⛈️', 99: '⛈️',
 };
 const MONTH_SHORT = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+const MAIL_AVATAR_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
 // Januar-Dezember des gewählten Jahres statt der letzten 12 Kalendermonate ab
 // heute - so lässt sich das Zahlen-Board auch für vergangene Jahre ansehen,
@@ -122,9 +123,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // blockieren, verzögert das jeden App-Start unnötig, nur für die kleine
   // "Niedriger Bestand"-Karte. Stattdessen lädt sie asynchron nach und
   // ergänzt ihre Karte erst, wenn sie fertig ist.
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, angebote, marken] = await Promise.all([
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, angebote, marken, emails] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('angebote'), getAll('marken'),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('angebote'), getAll('marken'), getAll('emails'),
   ]);
   const today = todayISO();
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
@@ -219,6 +220,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
     .map(([label, summe]) => ({ label, summe }))
     .sort((a, b) => b.summe - a.summe);
   const markenUmsatzMax = Math.max(1, ...markenUmsatz.map((m) => m.summe));
+
+  // --- Postfach-Vorschau (ungelesene zuerst, dann neueste) ---
+  const mailsSortiert = [...emails].sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+  const ungeleseneMails = mailsSortiert.filter((m) => m.unread);
+  const postfachVorschau = mailsSortiert.slice(0, 5);
 
   // --- Today's Termine ---
   const heute = termine.filter((t) => {
@@ -379,6 +385,32 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </div>
 
         <div class="card">
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+            <h2 style="margin:0">Postfach</h2>
+            ${ungeleseneMails.length ? `<span class="badge badge-warn">${ungeleseneMails.length} ungelesen</span>` : '<span class="text-mute">Alles gelesen</span>'}
+          </div>
+          ${postfachVorschau.length === 0 ? '<p class="text-mute">Noch keine Nachrichten.</p>' : `
+            <ul class="cal-event-list">
+              ${postfachVorschau.map((m) => {
+                const absender = (m.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || m.from || 'Unbekannt';
+                const kuerzel = absender.split(' ').map((p) => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
+                return `
+                <li class="dash-row-link" data-href="#/postfach">
+                  <span class="dash-avatar" style="background:${farbeAusText(absender, MAIL_AVATAR_FARBEN)}">${escapeHtml(kuerzel)}</span>
+                  <div style="min-width:0;flex:1">
+                    <strong style="${m.unread ? '' : 'font-weight:400'}">${escapeHtml(absender)}</strong>
+                    <div class="text-mute" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(m.subject || '(kein Betreff)')}</div>
+                  </div>
+                  ${m.unread ? '<span class="badge badge-warn">neu</span>' : ''}
+                </li>
+              `;
+              }).join('')}
+            </ul>
+          `}
+          <p class="hint"><a href="#/postfach">Zum Postfach →</a></p>
+        </div>
+
+        <div class="card">
           <h2>Meine Aufgaben</h2>
           <div class="search-bar" style="margin-bottom:8px">
             <input type="text" id="dash-aufgabe-input" placeholder="Neue Aufgabe hinzufügen ...">
@@ -396,15 +428,19 @@ export async function render(container, _route, { autoSync = true } = {}) {
         </div>
 
         <div class="card">
-          <h2>Team</h2>
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+            <h2 style="margin:0">Mitarbeiter</h2>
+            <span class="text-mute">${mitarbeiter.length}</span>
+          </div>
           <div class="dash-team">
             ${mitarbeiter.length === 0 ? '<p class="text-mute">Keine Mitarbeiter angelegt.</p>' : mitarbeiter.map((m) => `
-              <div class="dash-team-member">
+              <a class="dash-team-member" href="#/mitarbeiter">
                 <span class="dash-avatar" style="background:${m.farbe || '#f0a020'}">${escapeHtml((m.name || '?').split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase())}</span>
                 ${escapeHtml(m.name)}
-              </div>
+              </a>
             `).join('')}
           </div>
+          <p class="hint"><a href="#/mitarbeiter">Alle Mitarbeiter →</a></p>
         </div>
 
         <div class="card">

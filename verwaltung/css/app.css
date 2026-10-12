@@ -44,25 +44,25 @@
    Schriftvariante über dieselben CSS-Variablen wie oben - keine eigene
    Layout-Logik, damit jede bestehende Ansicht automatisch mitzieht. */
 :root[data-theme="jarvis"] {
-  --navy: #07080c;
-  --navy-2: #0f1218;
-  --sidebar-active: #ffab3d;
-  --accent: #ffab3d;
-  --accent-2: #ff7a1a;
-  --accent-rgb: 255, 171, 61;
-  --bg: #07080c;
-  --card: #0f1218;
-  --card-2: #141822;
-  --border: #232838;
-  --text: #e8ecf4;
-  --text-mute: #8089a0;
-  --danger: #ff5d6c;
-  --danger-bg: rgba(255, 93, 108, 0.15);
-  --success: #35d08f;
-  --success-bg: rgba(53, 208, 143, 0.15);
+  --navy: #12152b;
+  --navy-2: #171a35;
+  --sidebar-active: #8b7bf7;
+  --accent: #8b7bf7;
+  --accent-2: #6d5ce8;
+  --accent-rgb: 139, 123, 247;
+  --bg: #12152b;
+  --card: rgba(255, 255, 255, 0.06);
+  --card-2: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.13);
+  --text: #f3f4fb;
+  --text-mute: #b7bbd9;
+  --danger: #ff6b8a;
+  --danger-bg: rgba(255, 107, 138, 0.18);
+  --success: #3ddc97;
+  --success-bg: rgba(61, 220, 151, 0.18);
   --warn: #ffb648;
-  --warn-bg: rgba(255, 182, 72, 0.15);
-  --shadow: 0 0 24px rgba(255, 171, 61, 0.1), 0 4px 18px rgba(0, 0, 0, 0.55);
+  --warn-bg: rgba(255, 182, 72, 0.18);
+  --shadow: 0 0 24px rgba(139, 123, 247, 0.12), 0 4px 18px rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
 :root[data-theme="jarvis"] .sidebar-brand,
@@ -82,8 +82,8 @@
    Referenzbildern - reine Deko-Ebene auf body, verändert kein Layout. */
 :root[data-theme="jarvis"] body {
   background:
-    radial-gradient(ellipse 1700px 1100px at 15% 0%, rgba(255, 171, 61, 0.22), transparent 70%),
-    radial-gradient(ellipse 1500px 1000px at 100% 100%, rgba(74, 127, 214, 0.18), transparent 70%),
+    radial-gradient(ellipse 1700px 1100px at 15% 0%, rgba(99, 102, 241, 0.26), transparent 70%),
+    radial-gradient(ellipse 1500px 1000px at 100% 100%, rgba(236, 72, 153, 0.18), transparent 70%),
     var(--bg);
   background-attachment: fixed;
 }
@@ -94,10 +94,10 @@
    dort bleibt es aus Lesbarkeitsgründen deckend. */
 :root[data-theme="jarvis"] .card,
 :root[data-theme="jarvis"] .kpi-card {
-  background: rgba(15, 18, 24, 0.38);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border-color: rgba(var(--accent-rgb), 0.22);
+  background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-color: var(--border);
   box-shadow: 0 0 1px rgba(var(--accent-rgb), 0.35), 0 8px 28px rgba(0, 0, 0, 0.45);
 }
 
@@ -1479,7 +1479,8 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 .dash-woche-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
 .dash-team { display: flex; flex-direction: column; gap: 10px; }
-.dash-team-member { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.dash-team-member { display: flex; align-items: center; gap: 10px; font-size: 13.5px; text-decoration: none; color: var(--text); }
+.dash-team-member:hover { text-decoration: underline; }
 .dash-avatar {
   width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0;
