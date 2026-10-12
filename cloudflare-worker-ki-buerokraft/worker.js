@@ -1386,8 +1386,11 @@ async function callWerkoraMcpTool(name, args, ctx) {
       let termine = await firestoreList({ accessToken, projectId, collection: 'termine' });
       if (args.customer_id) termine = termine.filter((t) => t.kundeId === args.customer_id);
       if (args.project_id) termine = termine.filter((t) => t.projektId === args.project_id);
-      if (args.date_from) termine = termine.filter((t) => (t.start || '') >= args.date_from);
-      if (args.date_to) termine = termine.filter((t) => (t.start || '') <= args.date_to);
+      // Nur das Datum (nicht die Uhrzeit) vergleichen - sonst fliegt ein
+      // Termin mit Uhrzeit am date_to-Tag selbst fälschlich raus (String-
+      // Vergleich "2026-10-12T14:30" <= "2026-10-12" ist sonst false).
+      if (args.date_from) termine = termine.filter((t) => (t.start || '').slice(0, 10) >= args.date_from);
+      if (args.date_to) termine = termine.filter((t) => (t.start || '').slice(0, 10) <= args.date_to);
       await logAction(ctx, { action: 'mcp.appointments.search', status: 'success' });
       return mcpToolSuccess(termine.map(appointmentToApi));
     }
