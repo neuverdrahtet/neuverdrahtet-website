@@ -20,6 +20,7 @@ const BUCH_NAV = [
   { id: 'offeneposten', icon: '📬', label: 'Offene Posten' },
   { id: 'ustva', icon: '🧾', label: 'USt.-Voranmeldung' },
   { id: 'kontoabgleich', icon: '🏦', label: 'Kontoabgleich' },
+  { id: 'datenqualitaet', icon: '🔍', label: 'Datenqualität' },
   { id: 'anlagenverzeichnis', icon: '🏗️', label: 'Anlagenverzeichnis' },
   { id: 'stundensatz', icon: '🧮', label: 'Stundenverrechnungssatz' },
 ];
@@ -197,6 +198,16 @@ export async function render(container) {
           </div>
           <p class="hint">Kein Live-Bankzugang - lade den CSV-Export deines Online-Bankings hoch. Zahlungseingänge/-ausgänge werden automatisch gegen offene Rechnungen/Lieferantenrechnungen abgeglichen: eindeutige Treffer (Rechnungsnummer/Lieferant + passender Betrag) werden direkt übernommen, mehrdeutige Betragstreffer erscheinen als Vorschlag zur Bestätigung.</p>
           <div id="kontoabgleich-host"></div>
+        </div>
+        <div class="card settings-panel" data-panel="datenqualitaet" hidden>
+          <div class="view-header">
+            <h2 class="mb-0">Datenqualität</h2>
+            <div class="actions">
+              <button class="btn" id="btn-datenqualitaet-pruefen">🔄 Erneut prüfen</button>
+            </div>
+          </div>
+          <p class="hint">Sucht automatisch nach Auffälligkeiten, wie sie typischerweise durch (mehrfachen) Import entstehen: Rechnungen mit negativem Betrag ohne Storno-Verknüpfung, möglicherweise unverknüpfte Korrektur-Paare sowie mögliche doppelt angelegte Rechnungen/Ausgaben. Es wird nichts automatisch geändert oder gelöscht - jeder Treffer ist nur ein Hinweis zur manuellen Prüfung. Kunden-Duplikate werden weiterhin separat unter Kunden → Duplikate geprüft (jetzt auch anhand von E-Mail/Telefon, nicht nur exaktem Firmennamen).</p>
+          <div id="datenqualitaet-host"></div>
         </div>
         <div class="card settings-panel" data-panel="anlagenverzeichnis" hidden>
           <div class="view-header">
@@ -714,6 +725,135 @@ export async function render(container) {
   }
   container.querySelector('#bilanz-jahr-select').addEventListener('change', renderBilanz);
   container.querySelector('#bilanz-stichtag').addEventListener('change', renderBilanz);
+
+  /**
+   * Findet Rechnungs-Auffälligkeiten, wie sie typischerweise durch (mehrfachen)
+   * Import entstehen: ein Storno, der über eine eigene Belegnummer kam und
+   * deshalb nicht als Storno erkannt/verknüpft wurde, taucht sonst unbemerkt
+   * als ganz normale (evtl. negative) Rechnung auf.
+   */
+  function findRechnungsAuffaelligkeiten(alleRechnungen) {
+    const verknuepfteNummern = new Set();
+    for (const r of alleRechnungen) {
+      if (r.stornoVonNummer) { verknuepfteNummern.add(r.nummer); verknuepfteNummern.add(r.stornoVonNummer); }
+      if (r.storniertDurchNummer) { verknuepfteNummern.add(r.nummer); verknuepfteNummern.add(r.storniertDurchNummer); }
+    }
+
+    // a) Negativer Betrag, aber keine Storno-Verknüpfung gesetzt.
+    const unverknuepfteStornos = alleRechnungen.filter((r) => (r.brutto || 0) < -0.01 && !r.stornoVonNummer);
+
+    // b) Gleicher Kunde, Beträge heben sich genau auf, zeitlich nah beieinander,
+    //    aber keine der beiden ist bereits (als Storno-Paar) verknüpft.
+    const nichtVerknuepft = alleRechnungen.filter((r) => !verknuepfteNummern.has(r.nummer) && Math.abs(r.brutto || 0) > 0.01);
+    const korrekturPaare = [];
+    const verbraucht = new Set();
+    for (let i = 0; i < nichtVerknuepft.length; i++) {
+      const a = nichtVerknuepft[i];
+      if (verbraucht.has(a.id)) continue;
+      for (let j = i + 1; j < nichtVerknuepft.length; j++) {
+        const b = nichtVerknuepft[j];
+        if (verbraucht.has(b.id)) continue;
+        if (a.kundeId !== b.kundeId) continue;
+        if (Math.abs((a.brutto || 0) + (b.brutto || 0)) > 0.01) continue;
+        if (Math.abs(new Date(a.datum) - new Date(b.datum)) > 180 * 86400000) continue;
+        korrekturPaare.push([a, b]);
+        verbraucht.add(a.id); verbraucht.add(b.id);
+        break;
+      }
+    }
+
+    // c) Gleicher Kunde, gleicher Betrag, gleiches Datum, nicht storniert und
+    //    nicht bereits über (a)/(b) erfasst - mögliches echtes Duplikat.
+    const gruppen = new Map();
+    for (const r of alleRechnungen) {
+      if (r.status === 'storniert' || verknuepfteNummern.has(r.nummer)) continue;
+      const key = `${r.kundeId}|${(r.brutto || 0).toFixed(2)}|${r.datum}`;
+      if (!gruppen.has(key)) gruppen.set(key, []);
+      gruppen.get(key).push(r);
+    }
+    const moeglicheDuplikate = [...gruppen.values()].filter((g) => g.length > 1);
+
+    return { unverknuepfteStornos, korrekturPaare, moeglicheDuplikate };
+  }
+
+  /** Gleicher Lieferant, gleicher Betrag, gleiches Datum - typisches Muster bei mehrfachem Beleg-/Kontenexport-Import derselben Datei. */
+  function findAusgabenDuplikate(alleAusgaben) {
+    const gruppen = new Map();
+    for (const a of alleAusgaben) {
+      const key = `${(a.lieferant || '').trim().toLowerCase()}|${(a.betragBrutto || 0).toFixed(2)}|${a.datum}`;
+      if (!gruppen.has(key)) gruppen.set(key, []);
+      gruppen.get(key).push(a);
+    }
+    return [...gruppen.values()].filter((g) => g.length > 1);
+  }
+
+  function renderDatenqualitaet() {
+    const host = container.querySelector('#datenqualitaet-host');
+    const { unverknuepfteStornos, korrekturPaare, moeglicheDuplikate } = findRechnungsAuffaelligkeiten(rechnungen);
+    const ausgabenDuplikate = findAusgabenDuplikate(ausgaben);
+    const gesamt = unverknuepfteStornos.length + korrekturPaare.length + moeglicheDuplikate.length + ausgabenDuplikate.length;
+
+    if (gesamt === 0) {
+      host.innerHTML = `<p class="hint">✅ Keine Auffälligkeiten gefunden - keine unverknüpften Stornos, keine möglichen Duplikate bei Rechnungen oder Ausgaben.</p>`;
+      return;
+    }
+
+    host.innerHTML = `
+      ${unverknuepfteStornos.length ? `
+        <div class="card" style="margin-bottom:12px">
+          <h3>⚠️ ${unverknuepfteStornos.length} Rechnung(en) mit negativem Betrag ohne Storno-Verknüpfung</h3>
+          <p class="hint">Meist entsteht das beim Import, wenn eine Korrektur als eigener Beleg mit anderer Nummer gebucht wurde und deshalb nicht als Storno erkannt wird. Bitte einzeln prüfen und ggf. über die passende Original-Rechnung korrekt stornieren/verknüpfen.</p>
+          <table class="data-table">
+            <thead><tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th class="text-right">Betrag</th></tr></thead>
+            <tbody>
+              ${unverknuepfteStornos.map((r) => `<tr><td>${escapeHtml(r.nummer)}</td><td>${escapeHtml(kundenById[r.kundeId]?.firma || '–')}</td><td>${formatDate(r.datum)}</td><td class="text-right">${formatCurrency(r.brutto)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+      ${korrekturPaare.length ? `
+        <div class="card" style="margin-bottom:12px">
+          <h3>⚠️ ${korrekturPaare.length} möglicherweise unverknüpfte(s) Korrektur-Paar(e)</h3>
+          <p class="hint">Gleicher Kunde, Beträge heben sich genau auf, zeitlich nah beieinander - sieht nach einer Storno-Korrektur aus, ist aber nicht als solche verknüpft.</p>
+          <table class="data-table">
+            <thead><tr><th>Rechnung A</th><th>Rechnung B</th><th>Kunde</th><th class="text-right">Betrag A</th></tr></thead>
+            <tbody>
+              ${korrekturPaare.map(([a, b]) => `<tr><td>${escapeHtml(a.nummer)} (${formatDate(a.datum)})</td><td>${escapeHtml(b.nummer)} (${formatDate(b.datum)})</td><td>${escapeHtml(kundenById[a.kundeId]?.firma || '–')}</td><td class="text-right">${formatCurrency(a.brutto)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+      ${moeglicheDuplikate.length ? `
+        <div class="card" style="margin-bottom:12px">
+          <h3>⚠️ ${moeglicheDuplikate.length} Gruppe(n) möglicher Rechnungs-Duplikate</h3>
+          <p class="hint">Gleicher Kunde, gleicher Betrag, gleiches Datum, keine Storno-Verknüpfung - könnte ein echtes Duplikat sein (z.B. durch doppelten Import) oder zwei getrennte, zufällig gleich hohe Rechnungen.</p>
+          <table class="data-table">
+            <thead><tr><th>Nummern</th><th>Kunde</th><th>Datum</th><th class="text-right">Betrag</th></tr></thead>
+            <tbody>
+              ${moeglicheDuplikate.map((g) => `<tr><td>${g.map((r) => escapeHtml(r.nummer)).join(', ')}</td><td>${escapeHtml(kundenById[g[0].kundeId]?.firma || '–')}</td><td>${formatDate(g[0].datum)}</td><td class="text-right">${formatCurrency(g[0].brutto)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+      ${ausgabenDuplikate.length ? `
+        <div class="card">
+          <h3>⚠️ ${ausgabenDuplikate.length} Gruppe(n) möglicher Ausgaben-Duplikate</h3>
+          <p class="hint">Gleicher Lieferant, gleicher Betrag, gleiches Datum - meist entsteht das durch mehrfachen Beleg-/Kontenexport-Import derselben Datei.</p>
+          <table class="data-table">
+            <thead><tr><th>Lieferant</th><th>Datum</th><th class="text-right">Betrag</th><th>Anzahl</th></tr></thead>
+            <tbody>
+              ${ausgabenDuplikate.map((g) => `<tr><td>${escapeHtml(g[0].lieferant || '–')}</td><td>${formatDate(g[0].datum)}</td><td class="text-right">${formatCurrency(g[0].betragBrutto)}</td><td>${g.length}×</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : ''}
+    `;
+  }
+  container.querySelector('#btn-datenqualitaet-pruefen').addEventListener('click', async () => {
+    [rechnungen, ausgaben] = await Promise.all([getAll('rechnungen'), getAll('ausgaben')]);
+    renderDatenqualitaet();
+    toast('Datenqualität erneut geprüft', 'success');
+  });
 
   async function renderOffenePosten() {
     const host = container.querySelector('#offeneposten-host');
@@ -1491,6 +1631,7 @@ export async function render(container) {
   renderOffenePosten();
   renderUstva();
   renderKontoabgleich();
+  renderDatenqualitaet();
   renderAnlagenverzeichnis();
   renderStundensatzRechner();
 }

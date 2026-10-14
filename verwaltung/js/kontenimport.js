@@ -69,6 +69,11 @@ export function analysiereKontenexport(alleRows) {
   }
 
   const einnahmen = [];
+  // Stornos, die in lexoffice als EIGENER Beleg (eigene Belegnummer) gebucht
+  // wurden statt als Korrektur im selben Dokument - werden unten gegen eine
+  // passende Original-Einnahme zugeordnet, statt unerkannt als eigenständige
+  // (negative) Rechnung zu importieren.
+  const stornoKandidaten = [];
   const ausgaben = [];
   const uebersprungen = [];
   let stornoCount = 0;
@@ -93,11 +98,12 @@ export function analysiereKontenexport(alleRows) {
       const kunde = kontoMap.get(erlosRows[0].gegenkonto) || erlosRows[0].text;
       const forderungRest = nettoSoll(rows.filter((r) => r.konto === '1400'));
       const zahlung = rows.find((r) => /Zahlungseing/i.test(r.text));
-      einnahmen.push({
+      const eintrag = {
         key, belegnummer, datum: erlosRows[0].datum, kunde, netto, steuersatz, steuer,
         brutto: Math.round((netto + steuer) * 100) / 100,
         bezahlt: Math.abs(forderungRest) < 0.01, bezahltAm: zahlung?.datum || '',
-      });
+      };
+      if (netto < -0.01) stornoKandidaten.push(eintrag); else einnahmen.push(eintrag);
       continue;
     }
     if (konten.some((k) => istAufwandKonto(k))) {
@@ -119,10 +125,40 @@ export function analysiereKontenexport(alleRows) {
     uebersprungen.push({ key, belegnummer, grund: 'Nicht automatisch zuordenbar (z.B. Darlehen/reine Bilanzbuchung)', datum: rows[0].datum, text: rows[0].text });
   }
 
+  // Jeden Storno-Kandidaten gegen eine noch nicht verwendete Einnahme
+  // desselben Kunden mit genau gegensätzlichem Betrag (innerhalb eines
+  // Jahres) zuordnen. Ohne Treffer würde er sonst entweder unerkannt als
+  // eigenständige (negative) Rechnung auftauchen oder stillschweigend
+  // verloren gehen - stattdessen zur manuellen Prüfung in "uebersprungen".
+  const stornoZuordnungen = [];
+  const einnahmenVerwendetIdx = new Set();
+  for (const storno of stornoKandidaten) {
+    let trefferIdx = -1;
+    for (let i = 0; i < einnahmen.length; i++) {
+      if (einnahmenVerwendetIdx.has(i)) continue;
+      const e = einnahmen[i];
+      if (e.kunde !== storno.kunde) continue;
+      if (Math.abs(e.brutto + storno.brutto) > 0.01) continue;
+      if (Math.abs(new Date(e.datum) - new Date(storno.datum)) > 365 * 86400000) continue;
+      trefferIdx = i;
+      break;
+    }
+    if (trefferIdx >= 0) {
+      einnahmenVerwendetIdx.add(trefferIdx);
+      stornoZuordnungen.push({ original: einnahmen[trefferIdx], storno });
+    } else {
+      uebersprungen.push({
+        key: storno.key, belegnummer: storno.belegnummer,
+        grund: 'Storno-Beleg (negativer Erlös) ohne erkennbares Original - bitte manuell prüfen, damit er nicht versehentlich als eigenständige Rechnung auftaucht',
+        datum: storno.datum, text: storno.kunde,
+      });
+    }
+  }
+
   einnahmen.sort((a, b) => a.datum.localeCompare(b.datum));
   ausgaben.sort((a, b) => a.datum.localeCompare(b.datum));
   uebersprungen.sort((a, b) => a.datum.localeCompare(b.datum));
-  return { einnahmen, ausgaben, uebersprungen, stornoCount };
+  return { einnahmen, stornoZuordnungen, ausgaben, uebersprungen, stornoCount };
 }
 
 async function ladeDateiAlsCsvTexte(file) {
@@ -184,6 +220,7 @@ export function openKontenImport({ onImported } = {}) {
         <div class="card">
           <p>✅ <strong>${analyse.einnahmen.length} Einnahme(n)</strong> über insgesamt ${formatCurrency(summeEinnahmen)} werden als Rechnungen angelegt und verbucht (${bezahltEinnahmen} bezahlt, ${analyse.einnahmen.length - bezahltEinnahmen} noch offen).</p>
           <p>✅ <strong>${analyse.ausgaben.length} Ausgabe(n)</strong> über insgesamt ${formatCurrency(summeAusgaben)} werden angelegt und verbucht (${bezahltAusgaben} bezahlt, ${analyse.ausgaben.length - bezahltAusgaben} noch offen).</p>
+          ${analyse.stornoZuordnungen.length ? `<p>✅ <strong>${analyse.stornoZuordnungen.length} Storno-Beleg(e)</strong> mit eigener Belegnummer erkannt und korrekt mit ihrer Original-Rechnung verknüpft (werden nicht als eigenständige Rechnung angelegt).</p>` : ''}
           ${analyse.stornoCount ? `<p class="text-mute">${analyse.stornoCount} Korrekturbuchung(en) automatisch erkannt und ignoriert (heben sich gegenseitig auf, keine Auswirkung).</p>` : ''}
           ${analyse.uebersprungen.length ? `
             <p>⚠️ <strong>${analyse.uebersprungen.length} Vorgang/Vorgänge</strong> nicht automatisch übernommen - bitte bei Bedarf manuell in der Buchhaltung nachtragen:</p>
@@ -212,8 +249,11 @@ export function openKontenImport({ onImported } = {}) {
       const rechnungenNummernSet = new Set(rechnungenBestehend.map((r) => (r.nummer || '').trim().toLowerCase()).filter(Boolean));
       const ausgabenSchluesselSet = new Set(ausgabenBestehend.map((a) => a.importKontenexportKey).filter(Boolean));
 
+      const stornoByOriginalKey = new Map(analyse.stornoZuordnungen.map((p) => [p.original.key, p.storno]));
+
       let einnahmenNeu = 0;
       let einnahmenUebersprungen = 0;
+      let stornoPaareNeu = 0;
       let kundenAngelegt = 0;
       for (const item of analyse.einnahmen) {
         const nummerNorm = (item.belegnummer || item.key).trim().toLowerCase();
@@ -230,17 +270,28 @@ export function openKontenImport({ onImported } = {}) {
           kundenAngelegt++;
         }
         if (!kunde) { einnahmenUebersprungen++; continue; }
+
+        // Hat dieses Original einen zugeordneten Storno-Beleg (eigene
+        // Belegnummer, siehe analysiereKontenexport), wird es direkt als
+        // storniert angelegt und korrekt verknüpft, statt als normale
+        // bezahlte/offene Rechnung - sonst bekäme eine in Wirklichkeit
+        // stornierte Rechnung fälschlich den Status einer gültigen.
+        const storno = stornoByOriginalKey.get(item.key);
+        const stornoNummerNorm = storno ? (storno.belegnummer || storno.key).trim().toLowerCase() : null;
+        const stornoBereitsVorhanden = storno && rechnungenNummernSet.has(stornoNummerNorm);
+
         const rechnung = {
           id: uid(), nummer: item.belegnummer || item.key, kundeId: kunde.id, projektId: '', angebotId: null, auftragsbestaetigungId: null,
           datum: item.datum, leistungsdatum: item.datum,
           faelligAm: item.bezahlt ? item.datum : addDays(item.datum, settings.zahlungszielTage || 14),
-          status: item.bezahlt ? 'bezahlt' : 'offen', bezahltAm: item.bezahlt ? (item.bezahltAm || item.datum) : '',
+          status: (storno && !stornoBereitsVorhanden) ? 'storniert' : (item.bezahlt ? 'bezahlt' : 'offen'),
+          bezahltAm: item.bezahlt ? (item.bezahltAm || item.datum) : '',
           betreff: `Rechnung ${item.belegnummer || ''} (Import aus lexoffice-Kontenexport)`,
           notizen: 'Automatisch importiert aus lexoffice-Kontenexport.',
           positionen: [{ id: uid(), bezeichnung: `Leistung ${item.belegnummer || ''}`.trim(), beschreibung: '', menge: 1, einheit: 'Psch.', einzelpreis: item.netto, steuersatz: item.steuersatz }],
           netto: item.netto, steuer: item.steuer, brutto: item.brutto,
           createdAt: new Date().toISOString(), versendet: true, versendetAm: item.datum,
-          stornoVonNummer: '', storniertDurchNummer: '',
+          stornoVonNummer: '', storniertDurchNummer: (storno && !stornoBereitsVorhanden) ? (storno.belegnummer || storno.key) : '',
           steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
           verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0,
           zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
@@ -249,6 +300,24 @@ export function openKontenImport({ onImported } = {}) {
         rechnungenNummernSet.add(nummerNorm);
         try { await journal.syncBuchungFuerRechnung(rechnung, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
         einnahmenNeu++;
+
+        if (storno && !stornoBereitsVorhanden) {
+          const stornoRechnung = {
+            ...rechnung,
+            id: uid(),
+            nummer: storno.belegnummer || storno.key,
+            datum: storno.datum, leistungsdatum: storno.datum,
+            faelligAm: storno.datum, status: 'storniert', bezahltAm: '',
+            betreff: `Storno zu Rechnung ${rechnung.nummer} (Import aus lexoffice-Kontenexport)`,
+            positionen: [{ id: uid(), bezeichnung: `Storno zu ${rechnung.nummer}`, beschreibung: '', menge: 1, einheit: 'Psch.', einzelpreis: storno.netto, steuersatz: storno.steuersatz }],
+            netto: storno.netto, steuer: storno.steuer, brutto: storno.brutto,
+            versendetAm: storno.datum, stornoVonNummer: rechnung.nummer, storniertDurchNummer: '',
+          };
+          await put('rechnungen', stornoRechnung);
+          rechnungenNummernSet.add(stornoNummerNorm);
+          try { await journal.syncBuchungFuerRechnung(stornoRechnung, settings); } catch { /* Buchung ist Komfort, darf Import nicht abbrechen */ }
+          stornoPaareNeu++;
+        }
       }
 
       let ausgabenNeu = 0;
@@ -274,6 +343,7 @@ export function openKontenImport({ onImported } = {}) {
       vorschauHost.innerHTML = `
         <div class="card">
           <p>✅ ${einnahmenNeu} Einnahme(n) als Rechnung angelegt und verbucht${einnahmenUebersprungen ? ` (${einnahmenUebersprungen} bereits vorhanden, übersprungen)` : ''}</p>
+          ${stornoPaareNeu ? `<p>✅ ${stornoPaareNeu} davon korrekt als Storno-Paar verknüpft angelegt</p>` : ''}
           <p>✅ ${ausgabenNeu} Ausgabe(n) angelegt und verbucht${ausgabenUebersprungen ? ` (${ausgabenUebersprungen} bereits vorhanden, übersprungen)` : ''}</p>
           ${kundenAngelegt ? `<p>✅ ${kundenAngelegt} neue(r) Kunde(n) automatisch angelegt</p>` : ''}
         </div>

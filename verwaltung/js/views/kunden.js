@@ -347,13 +347,41 @@ export async function render(container, route) {
     return n;
   }
 
+  /**
+   * Gruppiert über mehrere Erkennungsmerkmale (Firmenname, E-Mail, Telefon)
+   * statt nur exaktem Firmennamen - per Union-Find, damit zwei Kunden auch
+   * zusammenfinden, wenn nur EIN starkes Merkmal übereinstimmt (z.B. gleiche
+   * E-Mail, aber Firma leicht anders geschrieben). Bewusst unabhängig davon,
+   * ob der Kunde mehrere Aufträge/Rechnungen hat - ein neuer Auftrag beim
+   * selben (bereits erkannten) Kunden ist kein Duplikat, nur ein zweiter
+   * Kunden-STAMMDATENSATZ für dieselbe Person/Firma ist eines.
+   */
   function findKundenDuplikatGruppen() {
+    const parent = new Map();
+    function find(x) { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; }
+    function union(a, b) { const ra = find(a); const rb = find(b); if (ra !== rb) parent.set(ra, rb); }
+    for (const k of kunden) parent.set(k.id, k.id);
+
+    const byFirma = new Map();
+    const byEmail = new Map();
+    const byTelefon = new Map();
+    for (const k of kunden) {
+      const firma = (k.firma || '').trim().toLowerCase();
+      const email = (k.email || '').trim().toLowerCase();
+      const telefon = (k.telefon || '').replace(/[^0-9+]/g, '');
+      if (firma) { if (!byFirma.has(firma)) byFirma.set(firma, []); byFirma.get(firma).push(k.id); }
+      if (email) { if (!byEmail.has(email)) byEmail.set(email, []); byEmail.get(email).push(k.id); }
+      if (telefon.length >= 6) { if (!byTelefon.has(telefon)) byTelefon.set(telefon, []); byTelefon.get(telefon).push(k.id); }
+    }
+    for (const ids of [...byFirma.values(), ...byEmail.values(), ...byTelefon.values()]) {
+      for (let i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+    }
+
     const groups = new Map();
     for (const k of kunden) {
-      const name = (k.firma || '').trim().toLowerCase();
-      if (!name) continue;
-      if (!groups.has(name)) groups.set(name, []);
-      groups.get(name).push(k);
+      const root = find(k.id);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(k);
     }
     return [...groups.values()].filter((g) => g.length > 1);
   }
@@ -397,7 +425,7 @@ export async function render(container, route) {
       title: 'Kunden-Duplikate zusammenführen',
       wide: true,
       bodyHtml: `
-        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Firmennamen gefunden. Der ausgewählte Kunde je Gruppe bleibt bestehen, alle verknüpften Projekte/Termine/Angebote/Rechnungen/Ausgaben/Aufgaben/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht. Gruppen abwählen, die keine echten Duplikate sind (z.B. zufällig gleicher Firmenname).</p>
+        <p class="hint">${gruppen.length} Gruppe(n) mit gleichem Firmennamen, gleicher E-Mail oder gleichem Telefon gefunden - ein neuer Auftrag/Projekt beim selben Kunden zählt dabei nicht als Duplikat, nur ein zweiter Kunden-Stammdatensatz. Der ausgewählte Kunde je Gruppe bleibt bestehen, alle verknüpften Projekte/Termine/Angebote/Rechnungen/Ausgaben/Aufgaben/Dokumente der anderen werden dorthin übertragen, die Duplikate danach gelöscht. Gruppen abwählen, die keine echten Duplikate sind (z.B. zufällig gleiche Zentrale-Telefonnummer).</p>
         <label class="field-checkbox" style="display:flex;align-items:center;gap:8px;padding:4px 0;font-weight:600;border-bottom:1px solid var(--border);margin-bottom:8px;padding-bottom:8px">
           <input type="checkbox" id="kdup-select-all" checked>
           <span>Alle Gruppen auswählen / abwählen</span>
