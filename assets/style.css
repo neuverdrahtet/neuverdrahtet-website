@@ -1041,6 +1041,14 @@ body:has(.cookie-banner) .contact-fab{ bottom:110px; }
   .fab{ width:46px; height:46px; }
 }
 
+/* Startseite: .mobile-contact-bar (volle Breite, fixed bottom, ~64px hoch)
+   würde den FAB-Stack sonst überdecken - FAB-Stack muss darüber schweben.
+   Nur auf Seiten mit .mobile-contact-bar relevant (aktuell nur index.html). */
+@media (max-width:720px){
+  body:has(.mobile-contact-bar) .contact-fab{ bottom:calc(64px + env(safe-area-inset-bottom, 0px) + 14px); }
+  body:has(.mobile-contact-bar):has(.cookie-banner) .contact-fab{ bottom:calc(64px + env(safe-area-inset-bottom, 0px) + 190px); }
+}
+
 /* =========================================================
    KI-Assistent — Chat-Widget (assets/ki-assistent.js)
    ========================================================= */
