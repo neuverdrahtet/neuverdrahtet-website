@@ -1794,6 +1794,23 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   html, body { background: #fff !important; }
   body > *:not(.print-root) { display: none !important; }
   .print-root { display: block !important; background: #fff !important; }
+
+  /* Fußzeile bleibt auf JEDER gedruckten Seite am unteren Rand stehen,
+     statt (wie im normalen Dokumentfluss) direkt nach dem Inhalt zu folgen -
+     bei kurzen Dokumenten stand sie sonst weit oben auf der Seite, bei
+     langen genau am Rand, je nach Inhaltsmenge an einer anderen Stelle.
+     position:fixed wiederholt sich im Druck auf jeder Seite an derselben
+     Stelle; padding-bottom auf .print-doc reserviert dafür unten Platz,
+     damit laufender Inhalt nicht darunter verschwindet. */
+  .print-doc { padding-bottom: 28mm; }
+  .print-doc .print-footer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin-top: 0;
+    background: #fff;
+  }
 }
 
 .text-mute { color: var(--text-mute); }
