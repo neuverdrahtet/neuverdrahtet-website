@@ -131,24 +131,26 @@ export async function render(container, opts = {}) {
       <table class="data-table">
         <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th>${marken.length > 0 ? '<th>Marke</th>' : ''}<th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
         <tbody>
-          ${filtered.map((p) => `
-            <tr data-id="${p.id}">
+          ${filtered.map((p) => {
+            const statusFarbe = spaltenById[p.status]?.farbe || 'var(--border)';
+            return `
+            <tr data-id="${p.id}" style="border-left:4px solid ${escapeHtml(statusFarbe)}">
               ${bulk.rowCell(p.id)}
               <td><span class="color-dot" style="background:${escapeHtml(p.farbe || 'var(--border)')}"></span></td>
               <td>${escapeHtml(p.titel)}</td>
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
-              ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
-              <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--border)')}22;color:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--text)')}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
-              <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
+              ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge" style="background:${escapeHtml(statusFarbe)}22;color:${escapeHtml(statusFarbe)}">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
+              <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(statusFarbe)}22;color:${escapeHtml(statusFarbe)}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
+              <td style="color:${escapeHtml(statusFarbe)}">${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
               <td>
-                <select class="inline-select status-select" data-id="${p.id}" title="Status ändern">
+                <select class="inline-select status-select" data-id="${p.id}" title="Status ändern" style="border-color:${escapeHtml(statusFarbe)};color:${escapeHtml(statusFarbe)}">
                   ${spalten.map((s) => `<option value="${s.id}" ${s.id === p.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
                 </select>
               </td>
-              <td>${formatDate(p.start)}</td>
-              <td>${formatDate(p.ende)}</td>
+              <td style="color:${escapeHtml(statusFarbe)}">${formatDate(p.start)}</td>
+              <td style="color:${escapeHtml(statusFarbe)}">${formatDate(p.ende)}</td>
             </tr>
-          `).join('')}
+          `; }).join('')}
         </tbody>
       </table>
       <div class="tt-card-list">
