@@ -48,15 +48,15 @@
  *                        Code (z.B. ein langes Zufallswort), den du 1:1 auch
  *                        beim Einrichten des Webhooks in der Meta-App einträgst.
  *                        Dient nur der einmaligen Webhook-Verifizierung.
- *   META_APP_SECRET      (Secret, empfohlen) - "App-Geheimcode" aus der
- *                        Meta-App (Einstellungen -> Grundlegendes). Wenn
- *                        gesetzt, prüft der Worker die Signatur jeder
- *                        Anfrage (X-Hub-Signature-256) und lehnt gefälschte
- *                        Anfragen ab. Ohne dieses Secret läuft der Worker
- *                        trotzdem, aber JEDER könnte vorgetäuschte
- *                        WhatsApp-Nachrichten einschicken (Kosten-/
- *                        Missbrauchsrisiko) - siehe Sicherheitshinweis in
- *                        der README.
+ *   META_APP_SECRET      (Secret, ERFORDERLICH) - "App-Geheimcode" aus der
+ *                        Meta-App (Einstellungen -> Grundlegendes). Der
+ *                        Worker prüft die Signatur jeder Anfrage
+ *                        (X-Hub-Signature-256) und lehnt ohne gültige
+ *                        Signatur ab (inkl. wenn dieses Secret fehlt) -
+ *                        sonst könnte JEDER vorgetäuschte WhatsApp-
+ *                        Nachrichten einschicken (Kosten-/Missbrauchs-
+ *                        risiko: löst echte Claude-Aufrufe und automatische
+ *                        Lead-Anlage in Werkora aus).
  *   MODEL_ID             (Variable, optional) - Standard: claude-haiku-4-5
  *   CALENDLY_API_TOKEN   (Secret, optional) - "Personal Access Token" aus
  *                        Calendly (calendly.com -> Konto-Einstellungen ->
@@ -547,10 +547,16 @@ export default {
 
     const rawBody = await request.text();
 
-    if (env.META_APP_SECRET) {
-      const signature = request.headers.get('X-Hub-Signature-256');
-      const gueltig = await validateMetaSignature({ appSecret: env.META_APP_SECRET, rawBody, signature });
-      if (!gueltig) return new Response('Ungültige Signatur.', { status: 403 });
+    // Signatur ist ab jetzt immer erforderlich (auch wenn META_APP_SECRET
+    // fehlt) - sonst könnte ohne gesetztes Secret jeder ungeprüft gefälschte
+    // WhatsApp-Nachrichten einschicken (siehe Header-Kommentar).
+    const signature = request.headers.get('X-Hub-Signature-256');
+    const gueltig = env.META_APP_SECRET
+      ? await validateMetaSignature({ appSecret: env.META_APP_SECRET, rawBody, signature })
+      : false;
+    if (!gueltig) {
+      console.error('ki-assistent-whatsapp: Webhook ohne gültige Signatur abgelehnt (META_APP_SECRET fehlt oder Signatur ungültig).');
+      return new Response('Ungültige Signatur.', { status: 403 });
     }
 
     let payload;

@@ -67,8 +67,9 @@ Antwort-Logik, nicht die WhatsApp-Anbindung selbst.
    - `META_PHONE_NUMBER_ID` (Variable, erforderlich) - siehe Schritt 3 oben.
    - `META_VERIFY_TOKEN` (Secret, erforderlich) - dein selbst gewählter Code,
      siehe Schritt 4 oben.
-   - `META_APP_SECRET` (Secret, **dringend empfohlen** - siehe
-     Sicherheitshinweis unten) - siehe Schritt 3 oben.
+   - `META_APP_SECRET` (Secret, **erforderlich** - siehe
+     Sicherheitshinweis unten, ohne dieses Secret nimmt der Worker gar
+     keine Nachrichten mehr an) - siehe Schritt 3 oben.
 5. Die entstandene Worker-URL (z.B.
    `https://neuverdrahtet-ki-assistent-whatsapp.<dein-konto>.workers.dev`)
    bei Meta als Webhook eintragen (siehe Schritt 4 oben) - erst danach lässt
@@ -114,16 +115,22 @@ den Buchungslink, ohne konkrete Uhrzeiten):
   Meta-App unter "WhatsApp → Konfiguration → Webhook" zeigt ein rotes
   Ausrufezeichen an, wenn der Webhook-Aufruf fehlschlägt.
 
-## Sicherheitshinweis: unbedingt `META_APP_SECRET` setzen
+## Sicherheitshinweis: `META_APP_SECRET` ist jetzt Pflicht
 
-Ohne dieses Secret prüft der Worker nicht, ob eine eingehende Anfrage
-wirklich von Meta stammt - jeder, der die Worker-URL kennt, könnte
-vorgetäuschte "WhatsApp-Nachrichten" einschicken und damit unnötige
-Anthropic-API-Kosten verursachen oder Leads mit Fantasiedaten anlegen. Mit
-gesetztem `META_APP_SECRET` prüft der Worker die Signatur
+Der Worker prüft bei jeder eingehenden Anfrage die Signatur
 (`X-Hub-Signature-256`-Header) nach dem offiziellen Meta-Verfahren
 ([developers.facebook.com/docs/graph-api/webhooks/getting-started](https://developers.facebook.com/docs/graph-api/webhooks/getting-started#validate-payloads))
-und lehnt gefälschte Anfragen mit HTTP 403 ab.
+und lehnt sie mit HTTP 403 ab, wenn die Signatur fehlt/ungültig ist **oder
+`META_APP_SECRET` gar nicht gesetzt ist**. Vorher lief der Worker auch ohne
+dieses Secret weiter (jeder, der die Worker-URL kennt, hätte vorgetäuschte
+"WhatsApp-Nachrichten" einschicken und damit unnötige Anthropic-API-Kosten
+verursachen oder Leads mit Fantasiedaten anlegen können) - das war ein
+Sicherheitsrisiko und wurde geschlossen.
+
+**Wichtig:** Falls `META_APP_SECRET` in diesem Worker (Cloudflare Dashboard
+→ Worker → Settings → Variables) noch nicht gesetzt ist, nimmt der Bot nach
+diesem Update **gar keine WhatsApp-Nachrichten mehr an**, bis das Secret
+gesetzt ist (siehe Schritt 3 oben zum Auslesen des App-Geheimcodes).
 
 ## Wichtige Design-Entscheidungen
 
