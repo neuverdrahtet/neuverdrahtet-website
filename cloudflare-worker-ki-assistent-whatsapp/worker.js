@@ -48,15 +48,15 @@
  *                        Code (z.B. ein langes Zufallswort), den du 1:1 auch
  *                        beim Einrichten des Webhooks in der Meta-App einträgst.
  *                        Dient nur der einmaligen Webhook-Verifizierung.
- *   META_APP_SECRET      (Secret, empfohlen) - "App-Geheimcode" aus der
- *                        Meta-App (Einstellungen -> Grundlegendes). Wenn
- *                        gesetzt, prüft der Worker die Signatur jeder
- *                        Anfrage (X-Hub-Signature-256) und lehnt gefälschte
- *                        Anfragen ab. Ohne dieses Secret läuft der Worker
- *                        trotzdem, aber JEDER könnte vorgetäuschte
- *                        WhatsApp-Nachrichten einschicken (Kosten-/
- *                        Missbrauchsrisiko) - siehe Sicherheitshinweis in
- *                        der README.
+ *   META_APP_SECRET      (Secret, ERFORDERLICH) - "App-Geheimcode" aus der
+ *                        Meta-App (Einstellungen -> Grundlegendes). Der
+ *                        Worker prüft die Signatur jeder Anfrage
+ *                        (X-Hub-Signature-256) und lehnt ohne gültige
+ *                        Signatur ab (inkl. wenn dieses Secret fehlt) -
+ *                        sonst könnte JEDER vorgetäuschte WhatsApp-
+ *                        Nachrichten einschicken (Kosten-/Missbrauchs-
+ *                        risiko: löst echte Claude-Aufrufe und automatische
+ *                        Lead-Anlage in Werkora aus).
  *   MODEL_ID             (Variable, optional) - Standard: claude-haiku-4-5
  *   CALENDLY_API_TOKEN   (Secret, optional) - "Personal Access Token" aus
  *                        Calendly (calendly.com -> Konto-Einstellungen ->
@@ -443,6 +443,21 @@ async function validateMetaSignature({ appSecret, rawBody, signature }) {
   return macHex === erwarteterHex;
 }
 
+// Begrenzt Claude-Aufrufe pro Absendernummer, falls eine einzelne Nummer den
+// Bot mit Nachrichten flutet - zusätzlich zur Signaturprüfung oben (die
+// gefälschte Absender blockiert, nicht aber eine echte, aber sehr aktive
+// Nummer). env.RATE_LIMITER kann fehlen (Binding noch nicht deployed/
+// konfiguriert) - dann einfach nicht blockieren.
+async function unterSchwellenwert(env, key) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
 /** Extrahiert die eingehende Text-Nachricht aus einem Meta-Webhook-Payload, oder null bei anderen Ereignissen (Status-Updates etc.). */
 function extrahiereEingehendeNachricht(payload) {
   try {
@@ -526,10 +541,16 @@ export default {
 
     const rawBody = await request.text();
 
-    if (env.META_APP_SECRET) {
-      const signature = request.headers.get('X-Hub-Signature-256');
-      const gueltig = await validateMetaSignature({ appSecret: env.META_APP_SECRET, rawBody, signature });
-      if (!gueltig) return new Response('Ungültige Signatur.', { status: 403 });
+    // Signatur ist ab jetzt immer erforderlich (auch wenn META_APP_SECRET
+    // fehlt) - sonst könnte ohne gesetztes Secret jeder ungeprüft gefälschte
+    // WhatsApp-Nachrichten einschicken (siehe Header-Kommentar).
+    const signature = request.headers.get('X-Hub-Signature-256');
+    const gueltig = env.META_APP_SECRET
+      ? await validateMetaSignature({ appSecret: env.META_APP_SECRET, rawBody, signature })
+      : false;
+    if (!gueltig) {
+      console.error('ki-assistent-whatsapp: Webhook ohne gültige Signatur abgelehnt (META_APP_SECRET fehlt oder Signatur ungültig).');
+      return new Response('Ungültige Signatur.', { status: 403 });
     }
 
     let payload;
@@ -543,6 +564,11 @@ export default {
     // Kein Text-Nachrichten-Ereignis (z.B. Zustellstatus "delivered"/"read") - trotzdem
     // mit 200 bestätigen, sonst wiederholt Meta den Webhook-Aufruf unnötig.
     if (!eingehend || !eingehend.text) return new Response('OK', { status: 200 });
+
+    if (!(await unterSchwellenwert(env, eingehend.von))) {
+      console.error(`ki-assistent-whatsapp: Rate-Limit überschritten für ${eingehend.von}.`);
+      return new Response('OK', { status: 200 });
+    }
 
     if (!env.ANTHROPIC_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT_JSON || !env.META_ACCESS_TOKEN || !env.META_PHONE_NUMBER_ID) {
       console.error('ki-assistent-whatsapp: erforderliche Secrets/Variablen fehlen.');
