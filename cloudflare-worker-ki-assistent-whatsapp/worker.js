@@ -78,6 +78,12 @@
  *                        Termin am Ende immer selbst über diesen Link
  *                        bestätigen.
  *
+ * RATE_LIMITER (Rate-Limiting-Binding, siehe wrangler.toml [[ratelimits]]) -
+ * begrenzt Claude-Aufrufe pro Absendernummer, damit eine einzelne Nummer
+ * nicht unbegrenzt Kosten verursachen kann. Wird von Cloudflare beim ersten
+ * Deploy automatisch angelegt, erfordert keine manuelle Einrichtung im
+ * Dashboard.
+ *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
