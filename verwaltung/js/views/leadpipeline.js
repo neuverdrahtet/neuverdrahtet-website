@@ -111,7 +111,7 @@ export async function render(container) {
   function openCardForm(k) {
     const isEdit = !!k;
     const neueId = uid();
-    const data = k || { id: neueId, firma: '', ansprechpartner: '', telefon: '', email: '', notizen: '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN) };
+    const data = k || { id: neueId, firma: '', ansprechpartner: '', telefon: '', email: '', notizen: '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN), createdAt: new Date().toISOString() };
     const { body, close } = openModal({
       title: isEdit ? 'Lead bearbeiten' : 'Neuer Lead',
       bodyHtml: `

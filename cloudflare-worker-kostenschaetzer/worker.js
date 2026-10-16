@@ -454,7 +454,7 @@ async function legeLeadAn({ env, kunde, projekt }) {
   const kundeId = crypto.randomUUID();
   const projektId = crypto.randomUUID();
   const kundennummer = await vergebeKundennummer({ accessToken, projectId: serviceAccount.project_id });
-  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, kundennummer, farbe: farbeAusText(kundeId, KUNDEN_FARBEN) } });
+  await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'kunden', id: kundeId, data: { ...kunde, kundennummer, farbe: farbeAusText(kundeId, KUNDEN_FARBEN), createdAt: new Date().toISOString() } });
   await firestoreWriteDoc({ accessToken, projectId: serviceAccount.project_id, collection: 'projekte', id: projektId, data: { ...projekt, kundeId } });
   await sendeLeadBenachrichtigung(env, [
     `📩 Neuer Lead: ${kunde.firma}`,

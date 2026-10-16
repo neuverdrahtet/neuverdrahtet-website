@@ -389,7 +389,7 @@ export function openKundeSchnellanlage({ kunde, onCreated, onUpdated } = {}) {
         '', { datum: currentSettings.kundeNummerDatum, zaehler: currentSettings.kundeNummerZaehler }
       );
       await setSettings({ kundeNummerDatum: nDatum, kundeNummerZaehler: nZaehler });
-      gespeicherterKunde = { id: uid(), ...felder, notizen: '', kundennummer: autoNummer, farbe: farbeAusText(firma, KUNDE_SCHNELL_FARBEN), status: 'kunde' };
+      gespeicherterKunde = { id: uid(), ...felder, notizen: '', kundennummer: autoNummer, farbe: farbeAusText(firma, KUNDE_SCHNELL_FARBEN), status: 'kunde', createdAt: new Date().toISOString() };
     }
     try {
       await put('kunden', gespeicherterKunde);

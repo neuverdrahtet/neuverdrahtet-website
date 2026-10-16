@@ -581,7 +581,7 @@ export async function render(container, route) {
   function openForm(kunde) {
     const isEdit = !!kunde;
     const neueId = uid();
-    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', istPrivatperson: false, farbe: farbeAusText(neueId, KUNDEN_FARBEN), status: kundenStatusListe[0]?.id || 'lead' };
+    const data = kunde || { id: neueId, firma: '', ansprechpartner: '', strasse: '', plz: '', ort: '', telefon: '', email: '', notizen: '', kundennummer: '', istPrivatperson: false, farbe: farbeAusText(neueId, KUNDEN_FARBEN), status: kundenStatusListe[0]?.id || 'lead', createdAt: new Date().toISOString() };
     const linkedProjekte = isEdit ? projekte.filter((p) => p.kundeId === data.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')) : [];
     const offenCount = linkedProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const linkedProjektIds = new Set(linkedProjekte.map((p) => p.id));
