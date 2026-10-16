@@ -142,9 +142,20 @@ const LEERER_KONTAKT = { name: '', email: '', telefon: '', anliegen: '' };
 async function autoErstelleKundeAusAnfrage(email) {
   const kontakt = email.kontakt;
   if (!kontakt?.email) return;
-  const [kunden, projekte, kanbanSpalten, settings] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getSettings()]);
+  const [kunden, projekte, kanbanSpalten, settings, alleEmails] = await Promise.all([getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getSettings(), getAll('emails')]);
   kanbanSpalten.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const bestehenderKunde = kunden.find((k) => (k.email || '').toLowerCase() === kontakt.email.toLowerCase());
+
+  // Gehört diese E-Mail zu einem Gmail-Thread (Antwort/Weiterleitung einer
+  // bereits einem Projekt zugeordneten Mail), ist eindeutig klar, welches
+  // Projekt gemeint ist - unabhängig davon, wie viele Projekte der Kunde
+  // insgesamt hat. Löst die Mehrdeutigkeit bei 2+ bestehenden Projekten unten
+  // zuverlässiger als bloßes Zählen, da z.B. eine Antwort auf ein Angebot
+  // immer demselben Thread zugeordnet bleibt, auch wenn später ein zweites,
+  // unabhängiges Projekt für denselben Kunden entsteht.
+  const threadVorgaenger = email.threadId
+    ? alleEmails.find((e) => e.id !== email.id && e.threadId === email.threadId && e.projektId)
+    : null;
 
   let kundeId, kundeName;
   if (bestehenderKunde) {
@@ -152,30 +163,32 @@ async function autoErstelleKundeAusAnfrage(email) {
     kundeName = bestehenderKunde.firma;
 
     // Schreibt derselbe (bereits bekannte) Kunde mehrfach zum selben Anliegen,
-    // entstand bisher bei JEDER E-Mail ein weiteres, dupliziertes Projekt. Hat
-    // der Kunde bereits genau EIN Projekt, wird diese Anfrage dort als weitere
-    // Notiz angehängt statt ein neues Duplikat anzulegen. Bei 0 oder 2+
-    // bestehenden Projekten ist nicht eindeutig, welches gemeint ist - dort
-    // bleibt es beim bisherigen Verhalten (neues Projekt anlegen).
+    // entstand bisher bei JEDER E-Mail ein weiteres, dupliziertes Projekt.
+    // Gehört diese Mail zu einem bereits verknüpften Thread, landet sie dort;
+    // sonst nur, wenn der Kunde bereits genau EIN Projekt hat (sichere
+    // Annahme bei 0 oder 2+ Projekten ohne Thread-Treffer nicht möglich -
+    // dort bleibt es beim bisherigen Verhalten: neues Projekt anlegen).
     const bestehendeProjekte = projekte.filter((p) => p.kundeId === kundeId);
-    if (bestehendeProjekte.length === 1) {
-      const projekt = bestehendeProjekte[0];
+    const zielProjekt = threadVorgaenger
+      ? projekte.find((p) => p.id === threadVorgaenger.projektId)
+      : (bestehendeProjekte.length === 1 ? bestehendeProjekte[0] : null);
+    if (zielProjekt) {
       const titel = kontakt.anliegen || email.subject || 'Anfrage';
       const updatedProjekt = {
-        ...projekt,
+        ...zielProjekt,
         beschreibung: [
-          projekt.beschreibung,
+          zielProjekt.beschreibung,
           `--- Weitere Anfrage per E-Mail (${formatDate(todayISO())}) ---\nBetreff: ${email.subject || ''}${kontakt.anliegen ? '\n' + kontakt.anliegen : ''}`,
         ].filter(Boolean).join('\n\n'),
       };
       await put('projekte', updatedProjekt);
-      await put('emails', { ...email, kundeAngelegtId: projekt.id, projektId: projekt.id });
+      await put('emails', { ...email, kundeAngelegtId: zielProjekt.id, projektId: zielProjekt.id });
       push.notifyRoles(['admin', 'buero'], {
         title: 'Weitere Anfrage zu bestehendem Projekt',
         body: `${kundeName}: ${titel}`,
         url: './index.html#/projekte',
       }).catch(() => { /* Push ist ein Komfort-Feature */ });
-      return { kundeId, projektId: projekt.id };
+      return { kundeId, projektId: zielProjekt.id };
     }
   } else {
     const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
@@ -255,12 +268,12 @@ function extrahiereAdresse(headerText) {
 
 /**
  * Verknüpft synchronisierte E-Mails automatisch mit dem passenden Kunden
- * (per Adressabgleich) und - falls eindeutig genau ein Projekt zum Kunden
- * gehört - auch direkt mit dem Projekt, damit die Korrespondenz in der
- * jeweiligen Kunden-/Projektakte auftaucht, ohne dass jemand die E-Mail
- * manuell zuordnen muss. Läuft rein lokal (kein KI-Aufruf nötig), deshalb
- * unabhängig von der KI-Kategorisierung bei jedem Postfach-Aufruf erneut
- * für noch unverknüpfte E-Mails. Gibt die Anzahl neu verknüpfter Mails zurück.
+ * (per Adressabgleich) und mit dem passenden Projekt, damit die Korrespondenz
+ * in der jeweiligen Kunden-/Projektakte auftaucht, ohne dass jemand die
+ * E-Mail manuell zuordnen muss. Läuft rein lokal (kein KI-Aufruf nötig),
+ * deshalb unabhängig von der KI-Kategorisierung bei jedem Postfach-Aufruf
+ * erneut für noch unverknüpfte E-Mails. Gibt die Anzahl neu verknüpfter
+ * Mails zurück.
  */
 export async function verknuepfeEmailsMitKundenUndProjekten() {
   const [alle, kunden, projekte] = await Promise.all([getAll('emails'), getAll('kunden'), getAll('projekte')]);
@@ -277,14 +290,24 @@ export async function verknuepfeEmailsMitKundenUndProjekten() {
     if (!projekteByKunde.has(p.kundeId)) projekteByKunde.set(p.kundeId, []);
     projekteByKunde.get(p.kundeId).push(p);
   }
+  // Gmail-Thread -> Projekt, aus bereits verknüpften E-Mails - eine Antwort
+  // im selben Thread landet damit zuverlässig beim selben Projekt, auch wenn
+  // der Kunde inzwischen 2+ Projekte hat (reines Zählen unten wäre dann
+  // mehrdeutig).
+  const projektIdByThreadId = new Map();
+  for (const e of alle) {
+    if (e.threadId && e.projektId && !projektIdByThreadId.has(e.threadId)) projektIdByThreadId.set(e.threadId, e.projektId);
+  }
   let verknuepft = 0;
   for (const e of offen) {
     const gegenpartei = extrahiereAdresse(e.richtung === 'ausgang' ? e.to : e.from);
     if (!gegenpartei) continue;
     const kunde = kundeByEmail.get(gegenpartei);
     if (!kunde) continue;
+    const threadProjektId = e.threadId ? projektIdByThreadId.get(e.threadId) : null;
     const projekteDesKunden = projekteByKunde.get(kunde.id) || [];
-    const updated = { ...e, kundeId: kunde.id, projektId: projekteDesKunden.length === 1 ? projekteDesKunden[0].id : '' };
+    const projektId = threadProjektId || (projekteDesKunden.length === 1 ? projekteDesKunden[0].id : '');
+    const updated = { ...e, kundeId: kunde.id, projektId };
     await put('emails', updated);
     verknuepft++;
   }
