@@ -358,6 +358,9 @@ genau wie in Werkora selbst.
 Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
 Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
 Mitarbeiter/Postfach/Mahnungen durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
+`werkora_create_mahnung` (legt die nächste fällige Mahnstufe zu einer
+überfälligen Rechnung an - gleiche Logik/Fristen/Texte wie der Button in
+Werkora selbst; legt nur den Datensatz an, verschickt nichts),
 neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben/Rechnungen anlegen,
 bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben/
 Entwurfs-Rechnungen ändern (`werkora_update_customer`,

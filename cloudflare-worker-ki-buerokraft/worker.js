@@ -79,6 +79,13 @@ const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#
 const AUFGABEN_STATUS_GESCHLOSSEN = ['erledigt'];
 const KUNDEN_STATUS_GESCHLOSSEN = ['verloren', 'kunde'];
 const RECHNUNG_OFFEN_STATUS = ['offen', 'teilbezahlt'];
+// 1:1 aus verwaltung/js/views/mahnungen.js portiert (STUFE_TEXT) - muss mit
+// den dort in Werkora angezeigten/druckbaren Mahntexten übereinstimmen.
+const MAHNUNG_STUFE_TEXT = {
+  1: (frist) => `wir müssen Sie leider daran erinnern, dass die unten genannte Rechnung noch nicht beglichen wurde. Wir bitten Sie, den offenen Betrag innerhalb der nächsten ${frist} Tage auf unser Konto zu überweisen. Sollten Sie bereits gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.`,
+  2: (frist) => `trotz unserer Zahlungserinnerung konnten wir bislang keinen Zahlungseingang zur unten genannten Rechnung feststellen. Wir bitten Sie dringend, den offenen Betrag zzgl. Mahngebühr innerhalb der nächsten ${frist} Tage zu begleichen.`,
+  3: (frist) => `trotz mehrfacher Zahlungsaufforderung ist der offene Betrag weiterhin nicht bei uns eingegangen. Wir fordern Sie hiermit letztmalig auf, den Gesamtbetrag zzgl. Mahngebühr innerhalb von ${frist} Tagen zu begleichen. Andernfalls sehen wir uns gezwungen, weitere Schritte zur Beitreibung der Forderung einzuleiten.`,
+};
 const AUSGABEN_KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 
 function jsonResponse(data, status = 200) {
@@ -1384,6 +1391,18 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: 'werkora_create_mahnung',
+    description: 'Legt für eine überfällige Rechnung die nächste fällige Mahnstufe an (1-3, automatisch ermittelt aus bisherigen Mahnungen zu dieser Rechnung) - dieselbe Logik/Fristen/Texte wie der "Mahnung jetzt erstellen"-Button in Werkora selbst. Legt NUR den Datensatz an (Frist/Gebühr/Text aus den Einstellungen), verschickt NICHTS - Drucken/E-Mail/WhatsApp bleibt ein manueller Schritt in Werkora (Ansicht "Mahnungen"). Schlägt fehl, wenn die Rechnung nicht überfällig ist oder die Zahlungsfrist der letzten Mahnung noch läuft.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string', description: 'ID der überfälligen Rechnung (aus werkora_search_invoices)' },
+      },
+      required: ['invoice_id'],
+    },
+  },
+  {
     name: 'werkora_get_dashboard',
     description: 'Liefert eine Kennzahlen-Übersicht: neue Leads, offene/überfällige Aufgaben, heutige Termine, offene Angebote (Anzahl+Wert), offene/überfällige Rechnungen (Anzahl+Wert).',
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -1893,6 +1912,39 @@ async function callWerkoraMcpTool(name, args, ctx) {
         ...reminderToApi(m),
         invoice_number: rechnungenById[m.rechnungId]?.nummer || '',
       })));
+    }
+    case 'werkora_create_mahnung': {
+      if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
+      const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!rechnung) return mcpToolError('Rechnung nicht gefunden.');
+      const heute = todayISO();
+      if (!RECHNUNG_OFFEN_STATUS.includes(rechnung.status) || !rechnung.faelligAm || rechnung.faelligAm >= heute) {
+        return mcpToolError('Diese Rechnung ist nicht überfällig - keine Mahnung nötig.');
+      }
+      const [bisherigeMahnungen, settingsDoc] = await Promise.all([
+        firestoreList({ accessToken, projectId, collection: 'mahnungen' }),
+        firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' }),
+      ]);
+      const mahnungenFuerRechnung = bisherigeMahnungen
+        .filter((m) => m.rechnungId === args.invoice_id)
+        .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+      const letzte = mahnungenFuerRechnung[mahnungenFuerRechnung.length - 1];
+      const wartetBis = letzte ? letzte.neueFrist : rechnung.faelligAm;
+      const bereit = !wartetBis || wartetBis < heute;
+      if (!bereit) return mcpToolError(`Zahlungsfrist der letzten Mahnung läuft noch bis ${wartetBis} - noch keine neue Mahnstufe fällig.`);
+      const stufe = Math.min(mahnungenFuerRechnung.length + 1, 3);
+      const frist = Number(settingsDoc?.mahnfristTage) || 10;
+      const gebuehr = settingsDoc?.mahnGebuehr?.[stufe] ?? 0;
+      const neueMahnung = {
+        id: crypto.randomUUID(), rechnungId: args.invoice_id, stufe, datum: heute,
+        neueFrist: addDaysISO(heute, frist), gebuehr,
+        text: (MAHNUNG_STUFE_TEXT[stufe] || (() => ''))(frist),
+        createdAt: new Date().toISOString(),
+      };
+      const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id: neueMahnung.id, data: neueMahnung });
+      await logAction(ctx, { action: 'mcp.mahnungen.create', entityType: 'mahnungen', entityId: created.id, newValue: created, status: 'success' });
+      await fireWebhook(ctx, 'reminder.created', { ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
+      return mcpToolSuccess({ ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
     }
     case 'werkora_get_dashboard': {
       const [kunden, aufgaben, termine, angebote, rechnungen] = await Promise.all([
