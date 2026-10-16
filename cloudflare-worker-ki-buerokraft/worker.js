@@ -1572,7 +1572,7 @@ const MCP_TOOLS = [
   },
   {
     name: 'werkora_mark_invoice_paid',
-    description: 'Markiert eine Rechnung als bezahlt und erzeugt automatisch die passenden Buchungssätze (Bank/Kasse gegen Erlös- und Umsatzsteuer-Konto, abhängig von Zahlungsart und Steuersatz) - genau wie Werkora selbst das beim Abhaken einer Zahlung tut.',
+    description: 'Markiert eine Rechnung als bezahlt und erzeugt automatisch die passenden Buchungssätze (Bank/Kasse gegen Erlös- und Umsatzsteuer-Konto, abhängig von Zahlungsart und Steuersatz) - genau wie Werkora selbst das beim Abhaken einer Zahlung tut. Hat die Rechnung einen Skonto-Rabatt (skonto_percent > 0), unbedingt vorher beim Nutzer erfragen, ob der Kunde den Skonto-Betrag tatsächlich abgezogen hat, und das Ergebnis in skonto_deducted übergeben - sonst wird in der Buchhaltung versehentlich der volle statt des reduzierten Zahlungseingangs verbucht.',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     inputSchema: {
       type: 'object',
@@ -1580,6 +1580,7 @@ const MCP_TOOLS = [
         invoice_id: { type: 'string' },
         paid_at: { type: 'string', description: 'YYYY-MM-DD, Standard: heute' },
         payment_method: { type: 'string', description: '"ueberweisung" (Standard), "bar", oder ein anderer in Werkora genutzter Wert' },
+        skonto_deducted: { type: 'boolean', description: 'Nur relevant, wenn die Rechnung einen Skonto-Rabatt hat: true, wenn der Kunde den Skonto-Betrag abgezogen und entsprechend weniger überwiesen hat, sonst false (Standard: false = voller Betrag).' },
       },
       required: ['invoice_id'],
     },
@@ -2121,6 +2122,11 @@ async function callWerkoraMcpTool(name, args, ctx) {
       if (existing.status === 'storniert') return mcpToolError('Eine stornierte Rechnung kann nicht als bezahlt markiert werden.');
       const changes = { status: 'bezahlt', bezahltAm: args.paid_at || todayISO() };
       if (args.payment_method) changes.zahlungsart = args.payment_method;
+      // Ohne diese Angabe würde syncBuchungFuerRechnung() unten immer den
+      // vollen statt des ggf. per Skonto reduzierten Betrags verbuchen (siehe
+      // journal.js) - dieselbe Abfrage wie im Werkora-Bearbeiten-Formular/der
+      // Tabellen-Inline-Statusänderung, nur hier explizit als Tool-Parameter.
+      if ((existing.skontoProzent || 0) > 0) changes.skontoGenutzt = args.skonto_deducted === true;
       const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
       const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
       await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: updated, settingsDoc });

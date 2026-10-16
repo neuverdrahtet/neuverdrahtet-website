@@ -323,9 +323,25 @@ export async function render(container, route) {
       select.addEventListener('change', async () => {
         const r = rechnungen.find((x) => x.id === select.dataset.id);
         if (!r) return;
+        const warStatus = r.status;
         r.status = select.value;
         if (select.value === 'bezahlt' && !r.bezahltAm) r.bezahltAm = todayISO();
         if (select.value !== 'bezahlt') r.bezahltAm = '';
+        // Dieselbe Skonto-Nachfrage wie im vollen Bearbeiten-Formular (siehe
+        // dort) - sonst würde die schnelle Statusänderung hier den vollen statt
+        // des ggf. reduzierten Zahlungseingangs in der Buchhaltung verbuchen.
+        if (warStatus !== 'bezahlt' && r.status === 'bezahlt' && r.skontoProzent > 0 && r.bezahltAm) {
+          const skontoFristBis = addDays(r.datum, r.skontoTage || 0);
+          if (r.bezahltAm <= skontoFristBis) {
+            const skontoBetrag = Math.round(r.brutto * r.skontoProzent) / 100;
+            const zahlbetrag = r.brutto - skontoBetrag;
+            r.skontoGenutzt = confirmDelete(
+              `Die Zahlung kam innerhalb der Skonto-Frist (bis ${formatDate(skontoFristBis)}) an. Hat der Kunde ${r.skontoProzent}% Skonto (${formatCurrency(skontoBetrag)}) abgezogen und nur ${formatCurrency(zahlbetrag)} statt ${formatCurrency(r.brutto)} überwiesen?`
+            );
+          } else {
+            r.skontoGenutzt = false;
+          }
+        }
         await put('rechnungen', r);
         await syncBuchung(r);
         toast('Status aktualisiert', 'success');
