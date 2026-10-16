@@ -1373,6 +1373,17 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: 'werkora_search_mahnungen',
+    description: 'Durchsucht bereits erstellte Mahnungen (Zahlungserinnerungen/Mahnstufen zu Rechnungen) - nur Lesen. Nützlich, um je überfälliger Rechnung zu ermitteln, welche Mahnstufe als Nächstes fällig wäre (siehe werkora_search_invoices mit status "overdue" für die Rechnungen selbst).',
+    annotations: { readOnlyHint: true, idempotentHint: true },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string', description: 'Nur Mahnungen zu dieser einen Rechnung' },
+      },
+    },
+  },
+  {
     name: 'werkora_get_dashboard',
     description: 'Liefert eine Kennzahlen-Übersicht: neue Leads, offene/überfällige Aufgaben, heutige Termine, offene Angebote (Anzahl+Wert), offene/überfällige Rechnungen (Anzahl+Wert).',
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -1867,6 +1878,20 @@ async function callWerkoraMcpTool(name, args, ctx) {
         unread: !!m.unread,
         date: m.dateSort || m.date || '',
         snippet: (m.text || '').slice(0, 140),
+      })));
+    }
+    case 'werkora_search_mahnungen': {
+      let [mahnungen, rechnungen] = await Promise.all([
+        firestoreList({ accessToken, projectId, collection: 'mahnungen' }),
+        firestoreList({ accessToken, projectId, collection: 'rechnungen' }),
+      ]);
+      const rechnungenById = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
+      if (args.invoice_id) mahnungen = mahnungen.filter((m) => m.rechnungId === args.invoice_id);
+      mahnungen.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+      await logAction(ctx, { action: 'mcp.mahnungen.search', status: 'success' });
+      return mcpToolSuccess(mahnungen.map((m) => ({
+        ...reminderToApi(m),
+        invoice_number: rechnungenById[m.rechnungId]?.nummer || '',
       })));
     }
     case 'werkora_get_dashboard': {
