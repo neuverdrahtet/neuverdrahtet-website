@@ -221,6 +221,33 @@ export async function render(container, _route, { autoSync = true } = {}) {
     .sort((a, b) => b.summe - a.summe);
   const markenUmsatzMax = Math.max(1, ...markenUmsatz.map((m) => m.summe));
 
+  // --- Kunden ohne aktuellen Auftrag (letzte Aktivität vor mehr als 6
+  // Monaten, oder noch nie eine) - Bestandskunden fielen bisher nirgends
+  // auf, wenn sie einfach "einschlafen", obwohl Reaktivierung meist
+  // günstiger ist als Neukundengewinnung. Nur status "kunde" (nicht Leads/
+  // Verloren, die gehören in die Lead-Pipeline). "Aktivität" = neuestes
+  // Projekt, Angebot oder Rechnung zu diesem Kunden.
+  const DORMANT_SCHWELLE_MONATE = 6;
+  const dormantSchwelle = (() => {
+    const d = new Date(today + 'T00:00:00');
+    d.setMonth(d.getMonth() - DORMANT_SCHWELLE_MONATE);
+    return d.toISOString().slice(0, 10);
+  })();
+  const letzteAktivitaetByKunde = new Map();
+  function merkeAktivitaet(kundeId, datum) {
+    if (!kundeId || !datum) return;
+    const bisher = letzteAktivitaetByKunde.get(kundeId);
+    if (!bisher || datum > bisher) letzteAktivitaetByKunde.set(kundeId, datum);
+  }
+  for (const p of projekte) merkeAktivitaet(p.kundeId, (p.createdAt || '').slice(0, 10));
+  for (const r of rechnungen) merkeAktivitaet(r.kundeId, r.datum);
+  for (const a of angebote) merkeAktivitaet(a.kundeId, a.datum);
+  const schlafendeKunden = kunden
+    .filter((k) => k.status === 'kunde')
+    .map((k) => ({ kunde: k, letzte: letzteAktivitaetByKunde.get(k.id) || '' }))
+    .filter((e) => !e.letzte || e.letzte < dormantSchwelle)
+    .sort((a, b) => (a.letzte || '').localeCompare(b.letzte || ''));
+
   // --- Postfach-Vorschau (ungelesene zuerst, dann neueste) ---
   const mailsSortiert = [...emails].sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
   const ungeleseneMails = mailsSortiert.filter((m) => m.unread);
@@ -343,6 +370,26 @@ export async function render(container, _route, { autoSync = true } = {}) {
             }).join('')}
           </div>
         </div>
+
+        ${schlafendeKunden.length > 0 ? `
+          <div class="card">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
+              <h2 style="margin:0">Kunden ohne aktuellen Auftrag</h2>
+              <span class="badge badge-warn">${schlafendeKunden.length}</span>
+            </div>
+            <p class="hint" style="margin-top:0">Seit mehr als ${DORMANT_SCHWELLE_MONATE} Monaten kein neues Projekt, Angebot oder keine Rechnung - evtl. Zeit für eine Nachfrage.</p>
+            <ul class="cal-event-list">
+              ${schlafendeKunden.slice(0, 8).map(({ kunde, letzte }) => `
+                <li class="dash-row-link" data-href="#/kunden">
+                  <span>${escapeHtml(kunde.firma)}</span>
+                  <span class="text-mute">${letzte ? 'zuletzt ' + formatDate(letzte) : 'noch nie ein Auftrag'}</span>
+                </li>
+              `).join('')}
+            </ul>
+            ${schlafendeKunden.length > 8 ? `<p class="hint">+${schlafendeKunden.length - 8} weitere</p>` : ''}
+            <p class="hint"><a href="#/kunden">Zu den Kunden →</a></p>
+          </div>
+        ` : ''}
 
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
