@@ -140,7 +140,11 @@ export async function render(container, opts = {}) {
               ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
               <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--border)')}22;color:${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.farbe || 'var(--text)')}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
               <td>${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
-              <td>${statusBadgeHtml(spaltenById[p.status], p.status)}</td>
+              <td>
+                <select class="inline-select status-select" data-id="${p.id}" title="Status ändern">
+                  ${spalten.map((s) => `<option value="${s.id}" ${s.id === p.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
+                </select>
+              </td>
               <td>${formatDate(p.start)}</td>
               <td>${formatDate(p.ende)}</td>
             </tr>
@@ -168,7 +172,21 @@ export async function render(container, opts = {}) {
       </div>
     `;
     tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
-      row.addEventListener('click', () => renderProjektAkte(projekte.find((p) => p.id === row.dataset.id)));
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.status-select')) return;
+        renderProjektAkte(projekte.find((p) => p.id === row.dataset.id));
+      });
+    });
+    tableHost.querySelectorAll('.status-select').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async () => {
+        const p = projekte.find((x) => x.id === select.dataset.id);
+        if (!p) return;
+        p.status = select.value;
+        await put('projekte', p);
+        toast('Status aktualisiert', 'success');
+        applyFilter();
+      });
     });
     bulk.wire(tableHost, {
       onChange: renderTable,
