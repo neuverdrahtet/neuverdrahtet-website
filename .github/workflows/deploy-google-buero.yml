@@ -1,0 +1,27 @@
+# Automatischer Deploy dieses einen Cloudflare Workers bei jedem Push auf
+# main, der etwas in cloudflare-worker-google-buero/ ändert - ersetzt das bisherige manuelle
+# Kopieren in die Cloudflare-Dashboard-Quick-Edit. Secrets (API-Keys,
+# Zugangsdaten im Worker selbst) werden davon NICHT berührt - die bleiben
+# weiterhin separat per "wrangler secret put" bzw. im Cloudflare-Dashboard
+# gepflegt (siehe README.md im jeweiligen Worker-Ordner), stehen also nie im
+# Git-Repo und nie in diesem Workflow.
+name: Deploy neuverdrahtet-google-buero
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare-worker-google-buero/**'
+      - '.github/workflows/deploy-google-buero.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: cloudflare-worker-google-buero
+          command: deploy
