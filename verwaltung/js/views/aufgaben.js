@@ -104,7 +104,11 @@ export async function render(container) {
               <td>${escapeHtml(mitarbeiterById[a.zugewiesenAn]?.name || '')}</td>
               <td>${formatDate(a.faelligAm)}</td>
               <td><span class="badge ${a.prioritaet === 'hoch' ? 'badge-danger' : a.prioritaet === 'niedrig' ? '' : 'badge-warn'}">${escapeHtml(PRIORITAETEN.find((p) => p.id === a.prioritaet)?.titel || 'Normal')}</span></td>
-              <td><span class="badge" style="background:${escapeHtml(st?.farbe || 'var(--border)')}22;color:${escapeHtml(st?.farbe || 'var(--text)')}">${escapeHtml(st?.titel || a.status || '')}</span></td>
+              <td>
+                <select class="inline-select status-select" data-id="${a.id}" title="Status ändern">
+                  ${aufgabenStatus.map((s) => `<option value="${s.id}" ${s.id === a.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
+                </select>
+              </td>
             </tr>
           `; }).join('')}
         </tbody>
@@ -112,7 +116,7 @@ export async function render(container) {
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
       row.addEventListener('click', (e) => {
-        if (e.target.classList.contains('chk-erledigt')) return;
+        if (e.target.classList.contains('chk-erledigt') || e.target.closest('.status-select')) return;
         openForm(aufgaben.find((a) => a.id === row.dataset.id));
       });
     });
@@ -124,6 +128,21 @@ export async function render(container) {
         a.erledigtAm = chk.checked ? new Date().toISOString() : '';
         await put('aufgaben', a);
         toast(chk.checked ? 'Aufgabe erledigt' : 'Aufgabe wieder geöffnet', 'success');
+        applyFilter();
+      });
+    });
+    tableHost.querySelectorAll('.status-select').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async () => {
+        const a = aufgaben.find((x) => x.id === select.dataset.id);
+        if (!a) return;
+        const wasErledigt = !!statusById[a.status]?.geschlossen;
+        a.status = select.value;
+        const nowErledigt = !!statusById[a.status]?.geschlossen;
+        if (!wasErledigt && nowErledigt) a.erledigtAm = new Date().toISOString();
+        if (!nowErledigt) a.erledigtAm = '';
+        await put('aufgaben', a);
+        toast('Status aktualisiert', 'success');
         applyFilter();
       });
     });

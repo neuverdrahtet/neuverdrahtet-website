@@ -11,17 +11,6 @@ import * as journal from '../journal.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
-const KATEGORIE_BADGE_CLASS = {
-  'Material': 'badge-kat-material',
-  'Werkzeug/Maschinen': 'badge-kat-werkzeug',
-  'Fahrzeug/Sprit': 'badge-kat-fahrzeug',
-  'Miete': 'badge-kat-miete',
-  'Versicherung': 'badge-kat-versicherung',
-  'Büro/Verwaltung': 'badge-kat-buero',
-  'Werbung/Marketing': 'badge-kat-werbung',
-  'Personal': 'badge-kat-personal',
-  'Sonstiges': 'badge-kat-sonstiges',
-};
 
 function openBelegAnsicht(beleg) {
   if (beleg?.url) {
@@ -206,7 +195,11 @@ export async function render(container) {
             <tr data-id="${a.id}">
               ${bulk.rowCell(a.id)}
               <td>${formatDate(a.datum)}</td>
-              <td><span class="badge ${KATEGORIE_BADGE_CLASS[a.kategorie] || ''}">${escapeHtml(a.kategorie)}</span></td>
+              <td>
+                <select class="inline-select kategorie-select" data-id="${a.id}" title="Kategorie ändern">
+                  ${KATEGORIEN.map((k) => `<option value="${k}" ${k === a.kategorie ? 'selected' : ''}>${k}</option>`).join('')}
+                </select>
+              </td>
               <td>${escapeHtml(a.beschreibung || '')}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
@@ -218,7 +211,22 @@ export async function render(container) {
       </table>
     `;
     tableHost.querySelectorAll('tbody tr').forEach((row) => {
-      row.addEventListener('click', () => openForm(ausgaben.find((a) => a.id === row.dataset.id)));
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.kategorie-select')) return;
+        openForm(ausgaben.find((a) => a.id === row.dataset.id));
+      });
+    });
+    tableHost.querySelectorAll('.kategorie-select').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async () => {
+        const a = ausgaben.find((x) => x.id === select.dataset.id);
+        if (!a) return;
+        a.kategorie = select.value;
+        await put('ausgaben', a);
+        try { await journal.syncBuchungFuerAusgabe(a, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
+        toast('Kategorie aktualisiert', 'success');
+        renderTable();
+      });
     });
     bulk.wire(tableHost, {
       onChange: renderTable,

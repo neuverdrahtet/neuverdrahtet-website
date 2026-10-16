@@ -626,6 +626,19 @@ table.data-table tbody tr:hover { background: var(--card-2); }
 table.data-table tbody tr { cursor: pointer; }
 .table-empty { padding: 30px; text-align: center; color: var(--text-mute); }
 
+/* Direkt in Tabellenzeilen editierbare Felder (Status/Kategorie-Auswahl,
+   Notiz-Inline-Formular) - sollen sich unauffällig in die Zeile einfügen statt
+   wie ein normales, breites Formularfeld zu wirken, und dürfen beim Klicken
+   nicht den Zeilen-Klick (öffnet sonst das volle Bearbeiten-Modal) auslösen. */
+table.data-table td select.inline-select {
+  font-size: 12.5px;
+  padding: 3px 6px;
+  max-width: 160px;
+}
+tr.notiz-row { cursor: default; }
+tr.notiz-row:hover { background: inherit; }
+tr.notiz-row textarea.notiz-inline-input { font-size: 13.5px; }
+
 table.data-table th.col-select, table.data-table td.col-select {
   width: 34px;
   padding-left: 12px;

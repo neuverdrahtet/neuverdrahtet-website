@@ -279,7 +279,13 @@ export async function render(container, route) {
               <td>${formatDate(r.datum)}</td>
               <td>${formatDate(r.faelligAm)}</td>
               <td>
-                <span class="badge ${STATUS_BADGE[r.status] || 'badge'}" ${r.stornoVonNummer && (r.stornoGrund || r.stornoGrundText) ? `title="${escapeHtml([GRUENDE_STORNO.find((g) => g.id === r.stornoGrund)?.titel, r.stornoGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[r.status] || r.status}</span>
+                ${r.status === 'storniert' ? `
+                  <span class="badge ${STATUS_BADGE[r.status] || 'badge'}" ${r.stornoVonNummer && (r.stornoGrund || r.stornoGrundText) ? `title="${escapeHtml([GRUENDE_STORNO.find((g) => g.id === r.stornoGrund)?.titel, r.stornoGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[r.status]}</span>
+                ` : `
+                  <select class="inline-select status-select" data-id="${r.id}" title="Status ändern">
+                    ${['offen', 'teilbezahlt', 'bezahlt'].map((s) => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}
+                  </select>
+                `}
                 ${overdue ? '<span class="badge badge-danger">überfällig</span>' : ''}
               </td>
               <td class="text-right">${formatCurrency(r.brutto)}${abschlagsSumme ? `<div class="text-mute" style="font-size:11px">Rest: ${formatCurrency(r.brutto - abschlagsSumme)}</div>` : ''}</td>
@@ -307,7 +313,24 @@ export async function render(container, route) {
       </div>
     `;
     tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
-      row.addEventListener('click', () => openForm(rechnungen.find((r) => r.id === row.dataset.id)));
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.status-select')) return;
+        openForm(rechnungen.find((r) => r.id === row.dataset.id));
+      });
+    });
+    tableHost.querySelectorAll('.status-select').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async () => {
+        const r = rechnungen.find((x) => x.id === select.dataset.id);
+        if (!r) return;
+        r.status = select.value;
+        if (select.value === 'bezahlt' && !r.bezahltAm) r.bezahltAm = todayISO();
+        if (select.value !== 'bezahlt') r.bezahltAm = '';
+        await put('rechnungen', r);
+        await syncBuchung(r);
+        toast('Status aktualisiert', 'success');
+        renderTable();
+      });
     });
     bulk.wire(tableHost, {
       onChange: renderTable,

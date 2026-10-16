@@ -220,7 +220,6 @@ export async function render(container, route) {
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
-  const kundenStatusById = Object.fromEntries(kundenStatusListe.map((s) => [s.id, s]));
   let filtered = kunden;
   const bulk = createBulkSelect('kunden', { label: 'Kunden' });
 
@@ -251,22 +250,26 @@ export async function render(container, route) {
       ${bulk.barHtml()}
       <table class="data-table">
         <thead><tr>
-          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Kundennummer</th><th>Status</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th>
+          ${bulk.headerCell()}<th></th><th>Firma / Name</th><th>Kundennummer</th><th>Status</th><th>Ansprechpartner</th><th>Ort</th><th>Telefon</th><th>E-Mail</th><th></th>
         </tr></thead>
         <tbody>
           ${filtered.map((k) => {
-            const status = kundenStatusById[k.status || 'kunde'];
             return `
             <tr data-id="${k.id}">
               ${bulk.rowCell(k.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${k.farbe || '#6b7280'}"></span></td>
               <td>${escapeHtml(k.firma)}</td>
               <td>${escapeHtml(k.kundennummer || '')}</td>
-              <td>${status ? `<span class="badge" style="background:${status.farbe}22;color:${status.farbe}">${escapeHtml(status.titel)}</span>` : ''}</td>
+              <td>
+                <select class="inline-select status-select" data-id="${k.id}" title="Status ändern">
+                  ${kundenStatusListe.map((s) => `<option value="${s.id}" ${s.id === (k.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
+                </select>
+              </td>
               <td>${escapeHtml(k.ansprechpartner || '')}</td>
               <td>${escapeHtml(k.ort || '')}</td>
               <td>${escapeHtml(k.telefon || '')}</td>
               <td>${escapeHtml(k.email || '')}</td>
+              <td><button type="button" class="btn btn-sm btn-ghost btn-notiz-toggle" data-id="${k.id}" title="Notiz schnell bearbeiten">📝</button></td>
             </tr>
           `;
           }).join('')}
@@ -296,6 +299,48 @@ export async function render(container, route) {
       row.addEventListener('click', () => {
         const kunde = kunden.find((k) => k.id === row.dataset.id);
         renderKundenakte(kunde);
+      });
+    });
+    tableHost.querySelectorAll('.status-select').forEach((select) => {
+      select.addEventListener('click', (e) => e.stopPropagation());
+      select.addEventListener('change', async () => {
+        const kunde = kunden.find((k) => k.id === select.dataset.id);
+        if (!kunde) return;
+        kunde.status = select.value;
+        await put('kunden', kunde);
+        toast('Status aktualisiert', 'success');
+        renderTable();
+      });
+    });
+    tableHost.querySelectorAll('.btn-notiz-toggle').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const row = btn.closest('tr');
+        const existing = row.nextElementSibling;
+        if (existing?.classList.contains('notiz-row')) { existing.remove(); return; }
+        tableHost.querySelectorAll('.notiz-row').forEach((r) => r.remove());
+        const kunde = kunden.find((k) => k.id === btn.dataset.id);
+        if (!kunde) return;
+        const notizRow = document.createElement('tr');
+        notizRow.className = 'notiz-row';
+        notizRow.innerHTML = `
+          <td colspan="${row.children.length}">
+            <div class="flex-row" style="gap:8px;align-items:flex-start;padding:4px 0">
+              <textarea class="notiz-inline-input" style="flex:1;min-height:60px">${escapeHtml(kunde.notizen || '')}</textarea>
+              <button type="button" class="btn btn-sm btn-primary btn-notiz-save">Speichern</button>
+            </div>
+          </td>
+        `;
+        notizRow.addEventListener('click', (ev) => ev.stopPropagation());
+        row.after(notizRow);
+        const textarea = notizRow.querySelector('textarea');
+        textarea.focus();
+        notizRow.querySelector('.btn-notiz-save').addEventListener('click', async () => {
+          kunde.notizen = textarea.value.trim();
+          await put('kunden', kunde);
+          toast('Notiz gespeichert', 'success');
+          notizRow.remove();
+        });
       });
     });
     bulk.wire(tableHost, {
