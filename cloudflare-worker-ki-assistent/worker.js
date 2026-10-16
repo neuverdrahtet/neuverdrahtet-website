@@ -36,6 +36,11 @@
  *                        Fehlt eines der vier, wird die Benachrichtigung
  *                        einfach übersprungen (kein Fehler).
  *
+ * RATE_LIMITER (Rate-Limiting-Binding, siehe wrangler.toml [[ratelimits]]) -
+ * begrenzt Claude-Aufrufe pro IP, damit ein Skript nicht unbegrenzt Kosten
+ * verursachen kann. Wird von Cloudflare beim ersten Deploy automatisch
+ * angelegt, erfordert keine manuelle Einrichtung im Dashboard.
+ *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
@@ -49,6 +54,18 @@ const DEFAULT_ALLOWED_ORIGINS = [
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_LEN = 4000;
 const MAX_TOOL_ITERATIONS = 4;
+
+// env.RATE_LIMITER kann fehlen (Binding noch nicht deployed/konfiguriert) -
+// dann einfach nicht blockieren, statt den Worker komplett auszuhebeln.
+async function unterSchwellenwert(env, ip) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
+}
 
 function getAllowedOrigins(env) {
   if (env.ALLOWED_ORIGINS) {
@@ -388,6 +405,11 @@ export default {
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers });
     if (!getAllowedOrigins(env).includes(origin)) {
       return jsonResponse({ error: 'Origin nicht erlaubt.' }, 403, headers);
+    }
+
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!(await unterSchwellenwert(env, ip))) {
+      return jsonResponse({ error: 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.' }, 429, headers);
     }
 
     let body;

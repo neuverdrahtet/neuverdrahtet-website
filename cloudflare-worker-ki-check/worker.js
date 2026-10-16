@@ -23,6 +23,11 @@
  *   ALLOWED_ORIGINS    (Variable, optional) - Komma-getrennte Liste erlaubter
  *                      Herkünfte, Standard: https://neuverdrahtet.com,https://www.neuverdrahtet.com
  *
+ * RATE_LIMITER (Rate-Limiting-Binding, siehe wrangler.toml [[ratelimits]]) -
+ * begrenzt teure Claude-Vision-Aufrufe pro IP, damit ein Skript nicht
+ * unbegrenzt Kosten verursachen kann. Wird von Cloudflare beim ersten Deploy
+ * automatisch angelegt, erfordert keine manuelle Einrichtung im Dashboard.
+ *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
@@ -137,6 +142,20 @@ async function callClaudeUnterverteilungCheck({ apiKey, model, imageDataUrl }) {
 // serverseitiges Sicherheitsnetz.
 const MAX_IMAGE_DATA_URL_LENGTH = 8_000_000; // ca. 6 MB Bilddaten (Base64-Overhead eingerechnet)
 
+// Schützt den teuren Claude-Vision-Aufruf vor einem Skript, das die
+// Timing-Anti-Spam-Heuristik unten umgeht und unbegrenzt Kosten verursacht.
+// env.RATE_LIMITER kann fehlen (Binding noch nicht deployed/konfiguriert) -
+// dann einfach nicht blockieren, statt den Worker komplett auszuhebeln.
+async function unterSchwellenwert(env, ip) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
@@ -146,6 +165,11 @@ export default {
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers });
     if (!getAllowedOrigins(env).includes(origin)) {
       return jsonResponse({ error: 'Origin nicht erlaubt.' }, 403, headers);
+    }
+
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!(await unterSchwellenwert(env, ip))) {
+      return jsonResponse({ error: 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.' }, 429, headers);
     }
 
     let body;

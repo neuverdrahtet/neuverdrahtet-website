@@ -78,6 +78,12 @@
  *                        Termin am Ende immer selbst über diesen Link
  *                        bestätigen.
  *
+ * RATE_LIMITER (Rate-Limiting-Binding, siehe wrangler.toml [[ratelimits]]) -
+ * begrenzt Claude-Aufrufe pro Absendernummer, damit eine einzelne Nummer
+ * nicht unbegrenzt Kosten verursachen kann. Wird von Cloudflare beim ersten
+ * Deploy automatisch angelegt, erfordert keine manuelle Einrichtung im
+ * Dashboard.
+ *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
@@ -443,6 +449,21 @@ async function validateMetaSignature({ appSecret, rawBody, signature }) {
   return macHex === erwarteterHex;
 }
 
+// Begrenzt Claude-Aufrufe pro Absendernummer, falls eine einzelne Nummer den
+// Bot mit Nachrichten flutet - zusätzlich zur Signaturprüfung oben (die
+// gefälschte Absender blockiert, nicht aber eine echte, aber sehr aktive
+// Nummer). env.RATE_LIMITER kann fehlen (Binding noch nicht deployed/
+// konfiguriert) - dann einfach nicht blockieren.
+async function unterSchwellenwert(env, key) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
 /** Extrahiert die eingehende Text-Nachricht aus einem Meta-Webhook-Payload, oder null bei anderen Ereignissen (Status-Updates etc.). */
 function extrahiereEingehendeNachricht(payload) {
   try {
@@ -543,6 +564,11 @@ export default {
     // Kein Text-Nachrichten-Ereignis (z.B. Zustellstatus "delivered"/"read") - trotzdem
     // mit 200 bestätigen, sonst wiederholt Meta den Webhook-Aufruf unnötig.
     if (!eingehend || !eingehend.text) return new Response('OK', { status: 200 });
+
+    if (!(await unterSchwellenwert(env, eingehend.von))) {
+      console.error(`ki-assistent-whatsapp: Rate-Limit überschritten für ${eingehend.von}.`);
+      return new Response('OK', { status: 200 });
+    }
 
     if (!env.ANTHROPIC_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT_JSON || !env.META_ACCESS_TOKEN || !env.META_PHONE_NUMBER_ID) {
       console.error('ki-assistent-whatsapp: erforderliche Secrets/Variablen fehlen.');

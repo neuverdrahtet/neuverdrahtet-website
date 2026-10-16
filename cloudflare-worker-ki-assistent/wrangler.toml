@@ -7,3 +7,11 @@ compatibility_date = "2026-01-01"
 
 [vars]
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
+
+# Begrenzt Claude-Chat-Aufrufe auf 30 pro IP und Minute - schützt vor
+# unbegrenzten Kosten durch ein Skript. Wird von Cloudflare beim ersten Deploy
+# automatisch angelegt, keine manuelle Einrichtung im Dashboard nötig.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
