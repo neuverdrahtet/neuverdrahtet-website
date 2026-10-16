@@ -237,6 +237,14 @@ export default {
     if (!ERLAUBTE_COLLECTIONS.includes(collection)) {
       return jsonResponse({ error: `Unbekannter Endpunkt. Erlaubt: ${ERLAUBTE_COLLECTIONS.map((c) => '/' + c).join(', ')}` }, 404);
     }
+    // id landet unvalidiert direkt in der Firestore-REST-URL (siehe
+    // firestoreGet/firestoreCreate/firestoreUpdate oben) - nur das in Werkora
+    // tatsächlich verwendete ID-Format zulassen (crypto.randomUUID() oder der
+    // "id-<base36>-<base36>"-Fallback, siehe uid() in utils.js), damit kein
+    // ungültiger/manipulierter Pfadabschnitt an Firestore durchgereicht wird.
+    if (id !== undefined && !/^[A-Za-z0-9_-]{1,200}$/.test(id)) {
+      return jsonResponse({ error: 'Ungültige ID.' }, 400);
+    }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
       return jsonResponse({ error: 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }, 500);
     }
