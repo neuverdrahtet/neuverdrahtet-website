@@ -395,6 +395,28 @@ function buildElektroKomplettBeschreibung(payload) {
 
 // --- Allgemeines Kontaktformular (index.html) ---
 
+// Erkennt Werbespam im freien Nachrichtenfeld (z.B. die verbreitete "wir
+// entfernen Ihre negativen Google-Bewertungen"-Masche) - bewusst nur bei
+// MEHREREN starken Signalen zusammen (>= 2 Treffer), damit eine echte
+// Kundenanfrage, die zufällig eines der Wörter enthält (z.B. "ich habe eine
+// schlechte Bewertung gelesen"), nicht fälschlich verworfen wird. Kein
+// Einzelwort-Abgleich, sondern typische Formulierungen/Muster dieser
+// Betrugsmasche.
+const SPAM_SIGNALE = [
+  /negative[nr]?\s+(google-?)?bewertungen/i,
+  /1-?stern-?bewertungen/i,
+  /bewertungen\s+(entfernen|löschen)/i,
+  /seo-?services?/i,
+  /google\s*ads\s*management/i,
+  /facebook-?bewertungen/i,
+  /wa\.me\//i,
+  /100\s*%\s*garantie/i,
+];
+function istWerbespam(nachricht) {
+  const text = (nachricht || '').toLowerCase();
+  return SPAM_SIGNALE.filter((regex) => regex.test(text)).length >= 2;
+}
+
 function buildKontaktBeschreibung(payload) {
   const zeilen = [
     `Anfrage über das Kontaktformular auf der Website (${new Date().toLocaleDateString('de-DE')})`,
@@ -467,7 +489,7 @@ async function legeLeadAn({ env, kunde, projekt }) {
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
 // ohne Netzwerkzugriff) - der Cloudflare-Worker-Laufzeit stört das nicht,
 // die Plattform ruft ausschließlich den default-Export auf.
-export { toFirestoreValue, toFirestoreFields, buildBeschreibung, klassifiziereLead, farbeAusText, buildElektroKomplettBeschreibung, klassifiziereElektroKomplettLead };
+export { toFirestoreValue, toFirestoreFields, buildBeschreibung, klassifiziereLead, farbeAusText, buildElektroKomplettBeschreibung, klassifiziereElektroKomplettLead, istWerbespam };
 
 export default {
   async fetch(request, env) {
@@ -513,6 +535,11 @@ export default {
     if (body.formTyp === 'kontakt') {
       if (!body.name || !body.email) {
         return jsonResponse({ error: 'Bitte Name und E-Mail angeben.' }, 400, headers);
+      }
+      // Wie bei der Bot-Erkennung oben: stillschweigend verwerfen, ohne dem
+      // Absender zu zeigen, dass er erkannt wurde - legt keinen Kunden/Lead an.
+      if (istWerbespam(body.nachricht)) {
+        return jsonResponse({ ok: true }, 200, headers);
       }
       try {
         await legeLeadAn({
