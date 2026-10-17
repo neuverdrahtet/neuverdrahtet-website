@@ -25,9 +25,10 @@ function bankOderKasse(konten, settings, zahlungsart) {
   return findKonto(konten, id, fallbackNummer);
 }
 
-/** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine bezahlte Rechnung. */
+/** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine bezahlte
+ * oder teilbezahlte Rechnung. */
 export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
-  if (r.status !== 'bezahlt') return [];
+  if (r.status !== 'bezahlt' && r.status !== 'teilbezahlt') return [];
   const geldKonto = bankOderKasse(konten, settings, r.zahlungsart);
   if (!geldKonto) return [];
   const datum = r.bezahltAm || r.datum;
@@ -35,16 +36,31 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
   const quelle = { typ: 'rechnung', id: r.id };
   const buchungen = [];
 
-  // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage anteilig
-  // (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag - Netto/USt.
-  // deshalb hier anteilig kürzen, sodass die Soll-Buchung aufs Geldkonto
-  // exakt dem tatsächlich eingegangenen (reduzierten) Betrag entspricht.
   let netto = r.netto;
   let steuer = r.steuer;
-  if (r.skontoGenutzt && r.skontoProzent > 0) {
+  let textZusatz = '';
+  if (r.status === 'teilbezahlt') {
+    // Teilzahlung: ohne hinterlegten Teilbetrag gibt es nichts zu verbuchen -
+    // Netto/USt. anteilig im Verhältnis Teilbetrag/Bruttobetrag kürzen
+    // (gleiche Rechnung wie beim Skonto unten), sodass die Soll-Buchung aufs
+    // Geldkonto exakt dem bisher tatsächlich eingegangenen Betrag entspricht,
+    // nicht dem vollen Rechnungsbetrag.
+    const teilbetrag = r.teilzahlungBetrag || 0;
+    if (!teilbetrag || !r.brutto) return [];
+    const faktor = Math.min(teilbetrag / r.brutto, 1);
+    netto = Math.round(r.netto * faktor * 100) / 100;
+    steuer = Math.round(r.steuer * faktor * 100) / 100;
+    textZusatz = ' (Teilzahlung)';
+  } else if (r.skontoGenutzt && r.skontoProzent > 0) {
+    // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage
+    // anteilig (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag -
+    // Netto/USt. deshalb hier anteilig kürzen, sodass die Soll-Buchung aufs
+    // Geldkonto exakt dem tatsächlich eingegangenen (reduzierten) Betrag
+    // entspricht.
     const faktor = 1 - r.skontoProzent / 100;
     netto = Math.round(r.netto * faktor * 100) / 100;
     steuer = Math.round(r.steuer * faktor * 100) / 100;
+    textZusatz = ` (abzgl. ${r.skontoProzent}% Skonto)`;
   }
 
   const steuerfrei = r.steuerart && r.steuerart !== 'regel';
@@ -54,7 +70,7 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
     : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
   if (erloesKonto && netto) {
     buchungen.push({
-      id: uid(), datum, text: r.skontoGenutzt ? `${belegtext} (abzgl. ${r.skontoProzent}% Skonto)` : belegtext,
+      id: uid(), datum, text: `${belegtext}${textZusatz}`,
       sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
       betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
     });

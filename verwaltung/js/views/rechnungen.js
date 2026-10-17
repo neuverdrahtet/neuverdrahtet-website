@@ -288,7 +288,7 @@ export async function render(container, route) {
                 `}
                 ${overdue ? '<span class="badge badge-danger">überfällig</span>' : ''}
               </td>
-              <td class="text-right">${formatCurrency(r.brutto)}${abschlagsSumme ? `<div class="text-mute" style="font-size:11px">Rest: ${formatCurrency(r.brutto - abschlagsSumme)}</div>` : ''}</td>
+              <td class="text-right">${formatCurrency(r.brutto)}${abschlagsSumme ? `<div class="text-mute" style="font-size:11px">Rest: ${formatCurrency(r.brutto - abschlagsSumme)}</div>` : ''}${r.status === 'teilbezahlt' && r.teilzahlungBetrag ? `<div class="text-mute" style="font-size:11px">Gezahlt: ${formatCurrency(r.teilzahlungBetrag)}</div>` : ''}</td>
             </tr>
           `; }).join('')}
         </tbody>
@@ -324,6 +324,19 @@ export async function render(container, route) {
         const r = rechnungen.find((x) => x.id === select.dataset.id);
         if (!r) return;
         const warStatus = r.status;
+        // Ohne den tatsächlich gezahlten Teilbetrag kann die Buchhaltung eine
+        // Teilzahlung nicht korrekt verbuchen (siehe journal.js) - deshalb
+        // hier abfragen, analog zur Skonto-Rückfrage unten. Bricht der Nutzer
+        // ab, bleibt der Status unverändert.
+        if (select.value === 'teilbezahlt') {
+          const eingabe = window.prompt(`Bisher gezahlter Betrag für Rechnung ${r.nummer} (von ${formatCurrency(r.brutto)}):`, r.teilzahlungBetrag ? String(r.teilzahlungBetrag) : '');
+          if (eingabe === null) { select.value = warStatus; return; }
+          const betrag = Number(eingabe.replace(',', '.'));
+          if (!Number.isFinite(betrag) || betrag < 0) { toast('Ungültiger Betrag.', 'danger'); select.value = warStatus; return; }
+          r.teilzahlungBetrag = betrag;
+        } else {
+          r.teilzahlungBetrag = 0;
+        }
         r.status = select.value;
         if (select.value === 'bezahlt' && !r.bezahltAm) r.bezahltAm = todayISO();
         if (select.value !== 'bezahlt') r.bezahltAm = '';
@@ -683,9 +696,14 @@ export async function render(container, route) {
             </div>
             ${isEdit ? `
               <div class="field"><label>Status</label>
-                <select name="status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
+                <select name="status" id="f-status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
               </div>
               <div class="field"><label>Bezahlt am</label><input type="date" name="bezahltAm" value="${data.bezahltAm || ''}"></div>
+              <div class="field" id="f-teilzahlung-feld" ${data.status === 'teilbezahlt' ? '' : 'hidden'}>
+                <label>Bisher gezahlter Betrag</label>
+                <input type="number" step="0.01" min="0" name="teilzahlungBetrag" value="${data.teilzahlungBetrag || ''}">
+                <span class="hint mb-0">Nötig, damit die Buchhaltung den tatsächlichen Zahlungseingang korrekt verbucht (siehe Journal).</span>
+              </div>
             ` : ''}
           </div>
           <div class="divider"></div>
@@ -785,6 +803,9 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
     const sigMitarbeiter = mountSigSection(body.querySelector('#sig-host-mitarbeiter'), data.unterschriftMitarbeiter, 'Unterschrift Mitarbeiter');
     body.querySelector('#f-zahlungsart').addEventListener('change', (e) => {
       body.querySelector('#bar-sig-section').hidden = e.target.value !== 'bar';
+    });
+    body.querySelector('#f-status')?.addEventListener('change', (e) => {
+      body.querySelector('#f-teilzahlung-feld').hidden = e.target.value !== 'teilbezahlt';
     });
 
     if (!locked) {
@@ -1113,6 +1134,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       if (isEdit) {
         updated.status = fd.get('status') || data.status;
         updated.bezahltAm = fd.get('bezahltAm') || '';
+        updated.teilzahlungBetrag = updated.status === 'teilbezahlt' ? (Number(fd.get('teilzahlungBetrag')) || 0) : 0;
       }
       if (!updated.kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
 

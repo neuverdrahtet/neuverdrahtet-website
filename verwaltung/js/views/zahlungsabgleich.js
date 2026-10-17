@@ -22,6 +22,7 @@ export async function render(container) {
   // überweist - eine Zahlung, die exakt auf diesen (kleineren) Betrag statt
   // auf den vollen Rechnungsbetrag lautet, ist ebenfalls ein gültiger Treffer.
   const betragBeiSkonto = (r) => (r.skontoProzent > 0 ? r.brutto - Math.round(r.brutto * r.skontoProzent) / 100 : null);
+  const TOLERANZ = 0.01;
 
   function renderList() {
     const offen = abgleiche.filter((a) => a.status === 'offen').sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -82,13 +83,35 @@ export async function render(container) {
       const abgleich = abgleiche.find((a) => a.id === id);
       btn.disabled = true;
       try {
+        const bezahlterBetrag = Number(abgleich.betrag);
+        const bezahltAm = (abgleich.datum || '').slice(0, 10) || rechnung.bezahltAm;
+        const vollBetrag = Math.abs((rechnung.brutto || 0) - bezahlterBetrag) < TOLERANZ;
         // Entspricht der eingegangene Betrag genau dem Skonto-reduzierten
         // Betrag (statt dem vollen Rechnungsbetrag), hat der Kunde das
         // angebotene Skonto offensichtlich genutzt - dann auch so verbuchen
         // (siehe journal.js erzeugeBuchungenFuerRechnung).
         const skontoBetrag = betragBeiSkonto(rechnung);
-        const skontoGenutzt = skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(Number(abgleich.betrag) * 100);
-        const aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm: (abgleich.datum || '').slice(0, 10) || rechnung.bezahltAm, skontoGenutzt };
+        const skontoGenutzt = !vollBetrag && skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(bezahlterBetrag * 100);
+        let aktualisiert;
+        let hinweis;
+        if (vollBetrag || skontoGenutzt) {
+          aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt, teilzahlungBetrag: 0 };
+          hinweis = `Rechnung ${rechnung.nummer} als bezahlt markiert.`;
+        } else {
+          // Weder voller noch Skonto-Betrag: Teilzahlung - bisher per
+          // Zahlungsabgleich bestätigte Teilbeträge werden addiert, damit
+          // mehrere Teilzahlungen zur selben Rechnung korrekt aufsummiert
+          // werden (siehe journal.js, das teilzahlungBetrag anteilig bucht).
+          const bisher = rechnung.status === 'teilbezahlt' ? (rechnung.teilzahlungBetrag || 0) : 0;
+          const neuerBetrag = bisher + bezahlterBetrag;
+          if (neuerBetrag >= (rechnung.brutto || 0) - TOLERANZ) {
+            aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt: false, teilzahlungBetrag: 0 };
+            hinweis = `Rechnung ${rechnung.nummer} ist mit dieser Zahlung komplett beglichen - als bezahlt markiert.`;
+          } else {
+            aktualisiert = { ...rechnung, status: 'teilbezahlt', bezahltAm, teilzahlungBetrag: neuerBetrag };
+            hinweis = `Teilzahlung für Rechnung ${rechnung.nummer} erfasst (${formatCurrency(neuerBetrag)} von ${formatCurrency(rechnung.brutto)}).`;
+          }
+        }
         await put('rechnungen', aktualisiert);
         await journal.syncBuchungFuerRechnung(aktualisiert, settings);
         rechnungenById[rechnungId] = aktualisiert;
@@ -96,7 +119,7 @@ export async function render(container) {
         if (rIndex !== -1) rechnungen[rIndex] = aktualisiert;
         await put('zahlungsabgleich', { ...abgleich, status: 'bestaetigt', rechnungId, erledigtAm: new Date().toISOString() });
         abgleiche = abgleiche.map((a) => (a.id === id ? { ...a, status: 'bestaetigt', rechnungId, erledigtAm: new Date().toISOString() } : a));
-        toast(`Rechnung ${rechnung.nummer} als bezahlt markiert.`, 'success');
+        toast(hinweis, 'success');
         renderList();
       } catch (err) {
         toast(err.message, 'danger');
