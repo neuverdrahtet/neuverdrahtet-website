@@ -258,7 +258,7 @@ export async function render(container) {
 
   function openCardForm(p) {
     const isEdit = !!p;
-    const data = p || { id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '', start: '', ende: '', mitarbeiterIds: [], farbe: '', createdAt: new Date().toISOString() };
+    const data = p || { id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '', start: '', ende: '', mitarbeiterIds: [], farbe: '', bereich: 'projekt', createdAt: new Date().toISOString() };
     const { body, close } = openModal({
       title: isEdit ? 'Projekt bearbeiten' : 'Neues Projekt',
       bodyHtml: `

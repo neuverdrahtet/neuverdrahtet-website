@@ -21,9 +21,19 @@ function statusBadgeHtml(spalte, statusFallback) {
   return `<span class="badge" style="background:${escapeHtml(farbe)}22;color:${escapeHtml(farbe)}">${titel}</span>`;
 }
 
+// Projekte ohne (oder mit ungültigem) Bereich - z.B. über Kanban angelegt,
+// das bisher kein Bereich-Feld gesetzt hat, oder Alt-Datensätze von vor der
+// Einführung des eigenen "Projekte"-Bereichs - fallen in den allgemeinen
+// "Projekte"-Bereich, damit sie durch die jetzt strikte Trennung in eigene
+// Reiter (Projekte/Aufträge/Service/Wartung) nicht aus allen Reitern
+// verschwinden.
+function effektiverBereich(p) {
+  return BEREICHE.some((b) => b.id === p.bereich) ? p.bereich : 'projekt';
+}
+
 export async function render(container, opts = {}) {
-  const bereichScope = opts.bereichScope || null;
-  const scopedBereiche = bereichScope ? BEREICHE.filter((b) => bereichScope.includes(b.id)) : BEREICHE;
+  const bereichScope = opts.bereichScope || ['projekt'];
+  const scopedBereiche = BEREICHE.filter((b) => bereichScope.includes(b.id));
 
   let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben, emails] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
@@ -40,7 +50,7 @@ export async function render(container, opts = {}) {
   const kategorienById = Object.fromEntries(kategorien.map((k) => [k.id, k]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   projekte.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
-  if (bereichScope) projekte = projekte.filter((p) => bereichScope.includes(p.bereich));
+  projekte = projekte.filter((p) => bereichScope.includes(effektiverBereich(p)));
 
   let folder = ALLE_OFFEN;
   let filtered = projekte;
@@ -112,7 +122,7 @@ export async function render(container, opts = {}) {
     filtered = projekte.filter((p) => {
       if (folder === ALLE_OFFEN && spaltenById[p.status]?.geschlossen) return false;
       if (folder !== ALLE && folder !== ALLE_OFFEN && p.status !== folder) return false;
-      if (bereichFilter && p.bereich !== bereichFilter) return false;
+      if (bereichFilter && effektiverBereich(p) !== bereichFilter) return false;
       if (gewerkFilter && p.gewerk !== gewerkFilter) return false;
       if (!q) return true;
       const kunde = kundenById[p.kundeId];
@@ -141,7 +151,7 @@ export async function render(container, opts = {}) {
               <td>${escapeHtml(kundenById[p.kundeId]?.firma || '')}</td>
               ${marken.length > 0 ? `<td>${p.markeId && markenById[p.markeId] ? `<span class="badge" style="background:${escapeHtml(statusFarbe)}22;color:${escapeHtml(statusFarbe)}">🏷️ ${escapeHtml(markenById[p.markeId].name)}</span>` : `<span class="text-mute">Standard</span>`}</td>` : ''}
               <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(statusFarbe)}22;color:${escapeHtml(statusFarbe)}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
-              <td style="color:${escapeHtml(statusFarbe)}">${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === p.bereich)?.titel || '')}</td>
+              <td style="color:${escapeHtml(statusFarbe)}">${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === effektiverBereich(p))?.titel || '')}</td>
               <td>
                 <select class="inline-select status-select" data-id="${p.id}" title="Status ändern" style="border-color:${escapeHtml(statusFarbe)};color:${escapeHtml(statusFarbe)}">
                   ${spalten.map((s) => `<option value="${s.id}" ${s.id === p.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
@@ -209,7 +219,7 @@ export async function render(container, opts = {}) {
   container.querySelector('#btn-export').addEventListener('click', () => {
     const header = ['Titel', 'Kunde', 'Bereich', 'Status', 'Gewerk', 'Beschreibung', 'Start', 'Ende', 'Erstellt am'];
     const rows = [header, ...filtered.map((p) => [
-      p.titel || '', kundenById[p.kundeId]?.firma || '', scopedBereiche.find((b) => b.id === p.bereich)?.titel || p.bereich || '',
+      p.titel || '', kundenById[p.kundeId]?.firma || '', BEREICHE.find((b) => b.id === effektiverBereich(p))?.titel || '',
       spaltenById[p.status]?.titel || p.status || '', GEWERKE.find((g) => g.id === p.gewerk)?.titel || '',
       p.beschreibung || '', p.start || '', p.ende || '', p.createdAt ? formatDate(p.createdAt) : '',
     ])];
@@ -852,7 +862,7 @@ export async function render(container, opts = {}) {
               <p class="text-mute" style="margin-top:2px">${escapeHtml(spaltenById[p.status]?.titel || p.status || '')}</p>
               <div class="akte-info-rows">
                 ${kunde ? `<div class="akte-info-row"><span class="text-mute">Kunde</span><span>${escapeHtml(kunde.firma)}</span></div>` : ''}
-                ${BEREICHE.find((b) => b.id === p.bereich) ? `<div class="akte-info-row"><span class="text-mute">Bereich</span><span>${escapeHtml(BEREICHE.find((b) => b.id === p.bereich).titel)}</span></div>` : ''}
+                <div class="akte-info-row"><span class="text-mute">Bereich</span><span>${escapeHtml(BEREICHE.find((b) => b.id === effektiverBereich(p)).titel)}</span></div>
                 ${kategorienById[p.kategorieId] ? `<div class="akte-info-row"><span class="text-mute">Kategorie</span><span>${escapeHtml(kategorienById[p.kategorieId].titel)}</span></div>` : ''}
                 ${p.gewerk ? `<div class="akte-info-row"><span class="text-mute">Gewerk</span><span>${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || p.gewerk)}</span></div>` : ''}
                 ${p.markeId && markenById[p.markeId] ? `<div class="akte-info-row"><span class="text-mute">Marke</span><span>🏷️ ${escapeHtml(markenById[p.markeId].name)}</span></div>` : ''}

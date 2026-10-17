@@ -604,6 +604,7 @@ export const DEFAULT_KANBAN_SPALTEN = [
 ];
 
 export const BEREICHE = [
+  { id: 'projekt', titel: 'Projekte' },
   { id: 'auftrag', titel: 'Aufträge' },
   { id: 'service', titel: 'Service' },
   { id: 'wartung', titel: 'Wartungen & Prüfungen' },
@@ -2352,6 +2353,8 @@ export const ROUTE_ROLLEN = {
   kanban: ['admin', 'buero'],
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
+  service: ['admin', 'buero', 'mitarbeiter'],
+  wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   termine: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
