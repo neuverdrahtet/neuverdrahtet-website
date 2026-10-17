@@ -2,27 +2,9 @@ import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate } from '../utils.js';
 import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
+import { verschiebeProjektReferenzen } from '../projektMerge.js';
 
 const SPALTEN_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
-
-// Sammlungen, die ein Projekt per projektId referenzieren - beim Zusammenlegen
-// zweier Projekte müssen diese Verweise auf das behaltene Projekt umgehängt
-// werden, sonst würden z.B. Termine/Angebote am gelöschten Duplikat "hängen
-// bleiben" und aus der Akte verschwinden.
-const PROJEKT_REFERENZ_STORES = [
-  'termine', 'aufgaben', 'emails', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
-  'mahnungen', 'ausgaben', 'zeiterfassung', 'dokumente', 'fotos', 'aufmasse', 'nachrichten',
-];
-
-async function verschiebeProjektReferenzen(alteProjektId, neueProjektId) {
-  for (const store of PROJEKT_REFERENZ_STORES) {
-    const rows = await getAll(store);
-    const betroffen = rows.filter((r) => r.projektId === alteProjektId);
-    for (const row of betroffen) {
-      await put(store, { ...row, projektId: neueProjektId });
-    }
-  }
-}
 
 export async function render(container) {
   let [projekte, kunden, mitarbeiter, spalten, marken] = await Promise.all([

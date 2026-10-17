@@ -11,6 +11,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
 import { generateEntityFromStichpunkte } from '../ai.js';
+import { verschiebeProjektReferenzen } from '../projektMerge.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
@@ -35,11 +36,11 @@ export async function render(container, opts = {}) {
   const bereichScope = opts.bereichScope || ['projekt'];
   const scopedBereiche = BEREICHE.filter((b) => bereichScope.includes(b.id));
 
-  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben, emails] = await Promise.all([
+  let [projekte, kunden, mitarbeiter, spalten, angebote, auftragsbestaetigungen, rechnungen, kategorien, settings, ausgaben, zeiterfassung, verwendungen, katalog, dokumente, marken, subunternehmer, termine, aufgaben, emails, mahnungen, fotos, aufmasse, nachrichten] = await Promise.all([
     getAll('projekte'), getAll('kunden'), getAll('mitarbeiter'), getAll('kanbanSpalten'),
     getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('kategorien'), getSettings(),
     getAll('ausgaben'), getAll('zeiterfassung'), getAll('verwendungen'), getAll('katalog'), getAll('dokumente'), getAll('marken'), getAll('subunternehmer'),
-    getAll('termine'), getAll('aufgaben'), getAll('emails'),
+    getAll('termine'), getAll('aufgaben'), getAll('emails'), getAll('mahnungen'), getAll('fotos'), getAll('aufmasse'), getAll('nachrichten'),
   ]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
   kategorien.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -241,6 +242,11 @@ export async function render(container, opts = {}) {
     { store: 'aufgaben', liste: aufgaben, feld: 'projektId' },
     { store: 'zeiterfassung', liste: zeiterfassung, feld: 'projektId' },
     { store: 'verwendungen', liste: verwendungen, feld: 'projektId' },
+    { store: 'emails', liste: emails, feld: 'projektId' },
+    { store: 'mahnungen', liste: mahnungen, feld: 'projektId' },
+    { store: 'fotos', liste: fotos, feld: 'projektId' },
+    { store: 'aufmasse', liste: aufmasse, feld: 'projektId' },
+    { store: 'nachrichten', liste: nachrichten, feld: 'projektId' },
   ];
 
   function projektVerknuepfteAnzahl(projektId) {
@@ -262,17 +268,8 @@ export async function render(container, opts = {}) {
   }
 
   async function fuehreProjekteZusammen(behaltenId, duplikatIds) {
-    for (const c of PROJEKT_VERKNUEPFTE_COLLECTIONS) {
-      for (const record of c.liste) {
-        if (duplikatIds.includes(record[c.feld])) {
-          await put(c.store, { ...record, [c.feld]: behaltenId });
-        }
-      }
-    }
-    for (const d of dokumente) {
-      if (d.bezugTyp === 'projekt' && duplikatIds.includes(d.bezugId)) {
-        await put('dokumente', { ...d, bezugId: behaltenId });
-      }
+    for (const id of duplikatIds) {
+      await verschiebeProjektReferenzen(id, behaltenId);
     }
     for (const id of duplikatIds) {
       await remove('projekte', id);
