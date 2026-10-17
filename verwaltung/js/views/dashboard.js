@@ -467,7 +467,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div id="dash-aufgaben-list">
             ${meineAufgaben.length === 0 ? '<p class="text-mute">Keine offenen Aufgaben.</p>' : `
               <ul class="cal-event-list">
-                ${meineAufgaben.map((a) => `<li><span>${escapeHtml(a.titel)}</span><span class="text-mute">${formatDate(a.faelligAm)}</span></li>`).join('')}
+                ${meineAufgaben.map((a) => `<li class="dash-row-link" data-href="#/aufgaben"><span>${escapeHtml(a.titel)}</span><span class="text-mute">${formatDate(a.faelligAm)}</span></li>`).join('')}
               </ul>
             `}
           </div>
