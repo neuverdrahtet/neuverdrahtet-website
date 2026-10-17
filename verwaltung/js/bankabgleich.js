@@ -15,6 +15,14 @@ function enthaeltText(nadel, heuhaufen) {
   return (heuhaufen || '').toLowerCase().includes(String(nadel).trim().toLowerCase());
 }
 
+// Betrag, den der Kunde bei Ausnutzung des angebotenen Skontos tatsächlich
+// überweist - eine Bankbuchung, die exakt auf diesen (kleineren) Betrag statt
+// auf den vollen Rechnungsbetrag lautet, ist ebenfalls ein gültiger Treffer
+// (gleiche Logik wie im Qonto-Zahlungsabgleich, siehe zahlungsabgleich.js).
+function betragBeiSkonto(r) {
+  return r.skontoProzent > 0 ? r.brutto - Math.round(r.brutto * r.skontoProzent) / 100 : null;
+}
+
 /** Ermittelt einen Zuordnungsvorschlag für eine einzelne Bankbuchung, ohne
  * etwas zu speichern. Betrag > 0 -> gegen offene Rechnungen, Betrag < 0 ->
  * gegen offene Kreditoren-Ausgaben. Gibt null zurück, wenn kein eindeutiger
@@ -23,7 +31,11 @@ export function findeVorschlag(bankbuchung, { rechnungen, ausgaben }) {
   const text = `${bankbuchung.verwendungszweck || ''} ${bankbuchung.empfaenger || ''}`;
   if (bankbuchung.betrag > 0) {
     const offene = rechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt');
-    const passendeBetraege = offene.filter((r) => Math.abs((r.brutto || 0) - bankbuchung.betrag) < TOLERANZ);
+    const passendeBetraege = offene.filter((r) => {
+      if (Math.abs((r.brutto || 0) - bankbuchung.betrag) < TOLERANZ) return true;
+      const skontoBetrag = betragBeiSkonto(r);
+      return skontoBetrag != null && Math.abs(skontoBetrag - bankbuchung.betrag) < TOLERANZ;
+    });
     const nummerTreffer = passendeBetraege.find((r) => enthaeltText(r.nummer, text));
     if (nummerTreffer) return { typ: 'rechnung', id: nummerTreffer.id, konfidenz: 'hoch' };
     if (passendeBetraege.length === 1) return { typ: 'rechnung', id: passendeBetraege[0].id, konfidenz: 'mittel' };
@@ -48,7 +60,12 @@ export async function uebernehmeZuordnung(bankbuchung, vorschlag, settings) {
   if (vorschlag.typ === 'rechnung') {
     const r = (await getAll('rechnungen')).find((x) => x.id === vorschlag.id);
     if (!r) return false;
-    const updated = { ...r, status: 'bezahlt', bezahltAm: bankbuchung.datum, zahlungsart: 'ueberweisung' };
+    // Entspricht der eingegangene Betrag genau dem Skonto-reduzierten statt dem
+    // vollen Rechnungsbetrag, hat der Kunde das angebotene Skonto offensichtlich
+    // genutzt - dann auch so verbuchen (siehe journal.js erzeugeBuchungenFuerRechnung).
+    const skontoBetrag = betragBeiSkonto(r);
+    const skontoGenutzt = skontoBetrag != null && Math.abs(skontoBetrag - bankbuchung.betrag) < TOLERANZ;
+    const updated = { ...r, status: 'bezahlt', bezahltAm: bankbuchung.datum, zahlungsart: 'ueberweisung', skontoGenutzt };
     await put('rechnungen', updated);
     try { await journal.syncBuchungFuerRechnung(updated, settings); } catch { /* Buchung ist Komfort, darf Zuordnung nicht blockieren */ }
   } else {
