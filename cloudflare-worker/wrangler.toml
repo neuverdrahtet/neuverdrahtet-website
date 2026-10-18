@@ -9,11 +9,16 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
 
-# Täglicher automatischer Büro-Check ("0 5 * * *") und wöchentliche
-# Katalog-Preisaktualisierung ("0 6 * * 1", montags) - siehe scheduled() in
-# worker.js, das anhand von event.cron zwischen beiden unterscheidet. Wird
-# beim Deploy per Cloudflare-Dashboard (Quick Edit) NICHT automatisch
+# EIN täglicher Cron Trigger für zwei Aufgaben: täglicher Büro-Check +
+# (nur montags) wöchentliche Katalog-Preisaktualisierung - siehe
+# scheduled() in worker.js, das montags zusätzlich die Katalog-
+# Aktualisierung anstößt. Bewusst EIN Trigger statt zwei: Cloudflare
+# Workers Free begrenzt Cron Trigger auf 5 PRO ACCOUNT (nicht pro Worker),
+# ein zweiter Trigger hier würde je nach Kontostand den Deploy mit
+# "Workers Free limit of 5 cron triggers" scheitern lassen. Wird beim
+# Deploy per Cloudflare-Dashboard (Quick Edit) NICHT automatisch
 # übernommen - dafür im Dashboard unter Settings -> Triggers -> Cron
-# Triggers manuell beide Ausdrücke eintragen.
+# Triggers manuell denselben Ausdruck eintragen (per "wrangler deploy",
+# z.B. über den GitHub-Actions-Workflow, passiert das automatisch).
 [triggers]
-crons = ["0 5 * * *", "0 6 * * 1"]
+crons = ["0 5 * * *"]

@@ -35,26 +35,30 @@
  * (imKatalog:false + quelle), damit die Verwaltungs-Oberfläche sie deutlich
  * zur Prüfung kennzeichnet, statt sie unmarkiert zu übernehmen.
  *
- * Zusätzlich läuft einmal wöchentlich (montags, siehe scheduled()) eine
- * automatische Katalog-Aktualisierung: recherchiert für einen rotierenden
- * Ausschnitt des bestehenden Artikel-/Leistungskatalogs aktuelle
- * Marktpreise und schlägt vereinzelt offensichtlich fehlende
- * Standardpositionen vor. Ändert dabei NIE direkt den Katalog, sondern
- * schreibt jedes Ergebnis nur als Vorschlag in die Firestore-Collection
- * "katalogVorschlaege" - ein Mensch prüft/übernimmt sie in der Verwaltung
- * unter Katalog -> "Preis-Vorschläge" (siehe runKatalogAktualisierung()).
- * Dafür wird zusätzlich FIREBASE_SERVICE_ACCOUNT_JSON benötigt (ohnehin für
+ * Zusätzlich läuft, angehängt an denselben täglichen Cron Trigger, aber nur
+ * montags (siehe scheduled()), eine automatische Katalog-Aktualisierung:
+ * recherchiert für einen rotierenden Ausschnitt des bestehenden Artikel-/
+ * Leistungskatalogs aktuelle Marktpreise und schlägt vereinzelt
+ * offensichtlich fehlende Standardpositionen vor. Ändert dabei NIE direkt
+ * den Katalog, sondern schreibt jedes Ergebnis nur als Vorschlag in die
+ * Firestore-Collection "katalogVorschlaege" - ein Mensch prüft/übernimmt
+ * sie in der Verwaltung unter Katalog -> "Preis-Vorschläge" (siehe
+ * runKatalogAktualisierung()). Dafür wird zusätzlich
+ * FIREBASE_SERVICE_ACCOUNT_JSON benötigt (ohnehin für
  * Push-Benachrichtigungen vorgesehen) - ohne dieses Secret läuft der
- * wöchentliche Lauf einfach nicht, alle anderen Funktionen bleiben
- * unberührt.
+ * wöchentliche Teil einfach nicht, alle anderen Funktionen bleiben
+ * unberührt. Bewusst EIN einziger Cron Trigger statt zwei separater:
+ * Cloudflare Workers Free begrenzt Cron Trigger auf 5 PRO ACCOUNT (nicht
+ * pro Worker) - ein zweiter Trigger würde den automatischen Deploy je nach
+ * Kontostand mit "Workers Free limit of 5 cron triggers" scheitern lassen.
  *
- * Damit der tägliche Büro-Check UND die wöchentliche Katalog-Aktualisierung
- * tatsächlich laufen, müssen im Cloudflare-Dashboard bei diesem Worker unter
- * Settings -> Triggers -> Cron Triggers einmalig BEIDE Trigger hinzugefügt
- * werden ("0 5 * * *" für den täglichen Check, ca. 6-7 Uhr deutscher Zeit,
- * und "0 6 * * 1" für die wöchentliche Katalog-Aktualisierung montags,
- * je nach Sommer-/Winterzeit) - das lässt sich nicht per Quick-Edit-Code
- * allein einrichten.
+ * Damit der tägliche Büro-Check (inkl. der montäglichen
+ * Katalog-Aktualisierung) tatsächlich läuft, muss im Cloudflare-Dashboard
+ * bei diesem Worker unter Settings -> Triggers -> Cron Triggers einmalig
+ * ein Trigger hinzugefügt werden (z.B. "0 5 * * *" für ca. 6-7 Uhr
+ * deutscher Zeit, je nach Sommer-/Winterzeit) - das lässt sich nicht per
+ * Quick-Edit-Code allein einrichten (per "wrangler deploy", z.B. über den
+ * GitHub-Actions-Workflow, passiert das automatisch).
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -2313,11 +2317,15 @@ async function runKatalogAktualisierung(env) {
 export default {
   /** Cloudflare Cron Trigger - siehe Dashboard -> dieser Worker -> Settings -> Triggers -> Cron Triggers. */
   async scheduled(event, env, ctx) {
-    if (event.cron === '0 6 * * 1') {
-      ctx.waitUntil(runKatalogAktualisierung(env));
-      return;
-    }
     ctx.waitUntil(runTagescheck(env));
+    // Läuft bewusst im selben (einzigen) Cron-Trigger statt mit einem
+    // zweiten eigenen Trigger - Cloudflare Workers Free begrenzt Cron-
+    // Trigger auf 5 PRO ACCOUNT (nicht pro Worker), ein zweiter Trigger
+    // würde den Deploy je nach Kontostand zum Scheitern bringen.
+    const heuteWochentag = new Date().toLocaleDateString('en-US', { timeZone: 'Europe/Berlin', weekday: 'long' });
+    if (heuteWochentag === 'Monday') {
+      ctx.waitUntil(runKatalogAktualisierung(env));
+    }
   },
 
   async fetch(request, env) {
