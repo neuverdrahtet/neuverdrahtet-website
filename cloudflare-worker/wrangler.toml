@@ -9,9 +9,11 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
 
-# Täglicher automatischer Büro-Check (siehe scheduled() in worker.js). Wird
+# Täglicher automatischer Büro-Check ("0 5 * * *") und wöchentliche
+# Katalog-Preisaktualisierung ("0 6 * * 1", montags) - siehe scheduled() in
+# worker.js, das anhand von event.cron zwischen beiden unterscheidet. Wird
 # beim Deploy per Cloudflare-Dashboard (Quick Edit) NICHT automatisch
 # übernommen - dafür im Dashboard unter Settings -> Triggers -> Cron
-# Triggers manuell denselben Ausdruck eintragen.
+# Triggers manuell beide Ausdrücke eintragen.
 [triggers]
-crons = ["0 5 * * *"]
+crons = ["0 5 * * *", "0 6 * * 1"]

@@ -28,11 +28,33 @@
  * ausschließlich hier im Worker (als Secrets) – sie werden NIE an den
  * Browser geschickt.
  *
- * Damit der tägliche Büro-Check tatsächlich läuft, muss im Cloudflare-
- * Dashboard bei diesem Worker unter Settings -> Triggers -> Cron Triggers
- * einmalig ein Trigger hinzugefügt werden (z.B. "0 5 * * *" für ca. 6-7 Uhr
- * deutscher Zeit, je nach Sommer-/Winterzeit) - das lässt sich nicht per
- * Quick-Edit-Code allein einrichten.
+ * Die KI-Angebotserstellung nutzt dabei den mitgelieferten Katalog IMMER
+ * zuerst - nur für Positionen ohne Katalogtreffer wird per Web-Search-Tool
+ * ein echter aktueller Marktpreis recherchiert (Fallback: vorsichtige
+ * Schätzung). Jede so recherchierte Position wird im Ergebnis markiert
+ * (imKatalog:false + quelle), damit die Verwaltungs-Oberfläche sie deutlich
+ * zur Prüfung kennzeichnet, statt sie unmarkiert zu übernehmen.
+ *
+ * Zusätzlich läuft einmal wöchentlich (montags, siehe scheduled()) eine
+ * automatische Katalog-Aktualisierung: recherchiert für einen rotierenden
+ * Ausschnitt des bestehenden Artikel-/Leistungskatalogs aktuelle
+ * Marktpreise und schlägt vereinzelt offensichtlich fehlende
+ * Standardpositionen vor. Ändert dabei NIE direkt den Katalog, sondern
+ * schreibt jedes Ergebnis nur als Vorschlag in die Firestore-Collection
+ * "katalogVorschlaege" - ein Mensch prüft/übernimmt sie in der Verwaltung
+ * unter Katalog -> "Preis-Vorschläge" (siehe runKatalogAktualisierung()).
+ * Dafür wird zusätzlich FIREBASE_SERVICE_ACCOUNT_JSON benötigt (ohnehin für
+ * Push-Benachrichtigungen vorgesehen) - ohne dieses Secret läuft der
+ * wöchentliche Lauf einfach nicht, alle anderen Funktionen bleiben
+ * unberührt.
+ *
+ * Damit der tägliche Büro-Check UND die wöchentliche Katalog-Aktualisierung
+ * tatsächlich laufen, müssen im Cloudflare-Dashboard bei diesem Worker unter
+ * Settings -> Triggers -> Cron Triggers einmalig BEIDE Trigger hinzugefügt
+ * werden ("0 5 * * *" für den täglichen Check, ca. 6-7 Uhr deutscher Zeit,
+ * und "0 6 * * 1" für die wöchentliche Katalog-Aktualisierung montags,
+ * je nach Sommer-/Winterzeit) - das lässt sich nicht per Quick-Edit-Code
+ * allein einrichten.
  *
  * Deployment: siehe README.md in diesem Ordner.
  *
@@ -115,8 +137,10 @@ const POSITIONEN_SCHEMA = {
           menge: { type: 'number' },
           einzelpreis: { type: 'number' },
           steuersatz: { type: 'number' },
+          imKatalog: { type: 'boolean' },
+          quelle: { type: 'string' },
         },
-        required: ['bezeichnung', 'beschreibung', 'einheit', 'menge', 'einzelpreis', 'steuersatz'],
+        required: ['bezeichnung', 'beschreibung', 'einheit', 'menge', 'einzelpreis', 'steuersatz', 'imKatalog', 'quelle'],
         additionalProperties: false,
       },
     },
@@ -142,9 +166,21 @@ Realistische Preise (netto, Deutschland) als Orientierung, wenn kein Katalogtref
 - E-Check/Prüfung: ca. 80-180 EUR pauschal für eine Wohnung/kleines Gewerbeobjekt, je nach Umfang.
 - Bei Unsicherheit lieber eine vorsichtige, plausible Schätzung innerhalb der genannten Rahmen als eine runde Zahl ohne Bezug.
 
+Katalog zuerst, Internet-Recherche nur als Ergänzung:
+- Nutze, wenn im mitgelieferten Katalog ein passender Artikel/eine passende Leistung existiert, dessen Bezeichnung, Einheit und Preis unverändert. Setze dafür "imKatalog": true und "quelle": "Katalog".
+- Existiert für eine benötigte Position KEIN Katalogtreffer, nutze das web_search-Werkzeug, um einen echten, aktuellen marktüblichen Preis zu recherchieren (z.B. bei Herstellern, Elektro-Fachgroßhändlern, Baumärkten/Online-Händlern je nach Gewerk/Branche) - rate NICHT einfach ins Blaue aus eigenem Wissen. Setze dafür "imKatalog": false und "quelle" auf eine kurze Angabe, worauf sich der Preis stützt (z.B. Händler-/Herstellername), max. ca. 60 Zeichen.
+- Nur falls die Recherche trotz Versuch keinen brauchbaren Treffer liefert, nutze als letzten Ausweg eine vorsichtige Schätzung anhand der folgenden Richtwerte, setze "imKatalog": false und "quelle": "Schätzung, keine Recherche möglich".
+- Erfinde keine Quellen - "quelle" muss ehrlich wiedergeben, ob wirklich recherchiert wurde.
+
+Richtwerte (netto, Deutschland) nur für den Fall, dass eine Recherche keinen Treffer liefert - an Umfang/Komplexität der jeweiligen Position anpassen, nicht immer denselben Wert nehmen:
+- Facharbeiter-Stundensatz Elektroinstallation: ca. 65-95 EUR/Std. (einfache Standardarbeiten eher 65-75, komplexere/Spezialarbeiten eher 85-95).
+- Hilfsarbeiten/Auszubildende: ca. 35-50 EUR/Std.
+- Anfahrt/Fahrzeit: wie Arbeitszeit oder als Pauschale 20-50 EUR, je nach Entfernung/Aufwand.
+- Übliche Kleinteile/Material (Richtwerte inkl. Handelsspanne): Steckdose/Schalter UP-Serie 8-20 EUR/Stk., NYM-J-Kabel 3x1,5mm² ca. 1-2 EUR/m, 5x1,5mm² ca. 2-3 EUR/m, Leitungsschutzschalter (LS) 15-25 EUR/Stk., FI/RCD-Schutzschalter 40-90 EUR/Stk., kleine Unterverteilung (bis 12 Module) 150-350 EUR, einfache LED-Deckenleuchte 25-60 EUR/Stk., Rauchmelder 15-30 EUR/Stk.
+- E-Check/Prüfung: ca. 80-180 EUR pauschal für eine Wohnung/kleines Gewerbeobjekt, je nach Umfang.
+
 Weitere Regeln:
 - Antworte ausschließlich auf Deutsch.
-- Nutze, wenn im mitgelieferten Katalog ein passender Artikel/eine passende Leistung existiert, dessen Bezeichnung, Einheit und Preis unverändert.
 - "einheit" ist z.B. "Std.", "Stk.", "m", "pauschal".
 - "steuersatz" ist in der Regel ${standardSteuersatz} (Prozent, als Zahl ohne %-Zeichen), außer es gibt einen klaren fachlichen Grund für einen anderen Satz.
 - "betreff" ist eine kurze, prägnante Überschrift (max. ca. 80 Zeichen).
@@ -158,45 +194,66 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
     .map((k) => `- ${k.bezeichnung} | Einheit: ${k.einheit || ''} | Preis netto: ${k.preis} EUR | USt: ${k.steuersatz}%`)
     .join('\n');
 
-  const userText = [
+  const initialContent = [
     kundeName ? `Kunde: ${kundeName}` : null,
     'Stichpunkte des Mitarbeiters:',
     stichpunkte,
     katalogText ? `\nVerfügbarer Katalog (Artikel/Leistungen):\n${katalogText}` : null,
   ].filter(Boolean).join('\n\n');
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 4096,
-      system: buildSystemPrompt(standardSteuersatz || 19),
-      messages: [{ role: 'user', content: userText }],
-      output_config: {
-        format: { type: 'json_schema', schema: POSITIONEN_SCHEMA },
+  let messages = [{ role: 'user', content: initialContent }];
+  let data;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
       },
-    }),
-  });
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        system: buildSystemPrompt(standardSteuersatz || 19),
+        messages,
+        // allowed_callers: ['direct'] ist nötig, damit auch günstigere Modelle
+        // ohne Unterstützung für "programmatic tool calling" diesen
+        // Tool-Aufruf ausführen können - siehe callClaudeGaebPreise.
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: 20, allowed_callers: ['direct'] }],
+        output_config: {
+          format: { type: 'json_schema', schema: POSITIONEN_SCHEMA },
+        },
+      }),
+    });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+
+    data = await res.json();
+    if (data.stop_reason === 'refusal') {
+      throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+    }
+    if (data.stop_reason === 'pause_turn') {
+      messages = [{ role: 'user', content: initialContent }, { role: 'assistant', content: data.content }];
+      continue;
+    }
+    break;
   }
 
-  const data = await res.json();
-  if (data.stop_reason === 'refusal') {
-    throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
-  }
-  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  const textBlock = (data.content || []).filter((b) => b.type === 'text').pop();
   if (!textBlock) {
     throw new Error('Keine Antwort erhalten.');
   }
-  return JSON.parse(textBlock.text);
+  try {
+    return JSON.parse(textBlock.text);
+  } catch {
+    const match = /\{[\s\S]*\}/.exec(textBlock.text);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Antwort der KI konnte nicht als JSON gelesen werden.');
+  }
 }
 
 /**
@@ -816,6 +873,131 @@ async function callClaudeGaebPreise({ apiKey, model, positionen }) {
         tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: positionen.length * 2 + 5, allowed_callers: ['direct'] }],
         output_config: {
           format: { type: 'json_schema', schema: GAEB_PREISVORSCHLAEGE_SCHEMA },
+        },
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+
+    data = await res.json();
+    if (data.stop_reason === 'refusal') {
+      throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+    }
+    if (data.stop_reason === 'pause_turn') {
+      messages = [{ role: 'user', content: initialContent }, { role: 'assistant', content: data.content }];
+      continue;
+    }
+    break;
+  }
+
+  const textBlock = (data.content || []).filter((b) => b.type === 'text').pop();
+  if (!textBlock) {
+    throw new Error('Keine Antwort erhalten.');
+  }
+  try {
+    return JSON.parse(textBlock.text);
+  } catch {
+    const match = /\{[\s\S]*\}/.exec(textBlock.text);
+    if (match) return JSON.parse(match[0]);
+    throw new Error('Antwort der KI konnte nicht als JSON gelesen werden.');
+  }
+}
+
+// --- Wöchentliche Katalog-Aktualisierung (siehe scheduled()/
+// runKatalogAktualisierung weiter unten): recherchiert per Web-Search-Tool
+// aktuelle Marktpreise für einen rotierenden Ausschnitt des bestehenden
+// Artikel-/Leistungskatalogs und schlägt vereinzelt branchenübliche, noch
+// fehlende Positionen vor. Schreibt NIE direkt in den Katalog - jedes
+// Ergebnis landet nur als Vorschlag in der Firestore-Collection
+// "katalogVorschlaege" und muss in der Verwaltung (Ansicht
+// "Katalog-Vorschläge") von einem Menschen geprüft/übernommen werden. ---
+
+const KATALOG_AKTUALISIERUNG_SCHEMA = {
+  type: 'object',
+  properties: {
+    preise: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          index: { type: 'number' },
+          neuerPreis: { type: 'number' },
+          gefunden: { type: 'boolean' },
+          quelle: { type: 'string' },
+        },
+        required: ['index', 'neuerPreis', 'gefunden', 'quelle'],
+        additionalProperties: false,
+      },
+    },
+    neueVorschlaege: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          typ: { type: 'string', enum: ['artikel', 'leistung'] },
+          bezeichnung: { type: 'string' },
+          einheit: { type: 'string' },
+          preis: { type: 'number' },
+          gewerk: { type: 'string' },
+          begruendung: { type: 'string' },
+          quelle: { type: 'string' },
+        },
+        required: ['typ', 'bezeichnung', 'einheit', 'preis', 'gewerk', 'begruendung', 'quelle'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['preise', 'neueVorschlaege'],
+  additionalProperties: false,
+};
+
+function buildKatalogAktualisierungSystemPrompt(gewerkeListe) {
+  return `Du prüfst für einen deutschen Handwerksbetrieb (Gewerke: ${gewerkeListe.join(', ') || 'diverse'}) einen Ausschnitt des bestehenden Artikel-/Leistungskatalogs auf aktuelle Marktpreise, indem du gezielt im Internet suchst (Hersteller, Fachgroßhändler, Baumärkte/Online-Händler, je nach Gewerk der jeweiligen Position).
+
+Aufgabe 1 - Preise prüfen:
+- Für jede übergebene Position (gekennzeichnet mit [index] Bezeichnung/Einheit/Gewerk/aktueller Preis) recherchierst du den aktuellen marktüblichen Netto-Preis (EUR) je Einheit, wie ihn ein Handwerksbetrieb einem Kunden in Rechnung stellen würde (inkl. üblicher Handelsspanne).
+- "index" muss exakt der Zahl in eckigen Klammern entsprechen. Liefere für JEDE übergebene Position genau ein Ergebnis.
+- "gefunden": true nur bei einer belastbaren, tatsächlich recherchierten Preisgrundlage, sonst false (dann trotzdem eine vorsichtige Schätzung in "neuerPreis" angeben).
+- "quelle": kurze Angabe, worauf sich der Preis stützt (z.B. Hersteller-/Händlername), max. ca. 60 Zeichen. Erfinde keine Quellen.
+- Wenn der aktuelle Preis weiterhin zutreffend erscheint, trage ihn trotzdem unverändert als "neuerPreis" ein (wird dann als "keine nennenswerte Änderung" erkannt).
+
+Aufgabe 2 - Fehlende Positionen (sparsam, max. 5):
+- Schlage höchstens 5 häufig benötigte Artikel/Leistungen vor, die zu den oben genannten Gewerken gehören und erkennbar noch NICHT im Katalog-Ausschnitt enthalten sind - nur offensichtliche, branchenübliche Standardpositionen, keine exotischen Spezialfälle.
+- "begruendung": 1 kurzer Satz, warum diese Position fehlt/sinnvoll ist.
+- "preis": recherchierter oder vorsichtig geschätzter Netto-Verkaufspreis je Einheit.
+- Lieber weniger oder gar keine Vorschläge als unsichere/erfundene.
+
+Antworte ausschließlich auf Deutsch.`;
+}
+
+async function callClaudeKatalogAktualisierung({ apiKey, model, items, gewerke }) {
+  const listText = items
+    .map((it) => `[${it.index}] ${it.bezeichnung} | Einheit: ${it.einheit || ''} | Gewerk: ${it.gewerk || '–'} | aktueller Preis: ${it.aktuellerPreis} EUR netto`)
+    .join('\n');
+
+  const initialContent = `Prüfe folgende Katalog-Positionen auf aktuelle Marktpreise und schlage ggf. fehlende Standardpositionen vor:\n\n${listText}`;
+  let messages = [{ role: 'user', content: initialContent }];
+  let data;
+
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 8192,
+        system: buildKatalogAktualisierungSystemPrompt(gewerke),
+        messages,
+        tools: [{ type: 'web_search_20260209', name: 'web_search', max_uses: items.length * 2 + 10, allowed_callers: ['direct'] }],
+        output_config: {
+          format: { type: 'json_schema', schema: KATALOG_AKTUALISIERUNG_SCHEMA },
         },
       }),
     });
@@ -2010,9 +2192,131 @@ async function runTagescheck(env) {
   }
 }
 
+// Wie viele Katalog-Einträge je wöchentlichem Lauf geprüft werden - absichtlich
+// klein gehalten (Kosten/Laufzeit der Web-Suche), rotiert aber über
+// "preisZuletztGeprueft" (älteste/nie geprüfte Einträge zuerst) komplett durch
+// den gesamten Katalog, nur eben über mehrere Wochen verteilt.
+const KATALOG_AKTUALISIERUNG_BATCH_SIZE = 25;
+
+/**
+ * Wöchentlicher automatischer Katalog-Check (Cloudflare Cron Trigger, siehe
+ * scheduled() unten): recherchiert für einen rotierenden Ausschnitt des
+ * Artikel-/Leistungskatalogs per Web-Search aktuelle Marktpreise und schlägt
+ * vereinzelt offensichtlich fehlende Standardpositionen vor. Ändert NIEMALS
+ * direkt den Katalog (Preise fließen in echte Angebote/Rechnungen ein) -
+ * jedes Ergebnis landet nur als Vorschlag in der Firestore-Collection
+ * "katalogVorschlaege" zur menschlichen Prüfung (Verwaltung -> Katalog ->
+ * "Preis-Vorschläge"). "paket"-Einträge und mit lexoffice verknüpfte Artikel
+ * werden übersprungen (ihr Preis wird an anderer Stelle gepflegt).
+ */
+async function runKatalogAktualisierung(env) {
+  if (!env.ANTHROPIC_API_KEY || !env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    console.log('Wöchentliche Katalog-Aktualisierung übersprungen: ANTHROPIC_API_KEY/FIREBASE_SERVICE_ACCOUNT_JSON fehlt.');
+    return;
+  }
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+
+  let katalog;
+  try {
+    katalog = await firestoreListDocuments({ serviceAccount, collection: 'katalog' });
+  } catch (err) {
+    console.log('Wöchentliche Katalog-Aktualisierung fehlgeschlagen (Katalog lesen):', err.message);
+    return;
+  }
+
+  const kandidaten = katalog
+    .filter((k) => k.typ !== 'paket' && !k.lexofficeArtikelId && k.bezeichnung)
+    .sort((a, b) => (a.preisZuletztGeprueft || '').localeCompare(b.preisZuletztGeprueft || ''))
+    .slice(0, KATALOG_AKTUALISIERUNG_BATCH_SIZE);
+  if (kandidaten.length === 0) return;
+
+  const gewerke = [...new Set(katalog.map((k) => k.gewerk).filter(Boolean))];
+  const items = kandidaten.map((k, index) => ({
+    index, katalogId: k.id, bezeichnung: k.bezeichnung, einheit: k.einheit, gewerk: k.gewerk, aktuellerPreis: Number(k.preis) || 0,
+  }));
+
+  let ergebnis;
+  try {
+    ergebnis = await callClaudeKatalogAktualisierung({
+      apiKey: env.ANTHROPIC_API_KEY,
+      model: env.MODEL_ID || 'claude-opus-4-8',
+      items,
+      gewerke,
+    });
+  } catch (err) {
+    console.log('Wöchentliche Katalog-Aktualisierung fehlgeschlagen (Recherche):', err.message);
+    return;
+  }
+
+  const heuteIso = new Date().toISOString();
+  let anzahlPreisvorschlaege = 0;
+  try {
+    for (const p of ergebnis.preise || []) {
+      const item = items[p.index];
+      if (!item) continue;
+      // "preisZuletztGeprueft" wird für JEDEN geprüften Eintrag gesetzt (auch
+      // ohne nennenswerte Preisänderung), damit die Rotation beim nächsten
+      // Lauf zu den noch nicht geprüften Einträgen weiterwandert.
+      await firestoreSetDoc({
+        serviceAccount, collection: 'katalog', id: item.katalogId,
+        data: { ...katalog.find((k) => k.id === item.katalogId), preisZuletztGeprueft: heuteIso },
+      });
+      if (!p.gefunden) continue;
+      const neuerPreis = Math.round(Number(p.neuerPreis) * 100) / 100;
+      const differenz = Math.abs(neuerPreis - item.aktuellerPreis);
+      const relevant = differenz >= 0.5 && differenz / Math.max(item.aktuellerPreis, 0.01) >= 0.05;
+      if (!relevant) continue;
+      const vorschlagId = crypto.randomUUID();
+      await firestoreSetDoc({
+        serviceAccount, collection: 'katalogVorschlaege', id: vorschlagId,
+        data: {
+          id: vorschlagId, typ: 'preis', katalogId: item.katalogId, bezeichnung: item.bezeichnung, einheit: item.einheit,
+          alterPreis: item.aktuellerPreis, neuerPreis, quelle: (p.quelle || '').slice(0, 200), status: 'offen', erstelltAm: heuteIso,
+        },
+      });
+      anzahlPreisvorschlaege++;
+    }
+
+    let anzahlNeueVorschlaege = 0;
+    for (const n of (ergebnis.neueVorschlaege || []).slice(0, 5)) {
+      if (!n.bezeichnung) continue;
+      const vorschlagId = crypto.randomUUID();
+      await firestoreSetDoc({
+        serviceAccount, collection: 'katalogVorschlaege', id: vorschlagId,
+        data: {
+          id: vorschlagId, typ: 'neu', typVorschlag: n.typ === 'leistung' ? 'leistung' : 'artikel', bezeichnung: n.bezeichnung,
+          einheit: n.einheit || '', neuerPreis: Math.round((Number(n.preis) || 0) * 100) / 100, gewerk: n.gewerk || '',
+          begruendung: (n.begruendung || '').slice(0, 300), quelle: (n.quelle || '').slice(0, 200), status: 'offen', erstelltAm: heuteIso,
+        },
+      });
+      anzahlNeueVorschlaege++;
+    }
+
+    if (anzahlPreisvorschlaege > 0 || anzahlNeueVorschlaege > 0) {
+      const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });
+      const tokens = tokenDocs.filter((t) => ['admin', 'buero'].includes(t.role)).map((t) => t.id);
+      if (tokens.length > 0) {
+        await sendFcmMessages({
+          serviceAccount,
+          tokens,
+          title: 'Katalog-Vorschläge warten auf Prüfung',
+          body: `${anzahlPreisvorschlaege} Preis-Update(s), ${anzahlNeueVorschlaege} neue Position(en) aus der wöchentlichen Katalog-Prüfung.`,
+          url: './index.html#/katalog-vorschlaege',
+        });
+      }
+    }
+  } catch (err) {
+    console.log('Wöchentliche Katalog-Aktualisierung fehlgeschlagen (Vorschläge schreiben):', err.message);
+  }
+}
+
 export default {
   /** Cloudflare Cron Trigger - siehe Dashboard -> dieser Worker -> Settings -> Triggers -> Cron Triggers. */
   async scheduled(event, env, ctx) {
+    if (event.cron === '0 6 * * 1') {
+      ctx.waitUntil(runKatalogAktualisierung(env));
+      return;
+    }
     ctx.waitUntil(runTagescheck(env));
   },
 

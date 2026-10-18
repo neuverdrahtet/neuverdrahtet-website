@@ -74,6 +74,7 @@ export async function render(container, route) {
   let items = await getAll('katalog');
   let lagerbewegungen = await getAll('lagerbewegungen');
   const lieferanten = await getAll('lieferanten');
+  const offeneVorschlaege = (await getAll('katalogVorschlaege')).filter((v) => v.status === 'offen').length;
   const lieferantenById = Object.fromEntries(lieferanten.map((l) => [l.id, l]));
   const settings = await getSettings();
   syncKatalogOeffentlich().catch((err) => console.error('katalogOeffentlich-Sync fehlgeschlagen:', err));
@@ -134,6 +135,7 @@ export async function render(container, route) {
     <div class="view-header">
       <h1>Artikel &amp; Leistungen</h1>
       <div class="actions">
+        <button class="btn" id="btn-vorschlaege">📋 Preis-Vorschläge${offeneVorschlaege ? ` <span class="badge badge-warn">${offeneVorschlaege}</span>` : ''}</button>
         <button class="btn" id="btn-import">⇪ Material/Leistungen importieren</button>
         <button class="btn" id="btn-datanorm-import">📦 DATANORM importieren</button>
         <button class="btn" id="btn-standard-import">📥 Standard-Kataloge importieren</button>
@@ -322,6 +324,7 @@ export async function render(container, route) {
     applyFilter();
   });
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#btn-vorschlaege').addEventListener('click', () => { window.location.hash = '#/katalog-vorschlaege'; });
   // Direktsprung auf einen einzelnen Katalog-Eintrag, z.B. vom Dashboard
   // ("Niedriger Lagerbestand") per #/katalog/<id>.
   if (route) {

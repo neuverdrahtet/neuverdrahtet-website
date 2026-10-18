@@ -46,6 +46,16 @@ function renumberPositionen(posState) {
   }
 }
 
+// Markiert Positionen, die die KI-Angebotserstellung NICHT aus dem Katalog,
+// sondern per Internet-Recherche befüllt hat (siehe cloudflare-worker/worker.js,
+// callClaude: "imKatalog"/"quelle") - deutlich sichtbar statt unmarkiert
+// übernommen, damit der Preis vor dem Versenden geprüft werden kann.
+function kiRecherchiertBadge(p) {
+  if (p.imKatalog !== false) return '';
+  const quelle = p.quelle ? ` – ${p.quelle}` : '';
+  return ` <span class="badge badge-warn" title="Preis nicht aus dem Katalog, sondern per KI-Internet-Recherche ermittelt${escapeHtml(quelle)} - bitte prüfen">🌐 bitte prüfen</span>`;
+}
+
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
     .filter(([rate]) => Number(rate) > 0)
@@ -84,7 +94,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
               return `
               <tr>
                 <td class="col-posnr">${escapeHtml(p.posNr || String(i + 1))}</td>
-                <td>${escapeHtml(p.bezeichnung || '')}</td>
+                <td>${escapeHtml(p.bezeichnung || '')}${kiRecherchiertBadge(p)}</td>
                 <td class="col-menge">${p.menge ?? 1}</td>
                 <td>${escapeHtml(p.einheit || '')}</td>
                 <td class="col-preis">${formatCurrency(p.einzelpreis)}</td>
@@ -117,7 +127,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
             return `
             <tr data-i="${i}">
               <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen - wird sonst automatisch anhand der Überschriften vergeben"></td>
-              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext"></td>
+              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext">${kiRecherchiertBadge(p)}</td>
               <td class="col-menge"><input class="f-menge" type="number" step="0.01" value="${p.menge ?? 1}"></td>
               <td><input class="f-einheit" value="${escapeHtml(p.einheit || '')}"></td>
               <td class="col-preis"><input class="f-preis" type="number" step="0.01" value="${p.einzelpreis ?? 0}"></td>

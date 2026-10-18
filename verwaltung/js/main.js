@@ -38,6 +38,7 @@ const routeLoaders = {
   'ki-aktivitaet': () => import('./views/ki-aktivitaet.js'),
   'ki-assistent': () => import('./views/ki-assistent.js'),
   katalog: () => import('./views/katalog.js'),
+  'katalog-vorschlaege': () => import('./views/katalog-vorschlaege.js'),
   lieferanten: () => import('./views/lieferanten.js'),
   inventur: () => import('./views/inventur.js'),
   angebote: () => import('./views/angebote.js'),
