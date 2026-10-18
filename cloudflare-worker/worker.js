@@ -969,20 +969,27 @@ Aufgabe 1 - Preise prüfen:
 - Wenn der aktuelle Preis weiterhin zutreffend erscheint, trage ihn trotzdem unverändert als "neuerPreis" ein (wird dann als "keine nennenswerte Änderung" erkannt).
 
 Aufgabe 2 - Fehlende Positionen (sparsam, max. 5):
-- Schlage höchstens 5 häufig benötigte Artikel/Leistungen vor, die zu den oben genannten Gewerken gehören und erkennbar noch NICHT im Katalog-Ausschnitt enthalten sind - nur offensichtliche, branchenübliche Standardpositionen, keine exotischen Spezialfälle.
+- Du bekommst zusätzlich die Liste ALLER bereits im Katalog vorhandenen Bezeichnungen (nicht nur der oben geprüften Positionen). Schlage NUR Artikel/Leistungen vor, die dort wirklich nirgends auftauchen - auch nicht unter leicht anderem Namen/Schreibweise. Prüfe diese Liste sorgfältig, BEVOR du einen Vorschlag machst - ein Vorschlag, der bereits (auch nur ähnlich benannt) vorhanden ist, erzeugt einen Katalog-Dublikat-Eintrag.
+- Schlage höchstens 5 häufig benötigte Artikel/Leistungen vor, die zu den oben genannten Gewerken gehören - nur offensichtliche, branchenübliche Standardpositionen, keine exotischen Spezialfälle.
 - "begruendung": 1 kurzer Satz, warum diese Position fehlt/sinnvoll ist.
 - "preis": recherchierter oder vorsichtig geschätzter Netto-Verkaufspreis je Einheit.
-- Lieber weniger oder gar keine Vorschläge als unsichere/erfundene.
+- Lieber weniger oder gar keine Vorschläge als unsichere/erfundene oder möglicherweise schon vorhandene.
 
 Antworte ausschließlich auf Deutsch.`;
 }
 
-async function callClaudeKatalogAktualisierung({ apiKey, model, items, gewerke }) {
+async function callClaudeKatalogAktualisierung({ apiKey, model, items, gewerke, vorhandeneBezeichnungen }) {
   const listText = items
     .map((it) => `[${it.index}] ${it.bezeichnung} | Einheit: ${it.einheit || ''} | Gewerk: ${it.gewerk || '–'} | aktueller Preis: ${it.aktuellerPreis} EUR netto`)
     .join('\n');
+  // Vollständige Liste ALLER bereits vorhandenen Katalog-Bezeichnungen (nicht
+  // nur des aktuell geprüften 25er-Ausschnitts) - sonst hält die KI bei
+  // Aufgabe 2 (fehlende Positionen vorschlagen) Einträge für fehlend, die im
+  // Katalog längst existieren, nur eben gerade nicht im Ausschnitt dieses
+  // Laufs auftauchen, und erzeugt dadurch Duplikate.
+  const bezeichnungenText = (vorhandeneBezeichnungen || []).join('\n');
 
-  const initialContent = `Prüfe folgende Katalog-Positionen auf aktuelle Marktpreise und schlage ggf. fehlende Standardpositionen vor:\n\n${listText}`;
+  const initialContent = `Prüfe folgende Katalog-Positionen auf aktuelle Marktpreise und schlage ggf. fehlende Standardpositionen vor:\n\n${listText}\n\nBereits vorhandene Bezeichnungen im GESAMTEN Katalog (für Aufgabe 2 - schlage NICHTS vor, das hier (auch sinngemäß/unter leicht anderem Namen) schon enthalten ist):\n${bezeichnungenText}`;
   let messages = [{ role: 'user', content: initialContent }];
   let data;
 
@@ -2239,6 +2246,24 @@ async function runKatalogAktualisierung(env) {
     index, katalogId: k.id, bezeichnung: k.bezeichnung, einheit: k.einheit, gewerk: k.gewerk, aktuellerPreis: Number(k.preis) || 0,
   }));
 
+  // Für den Dublikat-Check bei "neue Positionen" (Aufgabe 2, siehe Prompt)
+  // UND als Sicherheitsnetz im Code (falls die KI die Liste trotzdem
+  // übersieht): sowohl bereits vorhandene Katalog-Bezeichnungen als auch
+  // bereits offene "neu"-Vorschläge aus früheren Läufen berücksichtigen,
+  // damit dieselbe fehlende Position nicht Woche für Woche erneut
+  // vorgeschlagen wird, solange der alte Vorschlag noch unbearbeitet ist.
+  const normName = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  let offeneNeuVorschlaege = [];
+  try {
+    offeneNeuVorschlaege = (await firestoreListDocuments({ serviceAccount, collection: 'katalogVorschlaege' }))
+      .filter((v) => v.typ === 'neu' && v.status === 'offen');
+  } catch { /* Dublikat-Check ist ein Sicherheitsnetz, darf den Lauf nicht blockieren */ }
+  const bekannteNamen = new Set([
+    ...katalog.map((k) => normName(k.bezeichnung)),
+    ...offeneNeuVorschlaege.map((v) => normName(v.bezeichnung)),
+  ]);
+  const vorhandeneBezeichnungen = [...new Set(katalog.map((k) => k.bezeichnung).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'de'));
+
   let ergebnis;
   try {
     ergebnis = await callClaudeKatalogAktualisierung({
@@ -2246,6 +2271,7 @@ async function runKatalogAktualisierung(env) {
       model: env.MODEL_ID || 'claude-opus-4-8',
       items,
       gewerke,
+      vorhandeneBezeichnungen,
     });
   } catch (err) {
     console.log('Wöchentliche Katalog-Aktualisierung fehlgeschlagen (Recherche):', err.message);
@@ -2260,10 +2286,17 @@ async function runKatalogAktualisierung(env) {
       if (!item) continue;
       // "preisZuletztGeprueft" wird für JEDEN geprüften Eintrag gesetzt (auch
       // ohne nennenswerte Preisänderung), damit die Rotation beim nächsten
-      // Lauf zu den noch nicht geprüften Einträgen weiterwandert.
+      // Lauf zu den noch nicht geprüften Einträgen weiterwandert. Dafür den
+      // Eintrag bewusst FRISCH lesen statt den Stand vom Laufbeginn zu
+      // verwenden (firestoreSetDoc schreibt das komplette Dokument neu) -
+      // falls der Eintrag zwischenzeitlich (z.B. manuell in der Verwaltung)
+      // geändert wurde, würde eine ältere Kopie diese Änderung sonst
+      // stillschweigend überschreiben.
+      const aktuellerStand = await firestoreGetDoc({ serviceAccount, collection: 'katalog', id: item.katalogId });
+      if (!aktuellerStand) continue; // zwischenzeitlich gelöscht
       await firestoreSetDoc({
         serviceAccount, collection: 'katalog', id: item.katalogId,
-        data: { ...katalog.find((k) => k.id === item.katalogId), preisZuletztGeprueft: heuteIso },
+        data: { ...aktuellerStand, preisZuletztGeprueft: heuteIso },
       });
       if (!p.gefunden) continue;
       const neuerPreis = Math.round(Number(p.neuerPreis) * 100) / 100;
@@ -2284,6 +2317,11 @@ async function runKatalogAktualisierung(env) {
     let anzahlNeueVorschlaege = 0;
     for (const n of (ergebnis.neueVorschlaege || []).slice(0, 5)) {
       if (!n.bezeichnung) continue;
+      // Sicherheitsnetz gegen Dubletten, falls die KI die mitgelieferte
+      // Bezeichnungs-Liste trotzdem übersehen hat (siehe Prompt-Kommentar
+      // oben) - exakte/normalisierte Übereinstimmung, keine Fuzzy-Logik.
+      if (bekannteNamen.has(normName(n.bezeichnung))) continue;
+      bekannteNamen.add(normName(n.bezeichnung)); // verhindert Dublikate auch innerhalb derselben Vorschlagsliste
       const vorschlagId = crypto.randomUUID();
       await firestoreSetDoc({
         serviceAccount, collection: 'katalogVorschlaege', id: vorschlagId,

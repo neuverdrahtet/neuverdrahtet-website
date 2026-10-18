@@ -12,6 +12,10 @@ import { getSession } from '../auth.js';
 const STATUS_LABEL = { offen: 'Offen', uebernommen: 'Übernommen', abgelehnt: 'Abgelehnt' };
 const STATUS_BADGE = { offen: 'badge-warn', uebernommen: 'badge-success', abgelehnt: 'badge-danger' };
 
+function normName(s) {
+  return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
 export async function render(container) {
   let vorschlaege = await getAll('katalogVorschlaege');
   const katalog = await getAll('katalog');
@@ -69,6 +73,16 @@ export async function render(container) {
         await put('katalog', updatedItem);
         katalogById[v.katalogId] = updatedItem;
       } else {
+        // Sicherheitsnetz gegen Dubletten: der wöchentliche Recherche-Lauf
+        // sieht pro Durchgang nur einen Ausschnitt des Katalogs und kann
+        // trotz Gegenmaßnahmen im Prompt vereinzelt einen längst
+        // vorhandenen Artikel/eine Leistung als "fehlend" vorschlagen -
+        // deshalb hier zusätzlich lokal gegen den kompletten (bereits
+        // geladenen) Katalog prüfen, bevor ein neuer Eintrag entsteht.
+        const moeglichesDuplikat = katalog.find((k) => normName(k.bezeichnung) === normName(v.bezeichnung));
+        if (moeglichesDuplikat && !window.confirm(`Im Katalog existiert bereits ein Eintrag mit dem Namen "${moeglichesDuplikat.bezeichnung}" (${formatCurrency(moeglichesDuplikat.preis)}). Trotzdem einen neuen, zusätzlichen Eintrag anlegen?`)) {
+          return;
+        }
         const neuerEintrag = {
           id: uid(), typ: v.typVorschlag === 'leistung' ? 'leistung' : 'artikel', bezeichnung: v.bezeichnung,
           beschreibung: v.begruendung || '', einheit: v.einheit || (v.typVorschlag === 'leistung' ? 'Std.' : 'Stk.'),

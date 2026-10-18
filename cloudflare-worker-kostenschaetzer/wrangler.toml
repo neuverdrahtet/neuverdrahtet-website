@@ -7,3 +7,12 @@ compatibility_date = "2026-01-01"
 
 [vars]
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
+
+# Begrenzt Anfragen auf 10 pro IP und Minute - schützt den öffentlichen
+# Kostenschätzer/das Kontaktformular vor Lead-Flut per Skript. Wird von
+# Cloudflare beim ersten Deploy automatisch angelegt, keine manuelle
+# Einrichtung im Dashboard nötig.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1004"
+simple = { limit = 10, period = 60 }

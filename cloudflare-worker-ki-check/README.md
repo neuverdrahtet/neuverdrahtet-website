@@ -69,10 +69,9 @@ hier weder das interne KI-Budget noch andere Bereiche belastet.
   Guthaben). Das Frontend verkleinert Fotos vor dem Absenden client-seitig;
   der Worker deckelt die Bildgröße zusätzlich serverseitig
   (`MAX_IMAGE_DATA_URL_LENGTH`).
-- Schutz vor Spam/Missbrauch bisher nur Honeypot + Mindestzeit (wie beim
-  Kostenschätzer) - **kein** CAPTCHA, **kein** Rate-Limit pro IP. Falls das
-  zum Problem wird: Cloudflare Turnstile vorschalten oder ein Tageslimit
-  über eine KV-Namespace-Zählung ergänzen (beides nicht Teil dieser ersten
-  Version).
+- Schutz vor Spam/Missbrauch: Honeypot + Mindestzeit (wie beim Kostenschätzer)
+  sowie ein Rate-Limit von 20 Anfragen pro IP und Minute (`RATE_LIMITER`-
+  Binding in `wrangler.toml`, wird beim Deploy automatisch angelegt) - **kein**
+  CAPTCHA. Falls das nicht reicht: Cloudflare Turnstile vorschalten.
 - Ein monatliches Ausgabenlimit für den `ANTHROPIC_API_KEY` dieses Workers
   in der Anthropic-Konsole wird empfohlen.

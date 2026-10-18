@@ -68,10 +68,17 @@ aufgerufen wird.
   Ausweich-Hinweis auf E-Mail/Telefon; die genaue Fehlerursache steht im
   Cloudflare-Worker-Log (`npx wrangler tail`).
 
+## Missbrauchsschutz
+
+Honeypot + Mindestzeit (siehe Kopfkommentar in `worker.js`) sowie ein
+Rate-Limit von 10 Anfragen pro IP und Minute (`RATE_LIMITER`-Binding in
+`wrangler.toml`, wird beim Deploy automatisch angelegt, keine manuelle
+Einrichtung im Dashboard nötig).
+
 ## Spätere Ausbaustufen (nicht Teil dieser ersten Version)
 
 - Echtes CAPTCHA (z.B. Cloudflare Turnstile) statt nur Honeypot +
-  Mindestzeit, falls Spam trotzdem zum Problem wird.
+  Mindestzeit + Rate-Limit, falls Spam trotzdem zum Problem wird.
 - Foto-Upload (z.B. Zählerschrank-Foto) - aktuell bewusst nicht enthalten,
   da es weder ein öffentliches Firebase-Storage-Schreibrecht noch eine
   fertige Upload-UI auf der Website gibt.

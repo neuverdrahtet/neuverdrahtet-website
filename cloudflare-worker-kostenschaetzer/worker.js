@@ -40,6 +40,13 @@
  *                        einfach übersprungen (kein Fehler) - die Lead-
  *                        Anlage selbst hängt nicht daran.
  *
+ * RATE_LIMITER (Rate-Limiting-Binding, siehe wrangler.toml [[ratelimits]]) -
+ * begrenzt Anfragen pro IP, damit ein Skript (das die Timing-/Honeypot-
+ * Anti-Spam-Heuristik unten umgeht) nicht unbegrenzt CRM-Leads anlegen und
+ * dabei bei jedem Lead eine WhatsApp-Benachrichtigung an den Inhaber
+ * auslösen kann. Wird von Cloudflare beim ersten Deploy automatisch
+ * angelegt, erfordert keine manuelle Einrichtung im Dashboard.
+ *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
@@ -68,6 +75,21 @@ function corsHeaders(origin, env) {
 
 function jsonResponse(data, status, headers) {
   return new Response(JSON.stringify(data), { status, headers: { ...headers, 'Content-Type': 'application/json' } });
+}
+
+// Schützt vor einem Skript, das die Timing-/Honeypot-Anti-Spam-Heuristik
+// unten umgeht und unbegrenzt Leads anlegt (+ WhatsApp-Benachrichtigungen
+// an den Inhaber auslöst). env.RATE_LIMITER kann fehlen (Binding noch nicht
+// deployed/konfiguriert) - dann einfach nicht blockieren, statt den
+// öffentlichen Kostenschätzer/das Kontaktformular komplett auszuhebeln.
+async function unterSchwellenwert(env, ip) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
 }
 
 // --- Google-Service-Account-JWT-Flow (1:1 aus cloudflare-worker/worker.js
@@ -500,6 +522,11 @@ export default {
     if (request.method !== 'POST') return new Response('Method not allowed', { status: 405, headers });
     if (!getAllowedOrigins(env).includes(origin)) {
       return jsonResponse({ error: 'Origin nicht erlaubt.' }, 403, headers);
+    }
+
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    if (!(await unterSchwellenwert(env, ip))) {
+      return jsonResponse({ error: 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.' }, 429, headers);
     }
 
     let body;
