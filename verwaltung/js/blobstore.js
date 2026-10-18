@@ -37,7 +37,17 @@ function withTimeout(promise, ms, message) {
  * echte URL. trySyncPendingUploads() holt das später nach, sobald wieder
  * Netz da ist.
  */
+// Ohne Obergrenze könnte ein eingeloggter Nutzer (versehentlich oder per
+// Skript) beliebig große Dateien hochladen und dabei unkontrolliert
+// Firebase-Storage-Kosten verursachen - storage.rules erzwingt dieselbe
+// Grenze serverseitig, diese Prüfung hier gibt nur die schnellere,
+// verständlichere Fehlermeldung VOR dem eigentlichen Upload-Versuch.
+export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+
 export async function uploadBlobToStorage(path, blob) {
+  if ((blob?.size || 0) > MAX_UPLOAD_BYTES) {
+    throw new Error(`Datei ist zu groß (${(blob.size / 1024 / 1024).toFixed(1)} MB) - maximal ${MAX_UPLOAD_BYTES / 1024 / 1024} MB erlaubt.`);
+  }
   try {
     if (!navigator.onLine) throw new Error('offline');
     const { storage } = await import('./firebase.js');

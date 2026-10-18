@@ -1,5 +1,5 @@
 import { openDB, ensureSeeded, getSettings, hasRouteAccess, purgeOldTrash } from './db.js';
-import { initLock, lockNow } from './auth.js';
+import { initLock, lockNow, hasActiveProtection } from './auth.js';
 import { applyDeviceClass } from './device.js';
 import { toast } from './utils.js';
 import { isBrowserCapable, initForegroundListener } from './push.js';
@@ -211,6 +211,30 @@ export function ensureJarvisFont() {
   document.head.appendChild(link);
 }
 
+// Sperrt das Gerät automatisch nach N Minuten ohne Interaktion (Einstellungen
+// → Zugangscode → "Automatisch sperren") - wichtig für den Außendienst, wo
+// ein Tablet/Handy im Fahrzeug liegen bleiben kann. Nur ein einziger
+// setTimeout statt eines Poll-Intervalls, wird bei jeder erfassten Aktivität
+// zurückgesetzt. Läuft nur, wenn eine Sperre auf diesem Gerät überhaupt etwas
+// bewirkt (siehe hasActiveProtection) und eine Minutenzahl > 0 eingestellt ist.
+async function armAutoLock() {
+  const [settings, geschuetzt] = await Promise.all([getSettings(), hasActiveProtection()]);
+  const minuten = Number(settings.autoLockMinuten) || 0;
+  if (!geschuetzt || minuten <= 0) return;
+  const timeoutMs = minuten * 60 * 1000;
+  let timer = null;
+  function resetTimer() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (sessionStorage.getItem('nv-unlocked-session')) lockNow();
+    }, timeoutMs);
+  }
+  ['mousedown', 'mousemove', 'keydown', 'touchstart', 'scroll', 'wheel'].forEach((evt) => {
+    document.addEventListener(evt, resetTimer, { passive: true });
+  });
+  resetTimer();
+}
+
 export async function applyTheme() {
   const settings = await getSettings();
   const theme = settings.theme === 'dark' ? 'dark' : settings.theme === 'jarvis' ? 'jarvis' : 'light';
@@ -237,6 +261,7 @@ async function boot() {
   }
   await applyTheme();
   applyRoleToNav();
+  armAutoLock().catch(() => { /* Auto-Lock ist ein Komfort-/Sicherheits-Feature, darf den Start nicht stören */ });
   document.getElementById('app').hidden = false;
   // Einmalig auf document.body statt pro Routenwechsel: erfasst so auch
   // Modals (Positionstabelle in Angebot/Rechnung-Formularen), die außerhalb

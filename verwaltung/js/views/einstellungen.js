@@ -219,7 +219,9 @@ export async function render(container) {
           <form id="pw-form">
             <div class="form-grid">
               <div class="field"><label>Zugangscode (leer = kein Schutz)</label><input name="passcode" value="${escapeHtml(settings.passcode || '')}"></div>
+              <div class="field"><label>Automatisch sperren nach Inaktivität (Minuten, 0 = deaktiviert)</label><input type="number" step="1" min="0" name="autoLockMinuten" value="${settings.autoLockMinuten ?? 15}"></div>
             </div>
+            <p class="hint">Sperrt das Gerät automatisch, wenn länger keine Eingabe erfolgt ist – z.B. wenn ein Tablet im Fahrzeug liegen bleibt. Wirkt nur, wenn oben ein Zugangscode gesetzt ist bzw. (bei Mitarbeiter-Login per E-Mail) immer.</p>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
         </div>
@@ -1122,7 +1124,10 @@ export async function render(container) {
   container.querySelector('#pw-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    await setSettings({ passcode: (fd.get('passcode') || '').toString().trim() });
+    await setSettings({
+      passcode: (fd.get('passcode') || '').toString().trim(),
+      autoLockMinuten: Math.max(0, Number(fd.get('autoLockMinuten')) || 0),
+    });
     toast('Zugangscode gespeichert. Wird nach Neuladen aktiv.', 'success');
   });
 

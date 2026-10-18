@@ -20,6 +20,19 @@ export function initLock() {
   return FIREBASE_ENABLED ? initFirebaseLogin() : initPinLock();
 }
 
+/** Ob eine Sperre auf diesem Gerät überhaupt etwas bewirkt - im Firebase-
+ * Modus ist jeder Nutzer per E-Mail+Passwort eingeloggt, eine Sperre
+ * verlangt also immer ein erneutes Login. Im PIN-Modus (IndexedDB-Fallback)
+ * ohne gesetzten Zugangscode/Mitarbeiter-Code würde lockNow() dagegen sofort
+ * wieder ohne jede Abfrage entsperrt (siehe initPinLock oben) - genutzt z.B.
+ * um einen sinnlosen Auto-Lock-Timer in diesem Fall gar nicht erst zu
+ * starten. */
+export async function hasActiveProtection() {
+  if (FIREBASE_ENABLED) return true;
+  const [settings, mitarbeiter] = await Promise.all([getSettings(), getAll('mitarbeiter')]);
+  return !!settings.passcode || mitarbeiter.some((m) => m.zugangscode);
+}
+
 export function lockNow() {
   sessionStorage.removeItem(SESSION_KEY);
   if (FIREBASE_ENABLED) {

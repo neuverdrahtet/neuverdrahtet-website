@@ -13,7 +13,12 @@ service firebase.storage {
     // bereits in firestore.rules: nur wer das zugehörige Firestore-Dokument
     // lesen darf (Admin/Büro), erfährt überhaupt den genauen Storage-Pfad.
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      // Größenobergrenze (25 MB, dieselbe wie der Client-seitige Check in
+      // blobstore.js uploadBlobToStorage) - verhindert, dass ein eingeloggter
+      // Nutzer (versehentlich oder per Skript an der normalen App vorbei)
+      // beliebig große Dateien hochlädt und dabei Storage-Kosten verursacht.
+      allow write: if request.auth != null && request.resource.size < 25 * 1024 * 1024;
     }
   }
 }
