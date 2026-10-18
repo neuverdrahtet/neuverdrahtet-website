@@ -79,7 +79,13 @@ export async function render(container) {
     return [kundenById[a.kundeId]?.firma, projekteById[a.projektId]?.titel].filter(Boolean).join(' / ');
   }
 
-  const bezahlteRechnungen = rechnungen.filter((r) => r.status === 'bezahlt' && (r.bezahltAm || r.datum));
+  // "teilbezahlt" zählt hier bewusst mit (nicht nur "bezahlt") - sonst würde
+  // eine Teilzahlung in dieser cash-basis-Übersicht komplett unsichtbar
+  // bleiben, obwohl das Geld tatsächlich eingegangen ist und bereits korrekt
+  // in Buchungen verbucht wird (journal.js). Die tatsächlich eingegangenen
+  // Netto-/USt.-/Brutto-Anteile liefert journal.effektivErhaltenerBetrag()
+  // weiter unten - dieselbe Quelle wie bei der Verbuchung selbst.
+  const bezahlteRechnungen = rechnungen.filter((r) => (r.status === 'bezahlt' || r.status === 'teilbezahlt') && (r.bezahltAm || r.datum));
   const jahre = new Set([
     ...bezahlteRechnungen.map((r) => (r.bezahltAm || r.datum).slice(0, 4)),
     ...ausgaben.map((a) => (a.datum || '').slice(0, 4)),
@@ -288,9 +294,9 @@ export async function render(container) {
     const einnahmenAnzeige = einnahmenJahr.filter((r) => imZeitraum(r.bezahltAm || r.datum, quartal, monatFilter));
     const ausgabenAnzeige = ausgabenJahr.filter((a) => imZeitraum(a.datum, quartal, monatFilter));
 
-    const einnahmenBrutto = einnahmenAnzeige.reduce((s, r) => s + (r.brutto || 0), 0);
-    const einnahmenNetto = einnahmenAnzeige.reduce((s, r) => s + (r.netto || 0), 0);
-    const vereinnahmteUst = einnahmenAnzeige.reduce((s, r) => s + (r.steuer || 0), 0);
+    const einnahmenBrutto = einnahmenAnzeige.reduce((s, r) => s + journal.effektivErhaltenerBetrag(r).brutto, 0);
+    const einnahmenNetto = einnahmenAnzeige.reduce((s, r) => s + journal.effektivErhaltenerBetrag(r).netto, 0);
+    const vereinnahmteUst = einnahmenAnzeige.reduce((s, r) => s + journal.effektivErhaltenerBetrag(r).steuer, 0);
     const ausgabenBrutto = ausgabenAnzeige.reduce((s, a) => s + (a.betragBrutto || 0), 0);
     const ausgabenNetto = ausgabenAnzeige.reduce((s, a) => s + (a.betragNetto || 0), 0);
     const gezahlteUst = ausgabenBrutto - ausgabenNetto;
@@ -301,7 +307,7 @@ export async function render(container) {
       const mm = String(i + 1).padStart(2, '0');
       if (monatFilter && mm !== monatFilter) return null;
       if (!monatFilter && quartal && Number(mm) < (Number(quartal) - 1) * 3 + 1 || !monatFilter && quartal && Number(mm) > Number(quartal) * 3) return null;
-      const ein = einnahmenJahr.filter((r) => (r.bezahltAm || r.datum).slice(5, 7) === mm).reduce((s, r) => s + (r.brutto || 0), 0);
+      const ein = einnahmenJahr.filter((r) => (r.bezahltAm || r.datum).slice(5, 7) === mm).reduce((s, r) => s + journal.effektivErhaltenerBetrag(r).brutto, 0);
       const aus = ausgabenJahr.filter((a) => (a.datum || '').slice(5, 7) === mm).reduce((s, a) => s + (a.betragBrutto || 0), 0);
       return { monat: MONTHS[i], ein, aus, saldo: ein - aus };
     }).filter(Boolean);
@@ -309,7 +315,7 @@ export async function render(container) {
     // --- Steuerschätzung (grob, auf Basis des vereinfachten Überschusses) ---
     // Bewusst auf Basis des GANZEN Jahres (einnahmenJahr/ausgabenJahr), nicht
     // des ggf. gewählten Quartals - siehe Kommentar oben.
-    const einnahmenBruttoJahr = einnahmenJahr.reduce((s, r) => s + (r.brutto || 0), 0);
+    const einnahmenBruttoJahr = einnahmenJahr.reduce((s, r) => s + journal.effektivErhaltenerBetrag(r).brutto, 0);
     const ausgabenBruttoJahr = ausgabenJahr.reduce((s, a) => s + (a.betragBrutto || 0), 0);
     const ueberschussJahr = einnahmenBruttoJahr - ausgabenBruttoJahr;
     const istKapitalgesellschaft = settings.rechtsform !== 'einzelunternehmen' && settings.rechtsform !== 'personengesellschaft';
@@ -386,7 +392,8 @@ export async function render(container) {
     host.querySelector('#btn-export-csv').addEventListener('click', () => {
       const rows = [['Datum', 'Typ', 'Beschreibung', 'Netto', 'USt.', 'Brutto']];
       for (const r of einnahmenAnzeige) {
-        rows.push([r.bezahltAm || r.datum, 'Einnahme', `Rechnung ${r.nummer} – ${kundenById[r.kundeId]?.firma || ''}`, deNum(r.netto), deNum(r.steuer), deNum(r.brutto)]);
+        const betrag = journal.effektivErhaltenerBetrag(r);
+        rows.push([r.bezahltAm || r.datum, 'Einnahme', `Rechnung ${r.nummer}${betrag.textZusatz} – ${kundenById[r.kundeId]?.firma || ''}`, deNum(betrag.netto), deNum(betrag.steuer), deNum(betrag.brutto)]);
       }
       for (const a of ausgabenAnzeige) {
         const bezug = ausgabeBezug(a);
@@ -418,8 +425,9 @@ export async function render(container) {
     const rows = [];
     for (const r of einnahmenJahr) {
       const datum = r.bezahltAm || r.datum;
+      const betrag = journal.effektivErhaltenerBetrag(r);
       rows.push([
-        deNum(r.brutto), 'H', 'EUR', '', '', '',
+        deNum(betrag.brutto), 'H', 'EUR', '', '', '',
         settings.datevErloesKonto, '', buSchluessel(19), ddmm(datum), `"${r.nummer}"`, '', '',
         `"${(kundenById[r.kundeId]?.firma || 'Kunde').replace(/"/g, "'")}"`,
       ].join(';'));

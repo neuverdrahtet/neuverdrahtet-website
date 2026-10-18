@@ -312,8 +312,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
             </div>
           </div>
           <div class="dash-score-stats">
-            <div><span class="badge badge-success">✓</span> Im Zahlungsziel<strong>${formatCurrency(imZahlungsziel.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${imZahlungsziel.length} Rechnungen</span></div>
-            <div><span class="badge badge-warn">!</span> Im Mahnverfahren<strong>${formatCurrency(imMahnverfahren.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${imMahnverfahren.length} Rechnungen</span></div>
+            <div><span class="badge badge-success">✓</span> Im Zahlungsziel<strong>${formatCurrency(imZahlungsziel.reduce((s, r) => s + offenerRestbetrag(r), 0))}</strong><span class="text-mute">${imZahlungsziel.length} Rechnungen</span></div>
+            <div><span class="badge badge-warn">!</span> Im Mahnverfahren<strong>${formatCurrency(imMahnverfahren.reduce((s, r) => s + offenerRestbetrag(r), 0))}</strong><span class="text-mute">${imMahnverfahren.length} Rechnungen</span></div>
             <div><span class="badge badge-success">✓</span> Bezahlt<strong>${formatCurrency(alleAktuell.reduce((s, r) => s + r.brutto, 0))}</strong><span class="text-mute">${alleAktuell.length} Rechnungen</span></div>
           </div>
           <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>

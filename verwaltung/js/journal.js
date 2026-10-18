@@ -25,6 +25,39 @@ function bankOderKasse(konten, settings, zahlungsart) {
   return findKonto(konten, id, fallbackNummer);
 }
 
+/** Tatsächlich erhaltener Netto-/USt.-/Brutto-Anteil einer bezahlten oder
+ * teilbezahlten Rechnung - berücksichtigt einen Skonto-Abzug bzw. eine
+ * erfasste Teilzahlung. Einzige Quelle dieser Berechnung (wird sowohl von
+ * erzeugeBuchungenFuerRechnung unten als auch von cash-basis-Auswertungen
+ * wie der Buchhaltung-Übersicht/dem Dashboard verwendet), damit eine
+ * Rechnung überall denselben tatsächlich eingegangenen Betrag zeigt wie die
+ * daraus erzeugten Buchungssätze. */
+export function effektivErhaltenerBetrag(r) {
+  if (r.status === 'teilbezahlt') {
+    const teilbetrag = r.teilzahlungBetrag || 0;
+    if (!teilbetrag || !r.brutto) return { netto: 0, steuer: 0, brutto: 0, textZusatz: ' (Teilzahlung)' };
+    const faktor = Math.min(teilbetrag / r.brutto, 1);
+    return {
+      netto: Math.round(r.netto * faktor * 100) / 100,
+      steuer: Math.round(r.steuer * faktor * 100) / 100,
+      brutto: Math.round(teilbetrag * 100) / 100,
+      textZusatz: ' (Teilzahlung)',
+    };
+  }
+  if (r.status === 'bezahlt') {
+    if (r.skontoGenutzt && r.skontoProzent > 0) {
+      // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage
+      // anteilig (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag.
+      const faktor = 1 - r.skontoProzent / 100;
+      const netto = Math.round(r.netto * faktor * 100) / 100;
+      const steuer = Math.round(r.steuer * faktor * 100) / 100;
+      return { netto, steuer, brutto: Math.round((netto + steuer) * 100) / 100, textZusatz: ` (abzgl. ${r.skontoProzent}% Skonto)` };
+    }
+    return { netto: r.netto || 0, steuer: r.steuer || 0, brutto: r.brutto || 0, textZusatz: '' };
+  }
+  return { netto: 0, steuer: 0, brutto: 0, textZusatz: '' };
+}
+
 /** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine bezahlte
  * oder teilbezahlte Rechnung. */
 export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
@@ -36,32 +69,7 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
   const quelle = { typ: 'rechnung', id: r.id };
   const buchungen = [];
 
-  let netto = r.netto;
-  let steuer = r.steuer;
-  let textZusatz = '';
-  if (r.status === 'teilbezahlt') {
-    // Teilzahlung: ohne hinterlegten Teilbetrag gibt es nichts zu verbuchen -
-    // Netto/USt. anteilig im Verhältnis Teilbetrag/Bruttobetrag kürzen
-    // (gleiche Rechnung wie beim Skonto unten), sodass die Soll-Buchung aufs
-    // Geldkonto exakt dem bisher tatsächlich eingegangenen Betrag entspricht,
-    // nicht dem vollen Rechnungsbetrag.
-    const teilbetrag = r.teilzahlungBetrag || 0;
-    if (!teilbetrag || !r.brutto) return [];
-    const faktor = Math.min(teilbetrag / r.brutto, 1);
-    netto = Math.round(r.netto * faktor * 100) / 100;
-    steuer = Math.round(r.steuer * faktor * 100) / 100;
-    textZusatz = ' (Teilzahlung)';
-  } else if (r.skontoGenutzt && r.skontoProzent > 0) {
-    // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage
-    // anteilig (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag -
-    // Netto/USt. deshalb hier anteilig kürzen, sodass die Soll-Buchung aufs
-    // Geldkonto exakt dem tatsächlich eingegangenen (reduzierten) Betrag
-    // entspricht.
-    const faktor = 1 - r.skontoProzent / 100;
-    netto = Math.round(r.netto * faktor * 100) / 100;
-    steuer = Math.round(r.steuer * faktor * 100) / 100;
-    textZusatz = ` (abzgl. ${r.skontoProzent}% Skonto)`;
-  }
+  const { netto, steuer, textZusatz } = effektivErhaltenerBetrag(r);
 
   const steuerfrei = r.steuerart && r.steuerart !== 'regel';
   const satz = effektiverSteuersatz(r.netto, r.steuer);
