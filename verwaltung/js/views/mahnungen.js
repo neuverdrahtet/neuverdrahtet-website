@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals, offenerRestbetrag } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -117,7 +117,7 @@ export async function render(container) {
     ],
   });
 
-  const summeUeberfaellig = overdue.reduce((s, o) => s + (o.r.brutto || 0), 0);
+  const summeUeberfaellig = overdue.reduce((s, o) => s + offenerRestbetrag(o.r), 0);
   const offeneMahngebuehren = mahnungen
     .filter((m) => ['offen', 'teilbezahlt'].includes(rechnungenById[m.rechnungId]?.status))
     .reduce((s, m) => s + (m.gebuehr || 0), 0);
@@ -165,7 +165,7 @@ export async function render(container) {
                 <td>${formatDate(r.faelligAm)}</td>
                 <td><span class="badge badge-danger">${tageUeberfaellig} Tage</span></td>
                 <td>${stufeCount}</td>
-                <td class="text-right">${formatCurrency(r.brutto)}</td>
+                <td class="text-right">${formatCurrency(offenerRestbetrag(r))}</td>
                 <td>${bereit
                   ? `<button class="btn btn-sm btn-primary btn-create-mahnung" data-rid="${r.id}" data-stufe="${nextStufe}">Mahnung Stufe ${nextStufe}</button>`
                   : `<span class="badge" title="Zahlungsfrist der letzten Mahnung läuft noch">Wartet bis ${formatDate(wartetBis)}</span>`}</td>
@@ -291,7 +291,7 @@ export async function render(container) {
     const rech = rechnungenById[m.rechnungId];
     const kunde = kundenById[rech?.kundeId];
     const positionen = [
-      { bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}`, menge: 1, einheit: '', einzelpreis: rech?.brutto || 0, steuersatz: 0 },
+      { bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}`, menge: 1, einheit: '', einzelpreis: offenerRestbetrag(rech), steuersatz: 0 },
       { bezeichnung: 'Mahngebühr', menge: 1, einheit: '', einzelpreis: m.gebuehr || 0, steuersatz: 0 },
     ];
     return {

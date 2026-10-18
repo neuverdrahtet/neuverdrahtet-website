@@ -1,5 +1,5 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText } from '../utils.js';
+import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText, offenerRestbetrag } from '../utils.js';
 import * as google from '../google.js';
 import { syncCalendar } from '../googlesync.js';
 
@@ -147,8 +147,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
     return { ...r, mahnstufeCount: mahnungenFuerR.length, mahnBereit: !wartetBis || wartetBis < today, mahnWartetBis: wartetBis, mahnNextStufe: Math.min(mahnungenFuerR.length + 1, 3) };
   });
   const mahnBereitCount = ueberfaellig.filter((r) => r.mahnBereit).length;
-  const offenSumme = offen.reduce((s, r) => s + (r.brutto || 0), 0);
-  const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + (r.brutto || 0), 0);
+  const offenSumme = offen.reduce((s, r) => s + offenerRestbetrag(r), 0);
+  const ueberfaelligSumme = ueberfaellig.reduce((s, r) => s + offenerRestbetrag(r), 0);
   const aktiveProjekte = projekte.filter((p) => !spaltenById[p.status]?.geschlossen);
 
   // --- Angebote ohne Rückmeldung (Nachfassen) ---

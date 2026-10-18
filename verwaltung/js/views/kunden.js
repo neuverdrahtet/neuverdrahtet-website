@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, resolveMarkeSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText, offenerRestbetrag } from '../utils.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
@@ -891,7 +891,7 @@ export async function render(container, route) {
     const kRechnungen = rechnungen.filter((r) => r.kundeId === kunde.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
     const heute = todayISO();
     const umsatz = kRechnungen.filter((r) => r.status !== 'storniert').reduce((s, r) => s + (r.brutto || 0), 0);
-    const offenerBetrag = kRechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt').reduce((s, r) => s + (r.brutto || 0), 0);
+    const offenerBetrag = kRechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt').reduce((s, r) => s + offenerRestbetrag(r), 0);
     const offen = kProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const kAusgaben = ausgaben
       .filter((a) => a.kundeId === kunde.id || projektIds.has(a.projektId))

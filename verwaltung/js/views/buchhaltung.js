@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, KONTEN_KLASSEN, ANLAGE_KATEGORIEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast, readTextAutoEncoding } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, toast, readTextAutoEncoding, offenerRestbetrag } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { erkenneDelimiter, parseCsv, bankbuchungSchluessel, zeilenZuBuchungen } from '../bankimport.js';
 import * as bankabgleich from '../bankabgleich.js';
@@ -861,7 +861,7 @@ export async function render(container) {
     const offeneRechnungen = rechnungen
       .filter((r) => r.status === 'offen' || r.status === 'teilbezahlt')
       .sort((a, b) => (a.faelligAm || '').localeCompare(b.faelligAm || ''));
-    const summeDebitoren = offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0);
+    const summeDebitoren = offeneRechnungen.reduce((s, r) => s + offenerRestbetrag(r), 0);
 
     const offeneAusgaben = ausgaben
       .filter((a) => a.bezahlstatus === 'offen')
@@ -876,10 +876,10 @@ export async function render(container) {
       <h3>Debitoren</h3>
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-value">${offeneRechnungen.length}</div><div class="kpi-label">Offene Rechnungen</div></div>
-        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summeDebitoren)}</div><div class="kpi-label">Summe offen (brutto)</div></div>
+        <div class="kpi-card kpi-warn"><div class="kpi-value">${formatCurrency(summeDebitoren)}</div><div class="kpi-label">Summe offen</div></div>
       </div>
       <table class="data-table">
-        <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Status</th><th class="text-right">Betrag (brutto)</th></tr></thead>
+        <thead><tr><th>Nummer</th><th>Kunde</th><th>Fällig am</th><th>Status</th><th class="text-right">Offener Betrag</th></tr></thead>
         <tbody>
           ${offeneRechnungen.map((r) => {
             const overdue = r.faelligAm && r.faelligAm < today;
@@ -889,7 +889,7 @@ export async function render(container) {
                 <td>${escapeHtml(kundenById[r.kundeId]?.firma || '')}</td>
                 <td>${formatDate(r.faelligAm)}${overdue ? ' ⚠️' : ''}</td>
                 <td>${escapeHtml(RECHNUNG_STATUS_LABEL[r.status] || r.status)}</td>
-                <td class="text-right">${formatCurrency(r.brutto)}</td>
+                <td class="text-right">${formatCurrency(offenerRestbetrag(r))}</td>
               </tr>
             `;
           }).join('') || '<tr><td colspan="5">Keine offenen Rechnungen.</td></tr>'}

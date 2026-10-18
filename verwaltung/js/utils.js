@@ -19,6 +19,15 @@ export function farbeAusText(text, palette) {
   return palette[hash % palette.length];
 }
 
+// Tatsächlich noch offener Betrag einer Rechnung - berücksichtigt eine
+// bereits erfasste Teilzahlung (teilzahlungBetrag, Status "teilbezahlt").
+// Zentrale Stelle, damit "offen"/"überfällig"-Anzeigen (Dashboard,
+// Buchhaltung, Kundenakte, Mahnungen/Mahnschreiben) nicht versehentlich
+// weiterhin den vollen Rechnungsbetrag statt des tatsächlichen Rests zeigen.
+export function offenerRestbetrag(r) {
+  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0));
+}
+
 export function formatCurrency(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
 }

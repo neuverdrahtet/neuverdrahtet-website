@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, offenerRestbetrag } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
@@ -187,6 +187,12 @@ export async function render(container, route) {
   const kpiUeberfaellig = kpiOffen.filter((r) => r.faelligAm && r.faelligAm < today);
   const kpiBezahlt = nichtStorniert.filter((r) => r.status === 'bezahlt');
   const summe = (list) => list.reduce((s, r) => s + (r.brutto || 0), 0);
+  // Eigene Summierung für "Offen"/"Überfällig" (anders als "Bezahlt"/"Gesamt"
+  // oben, wo der volle Rechnungsbetrag korrekt ist): berücksichtigt eine
+  // bereits erfasste Teilzahlung, sonst würde eine teilbezahlte Rechnung
+  // weiterhin mit ihrem vollen statt des tatsächlich noch offenen Betrags in
+  // diese beiden KPIs einfließen.
+  const summeOffen = (list) => list.reduce((s, r) => s + offenerRestbetrag(r), 0);
   const jahresOptionen = [...new Set(rechnungen.map((r) => (r.datum || '').slice(0, 4)).filter(Boolean))].sort((a, b) => b.localeCompare(a));
 
   container.innerHTML = `
@@ -202,11 +208,11 @@ export async function render(container, route) {
     </div>
     <div class="kpi-grid">
       <div class="kpi-card kpi-clickable kpi-accent" id="kpi-offen">
-        <div class="kpi-value">${formatCurrency(summe(kpiOffen))}</div>
+        <div class="kpi-value">${formatCurrency(summeOffen(kpiOffen))}</div>
         <div class="kpi-label">Offen · ${kpiOffen.length} Rechnung(en)</div>
       </div>
       <div class="kpi-card kpi-clickable kpi-danger" id="kpi-ueberfaellig">
-        <div class="kpi-value">${formatCurrency(summe(kpiUeberfaellig))}</div>
+        <div class="kpi-value">${formatCurrency(summeOffen(kpiUeberfaellig))}</div>
         <div class="kpi-label">Überfällig · ${kpiUeberfaellig.length} Rechnung(en)</div>
       </div>
       <div class="kpi-card kpi-clickable kpi-success" id="kpi-bezahlt">

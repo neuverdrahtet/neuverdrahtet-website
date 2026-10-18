@@ -1,5 +1,5 @@
 import { getAll, getSettings, TERMIN_TYPEN } from '../db.js';
-import { escapeHtml, formatCurrency, formatDate, todayISO, localDateStr, openDokumentMitVorbelegung } from '../utils.js';
+import { escapeHtml, formatCurrency, formatDate, todayISO, localDateStr, openDokumentMitVorbelegung, offenerRestbetrag } from '../utils.js';
 import { mountKarte } from '../karte.js';
 
 // Tagesfokussierte Startseite (Ergänzung zum bestehenden, eher betriebswirt-
@@ -126,7 +126,7 @@ export async function render(container) {
                 return `
                   <li class="tu-row-link" data-href="#/rechnungen/${r.id}">
                     <div><strong>${escapeHtml(r.nummer)}</strong><div class="text-mute">${escapeHtml(kundenById[r.kundeId]?.firma || '')}${r.faelligAm ? ' · fällig ' + formatDate(r.faelligAm) : ''}</div></div>
-                    <span class="badge ${istUeberfaellig ? 'badge-danger' : ''}">${formatCurrency(r.brutto)}</span>
+                    <span class="badge ${istUeberfaellig ? 'badge-danger' : ''}">${formatCurrency(offenerRestbetrag(r))}</span>
                   </li>
                 `;
               }).join('')}

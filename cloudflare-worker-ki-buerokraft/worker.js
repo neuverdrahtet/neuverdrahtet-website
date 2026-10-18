@@ -79,6 +79,14 @@ const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#
 const AUFGABEN_STATUS_GESCHLOSSEN = ['erledigt'];
 const KUNDEN_STATUS_GESCHLOSSEN = ['verloren', 'kunde'];
 const RECHNUNG_OFFEN_STATUS = ['offen', 'teilbezahlt'];
+// Tatsächlich noch offener Betrag - berücksichtigt eine bereits erfasste
+// Teilzahlung (teilzahlungBetrag), analog zu offenerRestbetrag() in
+// verwaltung/js/utils.js. Ohne das würde z.B. das Dashboard-Tool bei einer
+// teilbezahlten Rechnung weiterhin den vollen statt des tatsächlichen Rests
+// als offenen Betrag melden.
+function offenerRestbetrag(r) {
+  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0));
+}
 // 1:1 aus verwaltung/js/views/mahnungen.js portiert (STUFE_TEXT) - muss mit
 // den dort in Werkora angezeigten/druckbaren Mahntexten übereinstimmen.
 const MAHNUNG_STUFE_TEXT = {
@@ -271,7 +279,7 @@ function bankOderKasse(konten, settings, zahlungsart) {
 }
 
 function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
-  if (r.status !== 'bezahlt') return [];
+  if (r.status !== 'bezahlt' && r.status !== 'teilbezahlt') return [];
   const geldKonto = bankOderKasse(konten, settings, r.zahlungsart);
   if (!geldKonto) return [];
   const datum = r.bezahltAm || r.datum;
@@ -279,12 +287,25 @@ function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
   const quelle = { typ: 'rechnung', id: r.id };
   const buchungen = [];
 
+  // 1:1 aus verwaltung/js/journal.js portiert (Teilzahlung/Skonto-Anteil) -
+  // muss mit der dortigen Logik übereinstimmen, sonst würde dieselbe
+  // Rechnung je nachdem, ob sie über Werkora oder per KI-Tool als
+  // (teil-)bezahlt markiert wird, unterschiedlich verbucht.
   let netto = r.netto;
   let steuer = r.steuer;
-  if (r.skontoGenutzt && r.skontoProzent > 0) {
+  let textZusatz = '';
+  if (r.status === 'teilbezahlt') {
+    const teilbetrag = r.teilzahlungBetrag || 0;
+    if (!teilbetrag || !r.brutto) return [];
+    const faktor = Math.min(teilbetrag / r.brutto, 1);
+    netto = Math.round(r.netto * faktor * 100) / 100;
+    steuer = Math.round(r.steuer * faktor * 100) / 100;
+    textZusatz = ' (Teilzahlung)';
+  } else if (r.skontoGenutzt && r.skontoProzent > 0) {
     const faktor = 1 - r.skontoProzent / 100;
     netto = Math.round(r.netto * faktor * 100) / 100;
     steuer = Math.round(r.steuer * faktor * 100) / 100;
+    textZusatz = ` (abzgl. ${r.skontoProzent}% Skonto)`;
   }
 
   const steuerfrei = r.steuerart && r.steuerart !== 'regel';
@@ -294,7 +315,7 @@ function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
     : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
   if (erloesKonto && netto) {
     buchungen.push({
-      id: crypto.randomUUID(), datum, text: r.skontoGenutzt ? `${belegtext} (abzgl. ${r.skontoProzent}% Skonto)` : belegtext,
+      id: crypto.randomUUID(), datum, text: `${belegtext}${textZusatz}`,
       sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
       betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
     });
@@ -672,6 +693,12 @@ function invoiceToApi(r) {
     net_total: r.netto || 0,
     vat_total: r.steuer || 0,
     gross_total: r.brutto || 0,
+    // paid_amount/open_value berücksichtigen eine erfasste Teilzahlung
+    // (status "teilbezahlt") - ohne das würde die KI beim Nachfragen/
+    // Mahnen weiterhin den vollen statt des tatsächlich noch offenen
+    // Betrags sehen (siehe offenerRestbetrag()).
+    paid_amount: r.status === 'bezahlt' ? (r.brutto || 0) : (r.status === 'teilbezahlt' ? (r.teilzahlungBetrag || 0) : 0),
+    open_value: offenerRestbetrag(r),
     paid_at: r.bezahltAm || '',
     // "locked" = bereits versendet und damit GoBD-gesperrt (nur noch per
     // Storno korrigierbar, kein Direkt-Edit mehr) - genau wie in Werkora
@@ -1572,7 +1599,7 @@ const MCP_TOOLS = [
   },
   {
     name: 'werkora_mark_invoice_paid',
-    description: 'Markiert eine Rechnung als bezahlt und erzeugt automatisch die passenden Buchungssätze (Bank/Kasse gegen Erlös- und Umsatzsteuer-Konto, abhängig von Zahlungsart und Steuersatz) - genau wie Werkora selbst das beim Abhaken einer Zahlung tut. Hat die Rechnung einen Skonto-Rabatt (skonto_percent > 0), unbedingt vorher beim Nutzer erfragen, ob der Kunde den Skonto-Betrag tatsächlich abgezogen hat, und das Ergebnis in skonto_deducted übergeben - sonst wird in der Buchhaltung versehentlich der volle statt des reduzierten Zahlungseingangs verbucht.',
+    description: 'Markiert eine Rechnung als (voll oder teilweise) bezahlt und erzeugt automatisch die passenden Buchungssätze (Bank/Kasse gegen Erlös- und Umsatzsteuer-Konto, abhängig von Zahlungsart und Steuersatz) - genau wie Werkora selbst das beim Abhaken einer Zahlung tut. Hat die Rechnung einen Skonto-Rabatt (skonto_percent > 0), unbedingt vorher beim Nutzer erfragen, ob der Kunde den Skonto-Betrag tatsächlich abgezogen hat, und das Ergebnis in skonto_deducted übergeben - sonst wird in der Buchhaltung versehentlich der volle statt des reduzierten Zahlungseingangs verbucht.',
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     inputSchema: {
       type: 'object',
@@ -1581,6 +1608,7 @@ const MCP_TOOLS = [
         paid_at: { type: 'string', description: 'YYYY-MM-DD, Standard: heute' },
         payment_method: { type: 'string', description: '"ueberweisung" (Standard), "bar", oder ein anderer in Werkora genutzter Wert' },
         skonto_deducted: { type: 'boolean', description: 'Nur relevant, wenn die Rechnung einen Skonto-Rabatt hat: true, wenn der Kunde den Skonto-Betrag abgezogen und entsprechend weniger überwiesen hat, sonst false (Standard: false = voller Betrag).' },
+        partial_amount: { type: 'number', description: 'Nur bei einer TEILZAHLUNG angeben: der INSGESAMT bisher gezahlte Betrag (nicht nur der neueste Eingang) als absoluter Euro-Betrag, z.B. 500 bei einer 1200€-Rechnung mit bisher 500€ Zahlungseingang. Die Rechnung wird dann als "teilbezahlt" markiert statt als voll bezahlt. Entspricht der Betrag (annähernd) dem vollen Rechnungsbetrag, wird automatisch auf voll bezahlt gesetzt. Ohne Angabe wird die Rechnung als vollständig bezahlt markiert.' },
       },
       required: ['invoice_id'],
     },
@@ -1968,7 +1996,7 @@ async function callWerkoraMcpTool(name, args, ctx) {
         quotes_open: offeneAngebote.length,
         quotes_total_value: Math.round(offeneAngebote.reduce((s, a) => s + (a.brutto || 0), 0) * 100) / 100,
         invoices_open: offeneRechnungen.length,
-        invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0) * 100) / 100,
+        invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + offenerRestbetrag(r), 0) * 100) / 100,
         invoices_overdue: offeneRechnungen.filter((r) => r.faelligAm && r.faelligAm < heute).length,
       });
     }
@@ -2120,13 +2148,28 @@ async function callWerkoraMcpTool(name, args, ctx) {
       const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
       if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
       if (existing.status === 'storniert') return mcpToolError('Eine stornierte Rechnung kann nicht als bezahlt markiert werden.');
-      const changes = { status: 'bezahlt', bezahltAm: args.paid_at || todayISO() };
+      const changes = { bezahltAm: args.paid_at || todayISO() };
       if (args.payment_method) changes.zahlungsart = args.payment_method;
+      // Teilzahlung: TOLERANZ wie beim bestehenden Zahlungsabgleich
+      // (bankabgleich.js/zahlungsabgleich.js) - ein Betrag, der (abgesehen
+      // von Rundung) dem vollen Rechnungsbetrag entspricht, zählt als voll
+      // bezahlt statt als technisch "teilbezahlt" liegen zu bleiben.
+      const TOLERANZ = 0.01;
+      const teilbetrag = typeof args.partial_amount === 'number' ? args.partial_amount : null;
+      if (teilbetrag != null && teilbetrag > 0 && teilbetrag < (existing.brutto || 0) - TOLERANZ) {
+        changes.status = 'teilbezahlt';
+        changes.teilzahlungBetrag = Math.round(teilbetrag * 100) / 100;
+      } else {
+        changes.status = 'bezahlt';
+      }
       // Ohne diese Angabe würde syncBuchungFuerRechnung() unten immer den
       // vollen statt des ggf. per Skonto reduzierten Betrags verbuchen (siehe
       // journal.js) - dieselbe Abfrage wie im Werkora-Bearbeiten-Formular/der
       // Tabellen-Inline-Statusänderung, nur hier explizit als Tool-Parameter.
-      if ((existing.skontoProzent || 0) > 0) changes.skontoGenutzt = args.skonto_deducted === true;
+      // Nur relevant, wenn die Rechnung dadurch VOLL bezahlt wird - eine
+      // Teilzahlung wird unabhängig vom Skonto-Status anteilig verbucht
+      // (siehe erzeugeBuchungenFuerRechnung oben).
+      if (changes.status === 'bezahlt' && (existing.skontoProzent || 0) > 0) changes.skontoGenutzt = args.skonto_deducted === true;
       const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
       const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
       await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: updated, settingsDoc });
@@ -2344,7 +2387,7 @@ export default {
           quotes_open: offeneAngebote.length,
           quotes_total_value: Math.round(offeneAngebote.reduce((s, a) => s + (a.brutto || 0), 0) * 100) / 100,
           invoices_open: offeneRechnungen.length,
-          invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + (r.brutto || 0), 0) * 100) / 100,
+          invoices_open_value: Math.round(offeneRechnungen.reduce((s, r) => s + offenerRestbetrag(r), 0) * 100) / 100,
           invoices_overdue: offeneRechnungen.filter((r) => r.faelligAm && r.faelligAm < heute).length,
           projects_missing_documents: 0, // Pflichtdokumente-Prüfung (Vorgabe Abschnitt 20) ist noch nicht gebaut (Phase 3)
         };
