@@ -168,7 +168,7 @@ Realistische Preise (netto, Deutschland) als Orientierung, wenn kein Katalogtref
 
 Katalog zuerst, Internet-Recherche nur als Ergänzung:
 - Nutze, wenn im mitgelieferten Katalog ein passender Artikel/eine passende Leistung existiert, dessen Bezeichnung, Einheit und Preis unverändert. Setze dafür "imKatalog": true und "quelle": "Katalog".
-- Existiert für eine benötigte Position KEIN Katalogtreffer, nutze das web_search-Werkzeug, um einen echten, aktuellen marktüblichen Preis zu recherchieren (z.B. bei Herstellern, Elektro-Fachgroßhändlern, Baumärkten/Online-Händlern je nach Gewerk/Branche) - rate NICHT einfach ins Blaue aus eigenem Wissen. Setze dafür "imKatalog": false und "quelle" auf eine kurze Angabe, worauf sich der Preis stützt (z.B. Händler-/Herstellername), max. ca. 60 Zeichen.
+- Existiert für eine benötigte Position KEIN Katalogtreffer, nutze das web_search-Werkzeug, um einen echten, aktuellen Preis zu recherchieren. neuverdrahtet bezieht Material überwiegend aus Baumärkten (z.B. Hornbach, Bauhaus, OBI, toom) und Online-Händlern (z.B. Amazon, Obeta-Webshop, Voltimum, Contorion, Electronic-Star) - suche BEVORZUGT dort nach dem aktuellen Verkaufspreis. Hersteller-Websites/Fachgroßhändler nur ergänzend, falls dort kein Preis zu finden ist. Rate NICHT einfach ins Blaue aus eigenem Wissen. Setze dafür "imKatalog": false und "quelle" auf eine kurze Angabe, worauf sich der Preis stützt (z.B. Händlername), max. ca. 60 Zeichen.
 - Nur falls die Recherche trotz Versuch keinen brauchbaren Treffer liefert, nutze als letzten Ausweg eine vorsichtige Schätzung anhand der folgenden Richtwerte, setze "imKatalog": false und "quelle": "Schätzung, keine Recherche möglich".
 - Erfinde keine Quellen - "quelle" muss ehrlich wiedergeben, ob wirklich recherchiert wurde.
 
@@ -833,7 +833,7 @@ const GAEB_PREISVORSCHLAEGE_SCHEMA = {
   additionalProperties: false,
 };
 
-const GAEB_PREISE_SYSTEM_PROMPT = `Du recherchierst für einen deutschen Elektro-/Handwerksbetrieb aktuelle, marktübliche Netto-Verkaufspreise für Positionen aus einem Leistungsverzeichnis (GAEB-Import), indem du gezielt im Internet suchst - bei Herstellern (z.B. Hager, Gira, Busch-Jaeger, ABB, Siemens, OBO Bettermann, Jung), Elektro-Fachgroßhändlern (z.B. Sonepar, Rexel, Elektroshop24, Voltimum) und einschlägigen Baumärkten/Online-Händlern (z.B. Bauhaus, Hornbach, Amazon, Conrad).
+const GAEB_PREISE_SYSTEM_PROMPT = `Du recherchierst für einen deutschen Elektro-/Handwerksbetrieb aktuelle, marktübliche Netto-Verkaufspreise für Positionen aus einem Leistungsverzeichnis (GAEB-Import), indem du gezielt im Internet suchst. Der Betrieb bezieht sein Material überwiegend aus Baumärkten (z.B. Hornbach, Bauhaus, OBI, toom) und Online-Händlern (z.B. Amazon, Obeta-Webshop, Voltimum, Contorion, Electronic-Star) - suche BEVORZUGT dort nach dem aktuellen Preis. Hersteller-Websites (z.B. Hager, Gira, Busch-Jaeger, ABB, Siemens, OBO Bettermann, Jung) oder Fachgroßhändler (z.B. Sonepar, Rexel) nur ergänzend, falls dort kein Preis zu finden ist.
 
 Regeln:
 - Antworte ausschließlich auf Deutsch.
@@ -955,7 +955,7 @@ const KATALOG_AKTUALISIERUNG_SCHEMA = {
 };
 
 function buildKatalogAktualisierungSystemPrompt(gewerkeListe) {
-  return `Du prüfst für einen deutschen Handwerksbetrieb (Gewerke: ${gewerkeListe.join(', ') || 'diverse'}) einen Ausschnitt des bestehenden Artikel-/Leistungskatalogs auf aktuelle Marktpreise, indem du gezielt im Internet suchst (Hersteller, Fachgroßhändler, Baumärkte/Online-Händler, je nach Gewerk der jeweiligen Position).
+  return `Du prüfst für einen deutschen Handwerksbetrieb (Gewerke: ${gewerkeListe.join(', ') || 'diverse'}) einen Ausschnitt des bestehenden Artikel-/Leistungskatalogs auf aktuelle Marktpreise, indem du gezielt im Internet suchst. Der Betrieb bezieht sein Material überwiegend aus Baumärkten (z.B. Hornbach, Bauhaus, OBI, toom) und Online-Händlern (z.B. Amazon, Obeta-Webshop, Voltimum, Contorion, Electronic-Star) - suche BEVORZUGT dort nach dem aktuellen Preis. Hersteller-Websites/Fachgroßhändler nur ergänzend, falls dort kein Preis zu finden ist.
 
 Aufgabe 1 - Preise prüfen:
 - Für jede übergebene Position (gekennzeichnet mit [index] Bezeichnung/Einheit/Gewerk/aktueller Preis) recherchierst du den aktuellen marktüblichen Netto-Preis (EUR) je Einheit, wie ihn ein Handwerksbetrieb einem Kunden in Rechnung stellen würde (inkl. üblicher Handelsspanne).
