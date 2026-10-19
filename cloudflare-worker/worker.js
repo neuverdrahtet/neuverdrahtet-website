@@ -500,7 +500,7 @@ async function callClaudeEntityStichpunkte({ apiKey, model, entityType, stichpun
 }
 
 function buildAngebotImportSystemPrompt(standardSteuersatz) {
-  return `Du liest ein fremdes Angebot/einen Kostenvoranschlag (von einem anderen Handwerksbetrieb, z.B. einem Mitbewerber) aus einem hochgeladenen PDF oder Foto aus und übernimmst dessen Positionen 1:1 in das gleiche strukturierte Format wie eigene Angebote.
+  return `Du liest ein fremdes Angebot/einen Kostenvoranschlag aus einem hochgeladenen PDF oder Foto aus und übernimmst dessen Positionen 1:1 in das gleiche strukturierte Format wie eigene Angebote. Das Dokument kann von einem Mitbewerber stammen (zum Preisvergleich) oder von einem Lieferanten/Großhändler/Partnerbetrieb (um dessen Positionen als Basis für ein eigenes Angebot zu übernehmen) - lies die Positionen in beiden Fällen gleich sorgfältig und unverändert aus.
 
 Regeln:
 - Antworte ausschließlich auf Deutsch.

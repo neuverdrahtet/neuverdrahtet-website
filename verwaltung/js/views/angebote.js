@@ -154,6 +154,7 @@ export async function render(container, route) {
         <button class="btn" id="btn-import">⇪ Angebote importieren</button>
         <button class="btn" id="btn-gaeb-import">📥 GAEB-LV importieren</button>
         <button class="btn" id="btn-fremdangebot-import">🤖 Fremdes Angebot importieren (KI)</button>
+        <button class="btn" id="btn-lieferantenangebot-import" title="Lieferanten-/Großhändlerangebot hochladen und mit eigenem Aufschlag als Basis für ein neues Angebot nutzen">📦 Lieferantenangebot nutzen (KI)</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
         <button class="btn" id="btn-new-privat">⚡ Privatkunden-Angebot</button>
@@ -287,6 +288,7 @@ export async function render(container, route) {
   container.querySelector('#btn-new-privat').addEventListener('click', () => openPrivatkundenSchnellstart());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
   container.querySelector('#btn-fremdangebot-import').addEventListener('click', () => openFremdangebotImport());
+  container.querySelector('#btn-lieferantenangebot-import').addEventListener('click', () => openLieferantenangebotImport());
   container.querySelector('#btn-import').addEventListener('click', () => openAngeboteImport());
 
   const KUNDEN_FARBEN_QUICK = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
@@ -501,6 +503,66 @@ export async function render(container, route) {
           betreff: result.betreff || '',
         });
         toast(`${result.positionen.length} Positionen übernommen - Preise bitte prüfen.`, 'success');
+      } catch (err) {
+        toast(err.message, 'danger');
+        input.disabled = false;
+      }
+    });
+  }
+
+  // Lieferanten-/Großhändlerangebot (z.B. ein PDF-Angebot eines Partnerbetriebs
+  // oder Großhändlers) hochladen und dessen Positionen per KI auslesen - anders
+  // als bei openFremdangebotImport() werden die ausgelesenen Preise hier NICHT
+  // 1:1 übernommen, sondern mit dem eingegebenen Aufschlag in eigene
+  // Verkaufspreise umgerechnet (nutzt dieselbe Extraktion wie der Mitbewerber-
+  // Import, da das Auslesen der Positionen unabhängig von der Quelle ist).
+  function openLieferantenangebotImport() {
+    let letzterAufschlag = 15;
+    try { letzterAufschlag = Number(localStorage.getItem('nv-lieferantenangebot-aufschlag')) || 15; } catch { /* Storage ggf. nicht verfügbar */ }
+    const { body, close } = openModal({
+      title: 'Lieferantenangebot nutzen',
+      bodyHtml: `
+        <p class="hint">PDF oder Foto eines Lieferanten-/Großhändler- oder Partnerangebots hochladen - die KI liest die Positionen aus, der eingegebene Aufschlag wird auf jeden ausgelesenen Preis angewendet. Das Ergebnis ist ein neues, eigenes Angebot zur Prüfung - die Originalpreise bleiben als Hinweis an jeder Position sichtbar.</p>
+        <div class="form-grid">
+          <div class="field"><label>Aufschlag auf Lieferantenpreise (%)</label><input type="number" id="lieferant-aufschlag" value="${letzterAufschlag}" min="0" step="0.5"></div>
+          <div class="field"><label>Datei</label><input type="file" id="lieferantenangebot-file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp"></div>
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#lieferantenangebot-file').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const input = e.target;
+      const aufschlag = Number(body.querySelector('#lieferant-aufschlag').value) || 0;
+      input.disabled = true;
+      try {
+        const fileDataUrl = await fileToDataUrl(file);
+        const result = await extractAngebotFromFremdPdf({ fileDataUrl, standardSteuersatz: settings.standardSteuersatz });
+        if (!result.positionen || result.positionen.length === 0) {
+          toast('Keine Positionen in diesem Dokument gefunden.', 'danger');
+          input.disabled = false;
+          return;
+        }
+        const positionen = mitLieferantenpraeferenz(result.positionen).map((p) => {
+          const originalpreis = Number(p.einzelpreis) || 0;
+          const neuerPreis = Math.round(originalpreis * (1 + aufschlag / 100) * 100) / 100;
+          return {
+            ...p, id: uid(), einzelpreis: neuerPreis, imKatalog: false,
+            quelle: `Lieferantenangebot: ${formatCurrency(originalpreis)} + ${aufschlag}% Aufschlag`,
+          };
+        });
+        try { localStorage.setItem('nv-lieferantenangebot-aufschlag', String(aufschlag)); } catch { /* Storage ggf. nicht verfügbar */ }
+        close();
+        openForm(null, {
+          positionen,
+          betreff: result.betreff ? `Angebot auf Basis Lieferantenangebot: ${result.betreff}` : '',
+        });
+        toast(`${positionen.length} Positionen mit ${aufschlag}% Aufschlag übernommen - bitte prüfen.`, 'success');
       } catch (err) {
         toast(err.message, 'danger');
         input.disabled = false;
