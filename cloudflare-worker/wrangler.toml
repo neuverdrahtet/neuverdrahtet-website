@@ -9,6 +9,16 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
 
+# Begrenzt die öffentliche Kunden-Upload-Route (/kunde-upload, siehe
+# worker.js unterSchwellenwert/handleKundenUpload) auf 10 Anfragen pro IP
+# und Minute - alle übrigen Routen prüfen weiterhin APP_SECRET und sind
+# davon nicht betroffen. Wird von Cloudflare beim ersten Deploy automatisch
+# angelegt, keine manuelle Einrichtung im Dashboard nötig.
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1005"
+simple = { limit = 10, period = 60 }
+
 # EIN täglicher Cron Trigger für zwei Aufgaben: täglicher Büro-Check +
 # (nur montags) wöchentliche Katalog-Preisaktualisierung - siehe
 # scheduled() in worker.js, das montags zusätzlich die Katalog-

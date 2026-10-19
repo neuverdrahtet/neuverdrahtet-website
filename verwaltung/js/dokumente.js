@@ -949,8 +949,9 @@ export function renderDokumenteSection(host, bezugTyp, bezugId, { kategorien = D
           <div class="dok-row" data-id="${d.id}">
             <span class="dok-icon">${iconFor(d.mime)}</span>
             <div class="dok-info">
-              <div class="dok-name">${escapeHtml(d.name)}</div>
+              <div class="dok-name">${escapeHtml(d.name)}${d.vonKundeHochgeladen ? ' <span class="badge badge-accent" title="Vom Kunden selbst über einen Upload-Link hochgeladen">📎 vom Kunden</span>' : ''}</div>
               <div class="text-mute" style="font-size:11px">${escapeHtml(katLabel(d.kategorie))} · ${formatSize(d.groesse)} · ${formatDateTime(d.erstelltAm)}</div>
+              ${d.uploadBeschreibung ? `<div class="text-mute" style="font-size:11px">„${escapeHtml(d.uploadBeschreibung)}“</div>` : ''}
             </div>
             <a class="btn btn-sm dok-download" data-id="${d.id}" href="#">Öffnen</a>
             <button type="button" class="btn btn-sm btn-danger dok-del" data-id="${d.id}">✕</button>

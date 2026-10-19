@@ -75,6 +75,7 @@ const STORES = {
   aufmasse: 'id',
   zahlungsabgleich: 'id',
   katalogVorschlaege: 'id',
+  uploadLinks: 'id',
 };
 
 export const KALK_KATEGORIEN = [

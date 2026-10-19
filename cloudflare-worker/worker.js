@@ -100,6 +100,16 @@
  *   eingetragen sein. Einmalige Anmeldung danach: im Browser
  *   https://<diese-worker-url>/oauth/authorize?setup_key=<OAUTH_SETUP_SECRET>
  *   aufrufen und das neuverdrahtet-Google-Konto bestätigen.
+ *
+ *   Externer Kunden-Upload-Link (POST /kunde-upload, siehe handleKundenUpload
+ *   unten und verwaltung/js/views/kunden.js "Upload-Link erstellen" +
+ *   upload.html am Repo-Root) - braucht NUR das ohnehin vorhandene
+ *   FIREBASE_SERVICE_ACCOUNT_JSON (muss Storage-Schreibrechte haben, hat das
+ *   Standard-Firebase-Admin-Dienstkonto bereits). Optional zusätzlich:
+ *   FIREBASE_STORAGE_BUCKET (Variable) – nur nötig, falls der Storage-Bucket
+ *   NICHT dem Standard-Schema "<project_id>.firebasestorage.app" entspricht.
+ *   RATE_LIMITER (Binding, siehe wrangler.toml [[ratelimits]]) wird beim
+ *   Deploy automatisch angelegt, keine manuelle Einrichtung nötig.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -1980,6 +1990,109 @@ async function firestoreSetDoc({ serviceAccount, collection, id, data }) {
   if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) beim Schreiben von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
 }
 
+// --- Kunden-Upload (externer Upload-Link, siehe /kunde-upload unten) -
+// Dateien landen per Service-Account direkt in Firebase Storage, ganz ohne
+// Firebase-Auth-Login des Kunden. storage.rules bleibt dadurch bewusst
+// unangetastet (siehe Kommentar dort: Storage<->Firestore-Cross-Rules lassen
+// sich mit dem lokalen Emulator nicht zuverlässig testen). ---
+
+function uint8ArrayFromBase64(base64) {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Lädt Rohbytes per Service-Account über die Google-Cloud-Storage-JSON-API
+ * hoch (nicht die Firebase-SDK) und setzt anschließend die Firebase-eigene
+ * "firebaseStorageDownloadTokens"-Metadata - nur damit funktioniert die
+ * normale firebasestorage.googleapis.com-Download-URL, die die Verwaltung
+ * (blobstore.js getDownloadURL) überall sonst nutzt.
+ */
+async function storageUploadFileWithToken({ serviceAccount, bucket, path, contentType, bytes }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/devstorage.read_write');
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${encodeURIComponent(path)}`;
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': contentType },
+    body: bytes,
+  });
+  if (!uploadRes.ok) throw new Error(`Storage-Upload-Fehler (${uploadRes.status}): ${(await uploadRes.text().catch(() => '')).slice(0, 300)}`);
+
+  const downloadToken = crypto.randomUUID();
+  const patchUrl = `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodeURIComponent(path)}`;
+  const patchRes = await fetch(patchUrl, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ metadata: { firebaseStorageDownloadTokens: downloadToken } }),
+  });
+  if (!patchRes.ok) throw new Error(`Storage-Metadata-Fehler (${patchRes.status}): ${(await patchRes.text().catch(() => '')).slice(0, 300)}`);
+
+  return { url: `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(path)}?alt=media&token=${downloadToken}`, path };
+}
+
+// Begrenzt /kunde-upload auf 10 Anfragen je IP und Minute (siehe wrangler.toml
+// [[ratelimits]]) - schützt vor einem Skript, das mit einem (z.B. abgelaufenen
+// oder erratenen) Token versucht, die Route zu fluten. env.RATE_LIMITER kann
+// fehlen (Binding noch nicht deployed) - dann einfach nicht blockieren.
+async function unterSchwellenwert(env, ip) {
+  if (!env.RATE_LIMITER) return true;
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success;
+  } catch {
+    return true;
+  }
+}
+
+/** Validiert Token+Datei und legt den Upload als normalen dokumente-Eintrag des Kunden an (siehe handler unten). */
+async function handleKundenUpload({ env, body }) {
+  const { token, dateiname, fileDataUrl, beschreibung } = body || {};
+  if (!token || typeof token !== 'string') {
+    const err = new Error('Kein gültiger Link (Token fehlt).'); err.status = 400; throw err;
+  }
+  const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(fileDataUrl || '');
+  if (!match) {
+    const err = new Error('Ungültiges Dateiformat (unterstützt: JPEG/PNG/WebP-Fotos oder PDF).'); err.status = 400; throw err;
+  }
+  const [, contentType, base64Data] = match;
+  const bytes = uint8ArrayFromBase64(base64Data);
+  if (bytes.length > 25 * 1024 * 1024) {
+    const err = new Error('Datei ist zu groß (maximal 25 MB).'); err.status = 400; throw err;
+  }
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    const err = new Error('Upload ist serverseitig nicht eingerichtet.'); err.status = 500; throw err;
+  }
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+
+  const link = await firestoreGetDoc({ serviceAccount, collection: 'uploadLinks', id: token });
+  if (!link) {
+    const err = new Error('Dieser Link ist ungültig oder wurde entfernt.'); err.status = 404; throw err;
+  }
+  const heute = new Date().toISOString().slice(0, 10);
+  if (link.ablaufAm && link.ablaufAm < heute) {
+    const err = new Error('Dieser Link ist abgelaufen - bitte einen neuen Link anfordern.'); err.status = 410; throw err;
+  }
+
+  const bucket = env.FIREBASE_STORAGE_BUCKET || `${serviceAccount.project_id}.firebasestorage.app`;
+  const dokId = crypto.randomUUID();
+  const sicherDateiname = String(dateiname || 'Datei').replace(/[^a-zA-Z0-9äöüÄÖÜß._ -]/g, '_').slice(0, 120) || 'Datei';
+  const path = `dokumente/kunde/${link.kundeId}/${dokId}`;
+  const { url } = await storageUploadFileWithToken({ serviceAccount, bucket, path, contentType, bytes });
+
+  await firestoreSetDoc({
+    serviceAccount, collection: 'dokumente', id: dokId,
+    data: {
+      id: dokId, bezugTyp: 'kunde', bezugId: link.kundeId, kategorie: 'sonstiges',
+      name: sicherDateiname, mime: contentType, groesse: bytes.length,
+      erstelltAm: new Date().toISOString(), url, path,
+      vonKundeHochgeladen: true, uploadBeschreibung: String(beschreibung || '').slice(0, 500),
+    },
+  });
+  return { ok: true };
+}
+
 // --- Google-Büro (Gmail + Kalender) - läuft bewusst IM Haupt-Worker statt in
 // einem eigenen dritten Worker: erspart eine zusätzliche Worker-zu-Worker-
 // Verbindung samt eigener URL/API-Key nur für diese zwei Werkzeuge. Nutzt
@@ -2395,6 +2508,40 @@ export default {
         const authUrl = buildGoogleAuthUrl({ clientId: env.GOOGLE_OAUTH_CLIENT_ID, redirectUri, state: env.OAUTH_SETUP_SECRET });
         return Response.redirect(authUrl, 302);
       }
+      // Externer Kunden-Upload-Link (siehe kunden.js "Upload-Link erstellen"
+      // und upload.html am Repo-Root) - ein Kunde ruft diese Route OHNE
+      // jeden Login auf, Autorisierung läuft stattdessen über den Token
+      // selbst (geprüft gegen die Firestore-Collection uploadLinks). Läuft
+      // deshalb bewusst VOR der generellen APP_SECRET-/Origin-Prüfung unten
+      // (ein geteilter Link soll z.B. auch aus WhatsApp/einer E-Mail heraus
+      // funktionieren, nicht nur von neuverdrahtet.com aus) - Schutz vor
+      // Missbrauch kommt stattdessen vom Token selbst (lang, zufällig,
+      // läuft automatisch ab) plus dem Rate-Limit unten.
+      if (teile[0] === 'kunde-upload' && request.method === 'POST') {
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        if (!(await unterSchwellenwert(env, ip))) {
+          return new Response(JSON.stringify({ error: 'Zu viele Anfragen - bitte kurz warten.' }), {
+            status: 429, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        let uploadBody;
+        try {
+          uploadBody = await request.json();
+        } catch {
+          return new Response(JSON.stringify({ error: 'Ungültiger Request-Body.' }), {
+            status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        try {
+          const result = await handleKundenUpload({ env, body: uploadBody });
+          return new Response(JSON.stringify(result), { status: 200, headers: { ...headers, 'Content-Type': 'application/json' } });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+            status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       if (teile[0] === 'oauth' && teile[1] === 'callback') {
         const code = url.searchParams.get('code');
         const state = url.searchParams.get('state');

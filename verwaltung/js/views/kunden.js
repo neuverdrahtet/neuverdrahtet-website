@@ -874,6 +874,54 @@ export async function render(container, route) {
     draw();
   }
 
+  // Erzeugt einen zeitlich befristeten, tokenbasierten Link (Firestore-
+  // Collection uploadLinks), über den der Kunde OHNE Login auf
+  // upload.html (Repo-Root, siehe cloudflare-worker/worker.js
+  // handleKundenUpload) Fotos/Dokumente hochladen kann - landen danach
+  // direkt als normaler dokumente-Eintrag (mit vonKundeHochgeladen-
+  // Markierung, siehe dokumente.js) in der Dokumente-Sektion unten.
+  async function openUploadLinkModal(kunde) {
+    if (!settings.aiWorkerUrl) {
+      toast('Bitte zuerst unter Einstellungen → KI-Angebotserstellung die Worker-URL hinterlegen.', 'danger');
+      return;
+    }
+    const token = uid();
+    const ablaufAm = addDays(todayISO(), 14);
+    await put('uploadLinks', { id: token, kundeId: kunde.id, erstelltAm: new Date().toISOString(), ablaufAm });
+    const link = `${location.origin}/upload.html?t=${encodeURIComponent(token)}&w=${encodeURIComponent(settings.aiWorkerUrl)}`;
+
+    const { body, close } = openModal({
+      title: `Upload-Link für ${kunde.firma}`,
+      bodyHtml: `
+        <p class="hint">Dieser Link lässt ${escapeHtml(kunde.firma)} Fotos/Dokumente hochladen, ohne sich einzuloggen - sie erscheinen danach direkt unten bei den Dokumenten. Gültig bis ${formatDate(ablaufAm)}.</p>
+        <div class="field"><input type="text" id="upload-link-field" readonly value="${escapeHtml(link)}"></div>
+        <div class="modal-actions" style="border:none;padding-top:10px">
+          <span class="spacer"></span>
+          ${kunde.telefon ? '<button type="button" class="btn" id="btn-link-whatsapp">📱 Per WhatsApp teilen</button>' : ''}
+          <button type="button" class="btn" id="btn-link-copy">Kopieren</button>
+          <button type="button" class="btn btn-primary" id="btn-link-close">Fertig</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-link-close').addEventListener('click', close);
+    body.querySelector('#btn-link-copy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        toast('Link kopiert', 'success');
+      } catch {
+        const field = body.querySelector('#upload-link-field');
+        field.select();
+        toast('Bitte manuell kopieren (markiert)', 'info');
+      }
+    });
+    const waBtn = body.querySelector('#btn-link-whatsapp');
+    if (waBtn) {
+      waBtn.addEventListener('click', () => {
+        openWhatsApp(kunde.telefon, `Hallo${kunde.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, bitte laden Sie Fotos/Unterlagen hier hoch: ${link}`);
+      });
+    }
+  }
+
   // Ganzseitige Kundenakte (ToolTime-Vorbild) - kompletter Überblick über
   // alles, was zu einem Kunden gehört: Projekte, Termine, Angebote,
   // Rechnungen, Ausgaben und Dokumente an einer Stelle statt verteilt über
@@ -927,7 +975,8 @@ export async function render(container, route) {
         <div class="fullpage-form-header">
           <button type="button" class="btn-back" id="akte-back">← ${escapeHtml(kunde.firma)}</button>
           <div class="fullpage-form-actions">
-            <button type="button" class="btn" id="akte-edit">✏️ Bearbeiten</button>
+            <button type="button" class="btn" id="akte-upload-link" title="Link erzeugen, über den der Kunde ohne Login Fotos/Dokumente hochladen kann">📎 Upload-Link</button>
+          <button type="button" class="btn" id="akte-edit">✏️ Bearbeiten</button>
           </div>
         </div>
         <div class="kpi-grid">
@@ -1088,6 +1137,7 @@ export async function render(container, route) {
     const close = () => render(container);
     container.querySelector('#akte-back').addEventListener('click', close);
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(kunde));
+    container.querySelector('#akte-upload-link').addEventListener('click', () => openUploadLinkModal(kunde));
     container.querySelectorAll('.akte-email-row').forEach((row) => {
       row.addEventListener('click', () => {
         const e = kEmails.find((x) => x.id === row.dataset.id);

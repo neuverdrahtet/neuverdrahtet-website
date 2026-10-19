@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://*.workers.dev; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="robots" content="noindex, nofollow">
+<title>Dateien hochladen | neuverdrahtet</title>
+<link rel="icon" type="image/png" href="assets/favicon.png">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #121316; color: #f2f2f3;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 24px 16px 60px;
+  }
+  .card {
+    width: 100%; max-width: 440px; background: #1b1d22; border: 1px solid #2c2f36;
+    border-radius: 14px; padding: 22px 20px; margin-top: 18px;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { color: #9a9ca3; font-size: 14px; margin: 0 0 18px; line-height: 1.5; }
+  .brand { font-weight: 700; font-size: 15px; letter-spacing: .02em; color: #f2f2f3; }
+  label { display: block; font-size: 13px; color: #c6c7cc; margin: 14px 0 6px; }
+  input[type="file"] {
+    width: 100%; padding: 10px; background: #0f1013; border: 1px dashed #3a3d46;
+    border-radius: 10px; color: #f2f2f3; font-size: 14px;
+  }
+  textarea {
+    width: 100%; min-height: 70px; padding: 10px; background: #0f1013; border: 1px solid #2c2f36;
+    border-radius: 10px; color: #f2f2f3; font-size: 14px; font-family: inherit; resize: vertical;
+  }
+  button {
+    width: 100%; margin-top: 18px; padding: 13px; border: none; border-radius: 10px;
+    background: #f0a020; color: #15161a; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  .filelist { margin-top: 10px; font-size: 13px; color: #c6c7cc; }
+  .filelist div { padding: 3px 0; display: flex; justify-content: space-between; gap: 10px; }
+  .status { margin-top: 14px; font-size: 14px; line-height: 1.5; }
+  .status.ok { color: #4cc27a; }
+  .status.err { color: #e06060; }
+  .hint-small { font-size: 12px; color: #74767d; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="brand">⚡ neuverdrahtet</div>
+  <div class="card" id="card">
+    <h1>Dateien hochladen</h1>
+    <p class="sub" id="intro">Fotos oder Dokumente direkt von hier hochladen - kein Login nötig.</p>
+    <form id="upload-form">
+      <label for="file-input">Foto(s) oder PDF auswählen</label>
+      <input type="file" id="file-input" accept="image/png,image/jpeg,image/webp,application/pdf" multiple>
+      <div class="filelist" id="filelist"></div>
+      <label for="beschreibung">Kurze Notiz (optional)</label>
+      <textarea id="beschreibung" placeholder="z.B. &quot;Sicherungskasten im Keller&quot;"></textarea>
+      <button type="submit" id="submit-btn">Hochladen</button>
+      <div class="status" id="status"></div>
+    </form>
+  </div>
+  <script src="assets/kunden-upload.js"></script>
+</body>
+</html>
