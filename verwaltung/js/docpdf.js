@@ -326,10 +326,23 @@ export async function buildDocPdfBlob(opts) {
     const sigW = 70, sigH = 22;
     const col2X = marginX + sigW + 16;
     if (opts.unterschriftKunde) {
-      try { doc.addImage(opts.unterschriftKunde, 'PNG', marginX, y - sigH + 4, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+      try { doc.addImage(opts.unterschriftKunde, 'PNG', marginX, y - sigH + 4, sigW, sigH); } catch (err) {
+        // Darf nicht still verschwinden: ein PDF, das aussieht als hätte niemand
+        // unterschrieben, obwohl eine Unterschrift vorhanden war (nur unlesbar),
+        // wäre bei einem rechtlich relevanten Dokument ein unbemerkter Fehler.
+        console.error('PDF: Unterschrift (Kunde) konnte nicht eingebettet werden:', err);
+        doc.setFontSize(7);
+        doc.setTextColor(190, 60, 60);
+        doc.text('⚠ Unterschrift nicht lesbar (Daten beschädigt)', marginX, y - 2);
+      }
     }
     if (opts.zeigeZweiteUnterschrift && opts.unterschriftMitarbeiter) {
-      try { doc.addImage(opts.unterschriftMitarbeiter, 'PNG', col2X, y - sigH + 4, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+      try { doc.addImage(opts.unterschriftMitarbeiter, 'PNG', col2X, y - sigH + 4, sigW, sigH); } catch (err) {
+        console.error('PDF: Unterschrift (Mitarbeiter) konnte nicht eingebettet werden:', err);
+        doc.setFontSize(7);
+        doc.setTextColor(190, 60, 60);
+        doc.text('⚠ Unterschrift nicht lesbar (Daten beschädigt)', col2X, y - 2);
+      }
     }
     doc.setDrawColor(160);
     doc.line(marginX, y, marginX + sigW, y);
@@ -497,7 +510,16 @@ function drawFotoGrid(doc, fotos, marginX, rightX, y, maxY) {
     try {
       const fmtFoto = logoFormat(dataUrl) || 'JPEG';
       doc.addImage(dataUrl, fmtFoto, x, y, fotoW, fotoH, undefined, 'FAST');
-    } catch (err) { /* ignore broken photo data */ }
+    } catch (err) {
+      // Nicht still weglassen - sonst wirkt die Foto-Dokumentation vollständig,
+      // obwohl tatsächlich ein Bild fehlt (z.B. im Mängel-/Arbeitsbericht).
+      console.error('PDF: Foto konnte nicht eingebettet werden:', err);
+      doc.setDrawColor(190, 60, 60);
+      doc.rect(x, y, fotoW, fotoH);
+      doc.setFontSize(7);
+      doc.setTextColor(190, 60, 60);
+      doc.text('⚠ Foto nicht lesbar', x + 3, y + fotoH / 2);
+    }
     if (col === 1) y += fotoH + 6;
   });
   if (fotos.length % 2 === 1) y += fotoH + 6;
@@ -637,7 +659,12 @@ export async function buildBerichtPdfBlob({
       y += 8;
       sigRow.forEach((u, i) => {
         const x = marginX + i * (sigW + gap);
-        try { doc.addImage(u.dataUrl, 'PNG', x, y, sigW, sigH); } catch (err) { /* ignore broken signature data */ }
+        try { doc.addImage(u.dataUrl, 'PNG', x, y, sigW, sigH); } catch (err) {
+          console.error(`PDF: ${u.label || 'Unterschrift'} konnte nicht eingebettet werden:`, err);
+          doc.setFontSize(7);
+          doc.setTextColor(190, 60, 60);
+          doc.text('⚠ nicht lesbar (Daten beschädigt)', x, y + sigH / 2);
+        }
       });
       y += sigH + 2;
       doc.setDrawColor(160);
