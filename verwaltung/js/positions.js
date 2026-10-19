@@ -133,6 +133,10 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
                 <td colspan="7"><input class="f-ueberschrift-text" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Neue Überschrift / Abschnittstitel, z.B. &quot;Abrissarbeiten&quot;"></td>
                 <td class="col-del"><button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
               </tr>
+              <tr class="row-ueberschrift-beschreibung" data-i="${i}">
+                <td></td>
+                <td colspan="7"><input class="f-ueberschrift-beschreibung" value="${escapeHtml(p.beschreibung || '')}" placeholder="Kurzbeschreibung für die Kunden-Kurzfassung (optional, z.B. &quot;Nassbereiche abdichten, Wände bis zur Decke fliesen&quot;)"></td>
+              </tr>
             `;
             return `
             <tr data-i="${i}">
@@ -177,7 +181,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
       <div class="totals-box">${totalsHtml(totals)}</div>
     `;
 
-    host.querySelectorAll('tbody tr:not(.row-langtext)').forEach((row) => {
+    host.querySelectorAll('tbody tr:not(.row-langtext):not(.row-ueberschrift-beschreibung)').forEach((row) => {
       const i = Number(row.dataset.i);
       row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
       if (posState[i].typ === 'ueberschrift') {
@@ -194,6 +198,10 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     host.querySelectorAll('tr.row-langtext').forEach((row) => {
       const i = Number(row.dataset.i);
       row.querySelector('.f-langtext').addEventListener('input', (e) => { posState[i].beschreibung = e.target.value; });
+    });
+    host.querySelectorAll('tr.row-ueberschrift-beschreibung').forEach((row) => {
+      const i = Number(row.dataset.i);
+      row.querySelector('.f-ueberschrift-beschreibung').addEventListener('input', (e) => { posState[i].beschreibung = e.target.value; });
     });
 
     host.querySelector('.f-gewerk-filter').addEventListener('change', (e) => {

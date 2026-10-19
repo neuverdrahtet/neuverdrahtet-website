@@ -110,6 +110,7 @@ export async function render(container, route) {
       closingText: (a.notizen || '') + '\n\nWir freuen uns auf Ihren Auftrag.',
       zeigeUnterschriftsfeld: true,
       unterschriftKunde: a.unterschriftKunde || null,
+      detailgrad: a.detailgrad || 'einzelpreise',
     };
   }
   function exportFilename(a) {
@@ -520,6 +521,7 @@ export async function render(container, route) {
       status: 'entwurf', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
+      detailgrad: 'einzelpreise',
     };
 
     const suggestedNummer = !isEdit
@@ -541,6 +543,14 @@ export async function render(container, route) {
             <div class="field col-span-2"><label>Betreff</label><input name="betreff" value="${escapeHtml(data.betreff || '')}" placeholder="z.B. Angebot für Elektroinstallation"></div>
             <div class="field col-span-2"><label>Steuerart</label>
               <select name="steuerart" id="f-steuerart">${STEUERARTEN.map((s) => `<option value="${s.id}" ${s.id === (data.steuerart || 'regel') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
+            </div>
+            <div class="field col-span-2"><label>Kundenansicht (Detailgrad im PDF)</label>
+              <select name="detailgrad">
+                <option value="einzelpreise" ${(data.detailgrad || 'einzelpreise') === 'einzelpreise' ? 'selected' : ''}>Einzelpreise – jede Position einzeln</option>
+                <option value="abschnittssummen" ${data.detailgrad === 'abschnittssummen' ? 'selected' : ''}>Abschnittssummen – nur Summe je Abschnitt</option>
+                <option value="kurzfassung" ${data.detailgrad === 'kurzfassung' ? 'selected' : ''}>Kurzfassung – Beschreibung + Preis je Abschnitt</option>
+              </select>
+              <p class="hint">"Abschnittssummen"/"Kurzfassung" wirken nur, wenn die Positionen mit Überschriften ("+ Überschrift") in Abschnitte gegliedert sind – sonst wird automatisch die volle Einzelpositionen-Liste gezeigt.</p>
             </div>
             ${isEdit ? `<div class="field"><label>Status</label>
               <select name="status" id="f-status">${Object.entries(STATUS_LABEL).map(([k, v]) => `<option value="${k}" ${k === data.status ? 'selected' : ''}>${v}</option>`).join('')}</select>
@@ -750,6 +760,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       const kundeIdLive = kundePicker.getValue() || data.kundeId;
       const projektIdLive = projektPicker.getValue() || data.projektId;
       const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
+      const detailgradLive = body.querySelector('select[name="detailgrad"]')?.value ?? data.detailgrad ?? 'einzelpreise';
       return {
         settings: getEffectiveSettings(projektIdLive), art: 'Angebot', nummer: data.nummer, datum: data.datum,
         refLabel: 'Gültig bis', refValue: formatDate(data.gueltigBis),
@@ -761,6 +772,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         closingText: notizenLive + '\n\nWir freuen uns auf Ihren Auftrag.',
         zeigeUnterschriftsfeld: true,
         unterschriftKunde: sigDataUrl || (sigPad && !sigPad.isEmpty() ? sigPad.getDataUrl() : null),
+        detailgrad: detailgradLive,
       };
     }
     mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
@@ -904,6 +916,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       updated.betreff = (fd.get('betreff') || '').toString().trim();
       updated.notizen = (fd.get('notizen') || '').toString().trim();
       updated.steuerart = fd.get('steuerart') || 'regel';
+      updated.detailgrad = fd.get('detailgrad') || 'einzelpreise';
       if (isEdit) {
         updated.status = fd.get('status') || data.status;
         if (updated.status === 'abgelehnt') {

@@ -1,4 +1,5 @@
 import { formatCurrency, formatDate, escapeHtml, toast } from './utils.js';
+import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung } from './positionsGrouping.js';
 
 export function printHtml(bodyHtml, settings) {
   const root = document.getElementById('print-root');
@@ -148,6 +149,7 @@ export function buildDocHtml({
   zeigeZweiteUnterschrift,
   unterschriftMitarbeiter,
   zweiteUnterschriftLabel,
+  detailgrad,
 }) {
   const absender = [settings.firmenname, settings.strasse, settings.plzOrt].filter(Boolean).map(escapeHtml).join(' · ');
 
@@ -160,7 +162,25 @@ export function buildDocHtml({
   ].filter(Boolean);
 
   let positionsHtml = '';
-  if (showPositions && positionen && positionen.length) {
+  // "Abschnittssummen"/"Kurzfassung" (siehe positionsGrouping.js) sind nur bei
+  // Angeboten wählbar und nur wirksam, wenn das Angebot tatsächlich in
+  // Abschnitte (Überschriften) gegliedert ist - sonst (z.B. Rechnungen/
+  // Auftragsbestätigungen, oder ein Angebot ganz ohne Überschriften) bleibt es
+  // bei der vollen Einzelpositionen-Liste.
+  const gruppen = (detailgrad === 'abschnittssummen' || detailgrad === 'kurzfassung') ? gruppierePositionenNachAbschnitt(positionen) : null;
+  if (showPositions && gruppen && hatAbschnitte(gruppen)) {
+    const rows = gruppen.map((g) => {
+      const beschreibung = detailgrad === 'kurzfassung' ? abschnittKurzbeschreibung(g) : '';
+      return `<tr>
+        <td colspan="2">${escapeHtml(g.titel || 'Sonstige Positionen')}${beschreibung ? `<br><span style="color:#666;font-size:11px">${escapeHtml(beschreibung)}</span>` : ''}</td>
+        <td style="text-align:right">${formatCurrency(g.summe)}</td>
+      </tr>`;
+    }).join('');
+    positionsHtml = `<table>
+      <thead><tr><th colspan="2">Leistung</th><th style="text-align:right">Preis €</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } else if (showPositions && positionen && positionen.length) {
     const rows = positionen.map((p, i) => {
       if (p.typ === 'ueberschrift') {
         return `<tr><td colspan="6" style="font-weight:700;padding-top:10px">${escapeHtml(p.bezeichnung || '')}</td></tr>`;

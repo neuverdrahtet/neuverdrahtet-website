@@ -1,5 +1,6 @@
 import { formatCurrency, formatDate, formatDateTime, hexToRgb } from './utils.js';
 import { loadJsPdf } from './vendorLoader.js';
+import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung } from './positionsGrouping.js';
 
 function logoFormat(dataUrl) {
   const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
@@ -208,7 +209,28 @@ export async function buildDocPdfBlob(opts) {
     y += lines.length * 5 + 4;
   }
 
-  if (opts.positionen && opts.positionen.length) {
+  // "Abschnittssummen"/"Kurzfassung" (siehe positionsGrouping.js, Kommentar
+  // dazu auch in pdf.js buildDocHtml) - nur wirksam, wenn tatsächlich
+  // Abschnitte (Überschriften) vorhanden sind, sonst volle Einzelpositionen.
+  const gruppenPdf = (opts.detailgrad === 'abschnittssummen' || opts.detailgrad === 'kurzfassung')
+    ? gruppierePositionenNachAbschnitt(opts.positionen) : null;
+  if (gruppenPdf && hatAbschnitte(gruppenPdf)) {
+    doc.autoTable({
+      startY: y,
+      margin: { left: marginX, right: marginX, bottom: 24 },
+      head: [['Leistung', '', 'Preis €']],
+      body: gruppenPdf.map((g) => {
+        const beschreibung = opts.detailgrad === 'kurzfassung' ? abschnittKurzbeschreibung(g) : '';
+        return [
+          { content: `${g.titel || 'Sonstige Positionen'}${beschreibung ? `\n${beschreibung}` : ''}`, colSpan: 2 },
+          { content: formatCurrency(g.summe), styles: { halign: 'right' } },
+        ];
+      }),
+      styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+      headStyles: { fillColor: accentRgb },
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  } else if (opts.positionen && opts.positionen.length) {
     doc.autoTable({
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
