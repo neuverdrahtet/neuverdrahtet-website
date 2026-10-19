@@ -522,6 +522,7 @@ export async function render(container, route) {
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
       detailgrad: 'einzelpreise',
+      nachtragZuAngebotId: prefill?.nachtragZuAngebotId || '', nachtragZuNummer: prefill?.nachtragZuNummer || '',
     };
 
     const suggestedNummer = !isEdit
@@ -535,6 +536,7 @@ export async function render(container, route) {
       bodyHtml: `
         <form id="ang-form">
           <div class="form-grid">
+            ${data.nachtragZuNummer ? `<div class="col-span-2"><p class="hint">📎 Nachtrag zu Angebot ${escapeHtml(data.nachtragZuNummer)}</p></div>` : ''}
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}"></div>
             <div class="field"><label>Kunde *</label><div id="f-kunde-host"></div></div>
             <div class="field"><label>Projekt</label><div id="f-projekt-host"></div></div>
@@ -575,6 +577,7 @@ export async function render(container, route) {
             <button type="button" class="btn btn-sm" id="btn-angebotsrechner" title="Projekt strukturiert erfassen (Räume, Beleuchtung, PV, Wallbox, Netzwerk ...) und als Positionen übernehmen">🧮 Angebotsrechner</button>
             <button type="button" class="btn btn-sm" id="btn-ki-erstellen" title="Erstellt NEUE Positionen aus frei gesprochenen/diktierten Stichpunkten">✨ Mit KI aus Sprache erstellen</button>
             <button type="button" class="btn btn-sm" id="btn-ki-preise" title="Füllt fehlende Preise bei bereits VORHANDENEN Positionen (z.B. aus GAEB-Import)">🔍 Fehlende Preise recherchieren (KI)</button>
+            ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn btn-sm" id="btn-nachtrag" title="Neues, separates Angebot für zusätzliche Arbeiten erstellen, das auf dieses Angebot verweist">📎 Nachtragsangebot erstellen</button>' : ''}
           </div>
           <p class="hint">KI-Preise sind Richtwerte aus einer Internetrecherche ohne Garantie - bei wichtigen Angeboten vor dem Versand prüfen.</p>
           <div id="pos-host"></div>
@@ -721,6 +724,35 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         onSubmit: uebernehmeStichpunkteAngebot,
       });
     });
+
+    if (isEdit && data.status !== 'abgelehnt') {
+      body.querySelector('#btn-nachtrag').addEventListener('click', () => {
+        openStichpunkteSprachModal({
+          title: 'Stichpunkte für das Nachtragsangebot',
+          placeholder: 'z.B. "Zusätzlich 2 Steckdosen im Flur, Kundenwunsch während der Ausführung" - sprechen oder tippen',
+          onSubmit: async (stichpunkte) => {
+            if (!stichpunkte || !stichpunkte.trim()) return;
+            try {
+              const kunde = kundenById[data.kundeId];
+              const result = await generateAngebotFromStichpunkte({
+                stichpunkte, kundeName: kunde?.firma, katalog, ort: kunde?.ort,
+              });
+              close();
+              openForm(null, {
+                kundeId: data.kundeId,
+                projektId: data.projektId,
+                betreff: `Nachtrag zu Angebot ${data.nummer}${data.betreff ? ': ' + data.betreff : ''}`,
+                positionen: mitLieferantenpraeferenz(result.positionen).map((p) => ({ ...p, id: uid() })),
+                nachtragZuAngebotId: data.id,
+                nachtragZuNummer: data.nummer,
+              });
+            } catch (err) {
+              toast(err.message, 'danger');
+            }
+          },
+        });
+      });
+    }
 
     body.querySelector('#btn-ki-preise').addEventListener('click', async () => {
       const zuRecherchieren = editor.getPositionen().filter((p) => !p.einzelpreis);
