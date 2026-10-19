@@ -517,6 +517,11 @@ const DEFAULT_SETTINGS = {
   // Default, das soll der Nutzer selbst aktivieren.
   angebotAutoVersandBeiFreigabe: false,
   mahnungenAutoVersand: false,
+  // Ebenfalls standardmäßig AUS, aus demselben Grund: versendet ohne
+  // Rückfrage eine Begrüßungsmail an jeden NEU angelegten Kunden mit
+  // E-Mail-Adresse (siehe pushTriggers.js, checkBegruessungsmails).
+  begruessungsmailAktiv: false,
+  begruessungsmailText: '',
   pushNotifiedMahnungenAm: '',
   pushNotifiedGeraetePruefungAm: '',
   pushNotifiedAnlagenPruefungAm: '',

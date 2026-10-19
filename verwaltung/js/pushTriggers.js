@@ -18,6 +18,7 @@ export async function checkPushTriggers() {
   await checkFaelligeAnlagenPruefungen(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
   await checkFaelligeAngebotNachfass(settings).catch(() => { /* Push ist ein Komfort-Feature */ });
   await checkTerminErinnerungen(settings).catch(() => { /* E-Mail-Erinnerung ist ein Komfort-Feature */ });
+  await checkBegruessungsmails(settings).catch(() => { /* E-Mail-Versand ist ein Komfort-Feature */ });
 }
 
 async function checkFaelligeMahnungen(settings) {
@@ -129,5 +130,38 @@ async function checkTerminErinnerungen(settings) {
       });
       await put('termine', { ...termin, erinnerungGesendetAm: todayISO() });
     } catch { /* einzelner Fehlschlag (z.B. Netzwerk) blockt nicht die übrigen Erinnerungen */ }
+  }
+}
+
+// Begrüßungsmail an neu angelegte Kunden (HERO-Vorbild "Begrüßungsmail") -
+// standardmäßig AUS (siehe db.js, DEFAULT_SETTINGS.begruessungsmailAktiv),
+// da ein automatischer E-Mail-Versand an echte Kunden ohne Rückfrage ein
+// bewusstes Opt-in sein sollte. Dedup läuft je Kunde über
+// begruessungsmailGesendetAm, nicht global pro Tag - ein Kunde bekommt die
+// Mail also genau einmal, unabhängig davon, wann der Tagescheck zuletzt lief.
+// Beim erstmaligen Aktivieren markiert einstellungen.js alle zu diesem
+// Zeitpunkt bereits bestehenden Kunden als "übersprungen", damit nicht beim
+// Einschalten plötzlich alle Bestandskunden eine "Willkommen"-Mail bekommen.
+async function checkBegruessungsmails(settings) {
+  if (!settings.begruessungsmailAktiv) return;
+  if (!google.isConnected()) return;
+  const kunden = await getAll('kunden');
+  const faellig = kunden.filter((k) => k.email && !k._geloescht && !k.begruessungsmailGesendetAm);
+  for (const kunde of faellig) {
+    try {
+      const text = (settings.begruessungsmailText || '').trim() || (
+        `Guten Tag${kunde.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n` +
+        `vielen Dank für Ihr Vertrauen - wir freuen uns, Sie als Kunden begrüßen zu dürfen.\n\n` +
+        `Bei Fragen erreichen Sie uns jederzeit telefonisch unter ${settings.telefon || ''}` +
+        `${settings.email ? ' oder per E-Mail an ' + settings.email : ''}.\n\n` +
+        `Mit freundlichen Grüßen\n${settings.firmenname}`
+      );
+      await google.sendEmail({
+        to: kunde.email,
+        subject: `Willkommen bei ${settings.firmenname}`,
+        bodyText: text,
+      });
+      await put('kunden', { ...kunde, begruessungsmailGesendetAm: todayISO() });
+    } catch { /* einzelner Fehlschlag (z.B. Netzwerk) blockt nicht die übrigen Begrüßungsmails */ }
   }
 }

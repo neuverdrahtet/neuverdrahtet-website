@@ -384,6 +384,18 @@ export async function render(container) {
             <div class="field"><textarea name="emailSignature" rows="5" placeholder="Mit freundlichen Grüßen&#10;...">${escapeHtml(settings.emailSignature || '')}</textarea></div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
+
+          <div class="divider"></div>
+          <h2 style="font-size:14px">Begrüßungsmail an neue Kunden</h2>
+          <p class="hint">
+            Versendet automatisch eine Willkommensmail, sobald ein neuer Kunde mit E-Mail-Adresse angelegt wird (benötigt die Google-Verbindung oben). Jeder Kunde bekommt die Mail nur einmal.
+            Beim erstmaligen Aktivieren werden alle schon bestehenden Kunden übersprungen - es geht also nur an wirklich neue Kunden ab jetzt.
+          </p>
+          <form id="begruessung-form">
+            <div class="field"><label><input type="checkbox" name="begruessungsmailAktiv" ${settings.begruessungsmailAktiv ? 'checked' : ''}> Aktiv</label></div>
+            <div class="field"><label>Text (leer = Standardtext)</label><textarea name="begruessungsmailText" rows="6" placeholder="Guten Tag,&#10;&#10;vielen Dank für Ihr Vertrauen ...">${escapeHtml(settings.begruessungsmailText || '')}</textarea></div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
         </div>
 
         <div class="card settings-panel" data-panel="kibuerokraft" hidden>
@@ -962,6 +974,31 @@ export async function render(container) {
     const fd = new FormData(e.target);
     await setSettings({ emailSignature: (fd.get('emailSignature') || '').toString() });
     toast('Signatur gespeichert', 'success');
+  });
+
+  container.querySelector('#begruessung-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const neuAktiv = fd.get('begruessungsmailAktiv') === 'on';
+    // Beim Umschalten von AUS auf AN: alle bereits bestehenden Kunden als
+    // "übersprungen" markieren, damit der nächste Hintergrund-Check (siehe
+    // pushTriggers.js checkBegruessungsmails) nicht allen Bestandskunden auf
+    // einen Schlag eine "Willkommen"-Mail schickt, sondern nur echten
+    // Neuanlagen ab jetzt.
+    if (neuAktiv && !settings.begruessungsmailAktiv) {
+      const bestandskunden = await getAll('kunden');
+      for (const k of bestandskunden) {
+        if (!k.begruessungsmailGesendetAm) {
+          await put('kunden', { ...k, begruessungsmailGesendetAm: 'uebersprungen (Bestandskunde bei Aktivierung)' });
+        }
+      }
+    }
+    await setSettings({
+      begruessungsmailAktiv: neuAktiv,
+      begruessungsmailText: (fd.get('begruessungsmailText') || '').toString(),
+    });
+    toast('Begrüßungsmail-Einstellungen gespeichert', 'success');
+    render(container);
   });
 
   container.querySelector('#lexoffice-form').addEventListener('submit', async (e) => {
