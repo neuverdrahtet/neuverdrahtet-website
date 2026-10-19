@@ -899,7 +899,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         try {
           const kundeId = body.querySelector('[name="kundeId"]').value;
           const kunde = kundenById[kundeId];
-          const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog });
+          const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog, ort: kunde?.ort });
           if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
           if (result.einleitung) {
             const notizenField = body.querySelector('textarea[name="notizen"]');

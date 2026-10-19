@@ -1,7 +1,7 @@
 import { getSettings } from './db.js';
 import { todayISO } from './utils.js';
 
-export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, katalog }) {
+export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, katalog, ort }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {
     throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
@@ -17,6 +17,7 @@ export async function generateAngebotFromStichpunkte({ stichpunkte, kundeName, k
       kundeName,
       katalog: (katalog || []).map((k) => ({ bezeichnung: k.bezeichnung, einheit: k.einheit, preis: k.preis, steuersatz: k.steuersatz })),
       standardSteuersatz: settings.standardSteuersatz,
+      ort,
     }),
   });
   if (!res.ok) {

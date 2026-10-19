@@ -295,7 +295,7 @@ export async function render(container, route) {
             try {
               const kundeId = kundePicker.getValue();
               const kunde = kundenById[kundeId];
-              const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog });
+              const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: kunde?.firma, katalog, ort: kunde?.ort });
               if (result.betreff && !body.querySelector('input[name="betreff"]').value) body.querySelector('input[name="betreff"]').value = result.betreff;
               const neuePositionen = [...editor.getPositionen(), ...(result.positionen || []).map((p) => ({ ...p, id: uid() }))];
               editor = createPositionsEditor({

@@ -56,6 +56,16 @@ function kiRecherchiertBadge(p) {
   return ` <span class="badge badge-warn" title="Preis nicht aus dem Katalog, sondern per KI-Internet-Recherche ermittelt${escapeHtml(quelle)} - bitte prüfen">🌐 bitte prüfen</span>`;
 }
 
+// Zeigt an, wovon die KI bei dieser Position ausgehen musste, weil Menge/
+// Qualität/Umfang nicht eindeutig aus den Stichpunkten hervorgingen (siehe
+// cloudflare-worker/worker.js, callClaude: "annahme") - macht die Kalkulation
+// nachvollziehbar, statt die Annahme nur unsichtbar in den Preis einfließen
+// zu lassen.
+function kiAnnahmeBadge(p) {
+  if (!p.annahme) return '';
+  return ` <span class="badge" title="Annahme der KI bei der Kalkulation: ${escapeHtml(p.annahme)}">ℹ️ Annahme</span>`;
+}
+
 function totalsHtml(totals) {
   const steuerRows = Object.entries(totals.steuerGruppen)
     .filter(([rate]) => Number(rate) > 0)
@@ -94,7 +104,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
               return `
               <tr>
                 <td class="col-posnr">${escapeHtml(p.posNr || String(i + 1))}</td>
-                <td>${escapeHtml(p.bezeichnung || '')}${kiRecherchiertBadge(p)}</td>
+                <td>${escapeHtml(p.bezeichnung || '')}${kiRecherchiertBadge(p)}${kiAnnahmeBadge(p)}</td>
                 <td class="col-menge">${p.menge ?? 1}</td>
                 <td>${escapeHtml(p.einheit || '')}</td>
                 <td class="col-preis">${formatCurrency(p.einzelpreis)}</td>
@@ -127,7 +137,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
             return `
             <tr data-i="${i}">
               <td class="col-posnr"><input class="f-posnr" value="${escapeHtml(p.posNr || String(i + 1))}" title="z.B. 1.1 oder 2.3 für Unterpositionen - wird sonst automatisch anhand der Überschriften vergeben"></td>
-              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext">${kiRecherchiertBadge(p)}</td>
+              <td><input class="f-bez" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Kurztext">${kiRecherchiertBadge(p)}${kiAnnahmeBadge(p)}</td>
               <td class="col-menge"><input class="f-menge" type="number" step="0.01" value="${p.menge ?? 1}"></td>
               <td><input class="f-einheit" value="${escapeHtml(p.einheit || '')}"></td>
               <td class="col-preis"><input class="f-preis" type="number" step="0.01" value="${p.einzelpreis ?? 0}"></td>

@@ -339,7 +339,7 @@ export async function render(container, route) {
       let positionen = [];
       if (stichpunkte) {
         try {
-          const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: neuerKunde.firma, katalog });
+          const result = await generateAngebotFromStichpunkte({ stichpunkte, kundeName: neuerKunde.firma, katalog, ort: neuerKunde.ort });
           positionen = mitLieferantenpraeferenz(result.positionen).map((p) => ({ ...p, id: uid() }));
           toast(`${positionen.length} Position(en) von der KI übernommen`, 'success');
         } catch (err) {
@@ -682,7 +682,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         const kundeId = kundePicker.getValue();
         const kunde = kundenById[kundeId];
         const result = await generateAngebotFromStichpunkte({
-          stichpunkte, kundeName: kunde?.firma, katalog,
+          stichpunkte, kundeName: kunde?.firma, katalog, ort: kunde?.ort,
         });
         if (result.betreff) body.querySelector('input[name="betreff"]').value = result.betreff;
         if (result.einleitung) {

@@ -143,8 +143,9 @@ const POSITIONEN_SCHEMA = {
           steuersatz: { type: 'number' },
           imKatalog: { type: 'boolean' },
           quelle: { type: 'string' },
+          annahme: { type: 'string' },
         },
-        required: ['bezeichnung', 'beschreibung', 'einheit', 'menge', 'einzelpreis', 'steuersatz', 'imKatalog', 'quelle'],
+        required: ['bezeichnung', 'beschreibung', 'einheit', 'menge', 'einzelpreis', 'steuersatz', 'imKatalog', 'quelle', 'annahme'],
         additionalProperties: false,
       },
     },
@@ -153,8 +154,9 @@ const POSITIONEN_SCHEMA = {
   additionalProperties: false,
 };
 
-function buildSystemPrompt(standardSteuersatz) {
+function buildSystemPrompt(standardSteuersatz, ort) {
   return `Du hilfst einem deutschen Elektro-Handwerksbetrieb (neuverdrahtet), aus kurzen Stichpunkten eines Mitarbeiters ein vollständiges, realistisches Angebot bzw. eine Rechnung mit Positionen zu erstellen. Diese Positionen werden sowohl für Angebote als auch für Rechnungen verwendet.
+${ort ? `\nEinsatzort dieses Auftrags: ${ort}. Berücksichtige das bei der Internet-Preisrecherche unten, da Material-/Lohnpreise je nach Region unterschiedlich sein können (z.B. Großstadt vs. ländlicher Raum).\n` : ''}
 
 Vollständigkeit der Leistungen - wie ein erfahrener Elektromeister denken:
 - Leite aus den Stichpunkten das komplette, für eine fachgerechte Ausführung tatsächlich nötige Leistungsspektrum ab, nicht nur die wörtlich genannten Stichworte.
@@ -189,10 +191,11 @@ Weitere Regeln:
 - "steuersatz" ist in der Regel ${standardSteuersatz} (Prozent, als Zahl ohne %-Zeichen), außer es gibt einen klaren fachlichen Grund für einen anderen Satz.
 - "betreff" ist eine kurze, prägnante Überschrift (max. ca. 80 Zeichen).
 - "einleitung" ist ein kurzer, freundlicher Einleitungssatz für das Anschreiben (1-2 Sätze).
-- Wenn Mengenangaben fehlen, nimm eine plausible Menge anhand der Beschreibung (z.B. Kabellänge nach typischer Raumgröße), sonst eine sinnvolle Standardmenge (z.B. 1).`;
+- Wenn Mengenangaben fehlen, nimm eine plausible Menge anhand der Beschreibung (z.B. Kabellänge nach typischer Raumgröße), sonst eine sinnvolle Standardmenge (z.B. 1).
+- "annahme": War die Menge, Material-/Ausführungsqualität oder der genaue Umfang einer Position nicht eindeutig aus den Stichpunkten ersichtlich, sodass du etwas annehmen musstest (z.B. welche Qualitätsklasse, welche Verlegeart, ob Vorarbeiten/Entsorgung enthalten sind) - beschreibe in max. ca. 100 Zeichen knapp, wovon du ausgegangen bist, z.B. "Standardqualität, gerade Verlegung, keine Durchbrüche". War die Position durch die Stichpunkte eindeutig vorgegeben (z.B. ein Katalogtreffer mit exakt passender Bezeichnung), lasse "annahme" als leeren String.`;
 }
 
-async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, standardSteuersatz }) {
+async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, standardSteuersatz, ort }) {
   const katalogText = (katalog || [])
     .slice(0, 200)
     .map((k) => `- ${k.bezeichnung} | Einheit: ${k.einheit || ''} | Preis netto: ${k.preis} EUR | USt: ${k.steuersatz}%`)
@@ -219,7 +222,7 @@ async function callClaude({ apiKey, model, stichpunkte, kundeName, katalog, stan
       body: JSON.stringify({
         model,
         max_tokens: 8192,
-        system: buildSystemPrompt(standardSteuersatz || 19),
+        system: buildSystemPrompt(standardSteuersatz || 19, ort),
         messages,
         // allowed_callers: ['direct'] ist nötig, damit auch günstigere Modelle
         // ohne Unterstützung für "programmatic tool calling" diesen
@@ -2690,6 +2693,7 @@ export default {
         kundeName: body.kundeName,
         katalog: body.katalog,
         standardSteuersatz: body.standardSteuersatz,
+        ort: body.ort,
       });
       return new Response(JSON.stringify(result), {
         status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
