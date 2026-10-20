@@ -2578,9 +2578,44 @@ const JARVIS_AKTIONS_AUSFUEHRUNG = {};
 
 async function fuehreJarvisAktionAus({ serviceAccount, aktionId, callerUid, callerRole }) {
   pruefeJarvisRolle(callerRole);
+
+  // Behebt eine beim Integrationstest (Phasen 1-4) erkannte Lücke: bisher
+  // gab es für EINZELNE Freigabe-Aktionen (anders als für Hintergrund-Jobs,
+  // siehe beanspracheTagesJob/beanspracheEinzelVorgang) keine Stale-
+  // Erkennung - stürzte der Worker zwischen dem Beanspruchen ("executing")
+  // und dem Abschluss ab, wäre die Aktion für immer unauflösbar
+  // "executing" geblieben (firestoreBeanspruche erlaubte nur den Übergang
+  // AUS "pending", nie aus "executing" heraus). Jetzt: ein seit mehr als
+  // JARVIS_JOB_STALE_MINUTEN "executing" hängender Vorgang wird (wie bei
+  // den Jobs) als "unklar" markiert und NIE automatisch erneut ausgeführt -
+  // ein Mensch muss erst prüfen, ob die Aktion schon wirklich ausgeführt
+  // wurde, bevor sie zurückgesetzt wird. Ein sauber fehlgeschlagener
+  // Versuch ("failed") bleibt dagegen retry-fähig.
+  const bestehend = await firestoreGetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId });
+  if (!bestehend) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if (bestehend.status === 'executing') {
+    const gestartetMs = bestehend.ausfuehrungGestartetAm ? new Date(bestehend.ausfuehrungGestartetAm).getTime() : 0;
+    const minutenSeitStart = (Date.now() - gestartetMs) / 60000;
+    if (minutenSeitStart < JARVIS_JOB_STALE_MINUTEN) {
+      const err = new Error('Dieser Vorgang wird gerade ausgeführt - bitte kurz warten.');
+      err.status = 409;
+      throw err;
+    }
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId, data: { status: 'unklar', unklarSeit: new Date().toISOString() } });
+    await protokolliereJarvisFehler({
+      serviceAccount, quelle: 'aktion-ausfuehrung-stale', kritisch: true,
+      fehler: new Error(`Freigabe-Aktion ${aktionId} war länger als ${JARVIS_JOB_STALE_MINUTEN} Minuten "executing" ohne Abschluss - vermutlich abgestürzt. Wird NICHT automatisch wiederholt.`),
+      kontext: { aktionId },
+    });
+    const err = new Error('Dieser Vorgang war länger als erwartet in Bearbeitung und wurde als "unklar" markiert - bitte erst manuell prüfen, ob er bereits ausgeführt wurde, bevor du ihn in Werkora zurücksetzt.');
+    err.status = 409;
+    throw err;
+  }
+
   const vorherigeDaten = await firestoreBeanspruche({
     serviceAccount, collection: 'jarvisAktionen', id: aktionId,
-    erwarteterStatus: 'pending', neuerStatus: 'executing',
+    erwarteterStatus: ['pending', 'failed'], neuerStatus: 'executing',
+    zusatzFelder: { ausfuehrungGestartetAm: new Date().toISOString() },
   });
 
   if (vorherigeDaten.ablaufAm && vorherigeDaten.ablaufAm < new Date().toISOString()) {
@@ -4590,6 +4625,8 @@ export const __test__ = {
   firestoreCreateIfMissing, firestoreFieldsToObject, toFirestoreFields,
   // Job-/Vorgangs-Lebenszyklus
   beanspracheTagesJob, beanspracheEinzelVorgang, JARVIS_JOB_STALE_MINUTEN,
+  // Freigabe-Engine (Stufe-2-Aktionen)
+  fuehreJarvisAktionAus, JARVIS_AKTIONS_AUSFUEHRUNG,
   // Firebase-ID-Token-Verifikation
   verifyFirebaseIdToken, pruefeJarvisRolle,
   // Kosten/Fehler-Protokollierung
