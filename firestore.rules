@@ -36,7 +36,7 @@ service cloud.firestore {
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
-        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks'
+        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks', 'pruefnormenGrenzwerte'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
@@ -234,6 +234,23 @@ service cloud.firestore {
     // ausschließlich zur Erkennung ungewöhnlicher Veränderungen gegenüber
     // dem Vormonat, siehe runJarvisControlCheck.
     match /jarvisKennzahlenVerlauf/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    // JARVIS TECH (Phase 7) - Ergebnisse von Dokument-/Bild-/Text-Analysen.
+    // Niemals clientseitig beschreibbar (auch die Verknüpfung mit einer
+    // Anlage läuft über die serverseitige Aktion jarvis-tech-verknuepfen).
+    match /jarvisTechAnalysen/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    // DGUV/VDE-Prüfprotokoll-Entwürfe (Phase 7) - bewusst NIEMALS
+    // clientseitig beschreibbar, auch nicht von admin (write:false wie alle
+    // anderen jarvis*-Collections): das Protokoll bleibt ausschließlich über
+    // die serverseitigen Aktionen jarvis-pruefprotokoll-erstellen/
+    // -aktualisieren veränderbar, die die Grenzwertprüfung und
+    // Kundenzuordnung erzwingen.
+    match /jarvisPruefprotokolle/{docId} {
       allow read: if isAdmin();
       allow write: if false;
     }

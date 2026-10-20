@@ -2679,6 +2679,16 @@ async function wendeFreigabeAn({ serviceAccount, collection, id, erwarteteVersio
     err.status = 409;
     throw err;
   }
+  // Phase 7 Korrektur (Vorgabe Punkt 1): ein nicht synchronisierter Gmail-
+  // Entwurf (siehe bearbeiteEmailAntwortentwurf) darf NICHT freigegeben
+  // werden, solange der Sync-Fehler nicht durch eine erneute Bearbeitung
+  // behoben wurde - sonst würde Danny auf Basis eines veralteten/falschen
+  // Gmail-Entwurfs "freigeben". Ablehnen bleibt davon unberührt.
+  if (entscheidung === 'freigeben' && collection === 'jarvisEmailVerarbeitung' && aktuell.gmailDraftSyncFehler) {
+    const err = new Error(`Freigabe nicht möglich: der Gmail-Entwurf konnte zuletzt nicht synchronisiert werden (${aktuell.gmailDraftSyncFehler}). Bitte den Antwortentwurf erneut bearbeiten/speichern, um die Synchronisierung erneut zu versuchen.`);
+    err.status = 409;
+    throw err;
+  }
   const neuerStatus = entscheidung === 'freigeben' ? 'freigegeben' : 'abgelehnt';
   const { id: _ignoriert, ...rest } = aktuell;
   await firestoreSetDoc({ serviceAccount, collection, id, data: { ...rest, freigabeStatus: neuerStatus, freigabeAm: new Date().toISOString() } });
@@ -2720,6 +2730,23 @@ async function bearbeiteRechnungsEntwurf({ serviceAccount, id, erwarteteVersion,
  * Bericht). Ein Fehlschlag dieses Zusatzversuchs blockiert die Bearbeitung
  * selbst NICHT, da der Text in Werkora in jedem Fall sicher gespeichert ist.
  */
+/**
+ * Phase 7 Korrektur: bisher (Phase 6) rief jede Bearbeitung POST /emails/{id}/draft
+ * erneut OHNE die bereits vorhandene draft_id auf - google-buero legte dadurch
+ * JEDES Mal einen NEUEN Gmail-Entwurf an, während der ursprüngliche unverändert
+ * (und veraltet) liegen blieb. Jetzt wird die beim allerersten Entwurf
+ * zurückgegebene gmailDraftId auf jarvisEmailVerarbeitung gespeichert und bei
+ * jeder weiteren Bearbeitung mitgeschickt, sodass google-buero den BESTEHENDEN
+ * Entwurf per Gmail drafts.update aktualisiert (siehe cloudflare-worker-
+ * google-buero/worker.js) statt zu duplizieren.
+ *
+ * Schlägt diese Synchronisierung fehl, wird das NICHT mehr nur protokolliert
+ * und ignoriert: gmailDraftSyncFehler wird auf dem Entwurf gesetzt, und
+ * wendeFreigabeAn verweigert für diesen Entwurf jede weitere Freigabe
+ * ("Freigabe zum Versand"), bis eine erneute Bearbeitung den Sync-Fehler
+ * behebt (Vorgabe Phase 7 Punkt 1: "Bei Fehlern darf keine Freigabe zum
+ * Versand möglich sein.").
+ */
 async function bearbeiteEmailAntwortentwurf({ serviceAccount, env, id, erwarteteVersion, antwortentwurfBetreff, antwortentwurfText }) {
   const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisEmailVerarbeitung', id });
   if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
@@ -2731,13 +2758,20 @@ async function bearbeiteEmailAntwortentwurf({ serviceAccount, env, id, erwartete
   if (typeof antwortentwurfText !== 'string' || !antwortentwurfText.trim()) { const err = new Error('Feld "antwortentwurfText" darf nicht leer sein.'); err.status = 400; throw err; }
 
   let neuerGmailEntwurfErstellt = false;
+  let gmailDraftId = aktuell.gmailDraftId || null;
+  let gmailDraftSyncFehler = null;
   try {
-    await callGoogleBuero({
+    const ergebnis = await callGoogleBuero({
       env, method: 'POST', path: `/emails/${id}/draft`,
-      body: { to: extractEmailAddress(aktuell.emailVon || ''), subject: antwortentwurfBetreff || aktuell.antwortentwurfBetreff || undefined, body_text: antwortentwurfText },
+      body: {
+        to: extractEmailAddress(aktuell.emailVon || ''), subject: antwortentwurfBetreff || aktuell.antwortentwurfBetreff || undefined,
+        body_text: antwortentwurfText, draft_id: aktuell.gmailDraftId || undefined,
+      },
     });
+    gmailDraftId = ergebnis.draft_id || gmailDraftId;
     neuerGmailEntwurfErstellt = true;
   } catch (draftErr) {
+    gmailDraftSyncFehler = draftErr.message || 'Unbekannter Fehler bei der Gmail-Entwurf-Synchronisierung.';
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'email-entwurf-bearbeiten', fehler: draftErr, kontext: { messageId: id } });
   }
 
@@ -2748,9 +2782,10 @@ async function bearbeiteEmailAntwortentwurf({ serviceAccount, env, id, erwartete
     data: {
       ...rest, antwortentwurfBetreff: antwortentwurfBetreff || aktuell.antwortentwurfBetreff || '', antwortentwurfText,
       version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString(), entwurfErstellt: aktuell.entwurfErstellt || neuerGmailEntwurfErstellt,
+      gmailDraftId, gmailDraftSyncFehler,
     },
   });
-  return { collection: 'jarvisEmailVerarbeitung', id, version: neueVersion, neuerGmailEntwurfErstellt };
+  return { collection: 'jarvisEmailVerarbeitung', id, version: neueVersion, neuerGmailEntwurfErstellt, gmailDraftSyncFehler };
 }
 
 /**
@@ -3512,12 +3547,14 @@ async function runJarvisEmailCheck(env) {
             aufgabenErstellt++;
 
             let entwurfErstellt = false;
+            let gmailDraftId = null;
             if (analyse.antwortentwurf?.text) {
               try {
-                await callGoogleBuero({
+                const draftErgebnis = await callGoogleBuero({
                   env, method: 'POST', path: `/emails/${email.message_id}/draft`,
                   body: { to: extractEmailAddress(email.from), subject: analyse.antwortentwurf.betreff || undefined, body_text: analyse.antwortentwurf.text },
                 });
+                gmailDraftId = draftErgebnis.draft_id || null;
                 entwuerfeErstellt++;
                 entwurfErstellt = true;
               } catch (draftErr) {
@@ -3556,6 +3593,7 @@ async function runJarvisEmailCheck(env) {
                 status: 'verarbeitet', aufgabeId, entwurfErstellt, angebotId, angebotFehlendeInfos, verarbeitetAm: new Date().toISOString(), version: 1, freigabeStatus: 'offen',
                 antwortentwurfBetreff: analyse.antwortentwurf?.betreff || '', antwortentwurfText: analyse.antwortentwurf?.text || '',
                 emailVon: email.from || '', emailBetreff: email.subject || '',
+                gmailDraftId, gmailDraftSyncFehler: null,
               },
             });
           } else if (analyse.kategorie === 'spam_werbung') {
@@ -4227,12 +4265,41 @@ async function holeJarvisZentraleDaten({ serviceAccount, env }) {
     }
   }));
 
+  // Phase 7 Korrektur (Vorgabe Punkt 1): jarvisMahnEntwuerfe speichert selbst
+  // NIE den Mahntext/die Gebühr (die liegen auf der echten "mahnungen"-
+  // Collection, siehe bearbeiteMahnEntwurf) - ohne diese Anreicherung hätte
+  // das Bearbeiten-Formular Danny nie den TATSÄCHLICHEN bisherigen Mahntext,
+  // die Mahnstufe, den offenen Betrag oder die Frist zeigen können, er hätte
+  // "blind" einen neuen Text eingeben müssen. Direkter, lesender Zugriff auf
+  // "mahnungen"/"rechnungen" (bereits etabliertes Muster, siehe
+  // berechneForderungen) statt über die KI-Bürokraft-REST-Schicht, da beide
+  // Collections hier direkt benötigte Felder (Text, Teilzahlungsbetrag)
+  // tragen. Ein Fehlschlag darf die gesamte Zentrale nicht zum Absturz bringen.
+  const offeneMahnentwuerfe = nochOffen(mahnEntwuerfe);
+  const mahnentwuerfe = await Promise.all(offeneMahnentwuerfe.map(async (m) => {
+    try {
+      const [mahnung, rechnung] = await Promise.all([
+        m.mahnungId ? firestoreGetDoc({ serviceAccount, collection: 'mahnungen', id: m.mahnungId }) : null,
+        m.rechnungId ? firestoreGetDoc({ serviceAccount, collection: 'rechnungen', id: m.rechnungId }) : null,
+      ]);
+      const bezahlterAnteil = rechnung?.status === 'teilbezahlt' ? (Number(rechnung.teilzahlungBetrag) || 0) : 0;
+      const offenerBetrag = rechnung ? Math.round(((Number(rechnung.brutto) || 0) - bezahlterAnteil) * 100) / 100 : null;
+      return {
+        ...m,
+        aktuellerMahntext: mahnung?.text || '', aktuelleGebuehr: mahnung?.gebuehr ?? null,
+        neueFrist: mahnung?.neueFrist || '', offenerBetragBrutto: offenerBetrag,
+      };
+    } catch {
+      return m;
+    }
+  }));
+
   return {
     neueKundenanfragen: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet'),
     vorbereiteteAntworten: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet' && e.entwurfErstellt),
     angebotsentwuerfe,
     rechnungsentwuerfe: nochOffen(rechnungsEntwuerfe).filter((e) => e.status === 'entwurf_erstellt'),
-    mahnentwuerfe: nochOffen(mahnEntwuerfe),
+    mahnentwuerfe,
     terminvorschlaege: nochOffen(terminVorschlaege).filter((e) => e.status === 'vorschlag_erstellt'),
     offeneProjektaufgaben: aufgaben.filter((a) => a.quelle === 'jarvis-projekt' && a.status === 'offen'),
     fehlgeschlageneAutomationen: jobs.filter((j) => j.status === 'failed' || j.status === 'unklar'),
@@ -4369,7 +4436,40 @@ function berechneAngeboteUndAuftragsbestand(angebote, rechnungen, heute) {
   };
 }
 
-/** Deckungsbeiträge je Projekt - NUR aus echten Daten (angenommene Angebote als Umsatz-Soll, Ausgaben + Zeiterfassung x Stundenlohn als Kosten). Projekte ohne ausreichende Datengrundlage werden klar als unvollständig markiert statt mit falschem Wert "0" gerechnet. */
+/**
+ * Deckungsbeiträge je Projekt - Berechnungsgrundlage (Phase 7 Punkt 1
+ * geprüft/dokumentiert):
+ *
+ *  - Umsatz-Soll = Summe des Nettobetrags ALLER Angebote mit status
+ *    "angenommen" und passender projektId. Das schließt bewusst auch
+ *    Nachtragsangebote mit ein, die auf dasselbe Projekt gebucht wurden
+ *    (dieselbe Logik wie die bestehende Nachtrags-Zusammenführung bei
+ *    Rechnungen, siehe Phase 4) - ein Projekt mit Basis- UND
+ *    Nachtragsangebot zeigt also korrekt die SUMME beider als Umsatz-Soll,
+ *    nicht nur das zuerst gefundene Angebot.
+ *  - Materialkosten = Summe von ausgaben.betragNetto mit passender projektId.
+ *  - Arbeitskosten = Summe über zeiterfassung (dauerMinuten/60 x
+ *    mitarbeiter.stundenlohn) mit passender projektId.
+ *  - Deckungsbeitrag = Umsatz-Soll minus (Materialkosten + Arbeitskosten).
+ *    Es handelt sich um eine SOLL-Rechnung auf Basis des Angebotswerts, NICHT
+ *    um eine Ist-Umsatz-Rechnung auf Basis tatsächlicher Zahlungseingänge
+ *    (die liefert separat berechneUmsatzverlauf/berechneForderungen) - ein
+ *    Projekt kann also einen positiven Deckungsbeitrag zeigen, obwohl die
+ *    zugehörige Rechnung noch gar nicht (vollständig) bezahlt wurde.
+ *
+ * Unvollständige/widersprüchliche Datengrundlagen werden NIEMALS stillschweigend
+ * als 0 gerechnet, sondern explizit als unvollstaendig markiert:
+ *  - kein angenommenes Angebot für das Projekt -> Umsatz-Soll unbekannt.
+ *  - mindestens ein Mitarbeiter mit erfasster Zeit auf dem Projekt hat
+ *    keinen hinterlegten Stundenlohn -> Arbeitskosten unbekannt.
+ *  - mindestens eine Ausgabe auf dem Projekt hat KEINEN gültigen
+ *    betragNetto (fehlend/leer/nicht-numerisch) -> Materialkosten unbekannt.
+ *    Wichtig: ein ECHTER, bewusst eingetragener Betrag von 0 (z.B. kostenlose
+ *    Ersatzlieferung) gilt NICHT als fehlend und blockiert die Berechnung
+ *    nicht - nur ein fehlender/ungültiger Wert tut das, sonst würde jede neu
+ *    angelegte, noch nicht ausgefüllte Ausgabe (die laut UI standardmäßig
+ *    bei 0 beginnt) fälschlich als "vollständig mit 0 € Kosten" durchgehen.
+ */
 function berechneProjektDeckungsbeitraege({ projekte, angebote, ausgaben, zeiterfassung, mitarbeiter }) {
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
   const angeboteProProjekt = {};
@@ -4380,7 +4480,8 @@ function berechneProjektDeckungsbeitraege({ projekte, angebote, ausgaben, zeiter
   const ausgabenProProjekt = {};
   for (const a of ausgaben) {
     if (!a.projektId) continue;
-    ausgabenProProjekt[a.projektId] = (ausgabenProProjekt[a.projektId] || 0) + (Number(a.betragNetto) || 0);
+    if (!ausgabenProProjekt[a.projektId]) ausgabenProProjekt[a.projektId] = [];
+    ausgabenProProjekt[a.projektId].push(a);
   }
   const zeitProProjekt = {};
   for (const z of zeiterfassung) {
@@ -4394,7 +4495,17 @@ function berechneProjektDeckungsbeitraege({ projekte, angebote, ausgaben, zeiter
     const umsatz = angeboteProProjekt[p.id];
     if (umsatz === undefined) { ergebnisse.push({ projektId: p.id, titel: p.titel || p.id, unvollstaendig: true, grund: 'Kein angenommenes Angebot für dieses Projekt gefunden - Umsatz-Soll unbekannt.' }); continue; }
 
-    const materialkosten = ausgabenProProjekt[p.id] || 0;
+    const ausgabenEintraege = ausgabenProProjekt[p.id] || [];
+    let materialkosten = 0, fehlendeAusgabendaten = false;
+    for (const a of ausgabenEintraege) {
+      if (a.betragNetto === undefined || a.betragNetto === null || a.betragNetto === '' || Number.isNaN(Number(a.betragNetto))) { fehlendeAusgabendaten = true; continue; }
+      materialkosten += Number(a.betragNetto);
+    }
+    if (fehlendeAusgabendaten) {
+      ergebnisse.push({ projektId: p.id, titel: p.titel || p.id, unvollstaendig: true, grund: 'Für mindestens eine Ausgabe auf diesem Projekt fehlt ein gültiger Nettobetrag - Materialkosten unvollständig.' });
+      continue;
+    }
+
     const zeitEintraege = zeitProProjekt[p.id] || [];
     let arbeitskosten = 0, fehlenderStundenlohn = false;
     for (const z of zeitEintraege) {
@@ -4594,6 +4705,384 @@ async function erzeugeJarvisWochenbericht({ serviceAccount, env }) {
     handlungsempfehlungen: empfehlungen,
     erstelltAm: new Date().toISOString(),
   };
+}
+
+// =============================================================================
+// JARVIS Phase 7 - JARVIS TECH: technische Unterstützung (Elektrofehlersuche,
+// DGUV-V3/VDE-Prüfungen, Wärmepumpen/PV, Klima/Kälte, Wartung/Serviceberichte).
+//
+// Kernsicherheitsprinzip (Vorgabe Punkt 6): jede Aussage, die JARVIS TECH
+// trifft, wird in "befunde" mit einer ehrlichen Herkunft gekennzeichnet:
+//   - "messwert": tatsächlich aus dem übergebenen Bild/Dokument abgelesen.
+//   - "herstellerquelle": NUR zulässig, wenn ein echter Herstellertext
+//     mitgegeben wurde UND sich die Aussage direkt daraus ableiten lässt.
+//   - "diagnosehypothese": alles andere (allgemeine fachliche Einschätzung
+//     ohne Beleg) - der Normalfall ohne mitgelieferte Herstellerdokumentation.
+// Diese Regel wird NICHT nur per Prompt erbeten, sondern serverseitig hart
+// erzwungen (siehe fuehreJarvisTechAnalyseAus): wurde keine Herstellerquelle
+// übergeben, wird jede als "herstellerquelle" gekennzeichnete Aussage
+// automatisch auf "diagnosehypothese" herabgestuft, BEVOR sie gespeichert
+// wird - unabhängig davon, ob sich Claude an die Prompt-Anweisung hält.
+//
+// JARVIS TECH erstellt/ändert NIEMALS automatisch echte Werkora-Anlagen oder
+// Kundendaten - eine erkannte Geräte-/Anlagenzuordnung ist immer nur ein
+// VORSCHLAG (vorgeschlageneVerknuepfung), die Verknüpfung mit einer echten
+// Anlage erfordert eine EXPLIZITE Bestätigung (verknuepfeTechAnalyseMitAnlage),
+// die zusätzlich prüft, dass die angegebene Kunden-ID tatsächlich zur Anlage
+// passt (verhindert eine falsche Kundenzuordnung).
+// =============================================================================
+
+const JARVIS_TECH_ANALYSE_TYPEN = ['typenschild', 'fehlermeldung', 'anlagenbild', 'messprotokoll', 'wartungsvorschlag'];
+
+const TECH_ANALYSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    erkannteGeraetedaten: {
+      type: 'object',
+      properties: {
+        hersteller: { type: ['string', 'null'] },
+        modell: { type: ['string', 'null'] },
+        seriennummer: { type: ['string', 'null'] },
+        geraetetyp: { type: ['string', 'null'] },
+        baujahr: { type: ['string', 'null'] },
+      },
+      required: ['hersteller', 'modell', 'seriennummer', 'geraetetyp', 'baujahr'],
+      additionalProperties: false,
+    },
+    erkannterFehlercode: { type: ['string', 'null'] },
+    ausgeleseneMesswerte: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          bezeichnung: { type: 'string' },
+          wert: { type: ['string', 'null'] },
+          einheit: { type: ['string', 'null'] },
+        },
+        required: ['bezeichnung', 'wert', 'einheit'],
+        additionalProperties: false,
+      },
+    },
+    befunde: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          aussage: { type: 'string' },
+          herkunft: { type: 'string', enum: ['messwert', 'herstellerquelle', 'diagnosehypothese'] },
+          quelle: { type: ['string', 'null'] },
+        },
+        required: ['aussage', 'herkunft', 'quelle'],
+        additionalProperties: false,
+      },
+    },
+    unsicherheitshinweis: { type: 'string' },
+    bildLesbar: { type: 'boolean' },
+  },
+  required: ['erkannteGeraetedaten', 'erkannterFehlercode', 'ausgeleseneMesswerte', 'befunde', 'unsicherheitshinweis', 'bildLesbar'],
+  additionalProperties: false,
+};
+
+const TECH_ANALYSE_TYP_ANWEISUNG = {
+  typenschild: 'Lies das Typenschild eines technischen Geräts (z.B. Wärmepumpe, Wechselrichter, Batteriespeicher, Klimagerät, Schutzschalter, Zählerschrank-Komponente) aus. Trage Hersteller/Modell/Seriennummer/Gerätetyp/Baujahr in erkannteGeraetedaten ein, so weit lesbar. Keine Messwerte zu erwarten, "ausgeleseneMesswerte" bleibt i.d.R. leer.',
+  fehlermeldung: 'Lies eine Fehlermeldung/einen Fehlercode auf einem Display, Bedienfeld oder Foto davon aus. Trage den erkannten Code in "erkannterFehlercode" ein. In "befunde" darfst du mögliche Fehlerursachen nennen - ohne mitgelieferte Herstellerquelle IMMER als "diagnosehypothese", niemals als "herstellerquelle".',
+  anlagenbild: 'Beschreibe den sichtbaren Zustand einer Anlage/Installation (z.B. sichtbare Schäden, lose Verkabelung, Korrosion, fehlende Abdeckungen). Das sind Beobachtungen am Bild, keine Messwerte - kennzeichne sie als "diagnosehypothese", außer du liest tatsächlich einen Messwert (z.B. eine Anzeige) direkt ab.',
+  messprotokoll: 'Lies ein bereits handschriftlich oder gedruckt ausgefülltes Mess-/Prüfprotokoll aus (z.B. DGUV-V3/E-Check-Formular) und übertrage die darin enthaltenen Messwerte strukturiert in "ausgeleseneMesswerte" (Bezeichnung/Wert/Einheit je Zeile). Übernimm NUR tatsächlich eingetragene Werte - fehlt ein Wert im Dokument, lasse die Zeile weg statt einen Wert zu schätzen.',
+  wartungsvorschlag: 'Bereite anhand der mitgegebenen Anlagendaten/des Symptoms mögliche Wartungsschritte, Fehlerursachen und Prüfschritte vor. Das ist i.d.R. keine Bildauswertung, sondern eine fachliche Einschätzung - kennzeichne jede Empfehlung ehrlich als "diagnosehypothese" (Normalfall) oder "herstellerquelle" (nur mit mitgegebenem Herstellertext).',
+};
+
+function buildTechSystemPrompt(analyseTyp, hatHerstellerquelle) {
+  return `Du bist ein technischer Assistent für einen deutschen Elektro-/Haustechnikbetrieb (Elektroinstallation, DGUV-V3-/DIN-VDE-Prüfungen, Wärmepumpen, Photovoltaik, Klima-/Kältetechnik). Du unterstützt eine Elektrofachkraft, ERSETZT sie aber NICHT.
+
+Aufgabe: ${TECH_ANALYSE_TYP_ANWEISUNG[analyseTyp] || ''}
+
+ZWINGENDE Regeln (Sicherheit vor Vollständigkeit):
+- Antworte ausschließlich auf Deutsch.
+- Erfinde NIEMALS Messwerte, Seriennummern, Fehlercodes oder Herstellerangaben. Ist ein Feld nicht lesbar/nicht ableitbar, setze es auf null (bzw. lasse die Position in "ausgeleseneMesswerte" ganz weg) - schätze NICHTS.
+- Jeder Eintrag in "befunde" MUSS "herkunft" ehrlich setzen:
+  - "messwert" NUR für tatsächlich im Bild/Dokument abgelesene Werte.
+  - "herstellerquelle" ${hatHerstellerquelle ? 'ist zulässig, aber NUR wenn sich die Aussage direkt aus dem unten mitgegebenen Herstellertext ableiten lässt - gib in "quelle" an, welcher Teil des Textes gemeint ist.' : 'ist HIER NICHT ZULÄSSIG, da kein Herstellertext mitgegeben wurde - verwende stattdessen IMMER "diagnosehypothese", selbst wenn du aus allgemeinem Wissen etwas über den Hersteller zu wissen glaubst.'}
+  - "diagnosehypothese" für jede allgemeine fachliche Einschätzung ohne Beleg.
+- "unsicherheitshinweis" ist PFLICHT und muss ehrlich benennen, was unsicher, nicht erkennbar oder nicht prüfbar ist. Ist nichts davon betroffen, schreibe "Keine besonderen Unsicherheiten."
+- Du triffst NIEMALS eine abschließende Aussage über eine bestandene Prüfung, eine Freigabe zur Inbetriebnahme oder die Sicherheit einer Anlage - das bleibt der Elektrofachkraft vor Ort vorbehalten.
+- "bildLesbar": false, wenn das Bild/Dokument nicht auswertbar ist (unscharf, falsches Motiv, etc.) - in diesem Fall alle anderen Felder so gut wie möglich auf null/leer setzen und den Grund im Unsicherheitshinweis nennen.`;
+}
+
+async function callClaudeTechAnalyse({ apiKey, model, analyseTyp, bildDataUrl, bildUrl, herstellerquelleText, kontextText }) {
+  if (bildUrl) {
+    const geladen = await ladeBelegVonUrl(bildUrl);
+    bildDataUrl = geladen.imageDataUrl || bildDataUrl;
+  }
+  const hatHerstellerquelle = typeof herstellerquelleText === 'string' && herstellerquelleText.trim().length > 0;
+
+  const content = [];
+  if (bildDataUrl) {
+    const match = /^data:(image\/(?:png|jpe?g|webp)|application\/pdf);base64,(.+)$/.exec(bildDataUrl);
+    if (!match) { const err = new Error('Ungültiges Bild-/Dokumentformat (unterstützt: JPEG/PNG/WebP-Fotos oder PDF).'); err.status = 400; throw err; }
+    const [, mediaType, base64Data] = match;
+    content.push(mediaType === 'application/pdf'
+      ? { type: 'document', source: { type: 'base64', media_type: mediaType, data: base64Data } }
+      : { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } });
+  }
+  if (hatHerstellerquelle) content.push({ type: 'text', text: `Herstellerquelle (z.B. Auszug aus Montage-/Bedienungsanleitung), NUR als Grundlage für "herkunft":"herstellerquelle" verwenden:\n\n${herstellerquelleText.slice(0, 20000)}` });
+  if (kontextText) content.push({ type: 'text', text: `Zusätzlicher Kontext/Symptom-Beschreibung von der Elektrofachkraft:\n\n${kontextText.slice(0, 4000)}` });
+  content.push({ type: 'text', text: 'Analysiere wie oben beschrieben und liefere die strukturierten Daten.' });
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model, max_tokens: 2048,
+      system: buildTechSystemPrompt(analyseTyp, hatHerstellerquelle),
+      messages: [{ role: 'user', content }],
+      output_config: { format: { type: 'json_schema', schema: TECH_ANALYSE_SCHEMA } },
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('Keine Antwort erhalten.');
+  return { ergebnis: JSON.parse(textBlock.text), hatHerstellerquelle };
+}
+
+/**
+ * Orchestriert eine TECH-Analyse Ende-zu-Ende: ruft Claude auf, erzwingt
+ * serverseitig die Herkunfts-Regel (siehe Kopfkommentar dieses Abschnitts)
+ * und speichert das Ergebnis als neue, eigenständige jarvisTechAnalysen-
+ * Dokument - OHNE irgendeine echte Anlage/Kunden-Collection zu berühren.
+ */
+/**
+ * "anlagenId" (Vorgabe Phase 7 Punkt 5 - Wärmepumpen/PV): wird eine ECHTE,
+ * bereits bekannte Anlage explizit mitgegeben (Danny startet die Anfrage
+ * bewusst VON dieser Anlage aus, z.B. aus der Kundenansicht heraus), werden
+ * ihre vorhandenen Werkora-Stammdaten (Bezeichnung/Kategorie/Hersteller-Notiz/
+ * letzte-Prüfung) automatisch als zusätzlicher, klar gekennzeichneter
+ * Kontext an Claude mitgegeben UND die Analyse direkt mit dieser Anlage
+ * verknüpft - das ist KEINE automatische KI-Vermutung, sondern eine vom
+ * Menschen selbst getroffene, unzweideutige Angabe, braucht also keine
+ * zusätzliche Bestätigung über verknuepfeTechAnalyseMitAnlage (das bleibt
+ * ausschließlich für von Claude VORGESCHLAGENE Zuordnungen reserviert).
+ * Eine unbekannte anlagenId wird hart abgelehnt (404) statt ignoriert zu
+ * werden - Vorgabe Punkt 7 "falsche Kundenzuordnung"/"falscher Gerätebezug".
+ */
+async function fuehreJarvisTechAnalyseAus({ serviceAccount, env, analyseTyp, bildDataUrl, bildUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId, callerUid, callerRole }) {
+  // Defense-in-depth (dieselbe Begründung wie bei fuehreJarvisAktionAus): die
+  // HTTP-Ebene prüft die Rolle bereits anhand des verifizierten ID-Tokens,
+  // diese interne Prüfung stellt sicher, dass ein direkter Aufruf dieser
+  // Funktion (z.B. aus einem künftigen weiteren Einstiegspunkt) niemals ohne
+  // Rollenprüfung durchrutschen kann.
+  pruefeJarvisRolle(callerRole);
+  if (!JARVIS_TECH_ANALYSE_TYPEN.includes(analyseTyp)) { const err = new Error(`Unbekannter TECH-Analysetyp "${analyseTyp}" - erlaubt sind: ${JARVIS_TECH_ANALYSE_TYPEN.join(', ')}.`); err.status = 400; throw err; }
+  if (!bildDataUrl && !bildUrl && !kontextText && !anlagenId) { const err = new Error('Weder Bild/Dokument noch Beschreibungstext noch Anlage übergeben - nichts zu analysieren.'); err.status = 400; throw err; }
+  if (!env.ANTHROPIC_API_KEY) { const err = new Error('JARVIS TECH ist serverseitig nicht eingerichtet (ANTHROPIC_API_KEY fehlt).'); err.status = 500; throw err; }
+
+  let anlage = null;
+  let angereicherterKontext = kontextText;
+  if (anlagenId) {
+    anlage = await firestoreGetDoc({ serviceAccount, collection: 'anlagen', id: anlagenId });
+    if (!anlage) { const err = new Error('Angegebene Anlage wurde nicht gefunden.'); err.status = 404; throw err; }
+    const anlagenInfoZeilen = [
+      `Bezeichnung: ${anlage.bezeichnung || 'unbekannt'}`,
+      `Kategorie: ${anlage.kategorie || 'unbekannt'}`,
+      `Standort: ${anlage.standort || 'unbekannt'}`,
+      anlage.letztePruefung ? `Letzte Prüfung: ${anlage.letztePruefung}` : null,
+      anlage.naechstePruefung ? `Nächste fällige Prüfung: ${anlage.naechstePruefung}` : null,
+      anlage.notizen ? `Notizen in Werkora: ${anlage.notizen}` : null,
+    ].filter(Boolean).join('\n');
+    angereicherterKontext = [`Vorhandene Werkora-Anlageninformationen (echte Stammdaten, keine Vermutung):\n${anlagenInfoZeilen}`, kontextText].filter(Boolean).join('\n\n');
+  }
+
+  const { ergebnis, hatHerstellerquelle } = await callClaudeTechAnalyse({
+    apiKey: env.ANTHROPIC_API_KEY, model: env.MODEL_ID || 'claude-opus-4-8',
+    analyseTyp, bildDataUrl, bildUrl, herstellerquelleText, kontextText: angereicherterKontext,
+  });
+
+  // Serverseitige Durchsetzung (Vorgabe Punkt 5/6) - siehe Kopfkommentar:
+  // auf reine Prompt-Befolgung verlassen wir uns hier bewusst NICHT.
+  let korrigiert = false;
+  const befunde = (ergebnis.befunde || []).map((b) => {
+    if (b.herkunft === 'herstellerquelle' && !hatHerstellerquelle) {
+      korrigiert = true;
+      return { ...b, herkunft: 'diagnosehypothese', quelle: null };
+    }
+    return b;
+  });
+  const unsicherheitshinweis = korrigiert
+    ? `${ergebnis.unsicherheitshinweis || ''} HINWEIS: mindestens eine Aussage wurde automatisch von "herstellerbestätigt" auf "Diagnosehypothese" korrigiert, da keine Herstellerquelle übergeben wurde.`.trim()
+    : (ergebnis.unsicherheitshinweis || '');
+
+  const id = crypto.randomUUID();
+  const daten = {
+    id, analyseTyp, erkannteGeraetedaten: ergebnis.erkannteGeraetedaten || {}, erkannterFehlercode: ergebnis.erkannterFehlercode || null,
+    ausgeleseneMesswerte: ergebnis.ausgeleseneMesswerte || [], befunde, unsicherheitshinweis, bildLesbar: ergebnis.bildLesbar !== false,
+    hatHerstellerquelle, kundeIdHinweis: kundeIdHinweis || '', anlagenIdHinweis: anlagenIdHinweis || '',
+    verknuepftMitAnlageId: anlage ? anlagenId : null, verknuepftMitKundeId: anlage ? (anlage.kundeId || '') : null, version: 1,
+    erstelltVonUid: callerUid || '', erstelltAm: new Date().toISOString(),
+  };
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisTechAnalysen', id, data: daten });
+  return daten;
+}
+
+/**
+ * Verknüpft eine TECH-Analyse EXPLIZIT mit einer echten Anlage (niemals
+ * automatisch). Prüft zusätzlich, dass eine mitgegebene kundeId tatsächlich
+ * zur echten Anlage passt - verhindert eine falsche Kundenzuordnung (Vorgabe
+ * Phase 7 Punkt 7 "Falsche Kundenzuordnung" muss getestet/verhindert werden).
+ * Ändert NIEMALS die echte "anlagen"-Collection selbst, nur die eigene
+ * jarvisTechAnalysen-Analyse.
+ */
+async function verknuepfeTechAnalyseMitAnlage({ serviceAccount, analyseId, erwarteteVersion, anlagenId, kundeId, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTechAnalysen', id: analyseId });
+  if (!aktuell) { const err = new Error('Analyse nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Diese Analyse wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (!anlagenId) { const err = new Error('Feld "anlagenId" fehlt.'); err.status = 400; throw err; }
+  const anlage = await firestoreGetDoc({ serviceAccount, collection: 'anlagen', id: anlagenId });
+  if (!anlage) { const err = new Error('Angegebene Anlage wurde nicht gefunden.'); err.status = 404; throw err; }
+  if (kundeId && anlage.kundeId && kundeId !== anlage.kundeId) {
+    const err = new Error(`Kundenzuordnung stimmt nicht überein: die Anlage "${anlage.bezeichnung || anlagenId}" gehört zu einem anderen Kunden als angegeben - Verknüpfung abgelehnt.`);
+    err.status = 409;
+    throw err;
+  }
+  const { id: _ignoriert, ...rest } = aktuell;
+  const neueVersion = (aktuell.version || 0) + 1;
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisTechAnalysen', id: analyseId,
+    data: { ...rest, verknuepftMitAnlageId: anlagenId, verknuepftMitKundeId: anlage.kundeId || kundeId || '', version: neueVersion, verknuepftAm: new Date().toISOString() },
+  });
+  return { id: analyseId, version: neueVersion, verknuepftMitAnlageId: anlagenId, verknuepftMitKundeId: anlage.kundeId || kundeId || '' };
+}
+
+async function holeJarvisTechAnalysen({ serviceAccount }) {
+  const alle = await firestoreListDocuments({ serviceAccount, collection: 'jarvisTechAnalysen' });
+  return alle.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
+}
+
+// =============================================================================
+// JARVIS Phase 7 - DGUV-V3-/DIN-VDE-Prüfprotokolle (Vorgabe Punkt 4).
+//
+// Zentrales Sicherheitsprinzip: JARVIS kennt/erfindet SELBST keine DIN-VDE-/
+// DGUV-Grenzwerte. Ein Grenzwertvergleich findet AUSSCHLIESSLICH gegen von
+// Danny selbst in der Collection "pruefnormenGrenzwerte" hinterlegte
+// Referenzwerte statt (normale Werkora-Stammdaten, admin/büro-verwaltet wie
+// z.B. "katalog" - keine KI-generierten Werte). Ohne einen zu
+// Prüfart+Messgröße passenden, von Danny konfigurierten Eintrag bleibt eine
+// Messung ausdrücklich "nicht_bewertbar" statt geraten zu werden - das setzt
+// Vorgabe Punkt 4 "Grenzwertprüfungen nur bei eindeutig anwendbarer
+// Prüfnorm" um ("eindeutig anwendbar" = von Danny für genau diese
+// Prüfart+Messgröße konfiguriert). Zusätzlich wird ein Grenzwert nur
+// angewendet, wenn die Prüfbedingung je Messung ausdrücklich bestätigt
+// wurde (pruefbedingungBestaetigt) - das setzt "nachweisbare
+// Prüfbedingungen" um. gesamtergebnis kennt bewusst KEINEN Wert
+// "bestanden"/"freigegeben" - nur "ohne_auffaelligkeiten" (= kein erkannter
+// Mangel, aber ausdrücklich KEIN rechtsverbindliches Prüfergebnis),
+// "auffaellig" oder "unvollstaendig". Es gibt keine "Freigabe"-Aktion für
+// Prüfprotokolle (bewusste Designentscheidung, siehe Entwicklungsbericht) -
+// die tatsächliche Unterschrift/rechtsverbindliche Abnahme bleibt
+// vollständig außerhalb des Systems bei der Elektrofachkraft vor Ort.
+// =============================================================================
+
+const JARVIS_PRUEFARTEN = ['dguv-v3', 'e-check', 'sonstiges'];
+
+/** Grenzwertprüfung EINER Messung - siehe Kopfkommentar. */
+function pruefeMesswertGrenzwert({ bezeichnung, wert, pruefbedingungBestaetigt }, pruefart, pruefnormenGrenzwerte) {
+  if (wert === undefined || wert === null || wert === '' || Number.isNaN(Number(wert))) {
+    return { status: 'fehlend', grund: 'Kein Messwert eingetragen.', normReferenz: null };
+  }
+  const passenderEintrag = (pruefnormenGrenzwerte || []).find((g) => g.pruefart === pruefart && g.messgroesse === bezeichnung);
+  if (!passenderEintrag) {
+    return { status: 'nicht_bewertbar', grund: 'Keine von Danny hinterlegte Prüfnorm für diese Messgröße - manuell durch die Elektrofachkraft bewerten.', normReferenz: null };
+  }
+  if (!pruefbedingungBestaetigt) {
+    return { status: 'nicht_bewertbar', grund: 'Prüfbedingung für diese Messung nicht bestätigt - ein Grenzwertvergleich setzt nachweisbare Prüfbedingungen voraus.', normReferenz: passenderEintrag.normReferenz || null };
+  }
+  const zahl = Number(wert);
+  const unterschritten = passenderEintrag.grenzwertMin !== undefined && passenderEintrag.grenzwertMin !== null && zahl < Number(passenderEintrag.grenzwertMin);
+  const ueberschritten = passenderEintrag.grenzwertMax !== undefined && passenderEintrag.grenzwertMax !== null && zahl > Number(passenderEintrag.grenzwertMax);
+  if (unterschritten || ueberschritten) {
+    return {
+      status: 'auffaellig',
+      grund: `Außerhalb des von Danny hinterlegten Bereichs (${passenderEintrag.grenzwertMin ?? '-∞'} bis ${passenderEintrag.grenzwertMax ?? '∞'} ${passenderEintrag.einheit || ''})${passenderEintrag.bedingung ? ` - ${passenderEintrag.bedingung}` : ''}`,
+      normReferenz: passenderEintrag.normReferenz || null,
+    };
+  }
+  return { status: 'ok', grund: null, normReferenz: passenderEintrag.normReferenz || null };
+}
+
+/** Bewertet ALLE Messwerte eines Protokolls und bestimmt das Gesamtergebnis - rein regelbasiert, keine KI beteiligt. */
+function berechnePruefprotokollErgebnis({ pruefart, messwerte, pruefnormenGrenzwerte }) {
+  const bewertet = (messwerte || []).map((m) => ({ ...m, grenzwertPruefung: pruefeMesswertGrenzwert(m, pruefart, pruefnormenGrenzwerte) }));
+  const hatFehlende = bewertet.some((m) => m.grenzwertPruefung.status === 'fehlend');
+  const hatAuffaellige = bewertet.some((m) => m.grenzwertPruefung.status === 'auffaellig');
+  const gesamtergebnis = hatFehlende ? 'unvollstaendig' : hatAuffaellige ? 'auffaellig' : 'ohne_auffaelligkeiten';
+  return { messwerte: bewertet, gesamtergebnis };
+}
+
+function pruefeMesswerteEingabe(messwerte) {
+  if (!Array.isArray(messwerte) || !messwerte.length) { const err = new Error('Feld "messwerte" fehlt oder ist leer.'); err.status = 400; throw err; }
+  for (const m of messwerte) {
+    if (!m || typeof m.bezeichnung !== 'string' || !m.bezeichnung.trim()) { const err = new Error('Jede Messung benötigt eine "bezeichnung".'); err.status = 400; throw err; }
+  }
+}
+
+/** Legt ein NEUES Prüfprotokoll als Entwurf an (ein Protokoll je Prüftermin). Prüft zwingend die Kundenzuordnung (wie bei JARVIS TECH). */
+async function erstelleJarvisPruefprotokoll({ serviceAccount, anlagenId, kundeId, pruefart, messwerte, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  if (!JARVIS_PRUEFARTEN.includes(pruefart)) { const err = new Error(`Unbekannte Prüfart "${pruefart}" - erlaubt sind: ${JARVIS_PRUEFARTEN.join(', ')}.`); err.status = 400; throw err; }
+  if (!anlagenId) { const err = new Error('Feld "anlagenId" fehlt.'); err.status = 400; throw err; }
+  pruefeMesswerteEingabe(messwerte);
+  const anlage = await firestoreGetDoc({ serviceAccount, collection: 'anlagen', id: anlagenId });
+  if (!anlage) { const err = new Error('Angegebene Anlage wurde nicht gefunden.'); err.status = 404; throw err; }
+  if (kundeId && anlage.kundeId && kundeId !== anlage.kundeId) {
+    const err = new Error(`Kundenzuordnung stimmt nicht überein: die Anlage "${anlage.bezeichnung || anlagenId}" gehört zu einem anderen Kunden als angegeben - Anlegen abgelehnt.`);
+    err.status = 409;
+    throw err;
+  }
+  const pruefnormenGrenzwerte = await firestoreListDocuments({ serviceAccount, collection: 'pruefnormenGrenzwerte' });
+  const { messwerte: bewertet, gesamtergebnis } = berechnePruefprotokollErgebnis({ pruefart, messwerte, pruefnormenGrenzwerte });
+  const id = crypto.randomUUID();
+  const daten = {
+    id, anlagenId, kundeId: anlage.kundeId || kundeId || '', pruefart, messwerte: bewertet, gesamtergebnis,
+    rechtsverbindlicherHinweis: 'Entwurf zur Durchsicht durch eine Elektrofachkraft - KEIN rechtsverbindliches Prüfergebnis, KEINE automatische Bestätigung einer bestandenen Prüfung, KEINE Unterschrift/Freigabe.',
+    version: 1, erstelltAm: new Date().toISOString(),
+  };
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisPruefprotokolle', id, data: daten });
+  return daten;
+}
+
+/** Aktualisiert die Messwerte eines bestehenden Protokoll-Entwurfs (Versionssicherung wie überall sonst im Freigabecenter). */
+async function aktualisiereJarvisPruefprotokoll({ serviceAccount, protokollId, erwarteteVersion, messwerte, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisPruefprotokolle', id: protokollId });
+  if (!aktuell) { const err = new Error('Prüfprotokoll nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieses Protokoll wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  pruefeMesswerteEingabe(messwerte);
+  const pruefnormenGrenzwerte = await firestoreListDocuments({ serviceAccount, collection: 'pruefnormenGrenzwerte' });
+  const { messwerte: bewertet, gesamtergebnis } = berechnePruefprotokollErgebnis({ pruefart: aktuell.pruefart, messwerte, pruefnormenGrenzwerte });
+  const neueVersion = (aktuell.version || 0) + 1;
+  const { id: _ignoriert, ...rest } = aktuell;
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisPruefprotokolle', id: protokollId,
+    data: { ...rest, messwerte: bewertet, gesamtergebnis, version: neueVersion, bearbeitetAm: new Date().toISOString() },
+  });
+  return { id: protokollId, version: neueVersion, gesamtergebnis };
+}
+
+async function holeJarvisPruefprotokolle({ serviceAccount }) {
+  const alle = await firestoreListDocuments({ serviceAccount, collection: 'jarvisPruefprotokolle' });
+  return alle.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
 }
 
 // --- Google-Büro (Gmail + Kalender) - läuft bewusst IM Haupt-Worker statt in
@@ -5512,6 +6001,151 @@ export default {
       }
     }
 
+    // Phase 7 - JARVIS TECH: Dokument-/Bild-/Text-Analyse (Typenschild,
+    // Fehlermeldung, Anlagenbild, Messprotokoll, Wartungsvorschlag).
+    if (body.action === 'jarvis-tech-analysiere') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const analyse = await fuehreJarvisTechAnalyseAus({
+          serviceAccount, env, analyseTyp: body.analyseTyp, bildDataUrl: body.bildDataUrl, bildUrl: body.bildUrl,
+          herstellerquelleText: body.herstellerquelleText, kontextText: body.kontextText,
+          kundeIdHinweis: body.kundeIdHinweis, anlagenIdHinweis: body.anlagenIdHinweis, anlagenId: body.anlagenId,
+          callerUid: aufrufer.uid, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, analyse }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 7 - JARVIS TECH: explizite Bestätigung einer Anlagen-Verknüpfung
+    // (NIEMALS automatisch - siehe verknuepfeTechAnalyseMitAnlage).
+    if (body.action === 'jarvis-tech-verknuepfen') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await verknuepfeTechAnalyseMitAnlage({
+          serviceAccount, analyseId: body.analyseId, erwarteteVersion: body.erwarteteVersion, anlagenId: body.anlagenId, kundeId: body.kundeId, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 7 - JARVIS TECH: Liste bisheriger Analysen (nur lesend).
+    if (body.action === 'jarvis-tech-analysen') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const analysen = await holeJarvisTechAnalysen({ serviceAccount });
+        return new Response(JSON.stringify({ ok: true, analysen }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 7 - DGUV/VDE-Prüfprotokolle: neuen Entwurf anlegen.
+    if (body.action === 'jarvis-pruefprotokoll-erstellen') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const protokoll = await erstelleJarvisPruefprotokoll({
+          serviceAccount, anlagenId: body.anlagenId, kundeId: body.kundeId, pruefart: body.pruefart, messwerte: body.messwerte, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, protokoll }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 7 - DGUV/VDE-Prüfprotokolle: bestehenden Entwurf aktualisieren.
+    if (body.action === 'jarvis-pruefprotokoll-aktualisieren') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await aktualisiereJarvisPruefprotokoll({
+          serviceAccount, protokollId: body.protokollId, erwarteteVersion: body.erwarteteVersion, messwerte: body.messwerte, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 7 - DGUV/VDE-Prüfprotokolle: Liste (nur lesend).
+    if (body.action === 'jarvis-pruefprotokolle') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const protokolle = await holeJarvisPruefprotokolle({ serviceAccount });
+        return new Response(JSON.stringify({ ok: true, protokolle }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     if (body.action === 'assistent-chat') {
       if (!Array.isArray(body.messages) || body.messages.length === 0) {
         return new Response(JSON.stringify({ error: 'Feld "messages" fehlt.' }), {
@@ -5608,4 +6242,10 @@ export const __test__ = {
   berechneUmsatzverlauf, berechneForderungen, berechneAngeboteUndAuftragsbestand,
   berechneProjektDeckungsbeitraege, berechneMitarbeiterAuslastung, berechneWartungsvertraege,
   berechneAufgabenUndVerzoegerungen, vergleicheMitVormonat,
+  // Phase 7 - JARVIS TECH
+  fuehreJarvisTechAnalyseAus, verknuepfeTechAnalyseMitAnlage, holeJarvisTechAnalysen,
+  callClaudeTechAnalyse, JARVIS_TECH_ANALYSE_TYPEN,
+  // Phase 7 - DGUV/VDE-Prüfprotokolle
+  erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
+  berechnePruefprotokollErgebnis, pruefeMesswertGrenzwert, JARVIS_PRUEFARTEN,
 };

@@ -409,6 +409,46 @@ export async function holeJarvisWochenbericht() {
   return bericht;
 }
 
+// =============================================================================
+// JARVIS TECH (Phase 7) - Dokument-/Bild-/Text-Analyse, Prüfprotokolle.
+// =============================================================================
+
+/** Analysiert ein Foto/Dokument/Symptom (siehe worker.js fuehreJarvisTechAnalyseAus). */
+export async function analysiereJarvisTech({ analyseTyp, bildDataUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId }) {
+  const { analyse } = await callJarvisBackend('jarvis-tech-analysiere', { analyseTyp, bildDataUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId });
+  return analyse;
+}
+
+/** Bestätigt EXPLIZIT die Verknüpfung einer TECH-Analyse mit einer echten Anlage (niemals automatisch). */
+export async function verknuepfeJarvisTechAnalyse({ analyseId, erwarteteVersion, anlagenId, kundeId }) {
+  const { ergebnis } = await callJarvisBackend('jarvis-tech-verknuepfen', { analyseId, erwarteteVersion, anlagenId, kundeId });
+  return ergebnis;
+}
+
+/** Liste bisheriger TECH-Analysen. */
+export async function holeJarvisTechAnalysen() {
+  const { analysen } = await callJarvisBackend('jarvis-tech-analysen');
+  return analysen;
+}
+
+/** Legt einen neuen DGUV-V3-/VDE-Prüfprotokoll-Entwurf an. */
+export async function erstelleJarvisPruefprotokoll({ anlagenId, kundeId, pruefart, messwerte }) {
+  const { protokoll } = await callJarvisBackend('jarvis-pruefprotokoll-erstellen', { anlagenId, kundeId, pruefart, messwerte });
+  return protokoll;
+}
+
+/** Aktualisiert die Messwerte eines bestehenden Prüfprotokoll-Entwurfs. */
+export async function aktualisiereJarvisPruefprotokoll({ protokollId, erwarteteVersion, messwerte }) {
+  const { ergebnis } = await callJarvisBackend('jarvis-pruefprotokoll-aktualisieren', { protokollId, erwarteteVersion, messwerte });
+  return ergebnis;
+}
+
+/** Liste bisheriger Prüfprotokoll-Entwürfe. */
+export async function holeJarvisPruefprotokolle() {
+  const { protokolle } = await callJarvisBackend('jarvis-pruefprotokolle');
+  return protokolle;
+}
+
 export async function chatMitAssistent({ messages }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {

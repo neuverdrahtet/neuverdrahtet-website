@@ -427,9 +427,29 @@ export default {
         const original = await gmailFetch(accessToken, `/messages/${teile[1]}?format=metadata&metadataHeaders=Message-ID&metadataHeaders=References`);
         const originalMsgId = getHeader(original.payload, 'Message-ID');
         const raw = buildMimeMessage({ to: body.to, subject: body.subject || `Re: ${getHeader(original.payload, 'Subject')}`, bodyText: body.body_text, inReplyToMessageId: originalMsgId, references: originalMsgId });
+        // Optionales "draft_id": aktualisiert einen bereits bestehenden Entwurf
+        // IN PLACE (Gmail drafts.update, PUT /drafts/{id}) statt jedes Mal einen
+        // neuen anzulegen - behebt das Problem, dass ein nachträglich in
+        // Werkora bearbeiteter Antworttext bisher einen ZWEITEN, parallelen
+        // Gmail-Entwurf erzeugt hat, während der alte unverändert liegen blieb.
+        // Schlägt das Update fehl (z.B. weil der Entwurf inzwischen von Danny
+        // manuell in Gmail gelöscht oder bereits versendet wurde), wird das
+        // NICHT stillschweigend durch einen neuen Entwurf ersetzt, sondern als
+        // Fehler nach oben gereicht - der Aufrufer (JARVIS) entscheidet dann,
+        // wie damit umzugehen ist (siehe bearbeiteEmailAntwortentwurf im
+        // Haupt-Worker: eine Freigabe zum Versand ist bei einem fehlgeschlagenen
+        // Sync nicht möglich).
+        if (body.draft_id) {
+          const aktualisiert = await gmailFetch(accessToken, `/drafts/${encodeURIComponent(body.draft_id)}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: { threadId: original.threadId, raw: base64UrlEncode(raw) } }),
+          });
+          await logAction(fsCtx, { action: 'update_email_draft', resourceType: 'email', resourceId: teile[1], status: 'success' });
+          return okResponse({ draft_id: aktualisiert.id, thread_id: original.threadId, aktualisiert: true }, 200);
+        }
         const draft = await gmailFetch(accessToken, '/drafts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: { threadId: original.threadId, raw: base64UrlEncode(raw) } }) });
         await logAction(fsCtx, { action: 'create_email_draft', resourceType: 'email', resourceId: teile[1], status: 'success' });
-        return okResponse({ draft_id: draft.id, thread_id: original.threadId }, 201);
+        return okResponse({ draft_id: draft.id, thread_id: original.threadId, aktualisiert: false }, 201);
       }
       if (teile[0] === 'emails' && teile[1] && teile[2] === 'read' && request.method === 'POST') {
         await gmailFetch(accessToken, `/messages/${teile[1]}/modify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) });

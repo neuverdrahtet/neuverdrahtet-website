@@ -86,6 +86,9 @@ const STORES = {
   jarvisTerminVorschlaege: 'id',
   jarvisAngebotsPruefung: 'id',
   jarvisKennzahlenVerlauf: 'id',
+  jarvisTechAnalysen: 'id',
+  jarvisPruefprotokolle: 'id',
+  pruefnormenGrenzwerte: 'id',
 };
 
 export const KALK_KATEGORIEN = [

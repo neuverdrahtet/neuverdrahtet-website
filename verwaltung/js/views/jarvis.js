@@ -1,9 +1,12 @@
-import { chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht, holeJarvisControl, holeJarvisWochenbericht } from '../ai.js';
-import { escapeHtml, toast, formatDateTime } from '../utils.js';
+import {
+  chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht, holeJarvisControl, holeJarvisWochenbericht,
+  analysiereJarvisTech, verknuepfeJarvisTechAnalyse, holeJarvisTechAnalysen, erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
+} from '../ai.js';
+import { escapeHtml, toast, formatDateTime, uid as neueId } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
 import { getSession } from '../auth.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
-import { get, put } from '../db.js';
+import { get, put, getAll, remove } from '../db.js';
 import { openModal } from '../ui.js';
 
 // Sprachausgabe ist eine Geräte-/Browsereinstellung, kein Werkora-Setting -
@@ -69,6 +72,7 @@ export async function render(container) {
     </div>
     <div class="tabs" id="jv-tabs">
       <button type="button" class="tab-item" data-tab="zentrale">📋 Zentrale</button>
+      <button type="button" class="tab-item" data-tab="tech">🔧 TECH</button>
       <button type="button" class="tab-item" data-tab="chat">💬 Chat</button>
     </div>
     <div id="jv-tab-inhalt"></div>
@@ -87,6 +91,8 @@ export async function render(container) {
     markiereAktivenTab();
     if (tab === 'chat') {
       await renderChat(inhaltEl, uid);
+    } else if (tab === 'tech') {
+      await renderTech(inhaltEl);
     } else {
       await renderZentrale(inhaltEl);
     }
@@ -132,13 +138,13 @@ function itemTitel(typ, item) {
 function itemDetails(typ, item) {
   switch (typ) {
     case 'email':
-      return `Kunde: ${escapeHtml(item.kundeId || 'unbekannt')}${item.angebotId ? `<br>Angebotsentwurf: ${escapeHtml(item.angebotId)}` : ''}${(item.angebotFehlendeInfos || []).length ? `<br>Hinweise: ${escapeHtml(item.angebotFehlendeInfos.join(' | '))}` : ''}`;
+      return `Kunde: ${escapeHtml(item.kundeId || 'unbekannt')}${item.angebotId ? `<br>Angebotsentwurf: ${escapeHtml(item.angebotId)}` : ''}${(item.angebotFehlendeInfos || []).length ? `<br>Hinweise: ${escapeHtml(item.angebotFehlendeInfos.join(' | '))}` : ''}${item.gmailDraftSyncFehler ? `<br><span class="badge badge-danger">⚠ Gmail-Entwurf nicht synchronisiert - Freigabe blockiert, bis erneut bearbeitet: ${escapeHtml(item.gmailDraftSyncFehler)}</span>` : ''}`;
     case 'angebot':
       return `Kunde: ${escapeHtml(item.kundeId || 'unbekannt')}${(item.letzteWarnungen || []).length ? `<br>Warnungen: ${escapeHtml(item.letzteWarnungen.join(' | '))}` : ''}`;
     case 'rechnung':
       return `Positionen: ${(item.positionen || []).length}${(item.fehlendeInfos || []).length ? `<br>Hinweise: ${escapeHtml(item.fehlendeInfos.join(' | '))}` : ''}${(item.bekannteAbschlaege || []).length ? `<br>Bekannte Abschläge: ${item.bekannteAbschlaege.length}` : ''}`;
     case 'mahnung':
-      return `Kein Mahntext hinterlegt (noch zu ergänzen in Werkora) - nicht versendet.`;
+      return `Offener Betrag: ${item.offenerBetragBrutto != null ? `${item.offenerBetragBrutto.toFixed(2)} €` : 'unbekannt'}${item.neueFrist ? ` · Frist: ${escapeHtml(item.neueFrist)}` : ''}${item.aktuellerMahntext ? `<br>Bisheriger Mahntext: ${escapeHtml(item.aktuellerMahntext)}` : '<br>Noch kein Mahntext hinterlegt.'} - nicht versendet.`;
     case 'termin':
       return (item.vorschlaege || []).map((v, i) => `${i}: ${formatDateTime(v.start)} - ${formatDateTime(v.end)}`).join('<br>') || escapeHtml((item.fehlendeInfos || []).join(' | '));
     case 'projekt':
@@ -432,17 +438,22 @@ async function renderZentrale(container) {
   // Strukturiertes Formular für den Mahntext (ändert über firestoreMergeFelder
   // NUR "text"/"gebuehr" auf der ECHTEN mahnungen-Collection, siehe
   // bearbeiteMahnEntwurf im Worker - rechnungId/stufe/neueFrist bleiben
-  // unberührt). Kein Vorbefüllen mit dem aktuellen echten Mahntext, da die
-  // Zentrale-Übersicht diesen (noch) nicht mit ausliefert - deshalb der
-  // deutliche Hinweis im Formular.
-  function oeffneMahnungFormular(entityId, erwarteteVersion) {
+  // unberührt). Vorbefüllt mit dem TATSÄCHLICHEN bisherigen Mahntext und
+  // zeigt Mahnstufe/offenen Betrag/Frist zur Orientierung an (Vorgabe
+  // Phase 7 Punkt 1 - vorher war das Formular immer "blind").
+  function oeffneMahnungFormular(entityId, erwarteteVersion, item) {
     const { body, close } = openModal({
       title: 'Mahntext bearbeiten',
       bodyHtml: `
         <form id="jv-mahn-form">
-          <p class="hint">Der eingegebene Text ersetzt den Mahntext auf der echten Mahnung (rechnungId/Stufe/Frist bleiben unverändert). Es wird NICHTS versendet.</p>
-          <div class="field"><label>Mahntext *</label><textarea name="text" rows="8" required placeholder="Mahntext eingeben …"></textarea></div>
-          <div class="field"><label>Mahngebühr € (optional, leer lassen = unverändert)</label><input type="number" step="0.01" name="gebuehr"></div>
+          <p class="hint">
+            Rechnung ${escapeHtml(item.rechnungId || '')} · Mahnstufe ${escapeHtml(String(item.stufe ?? '?'))}
+            · Offener Betrag ${item.offenerBetragBrutto != null ? `${item.offenerBetragBrutto.toFixed(2)} €` : 'unbekannt'}
+            ${item.neueFrist ? `· Frist ${escapeHtml(item.neueFrist)}` : ''}<br>
+            Der eingegebene Text ersetzt den Mahntext auf der echten Mahnung (rechnungId/Stufe/Frist bleiben unverändert). Es wird NICHTS versendet.
+          </p>
+          <div class="field"><label>Mahntext *</label><textarea name="text" rows="8" required>${escapeHtml(item.aktuellerMahntext || '')}</textarea></div>
+          <div class="field"><label>Mahngebühr € (optional, leer lassen = unverändert)</label><input type="number" step="0.01" name="gebuehr" value="${item.aktuelleGebuehr ?? ''}"></div>
           <div class="modal-actions">
             <span class="spacer"></span>
             <button type="button" class="btn" id="jv-mahn-cancel">Abbrechen</button>
@@ -474,7 +485,7 @@ async function renderZentrale(container) {
     } else if (typ === 'email') {
       oeffneEmailFormular(entityId, erwarteteVersion, item);
     } else if (typ === 'mahnung') {
-      oeffneMahnungFormular(entityId, erwarteteVersion);
+      oeffneMahnungFormular(entityId, erwarteteVersion, item);
     }
   }
 
@@ -532,6 +543,403 @@ async function renderZentrale(container) {
       zielEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
     }
   });
+}
+
+// =============================================================================
+// JARVIS TECH (Phase 7) - Dokument-/Bild-/Text-Analyse (Typenschild/
+// Fehlermeldung/Anlagenbild/Messprotokoll/Wartungsvorschlag) und DGUV-V3-/
+// VDE-Prüfprotokoll-Entwürfe. Jede Aussage wird mit ihrer Herkunft (Messwert/
+// Herstellerquelle/Diagnosehypothese) angezeigt - siehe worker.js für die
+// serverseitige Durchsetzung dieser Kennzeichnung.
+// =============================================================================
+
+const TECH_ANALYSE_TYPEN = [
+  { id: 'typenschild', titel: 'Typenschild auslesen' },
+  { id: 'fehlermeldung', titel: 'Fehlermeldung/Fehlercode' },
+  { id: 'anlagenbild', titel: 'Anlagenbild (Zustand)' },
+  { id: 'messprotokoll', titel: 'Vorhandenes Messprotokoll auslesen' },
+  { id: 'wartungsvorschlag', titel: 'Wartungsvorschlag (Wärmepumpe/PV/Klima/Wartung)' },
+];
+
+const HERKUNFT_BADGE = {
+  messwert: '<span class="badge badge-accent">Messwert</span>',
+  herstellerquelle: '<span class="badge badge-success">Herstellerquelle</span>',
+  diagnosehypothese: '<span class="badge badge-warn">Diagnosehypothese</span>',
+};
+
+const PROTOKOLL_ERGEBNIS_BADGE = {
+  ohne_auffaelligkeiten: '<span class="badge badge-success">ohne Auffälligkeiten (Entwurf)</span>',
+  auffaellig: '<span class="badge badge-danger">auffällig</span>',
+  unvollstaendig: '<span class="badge badge-warn">unvollständig</span>',
+};
+
+const PROTOKOLL_HINWEIS = 'Entwurf zur Durchsicht durch eine Elektrofachkraft - KEIN rechtsverbindliches Prüfergebnis, keine automatische Bestätigung einer bestandenen Prüfung, keine Unterschrift/Freigabe.';
+
+function dateiZuDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Datei konnte nicht gelesen werden.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderTechErgebnis(analyse) {
+  const g = analyse.erkannteGeraetedaten || {};
+  return `
+    <div class="card" style="margin-top:8px">
+      ${analyse.bildLesbar === false ? '<p class="hint">⚠️ Bild/Dokument war nicht auswertbar.</p>' : ''}
+      <p><strong>Gerät:</strong> ${escapeHtml(g.hersteller || '–')} ${escapeHtml(g.modell || '')}${g.seriennummer ? ` (SN ${escapeHtml(g.seriennummer)})` : ''}${g.geraetetyp ? ` - ${escapeHtml(g.geraetetyp)}` : ''}</p>
+      ${analyse.erkannterFehlercode ? `<p><strong>Fehlercode:</strong> ${escapeHtml(analyse.erkannterFehlercode)}</p>` : ''}
+      ${(analyse.ausgeleseneMesswerte || []).length ? `<p><strong>Ausgelesene Messwerte:</strong></p><ul>${analyse.ausgeleseneMesswerte.map((m) => `<li>${escapeHtml(m.bezeichnung)}: ${escapeHtml(String(m.wert ?? '–'))} ${escapeHtml(m.einheit || '')}</li>`).join('')}</ul>` : ''}
+      <p><strong>Befunde:</strong></p>
+      <ul>${(analyse.befunde || []).map((b) => `<li>${HERKUNFT_BADGE[b.herkunft] || ''} ${escapeHtml(b.aussage)}${b.quelle ? ` <span class="text-mute">(${escapeHtml(b.quelle)})</span>` : ''}</li>`).join('') || '<li class="text-mute">Keine Befunde.</li>'}</ul>
+      <p class="hint">⚠️ ${escapeHtml(analyse.unsicherheitshinweis || '')}</p>
+      <div id="jv-tech-verknuepfung"></div>
+    </div>
+  `;
+}
+
+function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen) {
+  const zielEl = ergebnisEl.querySelector('#jv-tech-verknuepfung');
+  if (!zielEl) return;
+  if (analyse.verknuepftMitAnlageId) {
+    zielEl.innerHTML = `<p class="text-mute">✅ Verknüpft mit Anlage ${escapeHtml(analyse.verknuepftMitAnlageId)}.</p>`;
+    return;
+  }
+  zielEl.innerHTML = `
+    <div class="field"><label>Mit echter Anlage verknüpfen (optional, NIEMALS automatisch)</label>
+      <select id="jv-tech-verknuepfen-kunde"><option value="">Kunde wählen …</option>${kunden.map((k) => `<option value="${k.id}">${escapeHtml(k.firma || k.id)}</option>`).join('')}</select>
+      <select id="jv-tech-verknuepfen-anlage"><option value="">–</option></select>
+      <button type="button" class="btn btn-sm" id="jv-tech-verknuepfen-btn" style="margin-top:4px">Verknüpfen</button>
+    </div>
+  `;
+  const kundeSel = zielEl.querySelector('#jv-tech-verknuepfen-kunde');
+  const anlageSel = zielEl.querySelector('#jv-tech-verknuepfen-anlage');
+  kundeSel.addEventListener('change', () => {
+    const gefiltert = anlagen.filter((a) => a.kundeId === kundeSel.value);
+    anlageSel.innerHTML = `<option value="">–</option>${gefiltert.map((a) => `<option value="${a.id}">${escapeHtml(a.bezeichnung)}</option>`).join('')}`;
+  });
+  zielEl.querySelector('#jv-tech-verknuepfen-btn').addEventListener('click', async () => {
+    if (!anlageSel.value) { toast('Bitte eine Anlage auswählen.', 'danger'); return; }
+    try {
+      await verknuepfeJarvisTechAnalyse({ analyseId: analyse.id, erwarteteVersion: analyse.version ?? 1, anlagenId: anlageSel.value, kundeId: kundeSel.value });
+      zielEl.innerHTML = '<p class="text-mute">✅ Verknüpft.</p>';
+      toast('Verknüpft.', 'success');
+    } catch (err) {
+      toast(err.message, 'danger');
+    }
+  });
+}
+
+function messwertZeilenHtml(messwerte) {
+  const liste = messwerte.length ? messwerte : [{ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }];
+  return liste.map((m, i) => `
+    <tr>
+      <td><input data-feld="bezeichnung" data-i="${i}" value="${escapeHtml(m.bezeichnung || '')}" placeholder="z.B. Isolationswiderstand" required></td>
+      <td><input data-feld="wert" data-i="${i}" value="${m.wert ?? ''}" style="width:90px"></td>
+      <td><input data-feld="einheit" data-i="${i}" value="${escapeHtml(m.einheit || '')}" style="width:70px"></td>
+      <td style="text-align:center"><input type="checkbox" data-feld="pruefbedingungBestaetigt" data-i="${i}" ${m.pruefbedingungBestaetigt ? 'checked' : ''}></td>
+      <td><button type="button" class="btn btn-sm btn-danger jv-messwert-del" data-i="${i}">✕</button></td>
+    </tr>`).join('');
+}
+
+function wireMesswertZeilen(host, zeilen, renderFn) {
+  host.querySelectorAll('[data-feld]').forEach((inp) => inp.addEventListener('input', () => {
+    const i = Number(inp.dataset.i);
+    zeilen[i][inp.dataset.feld] = inp.type === 'checkbox' ? inp.checked : inp.value;
+  }));
+  host.querySelectorAll('.jv-messwert-del').forEach((btn) => btn.addEventListener('click', () => { zeilen.splice(Number(btn.dataset.i), 1); renderFn(); }));
+}
+
+async function renderTech(container) {
+  const [kunden, anlagen] = await Promise.all([getAll('kunden'), getAll('anlagen')]);
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">🔧 Technische Analyse</h2>
+      <p class="hint">Elektrotechnik/Fehlersuche, DGUV-V3/DIN-VDE, Wärmepumpen, Photovoltaik, Klima-/Kältetechnik, Wartung. JARVIS unterstützt eine Elektrofachkraft, ersetzt sie nicht - jede Aussage ist klar als Messwert, Herstellerangabe oder fachliche Einschätzung gekennzeichnet.</p>
+      <form id="jv-tech-form">
+        <div class="form-grid">
+          <div class="field"><label>Analyseart</label>
+            <select name="analyseTyp">${TECH_ANALYSE_TYPEN.map((t) => `<option value="${t.id}">${escapeHtml(t.titel)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>Kunde (optional, zur Anlagenauswahl)</label>
+            <select id="jv-tech-kunde"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}">${escapeHtml(k.firma || k.id)}</option>`).join('')}</select>
+          </div>
+          <div class="field"><label>Anlage (optional - echte Werkora-Daten fließen automatisch ein)</label>
+            <select id="jv-tech-anlage"><option value="">–</option></select>
+          </div>
+          <div class="field col-span-2"><label>Foto/Dokument (optional, JPEG/PNG/WebP/PDF)</label><input type="file" name="datei" accept="image/png,image/jpeg,image/webp,application/pdf"></div>
+          <div class="field col-span-2"><label>Symptom-/Kontextbeschreibung (optional)</label><textarea name="kontextText" rows="2" placeholder="z.B. „Wärmepumpe zeigt Fehlercode, Leistung seit gestern reduziert“"></textarea></div>
+          <div class="field col-span-2"><label>Herstellerquelle (optional - nur ausfüllen, wenn ein echter Auszug aus einer Montage-/Bedienungsanleitung vorliegt, damit Aussagen als herstellerbestätigt gelten dürfen)</label><textarea name="herstellerquelleText" rows="3"></textarea></div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="jv-tech-analysieren-btn">🔍 Analysieren</button>
+      </form>
+      <div id="jv-tech-ergebnis"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <div class="flex-row" style="justify-content:space-between;align-items:center">
+        <h2 style="font-size:14px;margin:0">Bisherige Analysen</h2>
+        <button type="button" class="btn btn-sm" id="jv-tech-verlauf-btn">Laden</button>
+      </div>
+      <div id="jv-tech-verlauf"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">📋 DGUV-V3-/VDE-Prüfprotokolle</h2>
+      <p class="hint">${PROTOKOLL_HINWEIS} Grenzwerte werden NUR geprüft, wenn unten eine passende Prüfnorm hinterlegt ist.</p>
+      <button type="button" class="btn btn-sm" id="jv-protokoll-neu-btn">+ Neues Prüfprotokoll</button>
+      <div id="jv-protokoll-liste" style="margin-top:8px"></div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">⚙️ Prüfnormen/Grenzwerte (von dir konfiguriert)</h2>
+      <p class="hint">JARVIS kennt/erfindet selbst KEINE DIN-VDE-/DGUV-Grenzwerte - eine Grenzwertprüfung findet nur gegen hier eingetragene Werte statt.</p>
+      <button type="button" class="btn btn-sm" id="jv-norm-neu-btn">+ Grenzwert hinzufügen</button>
+      <div id="jv-norm-liste" style="margin-top:8px"></div>
+    </div>
+  `;
+
+  const kundeSelect = container.querySelector('#jv-tech-kunde');
+  const anlageSelect = container.querySelector('#jv-tech-anlage');
+  function aktualisiereAnlagenOptionen() {
+    const kundeId = kundeSelect.value;
+    const gefiltert = kundeId ? anlagen.filter((a) => a.kundeId === kundeId) : anlagen;
+    anlageSelect.innerHTML = `<option value="">–</option>${gefiltert.map((a) => `<option value="${a.id}">${escapeHtml(a.bezeichnung)}</option>`).join('')}`;
+  }
+  aktualisiereAnlagenOptionen();
+  kundeSelect.addEventListener('change', aktualisiereAnlagenOptionen);
+
+  container.querySelector('#jv-tech-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const datei = fd.get('datei');
+    let bildDataUrl;
+    if (datei && datei.size > 0) {
+      try { bildDataUrl = await dateiZuDataUrl(datei); } catch (err) { toast(err.message, 'danger'); return; }
+    }
+    const kontextText = String(fd.get('kontextText') || '').trim();
+    const herstellerquelleText = String(fd.get('herstellerquelleText') || '').trim();
+    const anlagenId = anlageSelect.value || undefined;
+    const kundeIdHinweis = kundeSelect.value || '';
+    const analyseTyp = fd.get('analyseTyp');
+    const btn = container.querySelector('#jv-tech-analysieren-btn');
+    const ergebnisEl = container.querySelector('#jv-tech-ergebnis');
+    btn.disabled = true; btn.textContent = 'Analysiert …';
+    ergebnisEl.innerHTML = '';
+    try {
+      const analyse = await analysiereJarvisTech({
+        analyseTyp, bildDataUrl, herstellerquelleText: herstellerquelleText || undefined,
+        kontextText: kontextText || undefined, kundeIdHinweis, anlagenId,
+      });
+      ergebnisEl.innerHTML = renderTechErgebnis(analyse);
+      wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen);
+      toast('Analyse abgeschlossen.', 'success');
+    } catch (err) {
+      ergebnisEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    } finally {
+      btn.disabled = false; btn.textContent = '🔍 Analysieren';
+    }
+  });
+
+  container.querySelector('#jv-tech-verlauf-btn').addEventListener('click', async () => {
+    const zielEl = container.querySelector('#jv-tech-verlauf');
+    zielEl.innerHTML = '<p class="text-mute">Lade …</p>';
+    try {
+      const analysen = await holeJarvisTechAnalysen();
+      zielEl.innerHTML = analysen.length === 0 ? '<p class="text-mute">Noch keine Analysen.</p>' : `
+        <ul class="cal-event-list">
+          ${analysen.map((a) => `
+            <li>
+              <div><strong>${escapeHtml(TECH_ANALYSE_TYPEN.find((t) => t.id === a.analyseTyp)?.titel || a.analyseTyp)}</strong>
+                <div class="text-mute">${formatDateTime(a.erstelltAm)}${a.verknuepftMitAnlageId ? ' · verknüpft' : ' · nicht verknüpft'}</div>
+              </div>
+            </li>`).join('')}
+        </ul>`;
+    } catch (err) {
+      zielEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    }
+  });
+
+  async function ladeProtokollListe() {
+    const listeEl = container.querySelector('#jv-protokoll-liste');
+    listeEl.innerHTML = '<p class="text-mute">Lade …</p>';
+    try {
+      const protokolle = await holeJarvisPruefprotokolle();
+      listeEl.innerHTML = protokolle.length === 0 ? '<p class="text-mute">Noch keine Prüfprotokolle.</p>' : `
+        <ul class="cal-event-list">
+          ${protokolle.map((p, i) => `
+            <li data-idx="${i}" style="cursor:pointer">
+              <div><strong>${escapeHtml(p.pruefart)} - Anlage ${escapeHtml(p.anlagenId)}</strong><div class="text-mute">${formatDateTime(p.erstelltAm)}</div></div>
+              ${PROTOKOLL_ERGEBNIS_BADGE[p.gesamtergebnis] || ''}
+            </li>`).join('')}
+        </ul>`;
+      listeEl.querySelectorAll('[data-idx]').forEach((li) => li.addEventListener('click', () => oeffneProtokollBearbeiten(protokolle[Number(li.dataset.idx)])));
+    } catch (err) {
+      listeEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  function oeffneProtokollNeu() {
+    let zeilen = [{ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }];
+    const { body, close } = openModal({
+      title: 'Neues Prüfprotokoll', wide: true,
+      bodyHtml: `
+        <form id="jv-protokoll-form">
+          <div class="form-grid">
+            <div class="field"><label>Kunde</label><select name="kundeId">${kunden.map((k) => `<option value="${k.id}">${escapeHtml(k.firma || k.id)}</option>`).join('')}</select></div>
+            <div class="field"><label>Anlage *</label><select name="anlagenId" required></select></div>
+            <div class="field"><label>Prüfart</label><select name="pruefart"><option value="dguv-v3">DGUV V3</option><option value="e-check">E-Check</option><option value="sonstiges">Sonstiges</option></select></div>
+          </div>
+          <table class="data-table" style="width:100%;margin-top:8px">
+            <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th></th></tr></thead>
+            <tbody id="jv-protokoll-messwerte"></tbody>
+          </table>
+          <button type="button" class="btn btn-sm" id="jv-messwert-add" style="margin-top:8px">+ Messwert hinzufügen</button>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-protokoll-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Entwurf erstellen</button>
+          </div>
+        </form>
+      `,
+    });
+    const kundeSel = body.querySelector('select[name="kundeId"]');
+    const anlageSel = body.querySelector('select[name="anlagenId"]');
+    function aktAnlagen() {
+      const gefiltert = anlagen.filter((a) => a.kundeId === kundeSel.value);
+      anlageSel.innerHTML = gefiltert.map((a) => `<option value="${a.id}">${escapeHtml(a.bezeichnung)}</option>`).join('');
+    }
+    kundeSel.addEventListener('change', aktAnlagen);
+    aktAnlagen();
+    function renderZeilen() {
+      body.querySelector('#jv-protokoll-messwerte').innerHTML = messwertZeilenHtml(zeilen);
+      wireMesswertZeilen(body.querySelector('#jv-protokoll-messwerte'), zeilen, renderZeilen);
+    }
+    renderZeilen();
+    body.querySelector('#jv-messwert-add').addEventListener('click', () => { zeilen.push({ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }); renderZeilen(); });
+    body.querySelector('#jv-protokoll-cancel').addEventListener('click', close);
+    body.querySelector('#jv-protokoll-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!anlageSel.value) { toast('Bitte eine Anlage auswählen.', 'danger'); return; }
+      try {
+        await erstelleJarvisPruefprotokoll({ anlagenId: anlageSel.value, kundeId: kundeSel.value, pruefart: body.querySelector('select[name="pruefart"]').value, messwerte: zeilen });
+        close();
+        toast('Prüfprotokoll-Entwurf erstellt.', 'success');
+        ladeProtokollListe();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+  }
+
+  function oeffneProtokollBearbeiten(protokoll) {
+    let zeilen = protokoll.messwerte.map((m) => ({ bezeichnung: m.bezeichnung, wert: m.wert, einheit: m.einheit, pruefbedingungBestaetigt: m.pruefbedingungBestaetigt || false }));
+    const { body, close } = openModal({
+      title: `Prüfprotokoll bearbeiten - ${protokoll.pruefart}`, wide: true,
+      bodyHtml: `
+        <p class="hint">${PROTOKOLL_HINWEIS}</p>
+        <table class="data-table" style="width:100%">
+          <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th></th></tr></thead>
+          <tbody id="jv-protokoll-messwerte-edit"></tbody>
+        </table>
+        <button type="button" class="btn btn-sm" id="jv-messwert-add-edit" style="margin-top:8px">+ Messwert hinzufügen</button>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="jv-protokoll-edit-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="jv-protokoll-edit-speichern">Speichern (erneute Prüfung erforderlich)</button>
+        </div>
+      `,
+    });
+    function renderZeilen() {
+      body.querySelector('#jv-protokoll-messwerte-edit').innerHTML = messwertZeilenHtml(zeilen);
+      wireMesswertZeilen(body.querySelector('#jv-protokoll-messwerte-edit'), zeilen, renderZeilen);
+    }
+    renderZeilen();
+    body.querySelector('#jv-messwert-add-edit').addEventListener('click', () => { zeilen.push({ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }); renderZeilen(); });
+    body.querySelector('#jv-protokoll-edit-cancel').addEventListener('click', close);
+    body.querySelector('#jv-protokoll-edit-speichern').addEventListener('click', async () => {
+      try {
+        await aktualisiereJarvisPruefprotokoll({ protokollId: protokoll.id, erwarteteVersion: protokoll.version ?? 1, messwerte: zeilen });
+        close();
+        toast('Prüfprotokoll aktualisiert.', 'success');
+        ladeProtokollListe();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+  }
+
+  container.querySelector('#jv-protokoll-neu-btn').addEventListener('click', oeffneProtokollNeu);
+  ladeProtokollListe();
+
+  async function ladeNormListe() {
+    const normen = await getAll('pruefnormenGrenzwerte');
+    const listeEl = container.querySelector('#jv-norm-liste');
+    listeEl.innerHTML = normen.length === 0 ? '<p class="text-mute">Noch keine Grenzwerte hinterlegt.</p>' : `
+      <table class="data-table" style="width:100%">
+        <thead><tr><th>Prüfart</th><th>Messgröße</th><th>Bereich</th><th>Bedingung</th><th>Norm</th><th></th></tr></thead>
+        <tbody>
+          ${normen.map((n) => `
+            <tr>
+              <td>${escapeHtml(n.pruefart)}</td><td>${escapeHtml(n.messgroesse)}</td>
+              <td>${n.grenzwertMin ?? '-∞'} – ${n.grenzwertMax ?? '∞'} ${escapeHtml(n.einheit || '')}</td>
+              <td>${escapeHtml(n.bedingung || '')}</td><td>${escapeHtml(n.normReferenz || '')}</td>
+              <td><button type="button" class="btn btn-sm btn-danger jv-norm-del" data-id="${n.id}">✕</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+    listeEl.querySelectorAll('.jv-norm-del').forEach((btn) => btn.addEventListener('click', async () => {
+      await remove('pruefnormenGrenzwerte', btn.dataset.id);
+      ladeNormListe();
+    }));
+  }
+
+  container.querySelector('#jv-norm-neu-btn').addEventListener('click', () => {
+    const { body, close } = openModal({
+      title: 'Grenzwert hinzufügen',
+      bodyHtml: `
+        <form id="jv-norm-form">
+          <div class="form-grid">
+            <div class="field"><label>Prüfart</label><select name="pruefart"><option value="dguv-v3">DGUV V3</option><option value="e-check">E-Check</option><option value="sonstiges">Sonstiges</option></select></div>
+            <div class="field"><label>Messgröße *</label><input name="messgroesse" required placeholder="z.B. Auslösezeit RCD"></div>
+            <div class="field"><label>Einheit</label><input name="einheit" placeholder="z.B. ms, MΩ, V"></div>
+            <div class="field"><label>Minimalwert (optional)</label><input type="number" step="any" name="grenzwertMin"></div>
+            <div class="field"><label>Maximalwert (optional)</label><input type="number" step="any" name="grenzwertMax"></div>
+            <div class="field col-span-2"><label>Bedingung</label><input name="bedingung" placeholder="z.B. bei 1x I∆n, Typ AC/A"></div>
+            <div class="field col-span-2"><label>Normreferenz (deine Angabe - JARVIS erfindet hier nichts)</label><input name="normReferenz" placeholder="z.B. DIN VDE 0100-410"></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-norm-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-norm-cancel').addEventListener('click', close);
+    body.querySelector('#jv-norm-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const messgroesse = String(fd.get('messgroesse') || '').trim();
+      if (!messgroesse) { toast('Messgröße darf nicht leer sein.', 'danger'); return; }
+      await put('pruefnormenGrenzwerte', {
+        id: neueId(), pruefart: fd.get('pruefart'), messgroesse,
+        einheit: String(fd.get('einheit') || '').trim(),
+        grenzwertMin: fd.get('grenzwertMin') ? Number(fd.get('grenzwertMin')) : null,
+        grenzwertMax: fd.get('grenzwertMax') ? Number(fd.get('grenzwertMax')) : null,
+        bedingung: String(fd.get('bedingung') || '').trim(),
+        normReferenz: String(fd.get('normReferenz') || '').trim(),
+      });
+      close();
+      toast('Grenzwert gespeichert.', 'success');
+      ladeNormListe();
+    });
+  });
+
+  ladeNormListe();
 }
 
 // =============================================================================
