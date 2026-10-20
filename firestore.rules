@@ -223,6 +223,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Freigabe-/Versions-Metadaten zu JARVIS-Angebotsentwürfen (Phase 5) -
+    // bewusst getrennt von der echten "angebote"-Collection (siehe
+    // Kommentar bei wendeAngebotsFreigabeAn in cloudflare-worker/worker.js).
+    match /jarvisAngebotsPruefung/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (

@@ -334,6 +334,69 @@ export async function chatMitJarvis({ messages }) {
   return res.json();
 }
 
+/**
+ * Gemeinsamer Aufruf-Helfer für die Phase-5-JARVIS-Aktionen (Freigabecenter/
+ * Zentrale/Tagesbericht) - bewusst NICHT in chatMitJarvis() integriert, um
+ * dessen bereits getesteten Code-Pfad nicht anzufassen. Reicht wie
+ * chatMitJarvis das aktuelle Firebase-ID-Token durch, damit der Worker
+ * serverseitig Rolle/Berechtigung prüfen kann.
+ */
+async function callJarvisBackend(action, extraBody = {}) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const { auth } = await import('./firebase.js');
+  if (!auth.currentUser) {
+    throw new Error('JARVIS benötigt eine aktive Firebase-Anmeldung (im reinen Zugangscode-Modus nicht verfügbar).');
+  }
+  const idToken = await auth.currentUser.getIdToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  let res;
+  try {
+    res = await fetch(settings.aiWorkerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-App-Secret': settings.aiAppSecret || '' },
+      body: JSON.stringify({ action, idToken, ...extraBody }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('Zeitüberschreitung bei JARVIS (keine Antwort innerhalb von 30s).');
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try { const data = await res.json(); if (data.error) message = data.error; } catch { /* ignore */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
+/** JARVIS-Zentrale (Phase 5): aggregierte Übersicht aller offenen Entwürfe/Freigaben/Jobs/Kosten. */
+export async function holeJarvisZentrale() {
+  const { daten } = await callJarvisBackend('jarvis-zentrale');
+  return daten;
+}
+
+/**
+ * Freigeben/Ablehnen/Bearbeiten eines freigabepflichtigen JARVIS-Vorgangs.
+ * erwarteteVersion MUSS die Version sein, die beim Laden der Detailansicht
+ * angezeigt wurde (Versionssicherung - siehe worker.js erstelleUndFuehreJarvisFreigabeAus).
+ */
+export async function sendeJarvisFreigabe({ typ, entityId, payload }) {
+  const { ergebnis } = await callJarvisBackend('jarvis-freigabe', { typ, entityId, payload });
+  return ergebnis;
+}
+
+/** JARVIS-Tagesbericht (Phase 5, erste Version - noch nicht automatisch per Cron erzeugt). */
+export async function holeJarvisTagesbericht() {
+  const { bericht } = await callJarvisBackend('jarvis-tagesbericht');
+  return bericht;
+}
+
 export async function chatMitAssistent({ messages }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {

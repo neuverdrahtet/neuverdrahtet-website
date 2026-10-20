@@ -2568,15 +2568,191 @@ async function beanspracheEinzelVorgang({ serviceAccount, collection, id, typ, t
   }
 }
 
-// Registry der tatsächlichen Aktions-Ausführungen - bewusst noch LEER. Die
-// konkreten Aktionstypen (z.B. "angebot.versenden", "email.versenden")
-// kommen in der nächsten Entwicklungsphase (autonomes E-Mail-/Angebots-
-// management), zusammen mit den jeweils nötigen Stufe-2-Vorlagen. Das
-// Ausführungs-Gerüst hier (Beanspruchen, Ablaufprüfung, Protokollierung) ist
-// bereits vollständig und unabhängig von den künftigen Aktionstypen nutzbar.
-const JARVIS_AKTIONS_AUSFUEHRUNG = {};
+// =============================================================================
+// JARVIS Phase 5 - Freigabecenter: konkrete, ausdrücklich erlaubte
+// Aktionstypen für die Freigabe-Engine. JEDER Aktionstyp wurde einzeln
+// darauf geprüft, ob er über eine bereits vorhandene, sichere Werkora-/
+// Google-Schnittstelle ausführbar ist (Vorgabe Phase 5 Punkt 3):
+//
+//  - email.pruefen / rechnung.pruefen / mahnung.pruefen / termin.pruefen /
+//    angebot.pruefen: reine interne Firestore-Status-Änderungen auf JARVIS-
+//    eigenen Entwurfs-Collections (Freigeben/Ablehnen durch Danny). KEIN
+//    externer Versand-Aufruf nötig oder möglich - google-buero hat
+//    absichtlich KEINEN gmail.send-Scope (siehe dessen Kopfkommentar) und
+//    die KI-Bürokraft-API blockiert quotes/{id}/send fest mit 403. Diese
+//    Aktionstypen bilden also NICHT das (ohnehin blockierte) Versenden ab,
+//    sondern Dannys eigene Prüf-/Freigabe-Entscheidung.
+//  - rechnung.bearbeiten: direkte, sichere Änderung der JARVIS-eigenen
+//    Rechnungsentwurf-Collection (niemals der echten "rechnungen"-Collection).
+//  - angebot.bearbeiten: ruft ECHT PATCH /quotes auf - sicher, weil die
+//    KI-Bürokraft-API selbst nur "entwurf"-Status editierbar macht (GoBD-
+//    Sperre bleibt dort bestehen, nicht hier nachgebaut).
+//  - termin.pruefen "freigeben" wählt NUR einen der vorgeschlagenen Slots
+//    innerhalb von JARVIS aus - bucht NIEMALS verbindlich einen Werkora-
+//    Termin oder ein Google-Kalender-Ereignis (Vorgabe Phase 5 Punkt 7).
+//
+// Ausdrücklich NICHT als Aktionstyp vorhanden: irgendetwas, das eine echte
+// Rechnung oder einen echten Kundentermin anlegt/ändert/versendet, oder eine
+// E-Mail tatsächlich verschickt - all das bleibt wie bisher ausschließlich
+// manuell in Werkora. JARVIS_AKTIONS_AUSFUEHRUNG ist eine geschlossene
+// Liste (keine "beliebige KI-Aktion ausführen"-Funktion) - ein nicht
+// gelisteter "typ" wird von fuehreJarvisAktionAus mit HTTP 501 abgelehnt.
+// =============================================================================
 
-async function fuehreJarvisAktionAus({ serviceAccount, aktionId, callerUid, callerRole }) {
+/**
+ * Generische Freigabe-/Ablehnungs-Logik für die vier JARVIS-eigenen,
+ * ausschließlich von JARVIS selbst beschriebenen Entwurfs-Collections
+ * (jarvisEmailVerarbeitung, jarvisRechnungsEntwuerfe, jarvisMahnEntwuerfe,
+ * jarvisTerminVorschlaege) - ein direktes Überschreiben per firestoreSetDoc
+ * ist hier unbedenklich (anders als bei "angebote", siehe
+ * wendeAngebotsFreigabeAn unten). Prüft die Versionssicherung (Vorgabe
+ * Phase 5 Punkt 2: "Eine Freigabe darf nur die konkret geprüfte Version
+ * betreffen") - weicht die aktuelle Version vom erwarteten Wert ab (der
+ * Entwurf wurde zwischenzeitlich neu generiert oder bearbeitet), wird die
+ * Freigabe abgelehnt statt die falsche Version zu bestätigen.
+ */
+async function wendeFreigabeAn({ serviceAccount, collection, id, erwarteteVersion, entscheidung }) {
+  if (!['freigeben', 'ablehnen'].includes(entscheidung)) { const err = new Error('Ungültige Entscheidung - erlaubt sind nur "freigeben" oder "ablehnen".'); err.status = 400; throw err; }
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection, id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Vorgang wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen und freigeben.`);
+    err.status = 409;
+    throw err;
+  }
+  const neuerStatus = entscheidung === 'freigeben' ? 'freigegeben' : 'abgelehnt';
+  const { id: _ignoriert, ...rest } = aktuell;
+  await firestoreSetDoc({ serviceAccount, collection, id, data: { ...rest, freigabeStatus: neuerStatus, freigabeAm: new Date().toISOString() } });
+  return { collection, id, freigabeStatus: neuerStatus };
+}
+
+/** Wie wendeFreigabeAn, aber für jarvisRechnungsEntwuerfe mit zusätzlicher Bearbeitungs-Möglichkeit (eigene Collection, sicher direkt editierbar). */
+async function bearbeiteRechnungsEntwurf({ serviceAccount, id, erwarteteVersion, neuePositionen }) {
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Entwurf wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (!Array.isArray(neuePositionen) || !neuePositionen.length) { const err = new Error('Feld "neuePositionen" fehlt oder ist leer.'); err.status = 400; throw err; }
+  const { id: _ignoriert, ...rest } = aktuell;
+  const neueVersion = (aktuell.version || 0) + 1;
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id,
+    // Änderungen nach einer Freigabe erfordern erneute Freigabe (Vorgabe
+    // Phase 5 Punkt 2): jede Bearbeitung erhöht die Version UND setzt
+    // freigabeStatus explizit zurück auf "offen".
+    data: { ...rest, positionen: neuePositionen, version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString() },
+  });
+  return { collection: 'jarvisRechnungsEntwuerfe', id, version: neueVersion };
+}
+
+/** Wie wendeFreigabeAn, aber für jarvisTerminVorschlaege: "freigeben" wählt einen der vorgeschlagenen Slots aus, bucht aber NIE verbindlich. */
+async function wendeTerminFreigabeAn({ serviceAccount, id, erwarteteVersion, entscheidung, ausgewaehlterSlotIndex }) {
+  if (!['freigeben', 'ablehnen'].includes(entscheidung)) { const err = new Error('Ungültige Entscheidung - erlaubt sind nur "freigeben" oder "ablehnen".'); err.status = 400; throw err; }
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTerminVorschlaege', id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Terminvorschlag wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  const { id: _ignoriert, ...rest } = aktuell;
+  if (entscheidung === 'ablehnen') {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisTerminVorschlaege', id, data: { ...rest, freigabeStatus: 'abgelehnt', freigabeAm: new Date().toISOString() } });
+    return { id, freigabeStatus: 'abgelehnt' };
+  }
+  const slot = (aktuell.vorschlaege || [])[Number(ausgewaehlterSlotIndex)];
+  if (!slot) { const err = new Error('Ungültiger Terminvorschlag-Index.'); err.status = 400; throw err; }
+  // WICHTIG: markiert NUR die Auswahl innerhalb von JARVIS - bucht NIEMALS
+  // verbindlich einen Werkora-Termin oder ein Google-Kalender-Ereignis
+  // (Vorgabe Phase 5 Punkt 7: keine Änderungen an Kundenterminen). Die
+  // tatsächliche Buchung bleibt ein manueller Schritt in Werkora.
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisTerminVorschlaege', id, data: { ...rest, freigabeStatus: 'freigegeben', ausgewaehlterSlot: slot, freigabeAm: new Date().toISOString() } });
+  return { id, freigabeStatus: 'freigegeben', ausgewaehlterSlot: slot };
+}
+
+/**
+ * Freigabe/Ablehnung/Bearbeitung für Angebotsentwürfe - bewusst GETRENNT von
+ * wendeFreigabeAn: die Versions-/Freigabe-Metadaten liegen in der eigenen
+ * Collection jarvisAngebotsPruefung, NIEMALS als zusätzliche Felder direkt
+ * auf dem echten "angebote"-Dokument (firestoreSetDoc würde dessen echte
+ * Felder wie Kunde/Positionen/Nummer vollständig überschreiben, siehe
+ * Kommentar bei firestoreSetDoc weiter oben). "Bearbeiten" ruft dagegen
+ * ECHT PATCH /quotes auf - sicher, weil die KI-Bürokraft-API das nur für
+ * Angebote im Status "entwurf" zulässt (GoBD-Sperre bleibt dort bestehen).
+ */
+async function wendeAngebotsFreigabeAn({ serviceAccount, env, angebotId, erwarteteVersion, entscheidung, neuePositionen }) {
+  if (!['freigeben', 'ablehnen', 'bearbeiten'].includes(entscheidung)) { const err = new Error('Ungültige Entscheidung - erlaubt sind nur "freigeben", "ablehnen" oder "bearbeiten".'); err.status = 400; throw err; }
+  const pruefung = await firestoreGetDoc({ serviceAccount, collection: 'jarvisAngebotsPruefung', id: angebotId });
+  if (!pruefung) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((pruefung.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Angebotsentwurf wurde seit deiner Prüfung aktualisiert (Version ${pruefung.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+
+  if (entscheidung === 'bearbeiten') {
+    if (!Array.isArray(neuePositionen) || !neuePositionen.length) { const err = new Error('Feld "neuePositionen" fehlt oder ist leer.'); err.status = 400; throw err; }
+    // Dieselbe Plausibilitätsprüfung wie bei der autonomen Erstellung
+    // (versucheAngebotsentwurf) - auch eine von Danny im Freigabecenter
+    // bearbeitete Position darf keinen ungültigen Preis/Steuersatz haben.
+    const plausibilitaet = pruefeAngebotsPlausibilitaet(neuePositionen);
+    if (!plausibilitaet.items.length) { const err = new Error('Nach der Plausibilitätsprüfung sind keine gültigen Positionen mehr übrig.'); err.status = 400; throw err; }
+    const aktualisiertesAngebot = await callKiBuerokraftRest({ env, method: 'PATCH', path: `/quotes/${encodeURIComponent(angebotId)}`, body: { items: plausibilitaet.items } });
+    const neueVersion = (pruefung.version || 0) + 1;
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisAngebotsPruefung', id: angebotId,
+      data: { angebotId, kundeId: pruefung.kundeId || '', version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString(), letzteWarnungen: plausibilitaet.warnungen },
+    });
+    return { angebotId, version: neueVersion, items: aktualisiertesAngebot.items, warnungen: plausibilitaet.warnungen };
+  }
+
+  const neuerStatus = entscheidung === 'freigeben' ? 'freigegeben' : 'abgelehnt';
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisAngebotsPruefung', id: angebotId,
+    data: { angebotId, kundeId: pruefung.kundeId || '', version: pruefung.version || 1, freigabeStatus: neuerStatus, freigabeAm: new Date().toISOString() },
+  });
+  return { angebotId, freigabeStatus: neuerStatus };
+}
+
+// WICHTIG: jede Ausführungsfunktion liest die zu bearbeitende Entität
+// einheitlich aus "payload.entityId" (von erstelleUndFuehreJarvisFreigabeAus
+// automatisch in den gespeicherten payload übernommen - siehe dort), NICHT
+// aus typ-spezifischen Feldnamen wie "messageId"/"projektId"/"angebotId".
+// Das vermeidet eine ganze Fehlerklasse ("falscher Feldname vergessen"), die
+// beim Schreiben der Phase-5-Tests tatsächlich aufgetreten ist.
+const JARVIS_AKTIONS_AUSFUEHRUNG = {
+  'email.pruefen': ({ serviceAccount, payload }) => wendeFreigabeAn({
+    serviceAccount, collection: 'jarvisEmailVerarbeitung', id: payload.entityId,
+    erwarteteVersion: payload.erwarteteVersion, entscheidung: payload.entscheidung,
+  }),
+  'rechnung.pruefen': ({ serviceAccount, payload }) => wendeFreigabeAn({
+    serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: payload.entityId,
+    erwarteteVersion: payload.erwarteteVersion, entscheidung: payload.entscheidung,
+  }),
+  'rechnung.bearbeiten': ({ serviceAccount, payload }) => bearbeiteRechnungsEntwurf({
+    serviceAccount, id: payload.entityId, erwarteteVersion: payload.erwarteteVersion, neuePositionen: payload.neuePositionen,
+  }),
+  'mahnung.pruefen': ({ serviceAccount, payload }) => wendeFreigabeAn({
+    serviceAccount, collection: 'jarvisMahnEntwuerfe', id: payload.entityId,
+    erwarteteVersion: payload.erwarteteVersion, entscheidung: payload.entscheidung,
+  }),
+  'termin.pruefen': ({ serviceAccount, payload }) => wendeTerminFreigabeAn({
+    serviceAccount, id: payload.entityId, erwarteteVersion: payload.erwarteteVersion,
+    entscheidung: payload.entscheidung, ausgewaehlterSlotIndex: payload.ausgewaehlterSlotIndex,
+  }),
+  'angebot.pruefen': ({ serviceAccount, env, payload }) => wendeAngebotsFreigabeAn({
+    serviceAccount, env, angebotId: payload.entityId, erwarteteVersion: payload.erwarteteVersion, entscheidung: payload.entscheidung,
+  }),
+  'angebot.bearbeiten': ({ serviceAccount, env, payload }) => wendeAngebotsFreigabeAn({
+    serviceAccount, env, angebotId: payload.entityId, erwarteteVersion: payload.erwarteteVersion,
+    entscheidung: 'bearbeiten', neuePositionen: payload.neuePositionen,
+  }),
+};
+
+async function fuehreJarvisAktionAus({ serviceAccount, env, aktionId, callerUid, callerRole }) {
   pruefeJarvisRolle(callerRole);
 
   // Behebt eine beim Integrationstest (Phasen 1-4) erkannte Lücke: bisher
@@ -2634,10 +2810,19 @@ async function fuehreJarvisAktionAus({ serviceAccount, aktionId, callerUid, call
   }
 
   try {
-    const ergebnis = await ausfuehrungsFunktion({ serviceAccount, payload: vorherigeDaten.payload || {} });
+    const ergebnis = await ausfuehrungsFunktion({ serviceAccount, env, payload: vorherigeDaten.payload || {} });
     await firestoreSetDoc({
       serviceAccount, collection: 'jarvisAktionen', id: aktionId,
-      data: { status: 'executed', ausgefuehrtAm: new Date().toISOString(), bestaetigtVonUid: callerUid },
+      // typ/payload/erstelltAm werden HIER bewusst erneut mitgeschrieben:
+      // firestoreSetDoc ERSETZT das Dokument vollständig (keine Teil-
+      // Aktualisierung) - ohne das würden diese ursprünglichen Felder beim
+      // Abschluss verloren gehen und "Ausführungsstatus anzeigen" im
+      // Freigabecenter (Phase 5) hätte keinen Kontext mehr, WELCHE Aktion
+      // eigentlich ausgeführt wurde.
+      data: {
+        typ: vorherigeDaten.typ, payload: vorherigeDaten.payload || {}, erstelltAm: vorherigeDaten.erstelltAm,
+        status: 'executed', ausgefuehrtAm: new Date().toISOString(), bestaetigtVonUid: callerUid, ergebnis,
+      },
     });
     await firestoreSetDoc({
       serviceAccount, collection: 'ai_action_log', id: crypto.randomUUID(),
@@ -2645,10 +2830,50 @@ async function fuehreJarvisAktionAus({ serviceAccount, aktionId, callerUid, call
     });
     return ergebnis;
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId, data: { status: 'failed', fehler: err.message } });
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisAktionen', id: aktionId,
+      data: { typ: vorherigeDaten.typ, payload: vorherigeDaten.payload || {}, erstelltAm: vorherigeDaten.erstelltAm, status: 'failed', fehler: err.message },
+    });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'aktion-ausfuehrung', fehler: err, kontext: { aktionId, typ: vorherigeDaten.typ }, kritisch: true });
     throw err;
   }
+}
+
+/**
+ * Erstellt (idempotent, deterministische ID) eine Stufe-2-Freigabe-Aktion
+ * und führt sie SOFORT aus - ein Klick auf "Freigeben"/"Ablehnen"/
+ * "Bearbeiten" im JARVIS-Freigabecenter entspricht EINEM Request, der intern
+ * denselben Beanspruchen-dann-Ausführen-Mechanismus wie jede andere JARVIS-
+ * Aktion durchläuft (siehe fuehreJarvisAktionAus), inklusive Stale-/Unklar-
+ * Erkennung. Die ID ist bewusst deterministisch aus Typ+Entität+erwarteter
+ * Version gebildet: ein doppelter Klick oder ein Netzwerk-Retry derselben
+ * Anfrage erzeugt dadurch NIEMALS eine zweite Aktion (firestoreCreateIfMissing
+ * legt sie beim zweiten Versuch nicht noch einmal an) - fuehreJarvisAktionAus
+ * behandelt den zweiten Versuch danach wie gewohnt (bereits ausgeführt/
+ * gerade in Bearbeitung/fehlgeschlagen und retry-fähig).
+ */
+async function erstelleUndFuehreJarvisFreigabeAus({ serviceAccount, env, typ, entityId, payload, callerUid, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  if (!Object.prototype.hasOwnProperty.call(JARVIS_AKTIONS_AUSFUEHRUNG, typ)) {
+    const err = new Error(`Unbekannter oder nicht erlaubter Aktionstyp "${typ}".`);
+    err.status = 400;
+    throw err;
+  }
+  if (payload?.erwarteteVersion === undefined || payload?.erwarteteVersion === null) {
+    const err = new Error('Feld "erwarteteVersion" fehlt - eine Freigabe muss sich auf eine konkret geprüfte Version beziehen.');
+    err.status = 400;
+    throw err;
+  }
+  const aktionId = `${typ}-${entityId}-v${payload.erwarteteVersion}`;
+  // entityId wird explizit IN den gespeicherten payload übernommen (als
+  // "entityId", einheitlich für alle Aktionstypen - siehe
+  // JARVIS_AKTIONS_AUSFUEHRUNG) - der Aufrufer muss sie nicht zusätzlich
+  // selbst unter einem typ-spezifischen Feldnamen duplizieren.
+  await firestoreCreateIfMissing({
+    serviceAccount, collection: 'jarvisAktionen', id: aktionId,
+    data: { typ, payload: { ...payload, entityId }, status: 'pending', erstelltAm: new Date().toISOString(), erstelltVonUid: callerUid },
+  });
+  return fuehreJarvisAktionAus({ serviceAccount, env, aktionId, callerUid, callerRole });
 }
 
 // =============================================================================
@@ -3035,6 +3260,19 @@ async function versucheAngebotsentwurf({ env, serviceAccount, email, kundeId, ka
     },
   });
 
+  // Phase 5 - eigene, schlanke Prüf-/Versions-Collection für das Freigabe-
+  // center: bewusst NICHT als zusätzliche Felder direkt auf dem echten
+  // angebote-Dokument gespeichert - firestoreSetDoc überschreibt ein
+  // Dokument VOLLSTÄNDIG (keine Teil-Aktualisierung, siehe Kommentar bei
+  // firestoreSetDoc), ein direkter Schreibzugriff auf "angebote" würde also
+  // dessen echte Felder (Kunde, Positionen, Nummer, ...) zerstören statt sie
+  // nur zu ergänzen. Das Angebot selbst bleibt ausschließlich über die
+  // KI-Bürokraft-API (POST/PATCH /quotes) verwaltet.
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisAngebotsPruefung', id: angebot.id,
+    data: { angebotId: angebot.id, kundeId, version: 1, freigabeStatus: 'offen', erstelltAm: new Date().toISOString() },
+  });
+
   return { angebotId: angebot.id, fehlendeInfos };
 }
 
@@ -3159,7 +3397,13 @@ async function runJarvisEmailCheck(env) {
 
             await firestoreSetDoc({
               serviceAccount, collection: 'jarvisEmailVerarbeitung', id: email.message_id,
-              data: { status: 'verarbeitet', aufgabeId, entwurfErstellt, angebotId, angebotFehlendeInfos, verarbeitetAm: new Date().toISOString() },
+              // version: 1 (Phase 5) - Grundlage für die Versionssicherung im
+              // JARVIS-Freigabecenter ("eine Freigabe betrifft nur die konkret
+              // geprüfte Version"); wird NUR durch eine spätere Bearbeitung
+              // im Freigabecenter erhöht, niemals durch diesen autonomen Job
+              // selbst (dieselbe E-Mail wird wegen TERMINALE_EMAIL_STATUS nie
+              // ein zweites Mal verarbeitet).
+              data: { status: 'verarbeitet', aufgabeId, entwurfErstellt, angebotId, angebotFehlendeInfos, verarbeitetAm: new Date().toISOString(), version: 1, freigabeStatus: 'offen' },
             });
           } else if (analyse.kategorie === 'spam_werbung') {
             try {
@@ -3349,6 +3593,13 @@ async function runJarvisRechnungsCheck(env) {
         }
 
         const hatPositionen = ergebnis.positionen.length > 0;
+        // version (Phase 5, Versionssicherung im Freigabecenter): "fehlende_daten"
+        // ist NICHT terminal und kann an einem späteren Tag erneut (mit ggf.
+        // anderem Inhalt) neu geschrieben werden - deshalb hier bei JEDEM
+        // Schreibvorgang den bisherigen Stand lesen und hochzählen, statt fix
+        // auf 1 zu setzen (anders als bei den anderen drei Entwurfstypen,
+        // deren Dedup-Status einen zweiten Schreibvorgang strukturell ausschließt).
+        const vorherigerEntwurf = await firestoreGetDoc({ serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: projekt.id });
         await firestoreSetDoc({
           serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: projekt.id,
           data: {
@@ -3356,6 +3607,8 @@ async function runJarvisRechnungsCheck(env) {
             positionen: ergebnis.positionen, fehlendeInfos: ergebnis.fehlendeInfos, bekannteAbschlaege,
             status: hatPositionen ? 'entwurf_erstellt' : 'fehlende_daten',
             vorschlagErstelltAm: new Date().toISOString(),
+            version: (vorherigerEntwurf?.version || 0) + 1,
+            freigabeStatus: 'offen',
           },
         });
 
@@ -3477,7 +3730,7 @@ async function runJarvisMahnungCheck(env) {
 
         await firestoreSetDoc({
           serviceAccount, collection: 'jarvisMahnEntwuerfe', id: `${rechnung.id}-stufe-${naechste.stufe}`,
-          data: { status: 'erstellt', rechnungId: rechnung.id, stufe: naechste.stufe, mahnungId: mahnung.id, erstelltAm: new Date().toISOString() },
+          data: { status: 'erstellt', rechnungId: rechnung.id, stufe: naechste.stufe, mahnungId: mahnung.id, erstelltAm: new Date().toISOString(), version: 1, freigabeStatus: 'offen' },
         });
 
         const aufgabeId = `jarvis-mahnung-aufgabe-${rechnung.id}-${naechste.stufe}`;
@@ -3650,6 +3903,10 @@ async function runJarvisWartungsCheck(env) {
           ? [`Google-Kalender nicht erreichbar: ${kalenderFehler.message}`]
           : (hatVorschlaege ? [] : ['Keine freien Termine im Suchzeitraum gefunden (ggf. alle Mitarbeiter im Urlaub oder Kalender vollständig belegt).']);
 
+        // version (Phase 5): "kein_vorschlag_moeglich" ist NICHT terminal und
+        // kann an einem späteren Tag erneut geschrieben werden - bisherigen
+        // Stand lesen und hochzählen statt fix auf 1 zu setzen.
+        const vorherigerVorschlag = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTerminVorschlaege', id: `${anlage.id}-${anlage.naechstePruefung}` });
         await firestoreSetDoc({
           serviceAccount, collection: 'jarvisTerminVorschlaege', id: `${anlage.id}-${anlage.naechstePruefung}`,
           data: {
@@ -3658,6 +3915,8 @@ async function runJarvisWartungsCheck(env) {
             dauerIstAnnahme: true, vorschlaege, fehlendeInfos,
             status: hatVorschlaege ? 'vorschlag_erstellt' : 'kein_vorschlag_moeglich',
             erstelltAm: new Date().toISOString(),
+            version: (vorherigerVorschlag?.version || 0) + 1,
+            freigabeStatus: 'offen',
           },
         });
 
@@ -3764,6 +4023,77 @@ async function runJarvisProjektCheck(env) {
     await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'projekt-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
+}
+
+// =============================================================================
+// JARVIS Phase 5 - Zentrale/Dashboard-Datenaggregation + Tagesbericht.
+// Bündelt ausschließlich bereits vorhandene Daten aus den JARVIS-eigenen
+// Collections (keine neue Datenhaltung, keine zusätzlichen externen
+// Aufrufe) - dieselbe Funktion bedient sowohl die interaktive JARVIS-
+// Zentrale (Action "jarvis-zentrale") als auch den Tagesbericht (Action
+// "jarvis-tagesbericht"), damit beide IMMER denselben, konsistenten Stand
+// zeigen statt zweier unabhängiger, potenziell widersprüchlicher Abfragen.
+// =============================================================================
+
+async function holeJarvisZentraleDaten({ serviceAccount }) {
+  const [
+    emailVerarbeitung, rechnungsEntwuerfe, mahnEntwuerfe, terminVorschlaege,
+    angebotsPruefungen, jobs, aktionen, aufgaben, kostenMonat,
+  ] = await Promise.all([
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisEmailVerarbeitung' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisRechnungsEntwuerfe' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisMahnEntwuerfe' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisTerminVorschlaege' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisAngebotsPruefung' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisJobs' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisAktionen' }),
+    firestoreListDocuments({ serviceAccount, collection: 'aufgaben' }),
+    firestoreGetDoc({ serviceAccount, collection: 'jarvisKosten', id: jarvisMonatsId() }),
+  ]);
+
+  // "offen" = noch nicht geprüft (freigabeStatus fehlt bei älteren, vor
+  // Phase 5 entstandenen Testdaten defensiv als "offen" behandelt).
+  const nochOffen = (liste) => liste.filter((e) => (e.freigabeStatus || 'offen') === 'offen');
+
+  return {
+    neueKundenanfragen: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet'),
+    vorbereiteteAntworten: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet' && e.entwurfErstellt),
+    angebotsentwuerfe: nochOffen(angebotsPruefungen),
+    rechnungsentwuerfe: nochOffen(rechnungsEntwuerfe).filter((e) => e.status === 'entwurf_erstellt'),
+    mahnentwuerfe: nochOffen(mahnEntwuerfe),
+    terminvorschlaege: nochOffen(terminVorschlaege).filter((e) => e.status === 'vorschlag_erstellt'),
+    offeneProjektaufgaben: aufgaben.filter((a) => a.quelle === 'jarvis-projekt' && a.status === 'offen'),
+    fehlgeschlageneAutomationen: jobs.filter((j) => j.status === 'failed' || j.status === 'unklar'),
+    offeneFreigaben: aktionen.filter((a) => a.status === 'pending'),
+    jobsNachStatus: {
+      wartend: jobs.filter((j) => j.status === 'pending').length,
+      inBearbeitung: jobs.filter((j) => j.status === 'running').length,
+      erfolgreich: jobs.filter((j) => j.status === 'done').length,
+      fehlgeschlagen: jobs.filter((j) => j.status === 'failed').length,
+      unklar: jobs.filter((j) => j.status === 'unklar').length,
+      freigabeErforderlich: aktionen.filter((a) => a.status === 'pending').length,
+    },
+    kiKostenMonat: {
+      monat: jarvisMonatsId(), usd: kostenMonat?.geschaetzteKostenUsd || 0,
+      inputTokens: kostenMonat?.inputTokens || 0, outputTokens: kostenMonat?.outputTokens || 0,
+    },
+  };
+}
+
+async function erzeugeJarvisTagesbericht({ serviceAccount }) {
+  const daten = await holeJarvisZentraleDaten({ serviceAccount });
+  return {
+    datum: new Date().toISOString().slice(0, 10),
+    neueKundenanfragen: daten.neueKundenanfragen.length,
+    vorbereiteteAngebote: daten.angebotsentwuerfe.length,
+    offeneRechnungsentwuerfe: daten.rechnungsentwuerfe.length,
+    faelligeWartungen: daten.terminvorschlaege.length,
+    ueberfaelligeAufgaben: daten.offeneProjektaufgaben.length,
+    offeneFreigaben: daten.offeneFreigaben.length,
+    technischeFehler: daten.fehlgeschlageneAutomationen.length,
+    kiKostenMonatUsd: daten.kiKostenMonat.usd,
+    erstelltAm: new Date().toISOString(),
+  };
 }
 
 // --- Google-Büro (Gmail + Kalender) - läuft bewusst IM Haupt-Worker statt in
@@ -4545,9 +4875,89 @@ export default {
         const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
         const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
         const ergebnis = await fuehreJarvisAktionAus({
-          serviceAccount, aktionId: body.aktionId, callerUid: aufrufer.uid, callerRole: aufrufer.role,
+          serviceAccount, env, aktionId: body.aktionId, callerUid: aufrufer.uid, callerRole: aufrufer.role,
         });
         return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 5 - EIN Request pro Freigabe-Klick (Freigeben/Ablehnen/
+    // Bearbeiten) im JARVIS-Freigabecenter: erstellt die Stufe-2-Aktion und
+    // führt sie im selben Aufruf aus (siehe erstelleUndFuehreJarvisFreigabeAus).
+    if (body.action === 'jarvis-freigabe') {
+      if (!body.typ || typeof body.typ !== 'string' || !body.entityId) {
+        return new Response(JSON.stringify({ error: 'Felder "typ" und "entityId" sind erforderlich.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        const ergebnis = await erstelleUndFuehreJarvisFreigabeAus({
+          serviceAccount, env, typ: body.typ, entityId: body.entityId, payload: body.payload || {},
+          callerUid: aufrufer.uid, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+          const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          await protokolliereJarvisFehler({ serviceAccount, quelle: 'freigabe', fehler: err, kontext: { typ: body.typ, entityId: body.entityId } });
+        }
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 5 - aggregierte Daten für die JARVIS-Zentrale (Dashboard).
+    if (body.action === 'jarvis-zentrale') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const daten = await holeJarvisZentraleDaten({ serviceAccount });
+        return new Response(JSON.stringify({ ok: true, daten }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 5 - Tagesbericht auf Abruf (noch NICHT an den Cron angehängt,
+    // siehe Bericht - "erste Version").
+    if (body.action === 'jarvis-tagesbericht') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const bericht = await erzeugeJarvisTagesbericht({ serviceAccount });
+        return new Response(JSON.stringify({ ok: true, bericht }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       } catch (err) {
@@ -4644,4 +5054,7 @@ export const __test__ = {
   // Phase 4 - Termin-/Wartungs-/Projektmanagement
   runJarvisWartungsCheck, runJarvisProjektCheck, faelligeAnlagen, tagesliste,
   tageOhneJedeMitarbeiterverfuegbarkeit, hatTerminkonflikt,
+  // Phase 5 - Freigabecenter: Versionssicherung, konkrete Aktionstypen, Zentrale/Tagesbericht
+  erstelleUndFuehreJarvisFreigabeAus, wendeFreigabeAn, bearbeiteRechnungsEntwurf,
+  wendeTerminFreigabeAn, wendeAngebotsFreigabeAn, holeJarvisZentraleDaten, erzeugeJarvisTagesbericht,
 };
