@@ -9,6 +9,26 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
 
+# Cloudflare Service Bindings zu den beiden anderen, separat deployten
+# Worker-zu-Worker-Anbindungen (Google-Büro + KI-Bürokraft, siehe
+# callGoogleBuero()/callKiBuerokraftRest() in worker.js) - ein Aufruf über ein
+# Service Binding läuft intern bei Cloudflare statt über die öffentliche
+# *.workers.dev-Adresse und vermeidet damit insbesondere den dokumentierten
+# "Error 1042: Restricted" bei Worker-zu-Worker-Fetches. Setzt voraus, dass
+# beide Ziel-Worker bereits unter genau diesem Namen deployt sind (siehe
+# deren jeweilige wrangler.toml "name ="). GOOGLE_BUERO_API_KEY/
+# KI_BUEROKRAFT_API_KEY bleiben weiterhin als Secrets nötig (werden vom
+# Ziel-Worker unabhängig vom Transportweg geprüft) - nur GOOGLE_BUERO_URL/
+# KI_BUEROKRAFT_URL werden durch das jeweilige Binding überflüssig (bleiben
+# als Fallback für Umgebungen ohne Binding nutzbar, falls gesetzt).
+[[services]]
+binding = "GOOGLE_BUERO"
+service = "neuverdrahtet-google-buero"
+
+[[services]]
+binding = "KI_BUEROKRAFT"
+service = "neuverdrahtet-ki-buerokraft"
+
 # Begrenzt die öffentliche Kunden-Upload-Route (/kunde-upload, siehe
 # worker.js unterSchwellenwert/handleKundenUpload) auf 10 Anfragen pro IP
 # und Minute - alle übrigen Routen prüfen weiterhin APP_SECRET und sind

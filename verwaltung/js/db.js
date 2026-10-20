@@ -81,6 +81,8 @@ const STORES = {
   jarvisJobs: 'id',
   jarvisKosten: 'id',
   jarvisEmailVerarbeitung: 'id',
+  jarvisRechnungsEntwuerfe: 'id',
+  jarvisMahnEntwuerfe: 'id',
 };
 
 export const KALK_KATEGORIEN = [
