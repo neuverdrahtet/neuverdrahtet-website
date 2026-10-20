@@ -150,8 +150,7 @@ global.fetch = async (url, init = {}) => {
       return jsonResponse(201, { success: true, data: { id: `quote-${zaehler.quoteErstellt}`, number: `AN-${zaehler.quoteErstellt}`, items: body.items } });
     }
     if (u.pathname === '/projects' && method === 'GET') return jsonResponse(200, { success: true, data: kib.projects || [] });
-    if (/^\/orders$/.test(u.pathname) && method === 'GET') return jsonResponse(200, { success: true, data: kib.orders || [] });
-    if (/^\/quotes\/.+$/.test(u.pathname) && method === 'GET') return jsonResponse(200, { success: true, data: kib.quoteById?.[u.pathname.split('/')[2]] || null });
+    if (u.pathname === '/quotes' && method === 'GET') return jsonResponse(200, { success: true, data: kib.quotesFor?.(u.searchParams) ?? [] });
     if (u.pathname === '/invoices' && method === 'GET') return jsonResponse(200, { success: true, data: kib.invoicesFor?.(u.searchParams) ?? [] });
     if (u.pathname === '/time-entries' && method === 'GET') return jsonResponse(200, { success: true, data: kib.timeEntries || { sum_minutes: 0 } });
     if (u.pathname === '/reminders' && method === 'GET') return jsonResponse(200, { success: true, data: kib.remindersFor?.(u.searchParams) ?? [] });
@@ -327,9 +326,9 @@ await pruefe('D: Rechnungsentwurf aus angenommenem Angebot (1:1-Kopie, kein Clau
   anthropicHandler = () => { throw new Error('Rechnungsmanagement darf NIE Claude aufrufen'); };
   global.__testKiBuerokraft = {
     projects: [{ id: 'proj-1', customer_id: 'kunde-1', title: 'Hausanschluss', status: 'abgeschlossen', bereich: 'Elektro' }],
-    orders: [{ id: 'order-1', project_id: 'proj-1', quote_id: 'angebot-1' }],
-    quoteById: { 'angebot-1': { id: 'angebot-1', items: [{ article_id: 'art-1', title: 'Hausanschluss legen', description: '', unit: 'Stk.', quantity: 1, unit_price_net: 800, vat_rate: 19 }] } },
-    invoicesFor: () => [],
+    quotesFor: (params) => (params.get('project_id') === 'proj-1' && params.get('status') === 'accepted'
+      ? [{ id: 'angebot-1', items: [{ article_id: 'art-1', title: 'Hausanschluss legen', description: '', unit: 'Stk.', quantity: 1, unit_price_net: 800, vat_rate: 19 }] }]
+      : []),
   };
   firestoreDb.set('kanbanSpalten/abgeschlossen', { fields: jsToFsFields({ id: 'abgeschlossen', geschlossen: true }), updateTime: naechsteUpdateTime() });
 
@@ -352,8 +351,7 @@ await pruefe('E: fehlende Kalkulationsdaten -> "fehlende_daten" statt erfundener
   firestoreDb.delete('jarvisRechnungsEntwuerfe/proj-2');
   global.__testKiBuerokraft = {
     projects: [{ id: 'proj-2', customer_id: 'kunde-2', title: 'Reparatur', status: 'abgeschlossen', bereich: 'Elektro' }],
-    orders: [],
-    invoicesFor: () => [],
+    quotesFor: () => [],
     timeEntries: { sum_minutes: 120 },
   };
   setzeKatalog([{ id: 'art-x', typ: 'artikel', bezeichnung: 'Kabel', einheit: 'm', gewerk: 'Elektro', preis: 2, steuersatz: 19 }]);
@@ -388,9 +386,10 @@ await pruefe('F: bereits vorhandene Rechnung -> kein Entwurf, terminal (kein ern
   firestoreDb.delete('jarvisRechnungsEntwuerfe/proj-3');
   global.__testKiBuerokraft = {
     projects: [{ id: 'proj-3', customer_id: 'kunde-3', title: 'Wartung', status: 'abgeschlossen', bereich: 'Elektro' }],
-    invoicesFor: () => [{ id: 'rechnung-vorhanden-1' }],
+    quotesFor: () => [],
   };
   firestoreDb.set('kanbanSpalten/abgeschlossen', { fields: jsToFsFields({ id: 'abgeschlossen', geschlossen: true }), updateTime: naechsteUpdateTime() });
+  firestoreDb.set('rechnungen/rechnung-vorhanden-1', { fields: jsToFsFields({ id: 'rechnung-vorhanden-1', projektId: 'proj-3', rechnungstyp: 'rechnung', status: 'offen', brutto: 500 }), updateTime: naechsteUpdateTime() });
   firestoreDb.delete(`jarvisJobs/rechnung-check-${new Date().toISOString().slice(0, 10)}`);
 
   await W.runJarvisRechnungsCheck(envBasis({ JARVIS_RECHNUNG_AKTIV: 'true' }));
@@ -398,7 +397,7 @@ await pruefe('F: bereits vorhandene Rechnung -> kein Entwurf, terminal (kein ern
   assert(entwurf.status === 'rechnung_vorhanden', 'Status muss rechnung_vorhanden sein');
 
   firestoreDb.delete(`jarvisJobs/rechnung-check-${new Date().toISOString().slice(0, 10)}`);
-  global.__testKiBuerokraft.invoicesFor = () => { throw new Error('darf bei terminalem Status nicht erneut aufgerufen werden'); };
+  global.__testKiBuerokraft.quotesFor = () => { throw new Error('darf bei terminalem Status nicht erneut aufgerufen werden'); };
   await W.runJarvisRechnungsCheck(envBasis({ JARVIS_RECHNUNG_AKTIV: 'true' })); // darf NICHT werfen - proj-3 muss übersprungen werden
   entwurf = liesDoc('jarvisRechnungsEntwuerfe', 'proj-3');
   assert(entwurf.status === 'rechnung_vorhanden', 'Status bleibt unverändert - kein erneuter Versuch bei terminalem Status');
@@ -420,8 +419,8 @@ await pruefe('G: Mahnstufe wird einmalig erstellt, Duplikat bei doppeltem Lauf v
     global.__testKiBuerokraft = {
       remindersFor: (params) => (params.get('invoice_id') === 'rech-faellig' ? [] : [{ invoice_id: 'rech-nicht-faellig', date: '2026-10-15', new_due_date: '2026-10-25' }]),
       invoicesFor: () => [
-        { id: 'rech-faellig', customer_id: 'kunde-f', due_date: '2026-10-01', number: 'RE-1' },
-        { id: 'rech-nicht-faellig', customer_id: 'kunde-f', due_date: '2026-09-01', number: 'RE-2' },
+        { id: 'rech-faellig', customer_id: 'kunde-f', due_date: '2026-10-01', number: 'RE-1', open_value: 500, gross_total: 500 },
+        { id: 'rech-nicht-faellig', customer_id: 'kunde-f', due_date: '2026-09-01', number: 'RE-2', open_value: 300, gross_total: 300 },
       ],
     };
     firestoreDb.set('einstellungen/global', { fields: jsToFsFields({ mahnfristTage: 10, mahnGebuehr: { 1: 5 } }), updateTime: naechsteUpdateTime() });

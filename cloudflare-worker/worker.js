@@ -146,6 +146,18 @@
  *   Datensätze für überfällige Rechnungen, OHNE Versand). Rechnungs-/
  *   Mahnungs-Check verwenden bewusst KEINEN Claude-Aufruf (rein
  *   regelbasiert aus echten Werkora-Daten).
+ *
+ *   JARVIS Phase 4 (autonome Termin-/Wartungs-/Projektüberwachung, siehe
+ *   runJarvisWartungsCheck/runJarvisProjektCheck) – ZWEI weitere unabhängige
+ *   Sicherheitsschalter (Variable, Standard: aus): JARVIS_WARTUNG_AKTIV
+ *   (Terminvorschläge für fällige Wartungen aus der Collection "anlagen" -
+ *   NIEMALS eine verbindliche Buchung, weder in Werkora noch im Google-
+ *   Kalender) und JARVIS_PROJEKT_AKTIV (Sammel-Hinweise zu überfälligen/
+ *   hängengebliebenen Projektaufgaben). Beide verwenden ebenfalls KEINEN
+ *   Claude-Aufruf (rein regelbasiert). JARVIS_WARTUNG_AKTIV braucht
+ *   zusätzlich eine funktionierende Google-Kalender-Anbindung (siehe
+ *   GOOGLE_BUERO_API_KEY oben) - ohne sie werden Vorschläge mit klarem
+ *   Fehlerhinweis als "kein_vorschlag_moeglich" (retry-fähig) markiert.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -2888,6 +2900,50 @@ async function callClaudeJarvisAngebotsvorschlag({ apiKey, model, emailText, kat
  * und blockiert NICHT die bereits abgeschlossene Aufgabe/den Antwortentwurf
  * aus Phase 2.
  */
+// Phase 4 (Vorgabe Punkt 7) - Plausibilitätskontrollen für Angebotspositionen,
+// zusätzlich zur bereits bestehenden Verifikation gegen echte Katalogdaten
+// (siehe versucheAngebotsentwurf unten, das jede katalogId gegen die
+// tatsächlich geladenen Daten prüft). Reine, leicht testbare Funktion: ein
+// HARTES Problem (kein positiver Preis, unplausibler Steuersatz) verwirft
+// die Position ganz; ein WEICHES Problem (ungewöhnlich hohe Menge/
+// Arbeitszeit, doppelte Position, fehlende Anfahrtsposition) behält die
+// Position, hängt aber eine Warnung an, die der Mensch vor Freigabe sieht.
+const JARVIS_PLAUSIBLE_STEUERSAETZE = [0, 7, 19];
+const JARVIS_MAX_MENGE_STUECK = 1000;
+const JARVIS_MAX_STUNDEN_JE_POSITION = 200;
+
+function pruefeAngebotsPlausibilitaet(items) {
+  const geprueft = [];
+  const warnungen = [];
+  const gesehenePositionen = new Map(); // article_id -> Anzahl bisher gesehen
+  for (const item of items) {
+    if (!(Number(item.unit_price_net) > 0)) { warnungen.push(`"${item.title}": kein positiver Materialpreis - Position verworfen.`); continue; }
+    if (!JARVIS_PLAUSIBLE_STEUERSAETZE.includes(Number(item.vat_rate))) { warnungen.push(`"${item.title}": unplausibler Steuersatz ${item.vat_rate}% - Position verworfen.`); continue; }
+
+    const warnungenZurPosition = [];
+    const istStundenPosition = /std|stunde/i.test(item.unit || '') || /std|stunde/i.test(item.title || '');
+    if (istStundenPosition && Number(item.quantity) > JARVIS_MAX_STUNDEN_JE_POSITION) {
+      warnungenZurPosition.push(`ungewöhnlich hohe Arbeitszeit (${item.quantity} Std.)`);
+    } else if (!istStundenPosition && Number(item.quantity) > JARVIS_MAX_MENGE_STUECK) {
+      warnungenZurPosition.push(`ungewöhnlich hohe Menge (${item.quantity})`);
+    }
+    const bisherGesehen = gesehenePositionen.get(item.article_id) || 0;
+    if (bisherGesehen > 0) warnungenZurPosition.push('doppelte Position (gleicher Artikel mehrfach im Angebot)');
+    gesehenePositionen.set(item.article_id, bisherGesehen + 1);
+
+    if (warnungenZurPosition.length) warnungen.push(`"${item.title}": ${warnungenZurPosition.join('; ')} - bitte prüfen.`);
+    geprueft.push(item);
+  }
+  // Fahrtkosten (Vorgabe Punkt 7) - mangels Geokodierung/Distanz-API in
+  // dieser Infrastruktur bewusst nur ein Prüfhinweis, keine berechnete
+  // Fahrtkostenposition (das wäre eine erfundene Zahl, siehe Vorgabe Punkt 7
+  // aus Phase 3: "Preise dürfen nicht frei erfunden werden").
+  if (geprueft.length && !geprueft.some((i) => /fahrt|anfahrt/i.test(i.title || ''))) {
+    warnungen.push('Keine Anfahrts-/Fahrtkostenposition im Entwurf enthalten - bitte prüfen, ob dafür eine Pauschale anfällt.');
+  }
+  return { items: geprueft, warnungen };
+}
+
 async function versucheAngebotsentwurf({ env, serviceAccount, email, kundeId, katalog, heute }) {
   if (!kundeId) {
     return { angebotId: '', fehlendeInfos: ['Kein bekannter Kunde in Werkora gefunden - automatischer Angebotsentwurf ist nur für bekannte Kunden vorgesehen.'] };
@@ -2923,9 +2979,13 @@ async function versucheAngebotsentwurf({ env, serviceAccount, email, kundeId, ka
   }
   if (!items.length) return { angebotId: '', fehlendeInfos };
 
+  const plausibilitaet = pruefeAngebotsPlausibilitaet(items);
+  fehlendeInfos.push(...plausibilitaet.warnungen);
+  if (!plausibilitaet.items.length) return { angebotId: '', fehlendeInfos };
+
   const angebot = await callKiBuerokraftRest({
     env, method: 'POST', path: '/quotes',
-    body: { customer_id: kundeId, title: `JARVIS-Entwurf: ${email.subject || 'Kundenanfrage'}`, items },
+    body: { customer_id: kundeId, title: `JARVIS-Entwurf: ${email.subject || 'Kundenanfrage'}`, items: plausibilitaet.items },
   });
 
   const aufgabeId = `jarvis-angebot-aufgabe-${angebot.id}`;
@@ -3124,20 +3184,39 @@ function geschlosseneProjektStatusIds(kanbanSpalten) {
   return new Set(kanbanSpalten.filter((s) => s.geschlossen).map((s) => s.id));
 }
 
-/** Sicherste Quelle: 1:1-Kopie der Positionen aus dem angenommenen Angebot (Auftragsbestätigung -> quote_id), falls vorhanden. */
+/**
+ * Sicherste Quelle: 1:1-Kopie der Positionen aus ALLEN angenommenen Angeboten
+ * des Projekts - bewusst NICHT nur das über die Auftragsbestätigung
+ * verknüpfte Basis-Angebot, sondern ALLE Angebote mit status=accepted zu
+ * diesem project_id (Phase 4, Vorgabe Punkt 8 "Nachträge"): ein
+ * Nachtragsangebot (siehe verwaltung/js/views/angebote.js "Nachtragsangebot
+ * erstellen") übernimmt bei der Erstellung dieselbe projektId wie das
+ * Basis-Angebot und wird dadurch hier automatisch mit erfasst, sobald auch
+ * das Nachtragsangebot angenommen wurde - ohne diese Erweiterung hätte ein
+ * angenommener Nachtrag in der Rechnung komplett gefehlt.
+ */
 async function bauePositionenAusAngebot({ env, projektId }) {
-  const auftraege = await callKiBuerokraftRest({ env, path: `/orders?project_id=${encodeURIComponent(projektId)}` });
-  const auftragMitAngebot = (auftraege || []).find((a) => a.quote_id);
-  if (!auftragMitAngebot) return null;
-  const angebot = await callKiBuerokraftRest({ env, path: `/quotes/${encodeURIComponent(auftragMitAngebot.quote_id)}` });
-  if (!angebot || !(angebot.items || []).length) return null;
+  const angenommeneAngebote = await callKiBuerokraftRest({ env, path: `/quotes?project_id=${encodeURIComponent(projektId)}&status=accepted` });
+  if (!(angenommeneAngebote || []).length) return null;
+  const positionen = [];
+  const angebotIds = [];
+  for (const angebot of angenommeneAngebote) {
+    if (!(angebot.items || []).length) continue;
+    angebotIds.push(angebot.id);
+    for (const it of angebot.items) {
+      positionen.push({
+        article_id: it.article_id || '', title: it.title, description: it.description || '',
+        unit: it.unit, quantity: it.quantity, unit_price_net: it.unit_price_net, vat_rate: it.vat_rate,
+      });
+    }
+  }
+  if (!positionen.length) return null;
   return {
-    quelle: 'angebot', angebotId: angebot.id,
-    positionen: angebot.items.map((it) => ({
-      article_id: it.article_id || '', title: it.title, description: it.description || '',
-      unit: it.unit, quantity: it.quantity, unit_price_net: it.unit_price_net, vat_rate: it.vat_rate,
-    })),
-    fehlendeInfos: [],
+    quelle: 'angebot', angebotIds,
+    positionen,
+    fehlendeInfos: angenommeneAngebote.length > 1
+      ? [`${angenommeneAngebote.length} angenommene Angebote für dieses Projekt wurden zusammengeführt (Basis-Angebot + Nachtrag/Nachträge) - Summierung bitte vor Übernahme prüfen.`]
+      : [],
   };
 }
 
@@ -3173,10 +3252,18 @@ async function runJarvisRechnungsCheck(env) {
 
   let geprueft = 0, entwuerfeErstellt = 0, bereitsVorhanden = 0, unvollstaendig = 0, uebersprungen = 0, fehlerAnzahl = 0;
   try {
-    const [projekte, kanbanSpalten, katalog] = await Promise.all([
+    const [projekte, kanbanSpalten, katalog, rechnungen] = await Promise.all([
       callKiBuerokraftRest({ env, path: '/projects' }),
       firestoreListDocuments({ serviceAccount, collection: 'kanbanSpalten' }),
       firestoreListDocuments({ serviceAccount, collection: 'katalog' }),
+      // Direkter Firestore-Zugriff statt der REST-Route /invoices: invoiceToApi
+      // dort bildet "rechnungstyp" (Rechnung vs. Abschlagsrechnung) und
+      // "verrechnetIn" bewusst nicht ab (reiner Lesezugriff für die KI-
+      // Bürokraft-API, nicht für diese Unterscheidung gedacht) - für die in
+      // Phase 4 geforderte Abschlags-/Teilabrechnungs-Erkennung werden genau
+      // diese beiden Felder gebraucht (gleiches Muster wie der bestehende
+      // direkte Lesezugriff auf kunden/katalog/kanbanSpalten).
+      firestoreListDocuments({ serviceAccount, collection: 'rechnungen' }),
     ]);
     const geschlosseneIds = geschlosseneProjektStatusIds(kanbanSpalten);
     const abgeschlosseneProjekte = (projekte || []).filter((p) => geschlosseneIds.has(p.status));
@@ -3190,24 +3277,48 @@ async function runJarvisRechnungsCheck(env) {
         if (!beanspruchung.beansprucht) { uebersprungen++; continue; }
         geprueft++;
 
-        // Doppelte Rechnungen verhindern: existiert bereits eine (echte)
-        // Rechnung zu diesem Projekt, braucht es keinen Entwurf.
-        const bestehendeRechnungen = await callKiBuerokraftRest({ env, path: `/invoices?project_id=${encodeURIComponent(projekt.id)}` });
-        if ((bestehendeRechnungen || []).length > 0) {
+        // Doppelte Rechnungen verhindern, ABER (Phase 4, Vorgabe Punkt 8)
+        // zwischen bereits gestellten ABSCHLAGSRECHNUNGEN und einer echten
+        // SCHLUSSRECHNUNG unterscheiden: existiert bereits eine fertige
+        // Schlussrechnung (rechnungstyp "rechnung", nicht storniert), ist das
+        // Projekt endgültig abgerechnet. Existieren dagegen nur
+        // Abschlagsrechnungen (Teilabrechnungen), ist noch KEINE
+        // Schlussrechnung gestellt - JARVIS bereitet dann trotzdem einen
+        // Entwurf vor, benennt aber die bereits erhaltenen Abschläge, damit
+        // ein Mensch sie beim Erstellen der echten Schlussrechnung in Werkora
+        // korrekt verrechnet (Werkora hat dafür bereits eine eigene
+        // "Abschlagszahlungen berücksichtigen"-Funktion - die Netto-/Brutto-
+        // Verrechnung selbst wird bewusst NICHT hier nachgebaut, um keine
+        // eigene, potenziell abweichende Finanzlogik einzuführen).
+        const rechnungenDesProjekts = rechnungen.filter((r) => r.projektId === projekt.id && r.status !== 'storniert');
+        const schlussrechnungVorhanden = rechnungenDesProjekts.some((r) => r.rechnungstyp !== 'abschlag');
+        if (schlussrechnungVorhanden) {
           await firestoreSetDoc({ serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: projekt.id, data: { status: 'rechnung_vorhanden', projektId: projekt.id, geprueftAm: new Date().toISOString() } });
           bereitsVorhanden++;
           continue;
         }
+        // Noch offene (nicht in einer Schlussrechnung "verrechnetIn") Abschlagsrechnungen.
+        const bekannteAbschlaege = rechnungenDesProjekts
+          .filter((r) => r.rechnungstyp === 'abschlag' && !r.verrechnetIn)
+          .map((r) => ({ id: r.id, number: r.nummer || '', gross_total: r.brutto || 0 }));
 
         let ergebnis = await bauePositionenAusAngebot({ env, projektId: projekt.id });
         if (!ergebnis) ergebnis = await bauePositionenAusZeiterfassung({ env, projektId: projekt.id, bereich: projekt.bereich, katalog });
+
+        if (bekannteAbschlaege.length) {
+          const abschlagsSumme = bekannteAbschlaege.reduce((s, a) => s + (a.gross_total || 0), 0);
+          ergebnis.fehlendeInfos = [
+            ...ergebnis.fehlendeInfos,
+            `Bereits ${bekannteAbschlaege.length} Abschlagsrechnung(en) über insgesamt ${abschlagsSumme.toFixed(2)} € gestellt - beim Anlegen der echten Schlussrechnung in Werkora über "Abschlagszahlungen berücksichtigen" verrechnen.`,
+          ];
+        }
 
         const hatPositionen = ergebnis.positionen.length > 0;
         await firestoreSetDoc({
           serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: projekt.id,
           data: {
             projektId: projekt.id, kundeId: projekt.customer_id || '', quelle: ergebnis.quelle,
-            positionen: ergebnis.positionen, fehlendeInfos: ergebnis.fehlendeInfos,
+            positionen: ergebnis.positionen, fehlendeInfos: ergebnis.fehlendeInfos, bekannteAbschlaege,
             status: hatPositionen ? 'entwurf_erstellt' : 'fehlende_daten',
             vorschlagErstelltAm: new Date().toISOString(),
           },
@@ -3267,8 +3378,23 @@ async function runJarvisRechnungsCheck(env) {
 // bestimmten Rechnung soll über die gesamte Laufzeit GENAU EINMAL entstehen.
 // =============================================================================
 
+// Phase 4 (Vorgabe Punkt 9) - Mahnungsprüfung um Teilzahlungen erweitert:
+// "open_value" (siehe invoiceToApi in cloudflare-worker-ki-buerokraft)
+// berücksichtigt bereits eine erfasste Teilzahlung (status "teilbezahlt")
+// korrekt. Zusätzlich NEU: ein sehr geringer Restbetrag (z.B. ein paar Cent
+// Rundungsdifferenz nach einer Teilzahlung) löst KEINE neue Mahnstufe mehr
+// aus - das wäre unverhältnismäßig und würde nur Verwirrung stiften.
+// "Gutschriften" und "strittige Forderungen" sind in der bestehenden
+// Werkora-Datenstruktur (rechnungen-Collection) NICHT als eigenes Feld
+// abgebildet (geprüft: keine entsprechenden Felder in rechnungen.js/
+// zahlungsabgleich.js) - JARVIS kann sie deshalb nicht automatisch
+// berücksichtigen; siehe Bericht, offener Punkt.
+const JARVIS_MAHNUNG_MINDEST_RESTBETRAG = 5;
+
 async function naechsteFaelligeMahnstufe({ env, rechnung, heute }) {
   if (!rechnung.due_date || rechnung.due_date >= heute) return null; // nicht überfällig
+  const restbetrag = rechnung.open_value ?? rechnung.gross_total ?? 0;
+  if (restbetrag <= JARVIS_MAHNUNG_MINDEST_RESTBETRAG) return null; // Restbetrag zu gering (z.B. Rundungsdifferenz nach Teilzahlung)
   const bisherigeMahnungen = await callKiBuerokraftRest({ env, path: `/reminders?invoice_id=${encodeURIComponent(rechnung.id)}` });
   const sortiert = (bisherigeMahnungen || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const letzte = sortiert[sortiert.length - 1];
@@ -3342,6 +3468,266 @@ async function runJarvisMahnungCheck(env) {
   } catch (err) {
     await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'mahnung-check', fehler: err, kontext: { jobId }, kritisch: true });
+  }
+}
+
+// =============================================================================
+// JARVIS Phase 4a - Autonome Überwachung von Wartungsterminen (Vorgabe Punkte
+// 2-4, 10). Quelle für "fällige Wartungen": die bestehende Firestore-
+// Collection "anlagen" (wiederkehrende Prüfungen/Wartungsverträge je Kunde -
+// siehe verwaltung/js/views/kunden.js mountAnlagenSection, Felder u.a.
+// kundeId/bezeichnung/intervallMonate/letztePruefung/naechstePruefung) - KEIN
+// neues Datenmodell, keine zweite Datenbank. JARVIS bucht NIEMALS verbindlich
+// (weder einen Werkora-Termin noch ein echtes Google-Kalender-Ereignis über
+// POST /calendar/events) - das wäre laut Vorgabe Punkt 6 nur nach
+// ausdrücklicher Freigabe erlaubt. Stattdessen entstehen reine
+// Terminvorschläge in der neuen Collection jarvisTerminVorschlaege, die ein
+// Mensch prüft und manuell (inkl. konkreter Mitarbeiterzuweisung) bucht.
+//
+// Fahrtzeiten (Vorgabe Punkt 4, "nach Möglichkeit"): diese Infrastruktur hat
+// keine Geokodierung/Distanz-API (kein Google-Maps-Distance-Matrix o.ä.
+// irgendwo im Projekt) - eine echte Fahrtzeit zu berechnen wäre eine
+// erfundene Zahl. Stattdessen wird ein fester Sicherheitspuffer
+// (JARVIS_FAHRZEIT_PUFFER_MINUTEN) vor/nach jedem bestehenden Termin
+// freigehalten, bevor ein Slot als Kandidat gilt - eine ehrliche, einfache
+// Annäherung, im Bericht klar als Vereinfachung benannt.
+// =============================================================================
+
+const JARVIS_WARTUNG_VORLAUF_TAGE = 30; // ab wann eine "bald fällige" Wartung schon vorgeschlagen wird (spiegelt die 30-Tage-Badge-Logik in kunden.js)
+const JARVIS_WARTUNG_SUCHFENSTER_TAGE = 60; // wie weit in die Zukunft nach freien Terminen gesucht wird
+const JARVIS_WARTUNG_DAUER_MINUTEN_STANDARD = 120; // Annahme, da "anlagen" keine Einsatzdauer je Objekt speichert - wird im Vorschlag ausdrücklich als Annahme gekennzeichnet (dauerIstAnnahme:true)
+const JARVIS_FAHRZEIT_PUFFER_MINUTEN = 30;
+const JARVIS_WARTUNG_VORSCHLAEGE_ANZAHL = 3;
+
+function faelligeAnlagen(anlagen, heute) {
+  const grenze = new Date(`${heute}T00:00:00Z`);
+  grenze.setUTCDate(grenze.getUTCDate() + JARVIS_WARTUNG_VORLAUF_TAGE);
+  const grenzeStr = grenze.toISOString().slice(0, 10);
+  return anlagen.filter((a) => a.naechstePruefung && a.naechstePruefung <= grenzeStr);
+}
+
+function tagesliste(dateFrom, dateTo) {
+  const tage = [];
+  const start = new Date(`${dateFrom}T00:00:00Z`);
+  const end = new Date(`${dateTo}T00:00:00Z`);
+  for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) tage.push(d.toISOString().slice(0, 10));
+  return tage;
+}
+
+/** Liefert die Menge der Tage (ISO yyyy-mm-dd), an denen laut Urlaubs-Terminen ALLE aktiven Mitarbeiter abwesend sind - reine, testbare Funktion. */
+function tageOhneJedeMitarbeiterverfuegbarkeit({ urlaubsTermine, aktiveMitarbeiterIds, tage }) {
+  const ausfallTage = new Set();
+  if (!aktiveMitarbeiterIds.length) return ausfallTage;
+  for (const tag of tage) {
+    const abwesende = new Set();
+    for (const termin of urlaubsTermine) {
+      const start = (termin.start || '').slice(0, 10);
+      const ende = (termin.ende || termin.start || '').slice(0, 10);
+      if (start && start <= tag && tag <= ende) (termin.mitarbeiterIds || []).forEach((id) => abwesende.add(id));
+    }
+    if (aktiveMitarbeiterIds.every((id) => abwesende.has(id))) ausfallTage.add(tag);
+  }
+  return ausfallTage;
+}
+
+/** true, wenn sich [slotStart,slotEnd) (inkl. Fahrzeit-Puffer) mit einem bestehenden Werkora-Termin überschneidet - reine, testbare Funktion. */
+function hatTerminkonflikt(slotStart, slotEnd, bestehendeTermine, pufferMinuten) {
+  const startMs = new Date(slotStart).getTime() - pufferMinuten * 60000;
+  const endMs = new Date(slotEnd).getTime() + pufferMinuten * 60000;
+  return bestehendeTermine.some((t) => {
+    if (!t.start) return false;
+    const tStart = new Date(t.start).getTime();
+    const tEnd = new Date(t.ende || t.start).getTime();
+    return startMs < tEnd && endMs > tStart;
+  });
+}
+
+async function runJarvisWartungsCheck(env) {
+  if (env.JARVIS_WARTUNG_AKTIV !== 'true') return;
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `wartung-check-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'wartung-check' });
+  if (!job) return;
+
+  let geprueft = 0, vorschlaegeErstellt = 0, bereitsGeplant = 0, keinVorschlagMoeglich = 0, uebersprungen = 0, fehlerAnzahl = 0;
+  try {
+    const [anlagen, termine, mitarbeiterOeffentlich] = await Promise.all([
+      firestoreListDocuments({ serviceAccount, collection: 'anlagen' }),
+      firestoreListDocuments({ serviceAccount, collection: 'termine' }),
+      firestoreListDocuments({ serviceAccount, collection: 'mitarbeiterOeffentlich' }),
+    ]);
+    const aktiveMitarbeiterIds = mitarbeiterOeffentlich.map((m) => m.id);
+    const urlaubsTermine = termine.filter((t) => t.typ === 'urlaub');
+    const bestehendeTermine = termine.filter((t) => t.typ !== 'urlaub');
+
+    const dateToObj = new Date(`${heute}T00:00:00Z`);
+    dateToObj.setUTCDate(dateToObj.getUTCDate() + JARVIS_WARTUNG_SUCHFENSTER_TAGE);
+    const dateToStr = dateToObj.toISOString().slice(0, 10);
+    const ausfallTage = tageOhneJedeMitarbeiterverfuegbarkeit({ urlaubsTermine, aktiveMitarbeiterIds, tage: tagesliste(heute, dateToStr) });
+
+    const faellige = faelligeAnlagen(anlagen, heute);
+
+    // EIN gemeinsamer Google-Kalender-Abruf für ALLE fälligen Anlagen dieses
+    // Laufs (identischer Zeitraum, identische angenommene Standarddauer)
+    // statt eines eigenen Aufrufs je Anlage - spart API-Aufrufe und macht
+    // eine fehlerhafte Kalenderverbindung an genau einer Stelle sichtbar/
+    // behandelbar statt bei jeder Anlage einzeln zu wiederholen.
+    let kandidatenSlots = null;
+    let kalenderFehler = null;
+    if (faellige.length > 0) {
+      try {
+        const verfuegbarkeit = await callGoogleBuero({ env, path: `/calendar/availability?date_from=${heute}&date_to=${dateToStr}&duration_minutes=${JARVIS_WARTUNG_DAUER_MINUTEN_STANDARD}` });
+        kandidatenSlots = (verfuegbarkeit?.free_slots || [])
+          .filter((slot) => !ausfallTage.has(slot.date))
+          .filter((slot) => !hatTerminkonflikt(slot.start, slot.end, bestehendeTermine, JARVIS_FAHRZEIT_PUFFER_MINUTEN));
+      } catch (err) {
+        kalenderFehler = err;
+        await protokolliereJarvisFehler({ serviceAccount, quelle: 'wartung-kalenderverbindung', fehler: err, kritisch: true });
+      }
+    }
+
+    for (const anlage of faellige) {
+      try {
+        const beanspruchung = await beanspracheEinzelVorgang({
+          serviceAccount, collection: 'jarvisTerminVorschlaege', id: `${anlage.id}-${anlage.naechstePruefung}`,
+          typ: 'wartungsvorschlag', terminalStatus: ['vorschlag_erstellt', 'bereits_geplant'],
+        });
+        if (!beanspruchung.beansprucht) { uebersprungen++; continue; }
+        geprueft++;
+
+        // Doppelte Wartungstermine/-aufträge verhindern (Vorgabe Punkt 10):
+        // existiert bereits ein Werkora-Termin für diesen Kunden rund um den
+        // Fälligkeitstermin, gilt die Wartung als vom Menschen schon
+        // eingeplant - kein weiterer Vorschlag nötig.
+        const bereitsVorhanden = bestehendeTermine.some((t) => t.kundeId === anlage.kundeId
+          && t.start && Math.abs(new Date(t.start).getTime() - new Date(`${anlage.naechstePruefung}T00:00:00Z`).getTime()) < JARVIS_WARTUNG_SUCHFENSTER_TAGE * 86400000);
+        if (bereitsVorhanden) {
+          await firestoreSetDoc({ serviceAccount, collection: 'jarvisTerminVorschlaege', id: `${anlage.id}-${anlage.naechstePruefung}`, data: { status: 'bereits_geplant', anlageId: anlage.id, geprueftAm: new Date().toISOString() } });
+          bereitsGeplant++;
+          continue;
+        }
+
+        const vorschlaege = (kandidatenSlots || []).slice(0, JARVIS_WARTUNG_VORSCHLAEGE_ANZAHL);
+        const hatVorschlaege = vorschlaege.length > 0;
+        const fehlendeInfos = kalenderFehler
+          ? [`Google-Kalender nicht erreichbar: ${kalenderFehler.message}`]
+          : (hatVorschlaege ? [] : ['Keine freien Termine im Suchzeitraum gefunden (ggf. alle Mitarbeiter im Urlaub oder Kalender vollständig belegt).']);
+
+        await firestoreSetDoc({
+          serviceAccount, collection: 'jarvisTerminVorschlaege', id: `${anlage.id}-${anlage.naechstePruefung}`,
+          data: {
+            anlageId: anlage.id, kundeId: anlage.kundeId || '', bezeichnung: anlage.bezeichnung || '',
+            naechstePruefung: anlage.naechstePruefung, dauerMinuten: JARVIS_WARTUNG_DAUER_MINUTEN_STANDARD,
+            dauerIstAnnahme: true, vorschlaege, fehlendeInfos,
+            status: hatVorschlaege ? 'vorschlag_erstellt' : 'kein_vorschlag_moeglich',
+            erstelltAm: new Date().toISOString(),
+          },
+        });
+
+        const aufgabeId = `jarvis-wartung-aufgabe-${anlage.id}-${anlage.naechstePruefung}`;
+        await firestoreSetDoc({
+          serviceAccount, collection: 'aufgaben', id: aufgabeId,
+          data: {
+            id: aufgabeId,
+            titel: hatVorschlaege
+              ? `JARVIS: Terminvorschläge für Wartung "${anlage.bezeichnung || anlage.id}" bereit`
+              : `JARVIS: Kein Terminvorschlag für Wartung "${anlage.bezeichnung || anlage.id}" möglich`,
+            beschreibung: hatVorschlaege
+              ? `${vorschlaege.length} Terminvorschlag/-vorschläge (angenommene Dauer ${JARVIS_WARTUNG_DAUER_MINUTEN_STANDARD} Min., bitte prüfen) vorbereitet - Buchung, Terminänderung und Mitarbeiterzuweisung erfordern deine ausdrückliche Freigabe.`
+              : `${fehlendeInfos.join(' ')} Bitte manuell planen.`,
+            status: 'offen', prioritaet: anlage.naechstePruefung < heute ? 'hoch' : 'normal',
+            kundeId: anlage.kundeId || '', erstelltAm: new Date().toISOString(), quelle: 'jarvis-wartung',
+          },
+        });
+
+        if (hatVorschlaege) vorschlaegeErstellt++; else keinVorschlagMoeglich++;
+      } catch (anlageErr) {
+        fehlerAnzahl++;
+        await protokolliereJarvisFehler({ serviceAccount, quelle: 'wartungsvorschlag', fehler: anlageErr, kontext: { anlageId: anlage.id } });
+      }
+    }
+
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      data: {
+        status: 'done', abgeschlossenAm: new Date().toISOString(),
+        ergebnisZusammenfassung: `${geprueft} geprüft, ${vorschlaegeErstellt} Vorschlag/Vorschläge erstellt, ${bereitsGeplant} bereits geplant, ${keinVorschlagMoeglich} ohne Vorschlag, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.`,
+      },
+    });
+  } catch (err) {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'wartung-check', fehler: err, kontext: { jobId }, kritisch: true });
+  }
+}
+
+// =============================================================================
+// JARVIS Phase 4b - Autonome Überwachung offener/überfälliger Projektaufgaben
+// (Vorgabe Punkt 5). Erzeugt bewusst GENAU EINEN Sammel-Hinweis je Projekt
+// (deterministische ID, täglich per Upsert aktualisiert) statt einer neuen
+// Aufgabe pro überfälliger Einzelaufgabe - verhindert dadurch von selbst
+// doppelte/anwachsende Hinweise (Vorgabe Punkt 10), ohne eine eigene
+// Dedup-Ledger-Collection zu benötigen. Schließt JARVIS' eigene, zuvor
+// erzeugte Aufgaben (ID-Präfix "jarvis-") von der Betrachtung aus - sonst
+// würde sich ein alter eigener Hinweis irgendwann selbst als "hängengeblieben" melden.
+// =============================================================================
+
+const JARVIS_PROJEKT_STALL_TAGE = 14; // ab wann eine offene Aufgabe OHNE Fälligkeitsdatum als "hängengeblieben" gilt
+
+async function runJarvisProjektCheck(env) {
+  if (env.JARVIS_PROJEKT_AKTIV !== 'true') return;
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `projekt-check-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'projekt-check' });
+  if (!job) return;
+
+  let projekteMitHinweis = 0, fehlerAnzahl = 0;
+  try {
+    const aufgaben = await callKiBuerokraftRest({ env, path: '/tasks?status=offen&limit=100' });
+    const proProjekt = new Map();
+    for (const aufgabe of (aufgaben || [])) {
+      if (!aufgabe.project_id || aufgabe.id.startsWith('jarvis-')) continue;
+      if (!proProjekt.has(aufgabe.project_id)) proProjekt.set(aufgabe.project_id, []);
+      proProjekt.get(aufgabe.project_id).push(aufgabe);
+    }
+
+    for (const [projektId, projektAufgaben] of proProjekt.entries()) {
+      try {
+        const ueberfaellig = projektAufgaben.filter((a) => a.due_date && a.due_date < heute);
+        const haengengeblieben = projektAufgaben.filter((a) => !a.due_date && a.created_at && new Date(a.created_at).getTime() < Date.now() - JARVIS_PROJEKT_STALL_TAGE * 86400000);
+        if (!ueberfaellig.length && !haengengeblieben.length) continue;
+
+        const aufgabeId = `jarvis-projekt-hinweis-${projektId}`;
+        const teile = [];
+        if (ueberfaellig.length) teile.push(`${ueberfaellig.length} überfällige Aufgabe(n): ${ueberfaellig.map((a) => a.title).join(', ')}`);
+        if (haengengeblieben.length) teile.push(`${haengengeblieben.length} seit über ${JARVIS_PROJEKT_STALL_TAGE} Tagen offene Aufgabe(n) ohne Fälligkeitsdatum: ${haengengeblieben.map((a) => a.title).join(', ')}`);
+
+        await firestoreSetDoc({
+          serviceAccount, collection: 'aufgaben', id: aufgabeId,
+          data: {
+            id: aufgabeId, titel: `JARVIS: Projekt hat ${ueberfaellig.length + haengengeblieben.length} auffällige Aufgabe(n)`,
+            beschreibung: teile.join(' | '),
+            status: 'offen', prioritaet: ueberfaellig.length ? 'hoch' : 'normal',
+            projektId, erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString(), quelle: 'jarvis-projekt',
+          },
+        });
+        projekteMitHinweis++;
+      } catch (projektErr) {
+        fehlerAnzahl++;
+        await protokolliereJarvisFehler({ serviceAccount, quelle: 'projekt-hinweis', fehler: projektErr, kontext: { projektId } });
+      }
+    }
+
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      data: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${projekteMitHinweis} Projekt(e) mit Hinweis, ${fehlerAnzahl} Fehler.` },
+    });
+  } catch (err) {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'projekt-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
 
@@ -3741,6 +4127,8 @@ export default {
     ctx.waitUntil(runJarvisEmailCheck(env)); // Phase 2 (+ Phase 3 Angebotsentwurf-Versuch bei JARVIS_ANGEBOT_AKTIV)
     ctx.waitUntil(runJarvisRechnungsCheck(env)); // Phase 3 - Rechnungsentwürfe
     ctx.waitUntil(runJarvisMahnungCheck(env)); // Phase 3 - Mahnungen
+    ctx.waitUntil(runJarvisWartungsCheck(env)); // Phase 4 - Wartungstermin-Vorschläge
+    ctx.waitUntil(runJarvisProjektCheck(env)); // Phase 4 - überfällige Projektaufgaben
   },
 
   async fetch(request, env) {
@@ -4212,8 +4600,11 @@ export const __test__ = {
   runJarvisEmailCheck, extractEmailAddress, findeKundeFuerEmail,
   callClaudeJarvisEmailAnalyse, TERMINALE_EMAIL_STATUS,
   // Phase 3 - Angebotsmanagement
-  versucheAngebotsentwurf, callClaudeJarvisAngebotsvorschlag,
+  versucheAngebotsentwurf, callClaudeJarvisAngebotsvorschlag, pruefeAngebotsPlausibilitaet,
   // Phase 3 - Rechnungs-/Mahnungsmanagement
   runJarvisRechnungsCheck, runJarvisMahnungCheck, geschlosseneProjektStatusIds,
   bauePositionenAusAngebot, bauePositionenAusZeiterfassung, naechsteFaelligeMahnstufe,
+  // Phase 4 - Termin-/Wartungs-/Projektmanagement
+  runJarvisWartungsCheck, runJarvisProjektCheck, faelligeAnlagen, tagesliste,
+  tageOhneJedeMitarbeiterverfuegbarkeit, hatTerminkonflikt,
 };
