@@ -110,6 +110,16 @@
  *   NICHT dem Standard-Schema "<project_id>.firebasestorage.app" entspricht.
  *   RATE_LIMITER (Binding, siehe wrangler.toml [[ratelimits]]) wird beim
  *   Deploy automatisch angelegt, keine manuelle Einrichtung nötig.
+ *
+ *   JARVIS (Actions "jarvis-chat"/"jarvis-action-confirm", siehe eigenen
+ *   Code-Abschnitt weiter unten) - braucht ebenfalls nur das ohnehin
+ *   vorhandene FIREBASE_SERVICE_ACCOUNT_JSON (zur ID-Token-Prüfung/Rollen-
+ *   Lookup, keine zusätzlichen Zugangsdaten). Optional:
+ *   JARVIS_MONATSLIMIT_USD (Variable) – geschätzte Kostenobergrenze pro
+ *   Kalendermonat (siehe JARVIS_PREIS_JE_MIO_TOKEN_USD), ab der weitere
+ *   JARVIS-Chat-Anfragen mit HTTP 429 abgelehnt werden. Ohne gesetzten Wert
+ *   gibt es keine automatische Kostenbremse (nur die laufende Erfassung in
+ *   der Firestore-Collection jarvisKosten).
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -1710,7 +1720,11 @@ Internetrecherche, Kalkulation und Datenpflege:
 // dürfen.
 const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search', max_uses: 5, allowed_callers: ['direct'] };
 
-async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleConfig }) {
+// callerRole/pruefeWerkzeug sind optional (Standard: null/keine Prüfung) -
+// der bestehende Aufrufer (Action "assistent-chat", ki-assistent.js) bleibt
+// dadurch unverändert, JARVIS übergibt hier zusätzlich die Rollenprüfung pro
+// Werkzeugaufruf sowie einen Kosten-Erfassungs-Callback.
+async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleConfig, callerRole = null, pruefeWerkzeug = null, aufKosten = null }) {
   let conversation = messages;
   // Sammelt jeden Tool-Aufruf mit Rohantwort - hilft bei der Fehlersuche, weil
   // das Modell einen Tool-Fehler sonst nur in eigenen (oft zu vagen) Worten
@@ -1747,6 +1761,7 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
     }
 
     const data = await res.json();
+    if (aufKosten) { try { await aufKosten(data.usage); } catch { /* Kostenerfassung darf die Antwort nicht blockieren */ } }
     if (data.stop_reason === 'refusal') {
       throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
     }
@@ -1776,6 +1791,15 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
     // Werkzeuge (auch die KI-Bürokraft-Werkzeuge) zu blockieren.
     const toolResults = [];
     for (const toolUse of toolUses) {
+      if (pruefeWerkzeug) {
+        try {
+          pruefeWerkzeug(toolUse.name, callerRole);
+        } catch (err) {
+          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Nicht berechtigt: ${err.message}`, is_error: true });
+          debugLog.push({ tool: toolUse.name, input: toolUse.input, error: `Berechtigung verweigert: ${err.message}` });
+          continue;
+        }
+      }
       const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
       if (!tool) {
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Unbekanntes Werkzeug: ${toolUse.name}`, is_error: true });
@@ -2091,6 +2115,319 @@ async function handleKundenUpload({ env, body }) {
     },
   });
   return { ok: true };
+}
+
+// =============================================================================
+// JARVIS - Sicherheitsgrundlage (Firebase-ID-Token-Verifizierung + Rollen-
+// prüfung), Freigabe-Aktionen-Engine (Stufe 2, korrekt OHNE Transaktion um
+// externe Aufrufe) und Kostenzähler. Siehe verwaltung/js/views/jarvis.js
+// (Chat-UI) + ai.js (chatMitJarvis). Bewusst IM bestehenden Haupt-Worker,
+// kein zweites System - nutzt dieselben Firestore-REST-Hilfsfunktionen
+// (firestoreGetDoc/firestoreSetDoc) und denselben Service-Account wie die
+// übrigen Funktionen hier (Kunden-Upload, Push-Versand, Katalog-Update).
+//
+// Rollout-Stand: NUR admin darf JARVIS aktuell nutzen (siehe
+// JARVIS_ERLAUBTE_ROLLEN unten) - eine spätere Öffnung für buero/
+// mitarbeiter braucht eine Änderung HIER UND in firestore.rules
+// (jarvisGespraeche u.a.), nie nur eine Seite davon.
+// =============================================================================
+
+const FIREBASE_JWK_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+
+function base64UrlDecodeToBytes(b64url) {
+  const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * Holt Googles öffentliche Schlüssel für Firebase-ID-Tokens, per Cloudflare-
+ * Cache-API zwischengespeichert (Google sendet passende Cache-Control-Header,
+ * i.d.R. mehrere Stunden gültig) - vermeidet einen zusätzlichen Netzwerk-
+ * Roundtrip bei jedem einzelnen JARVIS-Aufruf.
+ */
+async function holeFirebaseJwks() {
+  const cache = caches.default;
+  const cacheKey = new Request(FIREBASE_JWK_URL);
+  let res = await cache.match(cacheKey);
+  if (!res) {
+    const frisch = await fetch(FIREBASE_JWK_URL);
+    if (!frisch.ok) throw new Error(`Konnte Firebase-Schlüssel nicht laden (${frisch.status}).`);
+    res = new Response(frisch.body, frisch);
+    await cache.put(cacheKey, res.clone());
+  }
+  const data = await res.json();
+  return data.keys || [];
+}
+
+/**
+ * Verifiziert ein Firebase-Auth-ID-Token serverseitig (Signatur + Claims) per
+ * Web-Crypto-API gegen Googles öffentliche JWK-Schlüssel - es gibt kein
+ * Firebase Admin SDK für Cloudflare Workers, deshalb von Hand nachgebaut,
+ * nach demselben Prinzip wie die Service-Account-JWT-Signierung oben (nur
+ * umgekehrt: prüfen statt signieren). Wirft bei JEDER Unstimmigkeit (falsche
+ * Signatur, falsches Projekt, falscher Aussteller, abgelaufen) - kein
+ * Teilerfolg, kein "wahrscheinlich gültig".
+ */
+async function verifyFirebaseIdToken(idToken, projectId) {
+  if (!idToken || typeof idToken !== 'string') throw new Error('Kein ID-Token übergeben.');
+  const teile = idToken.split('.');
+  if (teile.length !== 3) throw new Error('Ungültiges Token-Format.');
+  const [headerB64, payloadB64, signatureB64] = teile;
+
+  let header, payload;
+  try {
+    header = JSON.parse(base64UrlDecodeToString(headerB64));
+    payload = JSON.parse(base64UrlDecodeToString(payloadB64));
+  } catch {
+    throw new Error('Token konnte nicht gelesen werden.');
+  }
+  if (header.alg !== 'RS256') throw new Error('Unerwarteter Signatur-Algorithmus.');
+
+  const keys = await holeFirebaseJwks();
+  const jwk = keys.find((k) => k.kid === header.kid);
+  if (!jwk) throw new Error('Signierschlüssel unbekannt (evtl. gerade rotiert - bitte erneut versuchen).');
+
+  const cryptoKey = await crypto.subtle.importKey(
+    'jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']
+  );
+  const signingInput = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
+  const signaturGueltig = await crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5', cryptoKey, base64UrlDecodeToBytes(signatureB64), signingInput
+  );
+  if (!signaturGueltig) throw new Error('Signatur ungültig.');
+
+  const now = Math.floor(Date.now() / 1000);
+  const KULANZ_SEKUNDEN = 60; // kleine Uhr-Toleranz zwischen Client/Server
+  if (payload.aud !== projectId) throw new Error('Token für ein anderes Firebase-Projekt ausgestellt.');
+  if (payload.iss !== `https://securetoken.google.com/${projectId}`) throw new Error('Unerwarteter Aussteller.');
+  if (!payload.sub || typeof payload.sub !== 'string') throw new Error('Token ohne Benutzer-ID.');
+  if (typeof payload.exp !== 'number' || payload.exp + KULANZ_SEKUNDEN < now) throw new Error('Token abgelaufen - bitte die Seite neu laden.');
+  if (typeof payload.iat !== 'number' || payload.iat - KULANZ_SEKUNDEN > now) throw new Error('Token noch nicht gültig (Uhrzeit-Abweichung?).');
+  if (typeof payload.auth_time !== 'number' || payload.auth_time - KULANZ_SEKUNDEN > now) throw new Error('Ungültiger Anmeldezeitpunkt im Token.');
+
+  return { uid: payload.sub, email: payload.email || '' };
+}
+
+// Rollen, die JARVIS aktuell nutzen dürfen - siehe Hinweis am Abschnittsanfang.
+const JARVIS_ERLAUBTE_ROLLEN = ['admin'];
+
+function pruefeJarvisRolle(role) {
+  if (!JARVIS_ERLAUBTE_ROLLEN.includes(role)) {
+    const err = new Error('JARVIS ist aktuell nur für Administratoren freigegeben.');
+    err.status = 403;
+    throw err;
+  }
+}
+
+/**
+ * Liest Rolle + Mitarbeiter-ID des per ID-Token verifizierten Nutzers aus
+ * Firestore (users/{uid}) - das ist die Grundlage für JEDE weitere
+ * Berechtigungsprüfung in diesem Abschnitt. Kein Werkzeugaufruf darf diese
+ * Prüfung umgehen.
+ */
+async function holeJarvisAufruferKontext({ serviceAccount, idToken }) {
+  const { uid, email } = await verifyFirebaseIdToken(idToken, serviceAccount.project_id);
+  const userDoc = await firestoreGetDoc({ serviceAccount, collection: 'users', id: uid });
+  if (!userDoc) {
+    const err = new Error('Kein Werkora-Konto zu diesem Login gefunden.');
+    err.status = 403;
+    throw err;
+  }
+  return { uid, email, role: userDoc.role || null, mitarbeiterId: userDoc.mitarbeiterId || null };
+}
+
+/**
+ * Prüft die Berechtigung für EIN konkretes Werkzeug. Aktuell (nur admin
+ * erlaubt) bewusst einfach gehalten - die Tool-spezifische Feinsteuerung pro
+ * Rolle (z.B. "mitarbeiter darf nur die eigenen Zeiterfassungs-/Aufgaben-
+ * Werkzeuge nutzen, keine Kundenfinanzen") ist absichtlich NICHT schon
+ * vorweggenommen, weil dafür noch keine Geschäftsentscheidung getroffen
+ * wurde (siehe Bericht) - das kommt, sobald JARVIS für buero/mitarbeiter
+ * geöffnet wird, als eigener, zu testender Schritt. Schon jetzt gilt aber:
+ * jeder einzelne Werkzeugaufruf durchläuft diese Funktion, nicht nur der
+ * Chat-Einstieg insgesamt.
+ */
+function pruefeWerkzeugBerechtigung(toolName, callerRole) {
+  pruefeJarvisRolle(callerRole);
+}
+
+// --- JARVIS: Kostenzähler (grobe Schätzung aus Claude-Token-Nutzung, siehe
+// usage-Feld der Anthropic-API-Antwort). Dient NUR als autonome Kostenbremse
+// für künftige Hintergrund-Läufe - für eine exakte Abrechnung ist weiterhin
+// die Anthropic-Konsole (console.anthropic.com -> Usage) maßgeblich. Die
+// Preis-Richtwerte unten sind Schätzungen und müssen bei einer Anthropic-
+// Preisänderung von Hand angepasst werden (bewusst als einzelne Konstante,
+// nicht irgendwo im Code verstreut).
+const JARVIS_PREIS_JE_MIO_TOKEN_USD = { input: 15, output: 75 };
+
+function jarvisMonatsId(datum = new Date()) {
+  return `${datum.getUTCFullYear()}-${String(datum.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+async function erfasseJarvisKosten({ serviceAccount, usage }) {
+  if (!usage) return;
+  const monatsId = jarvisMonatsId();
+  const inputTokens = usage.input_tokens || 0;
+  const outputTokens = usage.output_tokens || 0;
+  const kostenUsd = (inputTokens / 1e6) * JARVIS_PREIS_JE_MIO_TOKEN_USD.input + (outputTokens / 1e6) * JARVIS_PREIS_JE_MIO_TOKEN_USD.output;
+  try {
+    const bisherig = await firestoreGetDoc({ serviceAccount, collection: 'jarvisKosten', id: monatsId });
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisKosten', id: monatsId,
+      data: {
+        inputTokens: (bisherig?.inputTokens || 0) + inputTokens,
+        outputTokens: (bisherig?.outputTokens || 0) + outputTokens,
+        geschaetzteKostenUsd: Math.round(((bisherig?.geschaetzteKostenUsd || 0) + kostenUsd) * 100) / 100,
+        aktualisiertAm: new Date().toISOString(),
+      },
+    });
+  } catch {
+    // Kostenerfassung ist ein Komfort-/Schutzmechanismus - ein Fehlschlag
+    // darf eine sonst erfolgreiche JARVIS-Antwort nicht blockieren.
+  }
+}
+
+async function jarvisKostenlimitUeberschritten({ serviceAccount, monatslimitUsd }) {
+  if (!monatslimitUsd) return false;
+  const stand = await firestoreGetDoc({ serviceAccount, collection: 'jarvisKosten', id: jarvisMonatsId() });
+  return (stand?.geschaetzteKostenUsd || 0) >= monatslimitUsd;
+}
+
+// --- JARVIS: Fehlerüberwachung. Jeder fehlgeschlagene externe Aufruf
+// (Google/Claude/Firebase) landet hier - protokolliert im bestehenden
+// ai_action_log (gleiche Collection wie die KI-Bürokraft, damit es EIN
+// Protokoll bleibt, kein zweites Parallelsystem) UND legt bei kritischen
+// Fehlern eine interne Werkora-Aufgabe an, die im Tagesbericht/der
+// Aufgabenliste sichtbar ist - "eine Benachrichtigung vorbereiten", wie
+// gefordert, OHNE selbst autonom eine E-Mail/Push zu verschicken (das wäre
+// bereits eine Stufe-2/3-Aktion).
+async function protokolliereJarvisFehler({ serviceAccount, quelle, fehler, kontext, kritisch = false }) {
+  const eintrag = {
+    id: crypto.randomUUID(), quelle: `jarvis.${quelle}`, status: 'failed',
+    fehler: String(fehler?.message || fehler || 'Unbekannter Fehler').slice(0, 1000),
+    kontext: JSON.stringify(kontext || {}).slice(0, 2000),
+    zeitstempel: new Date().toISOString(),
+  };
+  try {
+    await firestoreSetDoc({ serviceAccount, collection: 'ai_action_log', id: eintrag.id, data: eintrag });
+  } catch { /* Protokollierung selbst darf den eigentlichen Fehler nicht verschlucken */ }
+  if (!kritisch) return;
+  try {
+    await firestoreSetDoc({
+      serviceAccount, collection: 'aufgaben', id: crypto.randomUUID(),
+      data: {
+        titel: `⚠️ JARVIS: Automatisierung fehlgeschlagen (${quelle})`,
+        beschreibung: eintrag.fehler,
+        status: 'offen', prioritaet: 'hoch', erstelltAm: eintrag.zeitstempel,
+        faelligkeit: new Date().toISOString().slice(0, 10),
+      },
+    });
+  } catch { /* Aufgabe ist ein Komfort-Hinweis, kein harter Bestandteil der Fehlerbehandlung selbst */ }
+}
+
+// --- JARVIS: Freigabe-Aktionen (Stufe 2) - Ausführung in zwei strikt
+// getrennten Schritten:
+//   1) ATOMAR per Firestore beanspruchen (status "pending" -> "executing",
+//      mit Vorbedingung auf die zuletzt gelesene updateTime). Das ist eine
+//      REINE Firestore-Operation, keine Transaktion nötig/sinnvoll.
+//   2) ERST NACH erfolgreichem Beanspruchen die externe Aktion ausführen.
+// Eine Firestore-Transaktion könnte den externen Aufruf nicht mit
+// einschließen (sie sieht nur Firestore-Lese-/Schreibzugriffe) und wird bei
+// einem Konflikt automatisch von Firestore selbst wiederholt - das würde
+// einen bereits ausgeführten externen Aufruf ein zweites Mal auslösen.
+// Deshalb bewusst KEINE Transaktion um Schritt 2, sondern eine bedingte
+// Einzel-Schreiboperation (optimistic concurrency per currentDocument.
+// updateTime) als einziger wirklich atomarer Schritt.
+async function firestoreBeanspruche({ serviceAccount, collection, id, erwarteterStatus, neuerStatus }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const docName = `projects/${serviceAccount.project_id}/databases/(default)/documents/${collection}/${id}`;
+  const getRes = await fetch(`https://firestore.googleapis.com/v1/${docName}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (getRes.status === 404) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if (!getRes.ok) throw new Error(`Firestore-Fehler (${getRes.status}) beim Lesen von ${collection}/${id}.`);
+  const doc = await getRes.json();
+  const aktuellerStatus = doc.fields?.status?.stringValue;
+  if (aktuellerStatus !== erwarteterStatus) {
+    const err = new Error(`Vorgang hat bereits den Status "${aktuellerStatus}" - keine erneute Ausführung.`);
+    err.status = 409;
+    throw err;
+  }
+  const commitRes = await fetch(`https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default)/documents:commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({
+      writes: [{
+        update: { name: docName, fields: { status: { stringValue: neuerStatus } } },
+        updateMask: { fieldPaths: ['status'] },
+        currentDocument: { updateTime: doc.updateTime },
+      }],
+    }),
+  });
+  if (!commitRes.ok) {
+    // FAILED_PRECONDITION bedeutet: das Dokument wurde zwischen unserem
+    // Lesen und Schreiben bereits geändert (z.B. zweiter Klick oder ein
+    // Netzwerk-Retry derselben Anfrage) - das ist der eigentliche Schutz
+    // gegen Doppelausführung, kein unerwarteter Fehlerfall.
+    const text = await commitRes.text().catch(() => '');
+    const err = new Error('Dieser Vorgang wurde inzwischen bereits bearbeitet (gleichzeitiger Zugriff).');
+    err.status = 409;
+    err.detail = text.slice(0, 300);
+    throw err;
+  }
+  return firestoreFieldsToObject(doc.fields || {});
+}
+
+// Registry der tatsächlichen Aktions-Ausführungen - bewusst noch LEER. Die
+// konkreten Aktionstypen (z.B. "angebot.versenden", "email.versenden")
+// kommen in der nächsten Entwicklungsphase (autonomes E-Mail-/Angebots-
+// management), zusammen mit den jeweils nötigen Stufe-2-Vorlagen. Das
+// Ausführungs-Gerüst hier (Beanspruchen, Ablaufprüfung, Protokollierung) ist
+// bereits vollständig und unabhängig von den künftigen Aktionstypen nutzbar.
+const JARVIS_AKTIONS_AUSFUEHRUNG = {};
+
+async function fuehreJarvisAktionAus({ serviceAccount, aktionId, callerUid, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const vorherigeDaten = await firestoreBeanspruche({
+    serviceAccount, collection: 'jarvisAktionen', id: aktionId,
+    erwarteterStatus: 'pending', neuerStatus: 'executing',
+  });
+
+  if (vorherigeDaten.ablaufAm && vorherigeDaten.ablaufAm < new Date().toISOString()) {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId, data: { status: 'expired' } });
+    const err = new Error('Dieser Vorgang ist abgelaufen - bitte in JARVIS neu anfordern.');
+    err.status = 410;
+    throw err;
+  }
+
+  const ausfuehrungsFunktion = JARVIS_AKTIONS_AUSFUEHRUNG[vorherigeDaten.typ];
+  if (!ausfuehrungsFunktion) {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId, data: { status: 'failed', fehler: 'Aktionstyp noch nicht implementiert.' } });
+    const err = new Error(`Aktionstyp "${vorherigeDaten.typ}" ist noch nicht implementiert (folgt in einer späteren Phase).`);
+    err.status = 501;
+    throw err;
+  }
+
+  try {
+    const ergebnis = await ausfuehrungsFunktion({ serviceAccount, payload: vorherigeDaten.payload || {} });
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisAktionen', id: aktionId,
+      data: { status: 'executed', ausgefuehrtAm: new Date().toISOString(), bestaetigtVonUid: callerUid },
+    });
+    await firestoreSetDoc({
+      serviceAccount, collection: 'ai_action_log', id: crypto.randomUUID(),
+      data: { quelle: 'jarvis.aktion', aktionTyp: vorherigeDaten.typ, aktionId, status: 'executed', zeitstempel: new Date().toISOString() },
+    });
+    return ergebnis;
+  } catch (err) {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisAktionen', id: aktionId, data: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'aktion-ausfuehrung', fehler: err, kontext: { aktionId, typ: vorherigeDaten.typ }, kritisch: true });
+    throw err;
+  }
 }
 
 // --- Google-Büro (Gmail + Kalender) - läuft bewusst IM Haupt-Worker statt in
@@ -2797,6 +3134,78 @@ export default {
       } catch (err) {
         return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
           status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'jarvis-chat') {
+      if (!Array.isArray(body.messages) || body.messages.length === 0) {
+        return new Response(JSON.stringify({ error: 'Feld "messages" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        if (await jarvisKostenlimitUeberschritten({ serviceAccount, monatslimitUsd: env.JARVIS_MONATSLIMIT_USD ? Number(env.JARVIS_MONATSLIMIT_USD) : null })) {
+          return new Response(JSON.stringify({ error: 'Das monatliche JARVIS-Kostenlimit ist erreicht - bitte in den Einstellungen anpassen oder bis zum nächsten Monat warten.' }), {
+            status: 429, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        const result = await callClaudeAssistentChat({
+          apiKey: env.ANTHROPIC_API_KEY,
+          model: env.MODEL_ID || 'claude-opus-4-8',
+          messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
+          kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
+          kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
+          googleConfig: buildGoogleConfig(env),
+          callerRole: aufrufer.role,
+          pruefeWerkzeug: pruefeWerkzeugBerechtigung,
+          aufKosten: (usage) => erfasseJarvisKosten({ serviceAccount, usage }),
+        });
+        return new Response(JSON.stringify(result), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+          const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          await protokolliereJarvisFehler({ serviceAccount, quelle: 'chat', fehler: err, kontext: { action: 'jarvis-chat' } });
+        }
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    if (body.action === 'jarvis-action-confirm') {
+      if (!body.aktionId || typeof body.aktionId !== 'string') {
+        return new Response(JSON.stringify({ error: 'Feld "aktionId" fehlt.' }), {
+          status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        const ergebnis = await fuehreJarvisAktionAus({
+          serviceAccount, aktionId: body.aktionId, callerUid: aufrufer.uid, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       }
     }

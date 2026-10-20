@@ -76,6 +76,10 @@ const STORES = {
   zahlungsabgleich: 'id',
   katalogVorschlaege: 'id',
   uploadLinks: 'id',
+  jarvisGespraeche: 'id',
+  jarvisAktionen: 'id',
+  jarvisJobs: 'id',
+  jarvisKosten: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2372,6 +2376,7 @@ export const ROUTE_ROLLEN = {
   'ki-freigaben': ['admin'],
   'ki-aktivitaet': ['admin'],
   'ki-assistent': ['admin', 'buero'],
+  jarvis: ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],

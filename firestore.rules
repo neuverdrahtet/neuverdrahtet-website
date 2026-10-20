@@ -26,7 +26,6 @@ service cloud.firestore {
         ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.kundeId
         : null;
     }
-
     // Sensible Geschäfts-/Finanz-/Personaldaten: nur Admin + Büro
     // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/angebote/rechnungen/
     // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
@@ -154,6 +153,45 @@ service cloud.firestore {
     }
     match /termine/{docId} {
       allow read: if isKunde() && myKundeId() == resource.data.kundeId;
+    }
+
+    // --- JARVIS (bewusst eigene, STRENGERE Regeln statt der generellen
+    // isSensitiveCollection admin+büro-Stufe - der Rollout ist ausdrücklich
+    // zunächst nur für admin vorgesehen, siehe cloudflare-worker/worker.js
+    // Action "jarvis-chat"). Jede Erweiterung auf weitere Rollen passiert
+    // hier UND im Worker gemeinsam, nie nur client-seitig. ---
+
+    // Gesprächsverlauf: jeder Nutzer sieht/schreibt ausschließlich die eigenen
+    // Unterhaltungen; admin zusätzlich lesend für Support-Zwecke (z.B. um
+    // einen gemeldeten Fehlerfall nachzuvollziehen), aber nicht schreibend in
+    // fremde Verläufe. Bewusst über uid (request.auth.uid) statt
+    // mitarbeiterId verglichen - NICHT jeder Nutzer (insbesondere ein admin
+    // ohne eigenen Mitarbeiter-Datensatz) hat zwingend ein mitarbeiterId,
+    // uid existiert dagegen immer und braucht zusätzlich keinen separaten
+    // get()-Lookup wie myMitarbeiterId().
+    match /jarvisGespraeche/{docId} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Ausführbare Freigabe-Aktionen (Stufe 2), Job-Protokoll und Kosten-
+    // zähler: NUR lesend für admin direkt aus dem Browser - jede
+    // Statusänderung (Freigeben/Ausführen) läuft ausschließlich über den
+    // Cloudflare Worker mit Service-Account, damit die Berechtigungs-/
+    // Idempotenz-/Audit-Logik zentral an einer Stelle sitzt und nicht durch
+    // einen manipulierten Browser-Schreibzugriff umgangen werden kann.
+    match /jarvisAktionen/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /jarvisJobs/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /jarvisKosten/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /{collectionId}/{docId} {

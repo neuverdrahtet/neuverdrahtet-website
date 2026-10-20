@@ -285,6 +285,55 @@ export async function rechercherePreiseFuerPositionen(positionen) {
  * gibt nur die finale Textantwort zurück - siehe cloudflare-worker/worker.js,
  * Aktion "assistent-chat".
  */
+/**
+ * JARVIS-Chat: wie chatMitAssistent, aber zusätzlich mit dem Firebase-
+ * ID-Token des eingeloggten Nutzers - der Worker verifiziert damit
+ * serverseitig, WER fragt, und prüft dessen Rolle (aktuell nur admin
+ * freigegeben) bei JEDEM Werkzeugaufruf, nicht nur beim Verbindungsaufbau.
+ * Siehe cloudflare-worker/worker.js, Action "jarvis-chat".
+ */
+export async function chatMitJarvis({ messages }) {
+  const settings = await getSettings();
+  if (!settings.aiWorkerUrl) {
+    throw new Error('KI-Funktion ist noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).');
+  }
+  const { auth } = await import('./firebase.js');
+  if (!auth.currentUser) {
+    throw new Error('JARVIS benötigt eine aktive Firebase-Anmeldung (im reinen Zugangscode-Modus nicht verfügbar).');
+  }
+  const idToken = await auth.currentUser.getIdToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  let res;
+  try {
+    res = await fetch(settings.aiWorkerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-App-Secret': settings.aiAppSecret || '',
+      },
+      body: JSON.stringify({ action: 'jarvis-chat', messages, idToken }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Zeitüberschreitung bei JARVIS (keine Antwort innerhalb von 45s).');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+  if (!res.ok) {
+    let message = `Fehler (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data.error) message = data.error;
+    } catch { /* ignore parse error */ }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 export async function chatMitAssistent({ messages }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {
