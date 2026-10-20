@@ -193,6 +193,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Dedup-Ledger für den autonomen E-Mail-Check (Phase 2) - verhindert,
+    // dass dieselbe E-Mail bei einem erneuten Lauf (z.B. nächster Tag, oder
+    // ein manueller Re-Trigger) nochmal eine Aufgabe/einen Entwurf erzeugt.
+    match /jarvisEmailVerarbeitung/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (
