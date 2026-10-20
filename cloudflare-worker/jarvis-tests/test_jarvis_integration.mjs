@@ -204,6 +204,19 @@ await pruefeWirftFehler('A5: unbekannter Signierschlüssel (kid) wird abgelehnt'
   await W.verifyFirebaseIdToken(token, serviceAccount.project_id);
 }, 'Signierschlüssel unbekannt');
 
+await pruefeWirftFehler('A6: Algorithmus-Verwechslung ("alg":"none") wird abgelehnt (klassische JWT-Schwachstelle)', async () => {
+  jwksResponse = { keys: [{ ...JWK, kid: TEST_KID, alg: 'RS256', use: 'sig' }] };
+  const now = Math.floor(Date.now() / 1000);
+  const header = { alg: 'none', typ: 'JWT', kid: TEST_KID };
+  const payload = { aud: serviceAccount.project_id, iss: `https://securetoken.google.com/${serviceAccount.project_id}`, sub: 'angreifer-uid', iat: now, exp: now + 3600, auth_time: now };
+  // Signatur-Teil bewusst leer - "alg":"none" verlangt laut (unsicherer)
+  // JWT-Spezifikation gar keine Signatur. verifyFirebaseIdToken muss das
+  // bereits an der Algorithmus-Prüfung abweisen, BEVOR überhaupt eine
+  // Signatur geprüft wird.
+  const token = `${base64urlJson(header)}.${base64urlJson(payload)}.`;
+  await W.verifyFirebaseIdToken(token, serviceAccount.project_id);
+}, 'Signatur-Algorithmus');
+
 // =============================================================================
 // B) Freigabe-Engine: gleichzeitige Bestätigungen + unklare Ausführungs-
 //    zustände (fuehreJarvisAktionAus) - neu getestet, siehe Bericht.
