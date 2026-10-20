@@ -158,6 +158,16 @@
  *   zusätzlich eine funktionierende Google-Kalender-Anbindung (siehe
  *   GOOGLE_BUERO_API_KEY oben) - ohne sie werden Vorschläge mit klarem
  *   Fehlerhinweis als "kein_vorschlag_moeglich" (retry-fähig) markiert.
+ *
+ *   JARVIS Phase 6 ("JARVIS CONTROL" - Unternehmensübersicht/proaktive
+ *   Überwachung, siehe holeJarvisControlDaten/runJarvisControlCheck) –
+ *   Sicherheitsschalter JARVIS_CONTROL_AKTIV (Variable, Standard: aus).
+ *   Verwendet KEINEN Claude-Aufruf (rein regelbasiert aus echten
+ *   Firestore-Daten) und erstellt ausschließlich interne Hinweise/Aufgaben -
+ *   nie eine Rechnung, Mahnung, einen Versand oder eine Buchung. Die
+ *   Zentrale/Tagesbericht/Wochenbericht-Abrufe (Actions "jarvis-control"/
+ *   "jarvis-tagesbericht"/"jarvis-wochenbericht") laufen unabhängig von
+ *   diesem Schalter immer live auf Abruf, lesend, ohne Nebenwirkung.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -2052,6 +2062,28 @@ async function firestoreSetDoc({ serviceAccount, collection, id, data }) {
   if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) beim Schreiben von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
 }
 
+/**
+ * Wie firestoreSetDoc, ABER ersetzt NUR die genannten Felder (echtes
+ * Teil-Update per Firestore-REST-Query-Parameter "updateMask.fieldPaths"),
+ * statt das Dokument komplett zu überschreiben (Phase 6 - gebraucht, um z.B.
+ * ausschließlich das "text"-Feld einer bereits real existierenden Mahnung
+ * sicher zu ändern, OHNE rechnungId/stufe/gebuehr dabei zu riskieren, siehe
+ * mahnung.bearbeiten). Für Collections, die JARVIS nicht alleine besitzt
+ * (anders als die eigenen jarvis*-Collections, wo ein voller Überschreib-
+ * Vorgang unbedenklich ist, weil JARVIS dort ohnehin immer den gesamten
+ * Dokumentinhalt selbst berechnet).
+ */
+async function firestoreMergeFelder({ serviceAccount, collection, id, felder }) {
+  const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+  const maske = Object.keys(felder).map((f) => `updateMask.fieldPaths=${encodeURIComponent(f)}`).join('&');
+  const url = `https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default)/documents/${collection}/${id}?${maske}`;
+  const res = await fetch(url, {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+    body: JSON.stringify({ fields: toFirestoreFields(felder) }),
+  });
+  if (!res.ok) throw new Error(`Firestore-Fehler (${res.status}) beim Teil-Update von ${collection}/${id}: ${(await res.text().catch(() => '')).slice(0, 300)}`);
+}
+
 // --- Kunden-Upload (externer Upload-Link, siehe /kunde-upload unten) -
 // Dateien landen per Service-Account direkt in Firebase Storage, ganz ohne
 // Firebase-Auth-Login des Kunden. storage.rules bleibt dadurch bewusst
@@ -2569,21 +2601,42 @@ async function beanspracheEinzelVorgang({ serviceAccount, collection, id, typ, t
 }
 
 // =============================================================================
-// JARVIS Phase 5 - Freigabecenter: konkrete, ausdrücklich erlaubte
-// Aktionstypen für die Freigabe-Engine. JEDER Aktionstyp wurde einzeln
+// JARVIS Freigabecenter: konkrete, ausdrücklich erlaubte Aktionstypen für die
+// Freigabe-Engine (Stand Phase 6: neun Typen). JEDER Aktionstyp wurde einzeln
 // darauf geprüft, ob er über eine bereits vorhandene, sichere Werkora-/
-// Google-Schnittstelle ausführbar ist (Vorgabe Phase 5 Punkt 3):
+// Google-Schnittstelle ausführbar ist (Vorgabe Phase 5 Punkt 3). Diese Liste
+// ist die vollständige Dokumentation der tatsächlichen realen Auswirkungen
+// jedes Typs (Vorgabe Phase 6 Punkt 1 - "Dokumentiere die bestehenden
+// Aktionstypen mit ihren tatsächlichen Auswirkungen"):
 //
-//  - email.pruefen / rechnung.pruefen / mahnung.pruefen / termin.pruefen /
-//    angebot.pruefen: reine interne Firestore-Status-Änderungen auf JARVIS-
-//    eigenen Entwurfs-Collections (Freigeben/Ablehnen durch Danny). KEIN
-//    externer Versand-Aufruf nötig oder möglich - google-buero hat
-//    absichtlich KEINEN gmail.send-Scope (siehe dessen Kopfkommentar) und
-//    die KI-Bürokraft-API blockiert quotes/{id}/send fest mit 403. Diese
-//    Aktionstypen bilden also NICHT das (ohnehin blockierte) Versenden ab,
-//    sondern Dannys eigene Prüf-/Freigabe-Entscheidung.
+//  - email.pruefen (freigeben/ablehnen): reine interne Firestore-Status-
+//    Änderung auf jarvisEmailVerarbeitung. KEIN externer Versand-Aufruf -
+//    google-buero hat absichtlich KEINEN gmail.send-Scope (siehe dessen
+//    Kopfkommentar). Bildet NICHT das (ohnehin blockierte) Versenden ab,
+//    sondern Dannys eigene Prüf-/Freigabe-Entscheidung zum vorbereiteten
+//    Antwortentwurf.
+//  - email.bearbeiten: ändert antwortentwurfBetreff/-Text auf der JARVIS-
+//    eigenen jarvisEmailVerarbeitung (sicherer Volltausch, da JARVIS diese
+//    Collection inhaltlich vollständig selbst erzeugt). Versucht zusätzlich
+//    BEST-EFFORT, den bereits vorher automatisch angelegten Gmail-Entwurf
+//    per POST /emails/{id}/draft durch einen neuen mit dem bearbeiteten Text
+//    zu ERSETZEN - schlägt dieser Zusatzaufruf fehl, wird das NICHT als
+//    Fehler der Bearbeitung gewertet (siehe bearbeiteEmailAntwortentwurf).
+//    BEKANNTE EINSCHRÄNKUNG: google-buero bietet keinen "Entwurf
+//    löschen/aktualisieren"-Endpunkt, daher bleibt in Gmail ggf. der ALTE,
+//    automatisch erzeugte Entwurf parallel zum neuen bestehen - Danny muss
+//    den veralteten Entwurf vor dem Versenden manuell in Gmail verwerfen.
+//  - rechnung.pruefen / mahnung.pruefen / termin.pruefen / angebot.pruefen:
+//    wie email.pruefen - reine interne Firestore-Status-Änderungen auf den
+//    jeweils JARVIS-eigenen Entwurfs-Collections. Die KI-Bürokraft-API
+//    blockiert quotes/{id}/send und invoices/{id}/send ohnehin fest mit 403.
 //  - rechnung.bearbeiten: direkte, sichere Änderung der JARVIS-eigenen
 //    Rechnungsentwurf-Collection (niemals der echten "rechnungen"-Collection).
+//  - mahnung.bearbeiten: ändert über firestoreMergeFelder NUR die Felder
+//    "text" und optional "gebuehr" auf der ECHTEN "mahnungen"-Collection
+//    (partielles Firestore-Update per updateMask, kein Volltausch) - alle
+//    anderen echten Felder (rechnungId, stufe, neueFrist) bleiben unberührt.
+//    Löst NIEMALS den tatsächlichen Versand der Mahnung aus.
 //  - angebot.bearbeiten: ruft ECHT PATCH /quotes auf - sicher, weil die
 //    KI-Bürokraft-API selbst nur "entwurf"-Status editierbar macht (GoBD-
 //    Sperre bleibt dort bestehen, nicht hier nachgebaut).
@@ -2597,6 +2650,12 @@ async function beanspracheEinzelVorgang({ serviceAccount, collection, id, typ, t
 // manuell in Werkora. JARVIS_AKTIONS_AUSFUEHRUNG ist eine geschlossene
 // Liste (keine "beliebige KI-Aktion ausführen"-Funktion) - ein nicht
 // gelisteter "typ" wird von fuehreJarvisAktionAus mit HTTP 501 abgelehnt.
+// JEDE Bearbeitung (*.bearbeiten) erhöht außerdem die Version des Entwurfs
+// und setzt freigabeStatus zurück auf "offen" - eine zuvor erteilte Freigabe
+// bezieht sich damit nachweislich nur auf die konkret geprüfte Version
+// (Vorgabe Phase 5 Punkt 2), eine erneute Freigabe-Prüfung nach Bearbeitung
+// ist zwingend erforderlich und wird serverseitig über erwarteteVersion
+// erzwungen.
 // =============================================================================
 
 /**
@@ -2646,6 +2705,84 @@ async function bearbeiteRechnungsEntwurf({ serviceAccount, id, erwarteteVersion,
     data: { ...rest, positionen: neuePositionen, version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString() },
   });
   return { collection: 'jarvisRechnungsEntwuerfe', id, version: neueVersion };
+}
+
+/**
+ * Phase 6 (Vorgabe Punkt 1 - "sichere Bearbeitung von E-Mail-... Entwürfen
+ * vor der Freigabe"). Ändert den gespeicherten Antwortentwurf-Text in der
+ * JARVIS-eigenen Collection jarvisEmailVerarbeitung (sicher, volle
+ * Kontrolle über die Collection). Versucht zusätzlich, best effort, einen
+ * AKTUALISIERTEN Gmail-Entwurf mit dem neuen Text anzulegen - google-buero
+ * hat KEINE PATCH-Route für bestehende Entwürfe (nur create), der beim
+ * autonomen Erstlauf (Stufe 1) bereits angelegte alte Entwurf bleibt daher
+ * zusätzlich im Postfach stehen und muss von Danny beim Versenden verworfen
+ * werden (dokumentierte, bewusst in Kauf genommene Einschränkung - siehe
+ * Bericht). Ein Fehlschlag dieses Zusatzversuchs blockiert die Bearbeitung
+ * selbst NICHT, da der Text in Werkora in jedem Fall sicher gespeichert ist.
+ */
+async function bearbeiteEmailAntwortentwurf({ serviceAccount, env, id, erwarteteVersion, antwortentwurfBetreff, antwortentwurfText }) {
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisEmailVerarbeitung', id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Entwurf wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (typeof antwortentwurfText !== 'string' || !antwortentwurfText.trim()) { const err = new Error('Feld "antwortentwurfText" darf nicht leer sein.'); err.status = 400; throw err; }
+
+  let neuerGmailEntwurfErstellt = false;
+  try {
+    await callGoogleBuero({
+      env, method: 'POST', path: `/emails/${id}/draft`,
+      body: { to: extractEmailAddress(aktuell.emailVon || ''), subject: antwortentwurfBetreff || aktuell.antwortentwurfBetreff || undefined, body_text: antwortentwurfText },
+    });
+    neuerGmailEntwurfErstellt = true;
+  } catch (draftErr) {
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'email-entwurf-bearbeiten', fehler: draftErr, kontext: { messageId: id } });
+  }
+
+  const { id: _ignoriert, ...rest } = aktuell;
+  const neueVersion = (aktuell.version || 0) + 1;
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisEmailVerarbeitung', id,
+    data: {
+      ...rest, antwortentwurfBetreff: antwortentwurfBetreff || aktuell.antwortentwurfBetreff || '', antwortentwurfText,
+      version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString(), entwurfErstellt: aktuell.entwurfErstellt || neuerGmailEntwurfErstellt,
+    },
+  });
+  return { collection: 'jarvisEmailVerarbeitung', id, version: neueVersion, neuerGmailEntwurfErstellt };
+}
+
+/**
+ * Phase 6 (Vorgabe Punkt 1). Ändert AUSSCHLIESSLICH das Textfeld (und
+ * optional die Gebühr) der REAL bereits angelegten Mahnung - es gibt keine
+ * PATCH /reminders-Route in der KI-Bürokraft-API, deshalb per
+ * firestoreMergeFelder (siehe dort) ein auf genau diese zwei Felder
+ * beschränktes, sicheres Teil-Update direkt auf der echten
+ * "mahnungen"-Collection, OHNE rechnungId/stufe/datum/neueFrist anzutasten.
+ */
+async function bearbeiteMahnEntwurf({ serviceAccount, id, erwarteteVersion, text, gebuehr }) {
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisMahnEntwuerfe', id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Mahnentwurf wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (typeof text !== 'string' || !text.trim()) { const err = new Error('Feld "text" darf nicht leer sein.'); err.status = 400; throw err; }
+  if (!aktuell.mahnungId) { const err = new Error('Keine verknüpfte Mahnung gefunden.'); err.status = 404; throw err; }
+
+  const felder = { text };
+  if (gebuehr !== undefined && gebuehr !== null && gebuehr !== '') felder.gebuehr = Number(gebuehr);
+  await firestoreMergeFelder({ serviceAccount, collection: 'mahnungen', id: aktuell.mahnungId, felder });
+
+  const { id: _ignoriert, ...rest } = aktuell;
+  const neueVersion = (aktuell.version || 0) + 1;
+  await firestoreSetDoc({
+    serviceAccount, collection: 'jarvisMahnEntwuerfe', id,
+    data: { ...rest, version: neueVersion, freigabeStatus: 'offen', bearbeitetAm: new Date().toISOString() },
+  });
+  return { collection: 'jarvisMahnEntwuerfe', id, version: neueVersion };
 }
 
 /** Wie wendeFreigabeAn, aber für jarvisTerminVorschlaege: "freigeben" wählt einen der vorgeschlagenen Slots aus, bucht aber NIE verbindlich. */
@@ -2727,6 +2864,13 @@ const JARVIS_AKTIONS_AUSFUEHRUNG = {
   'email.pruefen': ({ serviceAccount, payload }) => wendeFreigabeAn({
     serviceAccount, collection: 'jarvisEmailVerarbeitung', id: payload.entityId,
     erwarteteVersion: payload.erwarteteVersion, entscheidung: payload.entscheidung,
+  }),
+  'email.bearbeiten': ({ serviceAccount, env, payload }) => bearbeiteEmailAntwortentwurf({
+    serviceAccount, env, id: payload.entityId, erwarteteVersion: payload.erwarteteVersion,
+    antwortentwurfBetreff: payload.antwortentwurfBetreff, antwortentwurfText: payload.antwortentwurfText,
+  }),
+  'mahnung.bearbeiten': ({ serviceAccount, payload }) => bearbeiteMahnEntwurf({
+    serviceAccount, id: payload.entityId, erwarteteVersion: payload.erwarteteVersion, text: payload.text, gebuehr: payload.gebuehr,
   }),
   'rechnung.pruefen': ({ serviceAccount, payload }) => wendeFreigabeAn({
     serviceAccount, collection: 'jarvisRechnungsEntwuerfe', id: payload.entityId,
@@ -3403,7 +3547,16 @@ async function runJarvisEmailCheck(env) {
               // im Freigabecenter erhöht, niemals durch diesen autonomen Job
               // selbst (dieselbe E-Mail wird wegen TERMINALE_EMAIL_STATUS nie
               // ein zweites Mal verarbeitet).
-              data: { status: 'verarbeitet', aufgabeId, entwurfErstellt, angebotId, angebotFehlendeInfos, verarbeitetAm: new Date().toISOString(), version: 1, freigabeStatus: 'offen' },
+              // antwortentwurfBetreff/-Text sowie emailVon/emailBetreff
+              // (Phase 6) - der eigentliche Entwurfstext wurde bisher NUR an
+              // Gmail geschickt, aber nirgends in Werkora selbst gespeichert -
+              // ohne das hätte das Freigabecenter ihn weder anzeigen noch vor
+              // der Freigabe bearbeiten können (siehe email.bearbeiten unten).
+              data: {
+                status: 'verarbeitet', aufgabeId, entwurfErstellt, angebotId, angebotFehlendeInfos, verarbeitetAm: new Date().toISOString(), version: 1, freigabeStatus: 'offen',
+                antwortentwurfBetreff: analyse.antwortentwurf?.betreff || '', antwortentwurfText: analyse.antwortentwurf?.text || '',
+                emailVon: email.from || '', emailBetreff: email.subject || '',
+              },
             });
           } else if (analyse.kategorie === 'spam_werbung') {
             try {
@@ -4035,7 +4188,7 @@ async function runJarvisProjektCheck(env) {
 // zeigen statt zweier unabhängiger, potenziell widersprüchlicher Abfragen.
 // =============================================================================
 
-async function holeJarvisZentraleDaten({ serviceAccount }) {
+async function holeJarvisZentraleDaten({ serviceAccount, env }) {
   const [
     emailVerarbeitung, rechnungsEntwuerfe, mahnEntwuerfe, terminVorschlaege,
     angebotsPruefungen, jobs, aktionen, aufgaben, kostenMonat,
@@ -4055,10 +4208,29 @@ async function holeJarvisZentraleDaten({ serviceAccount }) {
   // Phase 5 entstandenen Testdaten defensiv als "offen" behandelt).
   const nochOffen = (liste) => liste.filter((e) => (e.freigabeStatus || 'offen') === 'offen');
 
+  // Behebt eine bei der Browser-Testvorbereitung (Phase 6) entdeckte Lücke:
+  // jarvisAngebotsPruefung speichert bewusst NIE die Positionen selbst (siehe
+  // Kommentar bei dessen firestoreSetDoc) - ohne diese Anreicherung hätte das
+  // Bearbeiten-Formular für Angebote in der Zentrale NIE die echten,
+  // aktuellen Positionen angezeigt (sicheres Bearbeiten setzt aber voraus,
+  // dass Danny erst sieht, was er überschreibt). Ein Fehlschlag dieses
+  // zusätzlichen Lese-Aufrufs (z.B. KI-Bürokraft nicht erreichbar) darf die
+  // gesamte Zentrale-Übersicht nicht zum Absturz bringen - dann bleibt das
+  // Formular eben leer und Danny muss die Positionen neu eingeben.
+  const offeneAngebotsentwuerfe = nochOffen(angebotsPruefungen);
+  const angebotsentwuerfe = await Promise.all(offeneAngebotsentwuerfe.map(async (a) => {
+    try {
+      const aktuell = await callKiBuerokraftRest({ env, path: `/quotes/${encodeURIComponent(a.angebotId)}` });
+      return { ...a, items: aktuell?.items || [] };
+    } catch {
+      return a;
+    }
+  }));
+
   return {
     neueKundenanfragen: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet'),
     vorbereiteteAntworten: nochOffen(emailVerarbeitung).filter((e) => e.status === 'verarbeitet' && e.entwurfErstellt),
-    angebotsentwuerfe: nochOffen(angebotsPruefungen),
+    angebotsentwuerfe,
     rechnungsentwuerfe: nochOffen(rechnungsEntwuerfe).filter((e) => e.status === 'entwurf_erstellt'),
     mahnentwuerfe: nochOffen(mahnEntwuerfe),
     terminvorschlaege: nochOffen(terminVorschlaege).filter((e) => e.status === 'vorschlag_erstellt'),
@@ -4080,8 +4252,19 @@ async function holeJarvisZentraleDaten({ serviceAccount }) {
   };
 }
 
-async function erzeugeJarvisTagesbericht({ serviceAccount }) {
-  const daten = await holeJarvisZentraleDaten({ serviceAccount });
+async function erzeugeJarvisTagesbericht({ serviceAccount, env }) {
+  const daten = await holeJarvisZentraleDaten({ serviceAccount, env });
+  // Phase 6 (Vorgabe Punkt 5 "Erweitere den bestehenden Tagesbericht") -
+  // ergänzt um die wichtigsten CONTROL-Kennzahlen (offene/überfällige
+  // Forderungen). Ein Fehlschlag der CONTROL-Berechnung (z.B. KI-Bürokraft
+  // nicht erreichbar) darf den Tagesbericht selbst nicht zum Absturz bringen.
+  let forderungen = null;
+  try {
+    const control = await holeJarvisControlDaten({ serviceAccount, env });
+    forderungen = control.forderungen;
+  } catch (err) {
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'tagesbericht-control', fehler: err });
+  }
   return {
     datum: new Date().toISOString().slice(0, 10),
     neueKundenanfragen: daten.neueKundenanfragen.length,
@@ -4092,6 +4275,323 @@ async function erzeugeJarvisTagesbericht({ serviceAccount }) {
     offeneFreigaben: daten.offeneFreigaben.length,
     technischeFehler: daten.fehlgeschlageneAutomationen.length,
     kiKostenMonatUsd: daten.kiKostenMonat.usd,
+    offeneForderungenBrutto: forderungen?.offenBrutto ?? null,
+    ueberfaelligeForderungenBrutto: forderungen?.ueberfaelligBrutto ?? null,
+    erstelltAm: new Date().toISOString(),
+  };
+}
+
+// =============================================================================
+// JARVIS Phase 6 - "JARVIS CONTROL": Unternehmensübersicht und proaktive
+// Überwachung, AUSSCHLIESSLICH aus bereits vorhandenen Werkora-Daten (keine
+// zusätzliche Datenhaltung außer einem schlanken monatlichen Kennzahlen-
+// Verlauf für die Veränderungserkennung, siehe jarvisKennzahlenVerlauf).
+// Bewusst OHNE jeden Claude-Aufruf (wie schon Rechnungs-/Mahnungsprüfung) -
+// alle Zahlen sind direkt aus echten Firestore-Daten berechnet, nie von
+// einer KI geschätzt. Wo eine Kennzahl mangels Datengrundlage nicht
+// verlässlich berechenbar ist, wird sie NICHT geraten, sondern explizit als
+// "unvollstaendig"/"nichtVerfuegbar" mit Begründung gekennzeichnet (Vorgabe
+// Punkt 3: "Keine erfundenen Umsätze, Kosten oder Gewinne").
+// =============================================================================
+
+const JARVIS_CONTROL_ANGEBOT_OHNE_RUECKMELDUNG_TAGE = 14;
+const JARVIS_CONTROL_ARBEITSTAGE_JE_MONAT_ANNAHME = 20; // Annahme für die Auslastungsberechnung, da Werkora keinen Kalender mit Feiertagen/Sollarbeitstagen je Monat führt
+
+function monatsSchluessel(datumIso) {
+  return (datumIso || '').slice(0, 7);
+}
+
+/** Umsatz-/Rechnungsentwicklung der letzten "monate" Kalendermonate (inkl. laufendem Monat), aus der echten rechnungen-Collection. */
+function berechneUmsatzverlauf(rechnungen, monate = 6) {
+  const heute = new Date();
+  const schluessel = [];
+  for (let i = monate - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(heute.getUTCFullYear(), heute.getUTCMonth() - i, 1));
+    schluessel.push(d.toISOString().slice(0, 7));
+  }
+  const proMonat = Object.fromEntries(schluessel.map((s) => [s, { monat: s, rechnungsumsatzNetto: 0, rechnungsumsatzBrutto: 0, zahlungseingang: 0, anzahlRechnungen: 0 }]));
+  for (const r of rechnungen) {
+    if (r.status === 'storniert') continue;
+    const m = monatsSchluessel(r.datum);
+    if (proMonat[m]) {
+      proMonat[m].rechnungsumsatzNetto += Number(r.netto) || 0;
+      proMonat[m].rechnungsumsatzBrutto += Number(r.brutto) || 0;
+      proMonat[m].anzahlRechnungen += 1;
+    }
+    // Zahlungseingang wird nach tatsächlichem Zahlungsdatum einsortiert, NICHT
+    // nach Rechnungsdatum (dieselbe Logik wie die bestehende EÜR-Auswertung
+    // in Werkora selbst, siehe cloudflare-worker-ki-buerokraft invoiceToApi-Kommentar).
+    const mBezahlt = monatsSchluessel(r.bezahltAm);
+    if (proMonat[mBezahlt]) {
+      if (r.status === 'bezahlt') proMonat[mBezahlt].zahlungseingang += Number(r.brutto) || 0;
+      else if (r.status === 'teilbezahlt') proMonat[mBezahlt].zahlungseingang += Number(r.teilzahlungBetrag) || 0;
+    }
+  }
+  return schluessel.map((s) => proMonat[s]);
+}
+
+/** Offene/überfällige Forderungen - aus denselben Feldern, die bereits das bestehende Mahnungsmanagement verwendet (Vorgabe Punkt 3: Rechnungsumsätze/Zahlungseingänge/Forderungen getrennt ausweisen). */
+function berechneForderungen(rechnungen, heute) {
+  let offenBrutto = 0, ueberfaelligBrutto = 0, anzahlOffen = 0, anzahlUeberfaellig = 0;
+  for (const r of rechnungen) {
+    if (r.status !== 'offen' && r.status !== 'teilbezahlt') continue;
+    const bezahlterAnteil = r.status === 'teilbezahlt' ? (Number(r.teilzahlungBetrag) || 0) : 0;
+    const rest = (Number(r.brutto) || 0) - bezahlterAnteil;
+    offenBrutto += rest;
+    anzahlOffen++;
+    if (r.faelligAm && r.faelligAm < heute) { ueberfaelligBrutto += rest; anzahlUeberfaellig++; }
+  }
+  return { offenBrutto: Math.round(offenBrutto * 100) / 100, ueberfaelligBrutto: Math.round(ueberfaelligBrutto * 100) / 100, anzahlOffen, anzahlUeberfaellig };
+}
+
+/** Angebote nach Status + "ohne Rückmeldung" (versendet, seit N Tagen keine Statusänderung - Annahme: "datum" ist das letzte bekannte Änderungsdatum, da Werkora kein separates "versendetAm"-Feld führt) + Auftragsbestand (angenommene Angebote ohne bereits gestellte Schlussrechnung). */
+function berechneAngeboteUndAuftragsbestand(angebote, rechnungen, heute) {
+  const nachStatus = { entwurf: 0, versendet: 0, angenommen: 0, abgelehnt: 0 };
+  const ohneRueckmeldung = [];
+  const grenzeTag = new Date(`${heute}T00:00:00Z`);
+  grenzeTag.setUTCDate(grenzeTag.getUTCDate() - JARVIS_CONTROL_ANGEBOT_OHNE_RUECKMELDUNG_TAGE);
+  const grenzeStr = grenzeTag.toISOString().slice(0, 10);
+
+  const projekteMitSchlussrechnung = new Set(
+    rechnungen.filter((r) => r.status !== 'storniert' && r.rechnungstyp !== 'abschlag' && r.projektId).map((r) => r.projektId)
+  );
+
+  let auftragsbestandNetto = 0;
+  for (const a of angebote) {
+    if (nachStatus[a.status] !== undefined) nachStatus[a.status]++;
+    if (a.status === 'versendet' && a.datum && a.datum <= grenzeStr) ohneRueckmeldung.push({ id: a.id, kundeId: a.kundeId || '', datum: a.datum, betreff: a.betreff || '' });
+    if (a.status === 'angenommen' && (!a.projektId || !projekteMitSchlussrechnung.has(a.projektId))) auftragsbestandNetto += Number(a.netto) || 0;
+  }
+  return {
+    nachStatus, ohneRueckmeldung,
+    auftragsbestandNetto: Math.round(auftragsbestandNetto * 100) / 100,
+    hinweis: 'Angebots-"Rückmeldedauer" wird mangels eigenem "versendetAm"-Feld anhand von "datum" angenähert.',
+  };
+}
+
+/** Deckungsbeiträge je Projekt - NUR aus echten Daten (angenommene Angebote als Umsatz-Soll, Ausgaben + Zeiterfassung x Stundenlohn als Kosten). Projekte ohne ausreichende Datengrundlage werden klar als unvollständig markiert statt mit falschem Wert "0" gerechnet. */
+function berechneProjektDeckungsbeitraege({ projekte, angebote, ausgaben, zeiterfassung, mitarbeiter }) {
+  const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const angeboteProProjekt = {};
+  for (const a of angebote) {
+    if (a.status !== 'angenommen' || !a.projektId) continue;
+    angeboteProProjekt[a.projektId] = (angeboteProProjekt[a.projektId] || 0) + (Number(a.netto) || 0);
+  }
+  const ausgabenProProjekt = {};
+  for (const a of ausgaben) {
+    if (!a.projektId) continue;
+    ausgabenProProjekt[a.projektId] = (ausgabenProProjekt[a.projektId] || 0) + (Number(a.betragNetto) || 0);
+  }
+  const zeitProProjekt = {};
+  for (const z of zeiterfassung) {
+    if (!z.projektId) continue;
+    if (!zeitProProjekt[z.projektId]) zeitProProjekt[z.projektId] = [];
+    zeitProProjekt[z.projektId].push(z);
+  }
+
+  const ergebnisse = [];
+  for (const p of projekte) {
+    const umsatz = angeboteProProjekt[p.id];
+    if (umsatz === undefined) { ergebnisse.push({ projektId: p.id, titel: p.titel || p.id, unvollstaendig: true, grund: 'Kein angenommenes Angebot für dieses Projekt gefunden - Umsatz-Soll unbekannt.' }); continue; }
+
+    const materialkosten = ausgabenProProjekt[p.id] || 0;
+    const zeitEintraege = zeitProProjekt[p.id] || [];
+    let arbeitskosten = 0, fehlenderStundenlohn = false;
+    for (const z of zeitEintraege) {
+      const ma = mitarbeiterById[z.mitarbeiterId];
+      if (!ma || !ma.stundenlohn) { fehlenderStundenlohn = true; continue; }
+      arbeitskosten += ((Number(z.dauerMinuten) || 0) / 60) * Number(ma.stundenlohn);
+    }
+    if (fehlenderStundenlohn) {
+      ergebnisse.push({ projektId: p.id, titel: p.titel || p.id, unvollstaendig: true, grund: 'Für mindestens einen Mitarbeiter mit erfasster Zeit ist kein Stundenlohn hinterlegt - Arbeitskosten unvollständig.' });
+      continue;
+    }
+    const kosten = Math.round((materialkosten + arbeitskosten) * 100) / 100;
+    const deckungsbeitrag = Math.round((umsatz - kosten) * 100) / 100;
+    ergebnisse.push({ projektId: p.id, titel: p.titel || p.id, unvollstaendig: false, umsatzNetto: umsatz, materialkosten: Math.round(materialkosten * 100) / 100, arbeitskosten: Math.round(arbeitskosten * 100) / 100, kostenGesamt: kosten, deckungsbeitrag });
+  }
+  return ergebnisse;
+}
+
+/** Mitarbeiterstunden/Auslastung im laufenden Monat - Soll-Stunden sind eine ANNAHME (siehe JARVIS_CONTROL_ARBEITSTAGE_JE_MONAT_ANNAHME), da Werkora keinen Soll-Arbeitszeit-Kalender führt. */
+function berechneMitarbeiterAuslastung(mitarbeiter, zeiterfassung) {
+  const heute = new Date().toISOString().slice(0, 7);
+  const minutenJeMitarbeiter = {};
+  for (const z of zeiterfassung) {
+    if (monatsSchluessel(z.datum) !== heute) continue;
+    minutenJeMitarbeiter[z.mitarbeiterId] = (minutenJeMitarbeiter[z.mitarbeiterId] || 0) + (Number(z.dauerMinuten) || 0);
+  }
+  return mitarbeiter.filter((m) => m.wochenstunden).map((m) => {
+    const istStunden = Math.round(((minutenJeMitarbeiter[m.id] || 0) / 60) * 100) / 100;
+    const sollStunden = Math.round(((Number(m.wochenstunden) / 5) * JARVIS_CONTROL_ARBEITSTAGE_JE_MONAT_ANNAHME) * 100) / 100;
+    return { mitarbeiterId: m.id, name: m.name || m.id, istStunden, sollStunden, auslastungProzent: sollStunden ? Math.round((istStunden / sollStunden) * 1000) / 10 : null };
+  });
+}
+
+/** Wartungsverträge: NUR Anzahl/Fälligkeiten aus echten Daten - KEIN erfundener wiederkehrender Umsatzwert, da "anlagen" keinen Vertragswert speichert. */
+function berechneWartungsvertraege(anlagen, heute) {
+  const vertraege = anlagen.filter((a) => a.kategorie === 'wartungsvertrag');
+  const faellig = faelligeAnlagen(vertraege, heute);
+  return {
+    anzahlVertraege: vertraege.length, anzahlFaellig: faellig.length,
+    wiederkehrenderUmsatz: null,
+    hinweis: 'Werkora speichert keinen Vertragswert zu Wartungsverträgen ("anlagen" hat kein Preisfeld) - wiederkehrender Umsatz kann nicht berechnet werden, nur Anzahl/Fälligkeiten.',
+  };
+}
+
+/** Offene Aufgaben/Projektverzögerungen - dieselbe Überfälligkeits-Logik wie runJarvisProjektCheck (Phase 4), hier für die Gesamtschau aggregiert. */
+function berechneAufgabenUndVerzoegerungen(aufgaben, projekte, geschlosseneIds, heute) {
+  const ueberfaelligeAufgaben = aufgaben.filter((a) => a.status !== 'erledigt' && a.faelligAm && a.faelligAm < heute && !(a.id || '').startsWith('jarvis-'));
+  const verzoegerteProjekte = projekte.filter((p) => !geschlosseneIds.has(p.status) && p.endDatum && p.endDatum < heute);
+  return { anzahlUeberfaelligeAufgaben: ueberfaelligeAufgaben.length, anzahlVerzoegerteProjekte: verzoegerteProjekte.length, verzoegerteProjekte: verzoegerteProjekte.map((p) => ({ projektId: p.id, titel: p.titel || p.id, endDatum: p.endDatum })) };
+}
+
+async function holeJarvisControlDaten({ serviceAccount, env }) {
+  const heute = new Date().toISOString().slice(0, 10);
+  const [rechnungen, angebote, projekte, kanbanSpalten, aufgaben, zeiterfassung, mitarbeiter, anlagen, ausgaben] = await Promise.all([
+    firestoreListDocuments({ serviceAccount, collection: 'rechnungen' }),
+    firestoreListDocuments({ serviceAccount, collection: 'angebote' }),
+    firestoreListDocuments({ serviceAccount, collection: 'projekte' }),
+    firestoreListDocuments({ serviceAccount, collection: 'kanbanSpalten' }),
+    firestoreListDocuments({ serviceAccount, collection: 'aufgaben' }),
+    firestoreListDocuments({ serviceAccount, collection: 'zeiterfassung' }),
+    firestoreListDocuments({ serviceAccount, collection: 'mitarbeiter' }),
+    firestoreListDocuments({ serviceAccount, collection: 'anlagen' }),
+    firestoreListDocuments({ serviceAccount, collection: 'ausgaben' }),
+  ]);
+  void env;
+  const geschlosseneIds = geschlosseneProjektStatusIds(kanbanSpalten);
+
+  return {
+    heute,
+    umsatzverlauf: berechneUmsatzverlauf(rechnungen),
+    forderungen: berechneForderungen(rechnungen, heute),
+    angeboteUndAuftragsbestand: berechneAngeboteUndAuftragsbestand(angebote, rechnungen, heute),
+    projektDeckungsbeitraege: berechneProjektDeckungsbeitraege({ projekte, angebote, ausgaben, zeiterfassung, mitarbeiter }),
+    mitarbeiterAuslastung: berechneMitarbeiterAuslastung(mitarbeiter, zeiterfassung),
+    wartungsvertraege: berechneWartungsvertraege(anlagen, heute),
+    aufgabenUndVerzoegerungen: berechneAufgabenUndVerzoegerungen(aufgaben, projekte, geschlosseneIds, heute),
+  };
+}
+
+// Schwellenwert für "ungewöhnliche Veränderung" einer Kennzahl gegenüber dem
+// Vormonat (relative Abweichung) - rein regelbasiert, keine KI/Statistik.
+const JARVIS_CONTROL_AUFFAELLIGE_ABWEICHUNG_PROZENT = 30;
+
+function vergleicheMitVormonat(aktuellerWert, vorherigerWert) {
+  if (!vorherigerWert) return null;
+  const abweichungProzent = Math.round(((aktuellerWert - vorherigerWert) / vorherigerWert) * 1000) / 10;
+  if (Math.abs(abweichungProzent) < JARVIS_CONTROL_AUFFAELLIGE_ABWEICHUNG_PROZENT) return null;
+  return { abweichungProzent, aktuellerWert, vorherigerWert };
+}
+
+/**
+ * Autonome proaktive Unternehmensüberwachung (Vorgabe Punkt 4). Erstellt
+ * AUSSCHLIESSLICH interne Hinweise/Aufgaben (deterministische IDs, Upsert -
+ * dasselbe Muster wie runJarvisProjektCheck in Phase 4, daher von Natur aus
+ * ohne doppelt anwachsende Hinweise) - trifft NIE selbst eine finanzielle
+ * oder vertragliche Entscheidung (kein Versand, keine Buchung, keine
+ * Vertragsänderung). Persistiert einen schlanken monatlichen Kennzahlen-
+ * Schnappschuss (jarvisKennzahlenVerlauf) ausschließlich zur Erkennung
+ * "ungewöhnlicher Veränderungen" im Folgemonat.
+ */
+async function runJarvisControlCheck(env) {
+  if (env.JARVIS_CONTROL_AKTIV !== 'true') return;
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `control-check-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'control-check' });
+  if (!job) return;
+
+  let hinweiseErstellt = 0, fehlerAnzahl = 0;
+  try {
+    const control = await holeJarvisControlDaten({ serviceAccount, env });
+
+    const upsertHinweis = async (id, titel, beschreibung, prioritaet = 'normal') => {
+      await firestoreSetDoc({
+        serviceAccount, collection: 'aufgaben', id,
+        data: { id, titel, beschreibung, status: 'offen', prioritaet, erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString(), quelle: 'jarvis-control' },
+      });
+      hinweiseErstellt++;
+    };
+
+    if (control.forderungen.anzahlUeberfaellig > 0) {
+      await upsertHinweis('jarvis-control-forderungen', `JARVIS: ${control.forderungen.anzahlUeberfaellig} überfällige Forderung(en)`, `Überfällige Forderungen insgesamt ${control.forderungen.ueberfaelligBrutto.toFixed(2)} € - Mahnlauf prüfen (siehe JARVIS-Zentrale, Mahnentwürfe).`, 'hoch');
+    }
+    if (control.angeboteUndAuftragsbestand.ohneRueckmeldung.length > 0) {
+      await upsertHinweis('jarvis-control-angebote-rueckmeldung', `JARVIS: ${control.angeboteUndAuftragsbestand.ohneRueckmeldung.length} Angebot(e) ohne Rückmeldung`, `Seit über ${JARVIS_CONTROL_ANGEBOT_OHNE_RUECKMELDUNG_TAGE} Tagen versendet, keine Statusänderung - Nachfassen empfohlen.`);
+    }
+    const projekteMitUnterdeckung = control.projektDeckungsbeitraege.filter((p) => !p.unvollstaendig && p.deckungsbeitrag < 0);
+    if (projekteMitUnterdeckung.length > 0) {
+      await upsertHinweis('jarvis-control-kostenueberschreitung', `JARVIS: ${projekteMitUnterdeckung.length} Projekt(e) mit negativem Deckungsbeitrag`, projekteMitUnterdeckung.map((p) => `${p.titel}: ${p.deckungsbeitrag.toFixed(2)} €`).join(' | '), 'hoch');
+    }
+    if (control.aufgabenUndVerzoegerungen.anzahlVerzoegerteProjekte > 0) {
+      await upsertHinweis('jarvis-control-projektverzug', `JARVIS: ${control.aufgabenUndVerzoegerungen.anzahlVerzoegerteProjekte} verzögerte(s) Projekt(e)`, control.aufgabenUndVerzoegerungen.verzoegerteProjekte.map((p) => `${p.titel} (geplantes Ende ${p.endDatum})`).join(' | '));
+    }
+    if (control.wartungsvertraege.anzahlFaellig > 0) {
+      await upsertHinweis('jarvis-control-wartung-faellig', `JARVIS: ${control.wartungsvertraege.anzahlFaellig} fällige(r) Wartungsvertrag/-verträge`, 'Siehe JARVIS-Zentrale, Terminvorschläge.');
+    }
+
+    // Veränderungserkennung gegenüber dem Vormonat (nur Rechnungsumsatz
+    // netto, als einfachster, am wenigsten mehrdeutiger Indikator).
+    const monatsId = jarvisMonatsId();
+    const vorMonat = await firestoreGetDoc({ serviceAccount, collection: 'jarvisKennzahlenVerlauf', id: jarvisMonatsId(new Date(new Date().setUTCMonth(new Date().getUTCMonth() - 1))) });
+    const laufenderMonatsUmsatz = control.umsatzverlauf[control.umsatzverlauf.length - 1]?.rechnungsumsatzNetto || 0;
+    const abweichung = vorMonat ? vergleicheMitVormonat(laufenderMonatsUmsatz, vorMonat.rechnungsumsatzNetto) : null;
+    if (abweichung) {
+      await upsertHinweis('jarvis-control-kennzahl-abweichung', `JARVIS: ungewöhnliche Umsatzveränderung (${abweichung.abweichungProzent > 0 ? '+' : ''}${abweichung.abweichungProzent}%)`, `Rechnungsumsatz netto: ${abweichung.aktuellerWert.toFixed(2)} € (Vormonat: ${abweichung.vorherigerWert.toFixed(2)} €).`);
+    }
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisKennzahlenVerlauf', id: monatsId, data: { monat: monatsId, rechnungsumsatzNetto: laufenderMonatsUmsatz, aktualisiertAm: new Date().toISOString() } });
+
+    await firestoreSetDoc({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      data: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${hinweiseErstellt} Hinweis(e) erstellt/aktualisiert.` },
+    });
+  } catch (err) {
+    fehlerAnzahl++;
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'control-check', fehler: err, kontext: { jobId }, kritisch: true });
+    void fehlerAnzahl;
+  }
+}
+
+/**
+ * Wochenbericht (Vorgabe Punkt 5, "erste Version") - kombiniert Zentrale +
+ * CONTROL-Daten zu Kennzahlen, offenen Entscheidungen, Risiken und
+ * (regelbasierten, NICHT von einer KI frei formulierten) Handlungs-
+ * empfehlungen. Wie der Tagesbericht vorerst nur auf Abruf, nicht per Cron.
+ */
+async function erzeugeJarvisWochenbericht({ serviceAccount, env }) {
+  const [zentrale, control] = await Promise.all([
+    holeJarvisZentraleDaten({ serviceAccount, env }),
+    holeJarvisControlDaten({ serviceAccount, env }),
+  ]);
+
+  const empfehlungen = [];
+  if (control.forderungen.anzahlUeberfaellig > 0) empfehlungen.push(`${control.forderungen.anzahlUeberfaellig} überfällige Forderung(en) (${control.forderungen.ueberfaelligBrutto.toFixed(2)} €) - Mahnlauf prüfen.`);
+  if (control.angeboteUndAuftragsbestand.ohneRueckmeldung.length > 0) empfehlungen.push(`${control.angeboteUndAuftragsbestand.ohneRueckmeldung.length} Angebot(e) ohne Rückmeldung - Nachfassen empfohlen.`);
+  const projekteMitUnterdeckung = control.projektDeckungsbeitraege.filter((p) => !p.unvollstaendig && p.deckungsbeitrag < 0);
+  if (projekteMitUnterdeckung.length > 0) empfehlungen.push(`${projekteMitUnterdeckung.length} Projekt(e) mit negativem Deckungsbeitrag - Kalkulation prüfen.`);
+  if (zentrale.offeneFreigaben.length > 0) empfehlungen.push(`${zentrale.offeneFreigaben.length} offene JARVIS-Freigabe(n) warten auf Entscheidung.`);
+
+  const risiken = [];
+  if (control.aufgabenUndVerzoegerungen.anzahlVerzoegerteProjekte > 0) risiken.push(`${control.aufgabenUndVerzoegerungen.anzahlVerzoegerteProjekte} Projekt(e) über dem geplanten Enddatum.`);
+  const unvollstaendigeProjekte = control.projektDeckungsbeitraege.filter((p) => p.unvollstaendig);
+  if (unvollstaendigeProjekte.length > 0) risiken.push(`Deckungsbeitrag für ${unvollstaendigeProjekte.length} Projekt(e) nicht berechenbar (unvollständige Daten, siehe Details).`);
+
+  return {
+    zeitraum: { von: control.umsatzverlauf[0]?.monat, bis: control.heute },
+    kennzahlen: {
+      umsatzverlauf: control.umsatzverlauf,
+      forderungen: control.forderungen,
+      angeboteUndAuftragsbestand: control.angeboteUndAuftragsbestand,
+      mitarbeiterAuslastung: control.mitarbeiterAuslastung,
+      wartungsvertraege: control.wartungsvertraege,
+    },
+    offeneEntscheidungen: zentrale.offeneFreigaben.length,
+    risiken,
+    handlungsempfehlungen: empfehlungen,
     erstelltAm: new Date().toISOString(),
   };
 }
@@ -4494,6 +4994,7 @@ export default {
     ctx.waitUntil(runJarvisMahnungCheck(env)); // Phase 3 - Mahnungen
     ctx.waitUntil(runJarvisWartungsCheck(env)); // Phase 4 - Wartungstermin-Vorschläge
     ctx.waitUntil(runJarvisProjektCheck(env)); // Phase 4 - überfällige Projektaufgaben
+    ctx.waitUntil(runJarvisControlCheck(env)); // Phase 6 - JARVIS CONTROL proaktive Überwachung (Flag JARVIS_CONTROL_AKTIV, Standard aus)
   },
 
   async fetch(request, env) {
@@ -4933,7 +5434,7 @@ export default {
         const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
         const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
         pruefeJarvisRolle(aufrufer.role);
-        const daten = await holeJarvisZentraleDaten({ serviceAccount });
+        const daten = await holeJarvisZentraleDaten({ serviceAccount, env });
         return new Response(JSON.stringify({ ok: true, daten }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
@@ -4956,7 +5457,51 @@ export default {
         const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
         const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
         pruefeJarvisRolle(aufrufer.role);
-        const bericht = await erzeugeJarvisTagesbericht({ serviceAccount });
+        const bericht = await erzeugeJarvisTagesbericht({ serviceAccount, env });
+        return new Response(JSON.stringify({ ok: true, bericht }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 6 - JARVIS CONTROL: Unternehmensübersicht auf Abruf.
+    if (body.action === 'jarvis-control') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const daten = await holeJarvisControlDaten({ serviceAccount, env });
+        return new Response(JSON.stringify({ ok: true, daten }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 6 - Wochenbericht auf Abruf (noch NICHT an den Cron angehängt).
+    if (body.action === 'jarvis-wochenbericht') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const bericht = await erzeugeJarvisWochenbericht({ serviceAccount, env });
         return new Response(JSON.stringify({ ok: true, bericht }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
@@ -5057,4 +5602,10 @@ export const __test__ = {
   // Phase 5 - Freigabecenter: Versionssicherung, konkrete Aktionstypen, Zentrale/Tagesbericht
   erstelleUndFuehreJarvisFreigabeAus, wendeFreigabeAn, bearbeiteRechnungsEntwurf,
   wendeTerminFreigabeAn, wendeAngebotsFreigabeAn, holeJarvisZentraleDaten, erzeugeJarvisTagesbericht,
+  // Phase 6 - sichere Bearbeitung E-Mail/Mahnung, Firestore-Teil-Update, CONTROL
+  firestoreMergeFelder, bearbeiteEmailAntwortentwurf, bearbeiteMahnEntwurf,
+  holeJarvisControlDaten, runJarvisControlCheck, erzeugeJarvisWochenbericht,
+  berechneUmsatzverlauf, berechneForderungen, berechneAngeboteUndAuftragsbestand,
+  berechneProjektDeckungsbeitraege, berechneMitarbeiterAuslastung, berechneWartungsvertraege,
+  berechneAufgabenUndVerzoegerungen, vergleicheMitVormonat,
 };

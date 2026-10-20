@@ -1,9 +1,10 @@
-import { chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht } from '../ai.js';
+import { chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht, holeJarvisControl, holeJarvisWochenbericht } from '../ai.js';
 import { escapeHtml, toast, formatDateTime } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
 import { getSession } from '../auth.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { get, put } from '../db.js';
+import { openModal } from '../ui.js';
 
 // Sprachausgabe ist eine Geräte-/Browsereinstellung, kein Werkora-Setting -
 // bewusst wie beim bisherigen KI-Assistenten nur in localStorage.
@@ -159,6 +160,70 @@ function entityIdVon(typ, item) {
   return item.id;
 }
 
+// Baut die HTML-Ansicht der JARVIS-CONTROL-Daten (siehe holeJarvisControlDaten
+// im Worker) - rein darstellend, keine eigene Berechnung im Client. Jede
+// Kennzahl zeigt genau das, was der Worker bereits geprüft/markiert hat
+// (z.B. "unvollstaendig" bei Projekt-Deckungsbeiträgen), damit nichts im
+// Frontend zusätzlich interpretiert oder geschätzt wird.
+function renderControlHtml(control) {
+  const letzterMonat = control.umsatzverlauf[control.umsatzverlauf.length - 1];
+  const umsatzZeilen = control.umsatzverlauf.map((m) => `
+    <tr><td>${escapeHtml(m.monat)}</td><td>${m.rechnungsumsatzNetto.toFixed(2)} €</td><td>${m.rechnungsumsatzBrutto.toFixed(2)} €</td><td>${m.zahlungseingang.toFixed(2)} €</td><td>${m.anzahlRechnungen}</td></tr>
+  `).join('');
+
+  const ang = control.angeboteUndAuftragsbestand;
+  const vollstaendigeProjekte = control.projektDeckungsbeitraege.filter((p) => !p.unvollstaendig);
+  const unvollstaendigeProjekte = control.projektDeckungsbeitraege.filter((p) => p.unvollstaendig);
+
+  return `
+    <div class="kpi-grid" style="margin-top:8px">
+      <div class="kpi"><div class="kpi-value">${(letzterMonat?.rechnungsumsatzNetto || 0).toFixed(2)} €</div><div class="kpi-label">Rechnungsumsatz netto (${escapeHtml(letzterMonat?.monat || '')})</div></div>
+      <div class="kpi"><div class="kpi-value">${(letzterMonat?.zahlungseingang || 0).toFixed(2)} €</div><div class="kpi-label">Zahlungseingang (${escapeHtml(letzterMonat?.monat || '')})</div></div>
+      <div class="kpi"><div class="kpi-value">${control.forderungen.offenBrutto.toFixed(2)} €</div><div class="kpi-label">Offene Forderungen (${control.forderungen.anzahlOffen})</div></div>
+      <div class="kpi"><div class="kpi-value">${control.forderungen.ueberfaelligBrutto.toFixed(2)} €</div><div class="kpi-label">Davon überfällig (${control.forderungen.anzahlUeberfaellig})</div></div>
+      <div class="kpi"><div class="kpi-value">${ang.auftragsbestandNetto.toFixed(2)} €</div><div class="kpi-label">Auftragsbestand netto</div></div>
+      <div class="kpi"><div class="kpi-value">${ang.ohneRueckmeldung.length}</div><div class="kpi-label">Angebote ohne Rückmeldung</div></div>
+    </div>
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Umsatzverlauf (letzte ${control.umsatzverlauf.length} Monate)</h3>
+    <table class="data-table" style="width:100%">
+      <thead><tr><th>Monat</th><th>Rechnungsumsatz netto</th><th>Rechnungsumsatz brutto</th><th>Zahlungseingang</th><th>Anzahl</th></tr></thead>
+      <tbody>${umsatzZeilen}</tbody>
+    </table>
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Angebote nach Status</h3>
+    <p>${Object.entries(ang.nachStatus).map(([s, n]) => `${escapeHtml(s)}: ${n}`).join(' · ')}</p>
+    <p class="text-mute" style="font-size:11px">${escapeHtml(ang.hinweis)}</p>
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Projekt-Deckungsbeiträge</h3>
+    ${vollstaendigeProjekte.length ? `
+      <table class="data-table" style="width:100%">
+        <thead><tr><th>Projekt</th><th>Umsatz netto</th><th>Kosten</th><th>Deckungsbeitrag</th></tr></thead>
+        <tbody>${vollstaendigeProjekte.map((p) => `<tr${p.deckungsbeitrag < 0 ? ' style="color:var(--danger,#d33)"' : ''}><td>${escapeHtml(p.titel)}</td><td>${p.umsatzNetto.toFixed(2)} €</td><td>${p.kostenGesamt.toFixed(2)} €</td><td>${p.deckungsbeitrag.toFixed(2)} €</td></tr>`).join('')}</tbody>
+      </table>
+    ` : '<p class="text-mute">Keine vollständig berechenbaren Projekte.</p>'}
+    ${unvollstaendigeProjekte.length ? `<p class="hint" style="margin-top:8px">⚠️ ${unvollstaendigeProjekte.length} Projekt(e) mit unvollständiger Datengrundlage - Deckungsbeitrag NICHT berechnet: ${unvollstaendigeProjekte.map((p) => `${escapeHtml(p.titel)} (${escapeHtml(p.grund)})`).join(' | ')}</p>` : ''}
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Mitarbeiterauslastung (laufender Monat)</h3>
+    ${control.mitarbeiterAuslastung.length ? `
+      <table class="data-table" style="width:100%">
+        <thead><tr><th>Mitarbeiter</th><th>Ist-Stunden</th><th>Soll-Stunden (Annahme)</th><th>Auslastung</th></tr></thead>
+        <tbody>${control.mitarbeiterAuslastung.map((m) => `<tr><td>${escapeHtml(m.name)}</td><td>${m.istStunden}</td><td>${m.sollStunden}</td><td>${m.auslastungProzent ?? '–'}%</td></tr>`).join('')}</tbody>
+      </table>
+      <p class="text-mute" style="font-size:11px">Soll-Stunden sind eine Annahme (Wochenstunden/5 × 20 Arbeitstage) - Werkora führt keinen Arbeitszeitkalender. Nur Mitarbeiter mit hinterlegter Wochenstundenzahl werden gezeigt.</p>
+    ` : '<p class="text-mute">Kein Mitarbeiter mit hinterlegter Wochenstundenzahl.</p>'}
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Wartungsverträge</h3>
+    <p>${control.wartungsvertraege.anzahlVertraege} Vertrag/Verträge, davon ${control.wartungsvertraege.anzahlFaellig} fällig.</p>
+    <p class="text-mute" style="font-size:11px">${escapeHtml(control.wartungsvertraege.hinweis)}</p>
+
+    <h3 style="font-size:13px;margin:16px 0 4px">Aufgaben/Projektverzögerungen</h3>
+    <p>${control.aufgabenUndVerzoegerungen.anzahlUeberfaelligeAufgaben} überfällige Aufgabe(n), ${control.aufgabenUndVerzoegerungen.anzahlVerzoegerteProjekte} verzögerte(s) Projekt(e)${control.aufgabenUndVerzoegerungen.verzoegerteProjekte.length ? `: ${control.aufgabenUndVerzoegerungen.verzoegerteProjekte.map((p) => `${escapeHtml(p.titel)} (Ende ${escapeHtml(p.endDatum)})`).join(', ')}` : ''}.</p>
+
+    <p class="text-mute" style="font-size:11px;margin-top:12px">Stand: ${escapeHtml(control.heute)} - auf Abruf erzeugt, keine KI-Berechnung (rein regelbasiert aus echten Werkora-Daten).</p>
+  `;
+}
+
 async function renderZentrale(container) {
   container.innerHTML = '<p class="text-mute">Lade JARVIS-Zentrale …</p>';
   let daten;
@@ -179,6 +244,17 @@ async function renderZentrale(container) {
         <div class="kpi"><div class="kpi-value">${formatUsd(daten.kiKostenMonat.usd)}</div><div class="kpi-label">Aktuelle KI-Kosten (Monat)</div></div>
       </div>
       <p class="hint">${escapeHtml(kostenZeile)}</p>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">📊 JARVIS CONTROL - Unternehmensübersicht</h2>
+      <p class="hint">Rein regelbasierte Auswertung der echten Werkora-Daten (keine KI beteiligt) - Rechnungsumsatz/Zahlungseingänge/Forderungen werden bewusst getrennt ausgewiesen, unvollständige Daten werden sichtbar markiert statt geschätzt.</p>
+      <div class="actions">
+        <button type="button" class="btn btn-sm" id="jv-control-btn">📊 Unternehmensübersicht laden</button>
+        <button type="button" class="btn btn-sm" id="jv-wochenbericht-btn">📈 Wochenbericht anzeigen</button>
+      </div>
+      <div id="jv-control"></div>
+      <div id="jv-wochenbericht"></div>
     </div>
 
     <div class="card" style="margin-bottom:12px">
@@ -207,7 +283,7 @@ async function renderZentrale(container) {
                   <span class="actions">
                     <button type="button" class="btn btn-sm jv-freigeben" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">✅ Freigeben</button>
                     <button type="button" class="btn btn-sm jv-ablehnen" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">❌ Ablehnen</button>
-                    ${['angebot', 'rechnung'].includes(k.typ) ? `<button type="button" class="btn btn-sm jv-bearbeiten" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">✏️ Bearbeiten</button>` : ''}
+                    ${['angebot', 'rechnung', 'email', 'mahnung'].includes(k.typ) ? `<button type="button" class="btn btn-sm jv-bearbeiten" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">✏️ Bearbeiten</button>` : ''}
                   </span>
                 ` : ''}
               </div>
@@ -247,22 +323,15 @@ async function renderZentrale(container) {
     }
   }
 
-  async function bearbeiten(typ, kat, idx) {
-    const item = holeItem(kat, idx);
-    if (!item) return;
-    const aktuellePositionen = JSON.stringify(item.positionen || item.items || [], null, 2);
-    const neueEingabe = window.prompt('Positionen als JSON bearbeiten (article_id, title, unit, quantity, unit_price_net, vat_rate):', aktuellePositionen);
-    if (neueEingabe === null) return;
-    let neuePositionen;
+  // Sendet die Bearbeitung an den Worker (Aktionstyp "<typ>.bearbeiten") und
+  // lädt die Zentrale danach neu. Jede Bearbeitung erhöht serverseitig die
+  // Version und setzt freigabeStatus zurück auf "offen" (siehe worker.js) -
+  // eine zuvor erteilte Freigabe bezieht sich also nachweislich nie auf die
+  // nun geänderte Fassung.
+  async function sendeBearbeitung(typ, entityId, erwarteteVersion, payload, close) {
     try {
-      neuePositionen = JSON.parse(neueEingabe);
-    } catch {
-      toast('Ungültiges JSON.', 'danger');
-      return;
-    }
-    const entityId = entityIdVon(typ, item);
-    try {
-      await sendeJarvisFreigabe({ typ: `${typ}.bearbeiten`, entityId, payload: { erwarteteVersion: item.version ?? 1, neuePositionen } });
+      await sendeJarvisFreigabe({ typ: `${typ}.bearbeiten`, entityId, payload: { erwarteteVersion, ...payload } });
+      close();
       toast('Entwurf aktualisiert - erneute Prüfung/Freigabe erforderlich.', 'success');
       await renderZentrale(container);
     } catch (err) {
@@ -270,9 +339,176 @@ async function renderZentrale(container) {
     }
   }
 
+  // Strukturiertes Formular für Positionen (Angebot/Rechnung) anstelle der
+  // bisherigen rohen JSON-Eingabe (Vorgabe Phase 6 Punkt 1). Jede Zeile
+  // entspricht exakt den Feldern, die der Worker erwartet (article_id bleibt
+  // je Zeile erhalten, da er u.a. zur Dubletten-Plausibilitätsprüfung dient).
+  function oeffnePositionenFormular(typ, entityId, erwarteteVersion, positionenRoh) {
+    let zeilen = (positionenRoh || []).map((p) => ({ ...p }));
+    const { body, close } = openModal({
+      title: typ === 'angebot' ? 'Angebotspositionen bearbeiten' : 'Rechnungspositionen bearbeiten',
+      wide: true,
+      bodyHtml: `
+        <form id="jv-pos-form">
+          <table class="data-table" style="width:100%">
+            <thead><tr><th>Bezeichnung</th><th>Einheit</th><th>Menge</th><th>Einzelpreis netto</th><th>MwSt %</th><th></th></tr></thead>
+            <tbody id="jv-pos-rows"></tbody>
+          </table>
+          <button type="button" class="btn btn-sm" id="jv-pos-add" style="margin-top:8px">+ Position hinzufügen</button>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-pos-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern (erneute Freigabe erforderlich)</button>
+          </div>
+        </form>
+      `,
+    });
+
+    function renderZeilen() {
+      body.querySelector('#jv-pos-rows').innerHTML = zeilen.map((z, i) => `
+        <tr>
+          <td><input data-feld="title" data-i="${i}" value="${escapeHtml(z.title || '')}" required></td>
+          <td><input data-feld="unit" data-i="${i}" value="${escapeHtml(z.unit || '')}" style="width:70px"></td>
+          <td><input type="number" step="0.01" data-feld="quantity" data-i="${i}" value="${z.quantity ?? ''}" style="width:80px" required></td>
+          <td><input type="number" step="0.01" data-feld="unit_price_net" data-i="${i}" value="${z.unit_price_net ?? ''}" style="width:100px" required></td>
+          <td><input type="number" step="1" data-feld="vat_rate" data-i="${i}" value="${z.vat_rate ?? 19}" style="width:70px"></td>
+          <td><button type="button" class="btn btn-sm btn-danger jv-pos-del" data-i="${i}">✕</button></td>
+        </tr>
+      `).join('') || '<tr><td colspan="6" class="text-mute">Keine Positionen - mit "+ Position hinzufügen" eine neue Zeile anlegen.</td></tr>';
+      body.querySelectorAll('input[data-feld]').forEach((inp) => inp.addEventListener('input', () => {
+        const i = Number(inp.dataset.i);
+        zeilen[i][inp.dataset.feld] = inp.type === 'number' ? Number(inp.value) : inp.value;
+      }));
+      body.querySelectorAll('.jv-pos-del').forEach((btn) => btn.addEventListener('click', () => {
+        zeilen.splice(Number(btn.dataset.i), 1);
+        renderZeilen();
+      }));
+    }
+    renderZeilen();
+
+    body.querySelector('#jv-pos-add').addEventListener('click', () => {
+      zeilen.push({ article_id: '', title: '', unit: 'Stk.', quantity: 1, unit_price_net: 0, vat_rate: 19 });
+      renderZeilen();
+    });
+    body.querySelector('#jv-pos-cancel').addEventListener('click', close);
+    body.querySelector('#jv-pos-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!zeilen.length) { toast('Mindestens eine Position erforderlich.', 'danger'); return; }
+      sendeBearbeitung(typ, entityId, erwarteteVersion, { neuePositionen: zeilen }, close);
+    });
+  }
+
+  // Strukturiertes Formular für den E-Mail-Antwortentwurf (Betreff/Text
+  // einzeln editierbar statt JSON) - siehe bearbeiteEmailAntwortentwurf im
+  // Worker für die bekannte Einschränkung bzgl. des alten Gmail-Entwurfs.
+  function oeffneEmailFormular(entityId, erwarteteVersion, item) {
+    const { body, close } = openModal({
+      title: 'E-Mail-Antwortentwurf bearbeiten',
+      bodyHtml: `
+        <form id="jv-email-form">
+          <p class="hint">Hinweis: JARVIS versucht, den bereits vorbereiteten Gmail-Entwurf zu ersetzen - gelingt das nicht, bleibt der alte Entwurf zusätzlich in Gmail bestehen und muss dort vor dem Versenden manuell verworfen werden.</p>
+          <div class="field"><label>Betreff</label><input name="betreff" value="${escapeHtml(item.antwortentwurfBetreff || '')}"></div>
+          <div class="field"><label>Text *</label><textarea name="text" rows="10" required>${escapeHtml(item.antwortentwurfText || '')}</textarea></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-email-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern (erneute Freigabe erforderlich)</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-email-cancel').addEventListener('click', close);
+    body.querySelector('#jv-email-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const text = String(form.get('text') || '').trim();
+      if (!text) { toast('Text darf nicht leer sein.', 'danger'); return; }
+      sendeBearbeitung('email', entityId, erwarteteVersion, {
+        antwortentwurfBetreff: String(form.get('betreff') || ''), antwortentwurfText: text,
+      }, close);
+    });
+  }
+
+  // Strukturiertes Formular für den Mahntext (ändert über firestoreMergeFelder
+  // NUR "text"/"gebuehr" auf der ECHTEN mahnungen-Collection, siehe
+  // bearbeiteMahnEntwurf im Worker - rechnungId/stufe/neueFrist bleiben
+  // unberührt). Kein Vorbefüllen mit dem aktuellen echten Mahntext, da die
+  // Zentrale-Übersicht diesen (noch) nicht mit ausliefert - deshalb der
+  // deutliche Hinweis im Formular.
+  function oeffneMahnungFormular(entityId, erwarteteVersion) {
+    const { body, close } = openModal({
+      title: 'Mahntext bearbeiten',
+      bodyHtml: `
+        <form id="jv-mahn-form">
+          <p class="hint">Der eingegebene Text ersetzt den Mahntext auf der echten Mahnung (rechnungId/Stufe/Frist bleiben unverändert). Es wird NICHTS versendet.</p>
+          <div class="field"><label>Mahntext *</label><textarea name="text" rows="8" required placeholder="Mahntext eingeben …"></textarea></div>
+          <div class="field"><label>Mahngebühr € (optional, leer lassen = unverändert)</label><input type="number" step="0.01" name="gebuehr"></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-mahn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern (erneute Freigabe erforderlich)</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-mahn-cancel').addEventListener('click', close);
+    body.querySelector('#jv-mahn-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      const text = String(form.get('text') || '').trim();
+      if (!text) { toast('Mahntext darf nicht leer sein.', 'danger'); return; }
+      const gebuehrRoh = form.get('gebuehr');
+      sendeBearbeitung('mahnung', entityId, erwarteteVersion, {
+        text, gebuehr: gebuehrRoh ? Number(gebuehrRoh) : undefined,
+      }, close);
+    });
+  }
+
+  function bearbeiten(typ, kat, idx) {
+    const item = holeItem(kat, idx);
+    if (!item) return;
+    const entityId = entityIdVon(typ, item);
+    const erwarteteVersion = item.version ?? 1;
+    if (typ === 'angebot' || typ === 'rechnung') {
+      oeffnePositionenFormular(typ, entityId, erwarteteVersion, item.positionen || item.items || []);
+    } else if (typ === 'email') {
+      oeffneEmailFormular(entityId, erwarteteVersion, item);
+    } else if (typ === 'mahnung') {
+      oeffneMahnungFormular(entityId, erwarteteVersion);
+    }
+  }
+
   container.querySelectorAll('.jv-freigeben').forEach((btn) => btn.addEventListener('click', () => entscheide(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx), 'freigeben')));
   container.querySelectorAll('.jv-ablehnen').forEach((btn) => btn.addEventListener('click', () => entscheide(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx), 'ablehnen')));
   container.querySelectorAll('.jv-bearbeiten').forEach((btn) => btn.addEventListener('click', () => bearbeiten(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx))));
+
+  container.querySelector('#jv-control-btn')?.addEventListener('click', async () => {
+    const zielEl = container.querySelector('#jv-control');
+    zielEl.innerHTML = '<p class="text-mute">Lade Unternehmensübersicht …</p>';
+    try {
+      const control = await holeJarvisControl();
+      zielEl.innerHTML = renderControlHtml(control);
+    } catch (err) {
+      zielEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    }
+  });
+
+  container.querySelector('#jv-wochenbericht-btn')?.addEventListener('click', async () => {
+    const zielEl = container.querySelector('#jv-wochenbericht');
+    zielEl.innerHTML = '<p class="text-mute">Lade Wochenbericht …</p>';
+    try {
+      const bericht = await holeJarvisWochenbericht();
+      zielEl.innerHTML = `
+        <h3 style="font-size:13px;margin:12px 0 4px">Wochenbericht (${escapeHtml(bericht.zeitraum.von || '')} – ${escapeHtml(bericht.zeitraum.bis || '')})</h3>
+        <p>Offene Entscheidungen: ${bericht.offeneEntscheidungen}</p>
+        ${bericht.risiken.length ? `<p><strong>Risiken:</strong></p><ul>${bericht.risiken.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : '<p class="text-mute">Keine besonderen Risiken erkannt.</p>'}
+        ${bericht.handlungsempfehlungen.length ? `<p><strong>Handlungsempfehlungen:</strong></p><ul>${bericht.handlungsempfehlungen.map((r) => `<li>${escapeHtml(r)}</li>`).join('')}</ul>` : '<p class="text-mute">Keine Handlungsempfehlungen.</p>'}
+        <p class="text-mute" style="font-size:11px">Stand: ${formatDateTime(bericht.erstelltAm)} - auf Abruf erzeugt, automatische wöchentliche Zustellung erst nach gesonderter Freigabe aktiv.</p>
+      `;
+    } catch (err) {
+      zielEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    }
+  });
 
   container.querySelector('#jv-tagesbericht-btn')?.addEventListener('click', async () => {
     const zielEl = container.querySelector('#jv-tagesbericht');

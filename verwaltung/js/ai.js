@@ -397,6 +397,18 @@ export async function holeJarvisTagesbericht() {
   return bericht;
 }
 
+/** JARVIS CONTROL (Phase 6): wirtschaftliche Unternehmensübersicht, nur lesend. */
+export async function holeJarvisControl() {
+  const { daten } = await callJarvisBackend('jarvis-control');
+  return daten;
+}
+
+/** JARVIS-Wochenbericht (Phase 6, erste Version - noch nicht automatisch per Cron erzeugt). */
+export async function holeJarvisWochenbericht() {
+  const { bericht } = await callJarvisBackend('jarvis-wochenbericht');
+  return bericht;
+}
+
 export async function chatMitAssistent({ messages }) {
   const settings = await getSettings();
   if (!settings.aiWorkerUrl) {

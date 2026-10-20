@@ -85,6 +85,7 @@ const STORES = {
   jarvisMahnEntwuerfe: 'id',
   jarvisTerminVorschlaege: 'id',
   jarvisAngebotsPruefung: 'id',
+  jarvisKennzahlenVerlauf: 'id',
 };
 
 export const KALK_KATEGORIEN = [

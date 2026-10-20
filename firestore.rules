@@ -230,6 +230,13 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Monatlicher Kennzahlen-Schnappschuss für JARVIS CONTROL (Phase 6) -
+    // ausschließlich zur Erkennung ungewöhnlicher Veränderungen gegenüber
+    // dem Vormonat, siehe runJarvisControlCheck.
+    match /jarvisKennzahlenVerlauf/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
 
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (
