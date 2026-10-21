@@ -24,7 +24,7 @@ crons = ["0 6 * * *", "0 6 * * 1-5", "0 10 * * 1-5", "0 14 * * 1-5"]
 # automatisierten Büroabläufe sollen im Staging-Testbetrieb NICHT eigenständig
 # anlaufen (Vorgabe "keine Aktivierung autonomer Funktionen"); ein
 # Cron-Testlauf wird stattdessen manuell ausgelöst (siehe
-# docs/phase10-staging-setup.md). Secrets separat per "wrangler secret put
+# staging/README.md). Secrets separat per "wrangler secret put
 # <NAME> --env staging" setzen, FIREBASE_SERVICE_ACCOUNT_JSON zum SEPARATEN
 # Firebase-Staging-Projekt - niemals die Produktions-Werte wiederverwenden.
 [env.staging]

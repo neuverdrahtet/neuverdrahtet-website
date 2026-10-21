@@ -5,13 +5,39 @@
 // mit seiner ausdrücklichen Freigabe) manuell gegen das SEPARATE
 // Firebase-Staging-Projekt ausgeführt werden, siehe staging/README.md.
 //
-// Sicherheitsmechanismus gegen ein versehentliches Ausführen gegen die
-// Produktion: das Skript verweigert den Start, wenn die Projekt-ID nicht
-// explizit über --project angegeben UND zusätzlich per --confirm-staging
-// bestätigt wird. Es prüft NICHT inhaltlich, ob ein Projekt "wirklich"
-// Staging ist (das kann nur Danny selbst wissen) - die beiden Flags sind
-// eine bewusste Mehraufwand-Hürde gegen ein versehentliches Kopieren eines
-// Befehls mit der falschen Projekt-ID.
+// Phase 10.1 Sicherheitskorrektur: ein bloßer Projektname mit dem Wort
+// "staging" (oder ein einzelnes CLI-Flag) ist KEIN Sicherheitsnachweis - ein
+// Tippfehler oder ein kopierter Befehl mit der falschen Projekt-ID hätte das
+// nicht verhindert. Das Skript verlangt deshalb DREI UNABHÄNGIGE,
+// tatsächlich überprüfte Bestätigungen, bevor irgendetwas geschrieben wird:
+//
+//   1. --project <id> UND --confirm-staging als CLI-Flags (wie bisher) -
+//      bewusste Mehraufwand-Hürde gegen ein versehentliches Copy&Paste.
+//   2. Die Projekt-ID in der tatsächlichen GOOGLE_APPLICATION_CREDENTIALS-
+//      Datei (Service-Account-JSON) MUSS exakt mit --project übereinstimmen.
+//      Das ist die kryptografische Bindung, die auch sonst in diesem Projekt
+//      als Isolationsgarantie dient (siehe staging/README.md, "Warum das
+//      ... sicherstellt") - verhindert, dass jemand mit PRODUKTIONS-
+//      Credentials nur per Tippfehler/Unwissen glaubt, gegen Staging zu
+//      laufen (oder umgekehrt).
+//   3. Im Zielprojekt selbst muss VORHER, einmalig und manuell (z.B. über
+//      die Firebase Console, siehe unten), ein Freigabe-Dokument angelegt
+//      worden sein (_stagingFreigabe/freigabe mit freigegeben:true und
+//      passender projektId). Das verlagert die eigentliche "ist das wirklich
+//      Staging"-Entscheidung dorthin, wo sie hingehört: in eine bewusste,
+//      von Danny im Zielsystem selbst hinterlegte Bestätigung - nicht in
+//      einen Kommandozeilen-Text, der sich leicht verwechseln lässt.
+//   4. Zusätzliche Heuristik: existieren in "kunden" bereits Dokumente OHNE
+//      istTestdatensatz:true, bricht das Skript ab - sieht nach einem
+//      Projekt mit echten Daten aus, selbst wenn alle Flags/Freigaben
+//      stimmen (z.B. ein aus Versehen von Produktion geklontes Projekt).
+//
+// Freigabe-Dokument einmalig anlegen (Danny, NACH Einrichtung des Staging-
+// Projekts, VOR dem ersten Seed-Lauf) - z.B. per kleinem eigenen Skript oder
+// direkt in der Firebase Console (Firestore -> Daten -> Collection
+// "_stagingFreigabe" -> Dokument-ID "freigabe" -> Felder wie unten):
+//   { freigegeben: true, projektId: "neuverdrahtet-staging",
+//     freigegebenAm: "2026-01-01T00:00:00.000Z", freigegebenVon: "Danny Berger" }
 //
 // Verwendung:
 //   GOOGLE_APPLICATION_CREDENTIALS=/pfad/zum/staging-service-account.json \
@@ -20,6 +46,7 @@
 // Voraussetzung: "npm install firebase-admin" (einmalig, lokal - nicht Teil
 // des Cloudflare-Worker-Codes, läuft nur hier als Node-Skript).
 
+import fs from 'node:fs';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -35,11 +62,55 @@ if (!projectId || !bestaetigt) {
   process.exit(1);
 }
 
+// Prüfung 2: die Projekt-ID im CLI-Argument muss mit der tatsächlichen
+// Projekt-ID in den Service-Account-Credentials übereinstimmen - ein reiner
+// Namensabgleich im Kommandozeilen-Text reicht nicht, die Datei selbst wird
+// gelesen und verglichen.
+const credentialsPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+if (!credentialsPath) {
+  console.error('Abgebrochen: GOOGLE_APPLICATION_CREDENTIALS ist nicht gesetzt (Pfad zur Staging-Service-Account-Datei).');
+  process.exit(1);
+}
+let credentialsJson;
+try {
+  credentialsJson = JSON.parse(fs.readFileSync(credentialsPath, 'utf8'));
+} catch (err) {
+  console.error(`Abgebrochen: GOOGLE_APPLICATION_CREDENTIALS ("${credentialsPath}") konnte nicht gelesen/geparst werden: ${err.message}`);
+  process.exit(1);
+}
+if (credentialsJson.project_id !== projectId) {
+  console.error(`Abgebrochen: die Projekt-ID in den Credentials ("${credentialsJson.project_id}") stimmt NICHT mit --project ("${projectId}") überein.`);
+  console.error('Das ist ein starkes Warnsignal für eine Verwechslung (z.B. Produktions-Credentials bei einem als "staging" gemeinten Aufruf, oder umgekehrt) - Lauf abgebrochen, bevor irgendetwas geschrieben wurde.');
+  process.exit(1);
+}
+
 console.log(`\n⚠️  Dieses Skript schreibt jetzt synthetische Testdaten in das Firestore-Projekt "${projectId}".`);
-console.log('    Stelle sicher, dass GOOGLE_APPLICATION_CREDENTIALS auf den STAGING-Service-Account zeigt, NICHT auf Produktion.\n');
+console.log('    Projekt-ID aus Credentials und --project stimmen überein. Prüfe jetzt die Freigabe im Zielprojekt selbst ...\n');
 
 initializeApp({ credential: applicationDefault(), projectId });
 const db = getFirestore();
+
+// Prüfung 3: Freigabe-Dokument im ZIELPROJEKT selbst (nicht im Skript-Text) -
+// siehe Kopfkommentar oben für die Anleitung, wie Danny es einmalig anlegt.
+const freigabeDoc = await db.collection('_stagingFreigabe').doc('freigabe').get();
+const freigabe = freigabeDoc.exists ? freigabeDoc.data() : null;
+if (!freigabe || freigabe.freigegeben !== true || freigabe.projektId !== projectId) {
+  console.error(`Abgebrochen: im Projekt "${projectId}" fehlt das Freigabe-Dokument "_stagingFreigabe/freigabe" (oder es stimmt nicht/nicht zu diesem Projekt).`);
+  console.error('Ein Projektname mit "staging" im Namen ist KEIN Sicherheitsnachweis - lege das Dokument einmalig manuell an (siehe Kopfkommentar dieser Datei), bevor du dieses Skript erneut ausführst.');
+  process.exit(1);
+}
+
+// Prüfung 4: Heuristik gegen ein Projekt, das (trotz aller vorherigen
+// Prüfungen) schon echte, nicht als Test gekennzeichnete Kundendaten enthält.
+const bestehendeKunden = await db.collection('kunden').limit(5).get();
+const unerwarteteEchteDaten = bestehendeKunden.docs.filter((d) => d.data()?.istTestdatensatz !== true);
+if (unerwarteteEchteDaten.length > 0) {
+  console.error(`Abgebrochen: Projekt "${projectId}" enthält bereits ${unerwarteteEchteDaten.length} Kunden-Dokument(e) OHNE istTestdatensatz:true - das sieht nach echten Daten aus (z.B. ein versehentlich von Produktion geklontes Projekt).`);
+  console.error('Dieses Skript schreibt niemals in ein Projekt, das schon unmarkierte Bestandsdaten enthält.');
+  process.exit(1);
+}
+
+console.log('Freigabe-Dokument gefunden und gültig, keine unerwarteten Bestandsdaten gefunden. Lege Testdaten an ...\n');
 
 // Deutlich als Testdaten erkennbar (Namen/Adressen/Beträge klar fiktiv,
 // keine realen Personen-/Firmennamen oder echten Adressen) - entspricht der

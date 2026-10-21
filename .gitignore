@@ -1,0 +1,9 @@
+node_modules/
+
+# Firebase CLI / Emulator-Laufzeitdateien (siehe Phase 10.1: package.json +
+# firestore-tests/ für echte Firestore-Regel-Tests gegen den lokalen
+# Emulator) - entstehen lokal bei jedem Testlauf, gehören nicht ins Repo.
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+.firebase/

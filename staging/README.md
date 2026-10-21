@@ -24,7 +24,7 @@ Staging bekommt **für jede einzelne Komponente eine eigene, von der Produktion 
 1. In der [Firebase Console](https://console.firebase.google.com) ein **neues** Projekt anlegen, z.B. `neuverdrahtet-staging`.
 2. Authentication aktivieren (E-Mail/Passwort, wie in Produktion).
 3. Firestore (Native-Modus) aktivieren.
-4. Die bestehende `firestore.rules` aus diesem Repo gegen das Staging-Projekt deployen: `firebase deploy --only firestore:rules --project neuverdrahtet-staging`.
+4. Die bestehenden `firestore.rules` UND `storage.rules` aus diesem Repo gegen das Staging-Projekt deployen: `firebase deploy --only firestore:rules,storage --project neuverdrahtet-staging` (ohne `storage.rules` würde ein frisches Firebase-Projekt Storage-Zugriffe aus dem Browser standardmäßig komplett sperren statt wie in Produktion zu regeln - sicher, aber die echten Integrationstests in Abschnitt "Echte Integrationstests" würden daran scheitern).
 5. Einen Service-Account-Schlüssel für dieses Projekt erzeugen (Projekteinstellungen → Dienstkonten → Neuen privaten Schlüssel generieren) – wird später als `FIREBASE_SERVICE_ACCOUNT_JSON`-Secret gebraucht.
 6. Einen eigenen Web-API-Key für `verwaltung/js/firebase-config.js` (nur für eine separate Staging-Instanz der Verwaltungs-Software, falls diese ebenfalls separat gehostet werden soll – optional, siehe Hinweis unten).
 
@@ -53,7 +53,14 @@ Die Vorlage ist bereits in den drei betroffenen `wrangler.toml`-Dateien als `[en
 
 ## Schritt 5: Synthetische Testdaten
 
-Das Skript `staging/seed-synthetic-data.mjs` (in diesem Repo, siehe Datei) legt ausschließlich klar als Test gekennzeichnete, fiktive Kunden/Anlagen/Angebote/Rechnungen an. Es tut nichts von selbst – Ausführung:
+Das Skript `staging/seed-synthetic-data.mjs` (in diesem Repo, siehe Datei) legt ausschließlich klar als Test gekennzeichnete, fiktive Kunden/Anlagen/Angebote/Rechnungen an. Es tut nichts von selbst und verlangt seit Phase 10.1 VIER unabhängige Bestätigungen, bevor irgendetwas geschrieben wird (Details im Kopfkommentar der Datei) – ein Projektname mit „staging" im Namen allein reicht nicht als Sicherheitsnachweis:
+
+1. `--project <id>` + `--confirm-staging` als CLI-Flags.
+2. Die Projekt-ID in der tatsächlichen `GOOGLE_APPLICATION_CREDENTIALS`-Datei muss exakt mit `--project` übereinstimmen (verhindert eine Verwechslung der Credentials selbst).
+3. **Neu, einmalig von Danny im Zielprojekt anzulegen:** das Dokument `_stagingFreigabe/freigabe` muss existieren, z.B. direkt in der Firebase Console unter Firestore, mit den Feldern `{ freigegeben: true, projektId: "neuverdrahtet-staging", freigegebenAm: "<ISO-Datum>", freigegebenVon: "Danny Berger" }`. Das verlagert die eigentliche „ist das wirklich Staging"-Entscheidung in eine bewusste, im Zielsystem selbst hinterlegte Bestätigung statt in einen Kommandozeilen-Text.
+4. Automatische Heuristik: existieren in `kunden` bereits Dokumente ohne `istTestdatensatz:true`, bricht das Skript ab (sieht nach echten Daten aus, z.B. ein versehentlich geklontes Projekt).
+
+Ausführung (NACH Anlegen des Freigabe-Dokuments aus Punkt 3):
 
 ```bash
 npm install firebase-admin
@@ -61,7 +68,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/pfad/zum/staging-service-account.json \
   node staging/seed-synthetic-data.mjs --project neuverdrahtet-staging --confirm-staging
 ```
 
-⏸ **Wartet auf Danny** – nur er hat den in Schritt 1.5 erzeugten Staging-Service-Account-Schlüssel und sollte diesen Befehl selbst (oder mit seiner ausdrücklichen Freigabe) ausführen.
+⏸ **Wartet auf Danny** – nur er hat den in Schritt 1.5 erzeugten Staging-Service-Account-Schlüssel, muss zuvor das Freigabe-Dokument anlegen und sollte diesen Befehl selbst (oder mit seiner ausdrücklichen Freigabe) ausführen.
 
 ## Schritt 6: Verwaltungs-Software gegen Staging zeigen lassen
 

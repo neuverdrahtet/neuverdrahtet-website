@@ -2489,6 +2489,34 @@ const JARVIS_ERLAUBTE_SCHREIBWERKZEUGE = [
   'createAppointment', 'createQuoteDraft', 'updateExpense', 'bulkFixReceipts',
 ];
 
+/**
+ * Phase 10.1 Punkt 1: eigene, VIEL kleinere Positivliste speziell für den
+ * autonomen, unbeaufsichtigten täglichen Büro-Check (runTagescheck, siehe
+ * dort) - bewusst NICHT dieselbe wie JARVIS_ERLAUBTE_SCHREIBWERKZEUGE oben.
+ * Der Tagescheck darf NUR Aufgaben anlegen (createTask); jede finanzielle
+ * oder geschäftskritische Schreibaktion (bulkFixReceipts/updateExpense,
+ * createQuoteDraft, createAppointment, createCustomer, updateLead/updateTask)
+ * ist ihm verboten, auch wenn sie in JARVIS_ERLAUBTE_SCHREIBWERKZEUGE steht -
+ * so eine Aktion erfordert künftig immer eine ausdrückliche, von einem
+ * Mitarbeiter im JARVIS-Chat angeforderte Aktion, nie einen automatischen
+ * nächtlichen Lauf ohne Rückfragemöglichkeit. Vorher konnte der Tagescheck
+ * theoretisch (z.B. durch eine per Prompt-Injection aus einer Lead-Nachricht,
+ * einer E-Mail oder einem manipulierten Beleg-Foto injizierte "Anweisung")
+ * jedes Werkzeug aus der großen Liste aufrufen, weil ihm kein
+ * rollenspezifisches pruefeWerkzeug übergeben wurde (siehe Korrektur in
+ * runTagescheck) - das ist die konkrete Lücke, die hier geschlossen wird.
+ */
+const JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE = ['createTask'];
+
+// Zusätzliche, von der Werkzeug-Positivliste UNABHÄNGIGE Obergrenze: selbst
+// das einzige für den Tagescheck erlaubte Schreibwerkzeug (createTask) darf
+// nicht beliebig oft pro Lauf aufgerufen werden - verhindert, dass injizierter
+// Inhalt (viele manipulierte Leads/E-Mails/Belege in einem Lauf) den Tagescheck
+// zu einer Flut sinnloser Aufgaben missbraucht. 15 liegt deutlich über dem im
+// Prompt vorgesehenen Bedarf (eine Aufgabe pro echtem Befund plus die
+// abschließende Tages-Zusammenfassung).
+const JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF = 15;
+
 // Zusätzliches, von der Positivliste UNABHÄNGIGES Namensmuster-Verbot als
 // letztes Sicherheitsnetz: selbst ein Werkzeugname, der (z.B. durch einen
 // künftigen Tippfehler/eine überstürzte Erweiterung) sowohl in
@@ -2535,11 +2563,11 @@ function pruefeWerkzeugGrundsicherheit(toolName) {
  * JARVIS-Chat-Anfrage insgesamt auslösen darf. "schreibaufrufeZaehler" ist
  * ein vom Aufrufer übergebenes mutable Objekt ({count}), damit der Zähler
  * über alle Modell-Iterationen EINER Chat-Anfrage hinweg wirkt, nicht nur
- * pro Runde. Bewusst NUR für JARVIS (nicht für den autonomen täglichen
- * Büro-Check, der absichtlich viele bulkFixReceipts-Aufrufe hintereinander
- * braucht, siehe Kommentar an dessen Aufrufstelle) - die Tool-spezifische
- * Feinsteuerung pro ROLLE (z.B. "mitarbeiter darf nur eigene Zeiterfassungs-/
- * Aufgaben-Werkzeuge nutzen") ist absichtlich NICHT schon vorweggenommen,
+ * pro Runde. Bewusst NUR für JARVIS (der autonome tägliche Büro-Check nutzt
+ * seit Phase 10.1 die eigene, viel kleinere Prüfung
+ * pruefeTagescheckWerkzeugErlaubt unten, nicht diese Funktion hier) - die
+ * Tool-spezifische Feinsteuerung pro ROLLE (z.B. "mitarbeiter darf nur eigene
+ * Zeiterfassungs-/Aufgaben-Werkzeuge nutzen") ist absichtlich NICHT schon vorweggenommen,
  * weil dafür noch keine Geschäftsentscheidung getroffen wurde (siehe
  * Bericht) - das kommt, sobald JARVIS für buero/mitarbeiter geöffnet wird,
  * als eigener, zu testender Schritt.
@@ -2552,6 +2580,38 @@ function pruefeWerkzeugBerechtigung(toolName, callerRole, schreibaufrufeZaehler 
     schreibaufrufeZaehler.count = (schreibaufrufeZaehler.count || 0) + 1;
     if (schreibaufrufeZaehler.count > JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT) {
       const err = new Error(`Limit von ${JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT} schreibenden Aktionen je Chat-Anfrage erreicht - bitte die Anfrage in kleineren Schritten wiederholen, damit ein Mensch zwischendurch prüfen kann.`);
+      err.status = 429;
+      throw err;
+    }
+  }
+}
+
+/**
+ * Phase 10.1 Punkt 1: Werkzeugprüfung speziell für den autonomen täglichen
+ * Büro-Check (runTagescheck) - wird dort als "pruefeWerkzeug" übergeben,
+ * genau wie pruefeWerkzeugBerechtigung für JARVIS. Läuft ZUSÄTZLICH zur immer
+ * aktiven pruefeWerkzeugGrundsicherheit (oben), die nur die große, für
+ * JARVIS-Chat gedachte Positivliste kennt - diese Funktion hier erlaubt dem
+ * unbeaufsichtigten Lauf ausschließlich createTask (siehe
+ * JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE) und begrenzt selbst das auf
+ * JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF Aufrufe. Es gibt bewusst
+ * keine Rollenprüfung (der Cron-Trigger hat keinen angemeldeten Nutzer) -
+ * die Absicherung ist hier die Werkzeug-Positivliste selbst, nicht eine
+ * Nutzerrolle.
+ */
+function pruefeTagescheckWerkzeugErlaubt(toolName, _callerRole, schreibaufrufeZaehler = null) {
+  const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
+  const istSchreibend = tool && tool.method && tool.method !== 'GET';
+  if (!istSchreibend) return;
+  if (!JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE.includes(toolName)) {
+    const err = new Error(`Werkzeug "${toolName}" ist für den automatischen täglichen Büro-Check nicht erlaubt (nur createTask). Finanzielle oder geschäftskritische Schreibaktionen (z.B. bulkFixReceipts, updateExpense, createQuoteDraft, createAppointment, createCustomer, updateLead) erfordern eine ausdrückliche, von einem Mitarbeiter im JARVIS-Chat angeforderte Aktion - nicht einen automatischen nächtlichen Lauf ohne Rückfragemöglichkeit.`);
+    err.status = 403;
+    throw err;
+  }
+  if (schreibaufrufeZaehler) {
+    schreibaufrufeZaehler.count = (schreibaufrufeZaehler.count || 0) + 1;
+    if (schreibaufrufeZaehler.count > JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF) {
+      const err = new Error(`Limit von ${JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF} Schreibaktionen je täglichem Lauf erreicht - verhindert, dass injizierter Inhalt eine Flut an Aufgaben auslöst.`);
       err.status = 429;
       throw err;
     }
@@ -5808,6 +5868,22 @@ function buildGoogleConfig(env) {
 // bestehende E-Mail-Feature läuft über die Gmail-Anbindung im Browser, die
 // bei einem nächtlichen Cron-Lauf ohne offene App nicht zur Verfügung
 // steht).
+//
+// Phase 10.1 Punkt 1 (Sicherheitskorrektur): Dieser Lauf ist vollständig
+// unbeaufsichtigt und verarbeitet dabei zwangsläufig Freitext aus
+// Außenstehenden-Quellen (Lead-Nachrichten, E-Mail-Inhalte, per KI
+// ausgelesene Beleg-Fotos) - genau die Art von Inhalt, die laut
+// ASSISTENT_CHAT_SYSTEM_PROMPT niemals als Anweisung behandelt werden darf.
+// Deshalb bekommt er über "pruefeWerkzeug" unten eine EIGENE, sehr kleine
+// Werkzeug-Positivliste (pruefeTagescheckWerkzeugErlaubt,
+// JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE = nur createTask) statt der für
+// den interaktiven JARVIS-Chat gedachten pruefeWerkzeugBerechtigung - er kann
+// dadurch strukturell KEINE finanzielle/geschäftskritische Schreibaktion
+// (bulkFixReceipts, updateExpense, createQuoteDraft, createAppointment,
+// createCustomer, updateLead) mehr auslösen, auch nicht durch eine per
+// Prompt-Injection manipulierte Lead-/E-Mail-/Beleg-Eingabe - das war vorher
+// (nur durch Prompttext "nutze bulkFixReceipts" beschränkt, nicht
+// serverseitig) die konkrete Lücke.
 function buildTagescheckPrompt(heute, { googleVerfuegbar = false } = {}) {
   return `Führe jetzt deinen täglichen Büro-Check durch (automatischer Lauf ohne Mitarbeiter - es beantwortet dir gerade niemand Rückfragen, entscheide eigenständig im Rahmen deiner Regeln). Heutiges Datum: ${heute}.
 
@@ -5817,12 +5893,12 @@ Gehe systematisch vor:
 3. searchInvoices (status=overdue) auf überfällige Rechnungen prüfen.
 4. searchAppointments für die nächsten Tage auf anstehende Termine prüfen, für die ggf. noch etwas vorzubereiten ist.
 5. searchLeads auf unbearbeitete Leads ohne next_action prüfen.
-6. searchExpenses mit incomplete=true prüfen, ob unvollständige Belege (ohne/mit 0 Euro Betrag) offen sind. Falls ja: räume den Rückstand per bulkFixReceipts (limit=25) ab - wiederhole den Aufruf, solange has_more=true ist, aber höchstens 6 Aufrufe in diesem Lauf (der Rest folgt automatisch beim nächsten täglichen Check). Erfinde dabei nichts - Belege, die bulkFixReceipts als needs_manual_review meldet, bleiben offen und werden nur zusammengefasst, nicht als erledigt gemeldet.
+6. searchExpenses mit incomplete=true prüfen, ob unvollständige Belege (ohne/mit 0 Euro Betrag) offen sind. Du darfst diese Belege NICHT selbst per bulkFixReceipts korrigieren - das ist eine finanzielle Änderung und erfordert eine ausdrückliche, von einem Mitarbeiter im JARVIS-Chat angeforderte Aktion, keinen automatischen nächtlichen Lauf. Lege bei offenen unvollständigen Belegen stattdessen per createTask GENAU EINE Aufgabe an (Titel z.B. "N unvollständige Belege prüfen"), die die Anzahl nennt und darauf hinweist, dass sie im JARVIS-Chat per bulkFixReceipts abgearbeitet werden können.
 7. Soll-/Ist-Zeitvergleich: prüfe searchProjects für laufende Projekte (Status "in Arbeit"/vergleichbar). Für jedes: kalkulierte Stunden aus den zugehörigen Std.-Positionen im Angebot (searchQuotes) mit der tatsächlich erfassten Zeit (searchTimeEntries, project_id + sum_minutes) vergleichen. Weicht die Istzeit deutlich (z.B. >20%) von der Sollzeit ab, per createTask eine Aufgabe mit Sollzeit/Istzeit/Abweichung anlegen - keine automatische Anpassung von Kalkulationswerten, nur eine Beobachtung/Empfehlung zur Prüfung (siehe deine Regeln zu Kalkulation/Datenpflege).
 ${googleVerfuegbar ? `8. searchEmails mit unread=true auf ungelesene wichtige E-Mails prüfen (grob überfliegen, nicht jede einzeln bearbeiten) - bei erkennbar dringenden/kundenbezogenen Mails eine Aufgabe anlegen. searchCalendarEvents für die nächsten paar Tage auf Termine prüfen, die nicht schon in Werkora als Termin erfasst sind, und ggf. darauf hinweisen.` : ''}
 ${googleVerfuegbar ? '9' : '8'}. Recherchiere nur bei erkennbarem konkretem Bedarf zusätzlich im Internet (nach deinen Regeln zu Internetrecherche/Kalkulation) - der heutige Schwerpunkt ist der Überblick, nicht die tiefe Recherche.
 ${googleVerfuegbar ? '10' : '9'}. Lege per createTask für jede wirklich handlungsbedürftige Sache, für die noch keine passende Aufgabe existiert, eine konkrete Aufgabe an (sprechender Titel, passende Priorität, ggf. Fälligkeitsdatum, Kunden-/Projektbezug).
-${googleVerfuegbar ? '11' : '10'}. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist - inkl. wie viele Belege automatisch erledigt wurden, wie viele noch manuell geprüft werden müssen, und auffällige Soll-/Ist-Zeitabweichungen${googleVerfuegbar ? ' sowie relevante E-Mails/Kalendertermine' : ''} (auch wenn sonst nichts Dringendes ansteht - dann das kurz so vermerken).
+${googleVerfuegbar ? '11' : '10'}. Schließe den Lauf IMMER mit genau einer weiteren Aufgabe ab: Titel "Tages-Zusammenfassung ${heute}", die knapp auflistet was geprüft wurde und was heute wichtig ist - inkl. wie viele Belege noch unvollständig sind, und auffällige Soll-/Ist-Zeitabweichungen${googleVerfuegbar ? ' sowie relevante E-Mails/Kalendertermine' : ''} (auch wenn sonst nichts Dringendes ansteht - dann das kurz so vermerken).
 
 Antworte danach zusätzlich mit einer kurzen Fließtext-Zusammenfassung (max. 3-4 Sätze, ohne Aufzählungszeichen, geeignet als Text einer Push-Benachrichtigung).`;
 }
@@ -5844,6 +5920,7 @@ async function runTagescheck(env) {
       kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
       kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
       googleConfig,
+      pruefeWerkzeug: pruefeTagescheckWerkzeugErlaubt,
     });
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
@@ -7023,4 +7100,7 @@ export const __test__ = {
   berechnePruefprotokollErgebnis, pruefeMesswertGrenzwert, JARVIS_PRUEFARTEN,
   // Phase 8 - Siri-Kurzbefehle
   sha256Hex, fuehreSiriAbfrageAus, fuehreSiriIntentAus, SIRI_ERLAUBTE_INTENTS,
+  // Phase 10.1 - Tagescheck-Schreibrechte begrenzen
+  pruefeTagescheckWerkzeugErlaubt, JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE, JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF,
+  buildTagescheckPrompt,
 };

@@ -1,0 +1,15 @@
+{
+  "name": "neuverdrahtet-website",
+  "private": true,
+  "description": "Entwicklungs-Abhängigkeiten für lokale Tests (Firestore-Regel-Tests, Browser-Smoke-Test) - NICHT Teil der Cloudflare-Worker-Laufzeit (die hat keine package.json/node_modules, siehe cloudflare-worker/README.md).",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore \"node firestore-tests/rules.test.mjs\"",
+    "test:browser-smoke": "node verwaltung/tests/browser-smoke.test.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.4.0",
+    "firebase-tools": "^15.0.0",
+    "playwright": "^1.56.1"
+  }
+}
