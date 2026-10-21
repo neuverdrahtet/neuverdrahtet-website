@@ -1783,6 +1783,10 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
   // keine sensiblen Daten - dieselben Werte, die eh im Browser-Payload/den
   // Chat-Nachrichten sichtbar sind).
   const debugLog = [];
+  // Zählt schreibende Werkzeugaufrufe über ALLE Modell-Iterationen dieser
+  // EINEN callClaudeAssistentChat-Ausführung hinweg (siehe
+  // pruefeWerkzeugBerechtigung) - bewusst außerhalb der Schleife angelegt.
+  const schreibaufrufeZaehler = { count: 0 };
 
   // 20 statt vorher 10 Runden, damit der tägliche Büro-Check auch mehrere
   // bulkFixReceipts-Aufrufe (Beleg-Rückstand abarbeiten) hintereinander
@@ -1841,14 +1845,17 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
     // Werkzeuge (auch die KI-Bürokraft-Werkzeuge) zu blockieren.
     const toolResults = [];
     for (const toolUse of toolUses) {
-      if (pruefeWerkzeug) {
-        try {
-          pruefeWerkzeug(toolUse.name, callerRole);
-        } catch (err) {
-          toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Nicht berechtigt: ${err.message}`, is_error: true });
-          debugLog.push({ tool: toolUse.name, input: toolUse.input, error: `Berechtigung verweigert: ${err.message}` });
-          continue;
-        }
+      try {
+        // Läuft IMMER, für jeden Aufrufer (JARVIS, allgemeiner KI-Assistent,
+        // autonomer Büro-Check) - siehe Kopfkommentar von
+        // pruefeWerkzeugGrundsicherheit. Das ist die vom Systemprompt
+        // unabhängige serverseitige Grenze, die Phase 10 Punkt 1 verlangt.
+        pruefeWerkzeugGrundsicherheit(toolUse.name);
+        if (pruefeWerkzeug) pruefeWerkzeug(toolUse.name, callerRole, schreibaufrufeZaehler);
+      } catch (err) {
+        toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Nicht berechtigt: ${err.message}`, is_error: true });
+        debugLog.push({ tool: toolUse.name, input: toolUse.input, error: `Berechtigung verweigert: ${err.message}` });
+        continue;
       }
       const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolUse.name);
       if (!tool) {
@@ -2151,16 +2158,30 @@ function zeitkonstanterVergleich(a, b) {
   return unterschied === 0;
 }
 
-async function unterSchwellenwert(env, ip) {
+/**
+ * Phase 10 Punkt 1: FAIL-CLOSED statt fail-open. Fehlt das RATE_LIMITER-
+ * Binding (noch nicht eingerichtet) oder schlägt der Aufruf fehl, wird die
+ * Route jetzt bewusst GESPERRT statt ungebremst durchzulassen - ein
+ * öffentlich erreichbarer, unauthentifizierter Endpunkt (/kunde-upload,
+ * /siri-abfrage) darf nie ohne jeden Flooding-Schutz laufen. Das bedeutet:
+ * bis das Binding in Cloudflare eingerichtet ist, sind diese beiden Routen
+ * kontrolliert gesperrt (eigener, klar erkennbarer Fehlergrund statt eines
+ * irreführenden normalen "429 zu viele Anfragen") - siehe Pilot-Vorbedingung
+ * im Bericht. Gibt ein Objekt statt eines reinen Booleans zurück, damit die
+ * Aufrufstelle zwischen "Limit überschritten" (429, normaler Alltag) und
+ * "Rate-Limiter nicht einsatzbereit" (503, Konfigurationsproblem) unterscheiden kann.
+ */
+async function pruefeRateLimit(env, ip) {
   if (!env.RATE_LIMITER) {
-    console.warn('unterSchwellenwert: RATE_LIMITER-Binding fehlt - kein Flooding-Schutz auf dieser Route aktiv.');
-    return true;
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Route wird FAIL-CLOSED gesperrt (siehe Phase 10 Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
   }
   try {
     const { success } = await env.RATE_LIMITER.limit({ key: ip });
-    return success;
-  } catch {
-    return true;
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Route wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
   }
 }
 
@@ -2451,18 +2472,90 @@ async function holeJarvisAufruferKontext({ serviceAccount, idToken }) {
 }
 
 /**
- * Prüft die Berechtigung für EIN konkretes Werkzeug. Aktuell (nur admin
- * erlaubt) bewusst einfach gehalten - die Tool-spezifische Feinsteuerung pro
- * Rolle (z.B. "mitarbeiter darf nur die eigenen Zeiterfassungs-/Aufgaben-
- * Werkzeuge nutzen, keine Kundenfinanzen") ist absichtlich NICHT schon
- * vorweggenommen, weil dafür noch keine Geschäftsentscheidung getroffen
- * wurde (siehe Bericht) - das kommt, sobald JARVIS für buero/mitarbeiter
- * geöffnet wird, als eigener, zu testender Schritt. Schon jetzt gilt aber:
- * jeder einzelne Werkzeugaufruf durchläuft diese Funktion, nicht nur der
- * Chat-Einstieg insgesamt.
+ * Phase 10 Punkt 1 ("Systemprompts allein gelten nicht als Sicherheitsgrenze"):
+ * EXPLIZITE, serverseitige Positivliste der Werkzeuge, die überhaupt
+ * schreibend aufgerufen werden dürfen - unabhängig davon, was im Systemprompt
+ * steht oder was zufällig in KI_BUEROKRAFT_TOOLS eingetragen ist. Ein neues
+ * Werkzeug mit method 'POST'/'PATCH'/'DELETE', das hier NICHT eingetragen
+ * ist, wird unten HART abgelehnt, selbst wenn es versehentlich zur Tools-
+ * Liste hinzugefügt wurde - verhindert, dass eine künftige, unbedacht
+ * hinzugefügte Schreibaktion (z.B. "sendEmail"/"deleteCustomer") automatisch
+ * nutzbar wird, nur weil sie im Tools-Array auftaucht. Es gibt bewusst KEIN
+ * Werkzeug zum Versenden, Löschen oder Erstellen/Verschicken von Rechnungen/
+ * Mahnungen - das bleibt vollständig außerhalb dieser Liste.
  */
-function pruefeWerkzeugBerechtigung(toolName, callerRole) {
+const JARVIS_ERLAUBTE_SCHREIBWERKZEUGE = [
+  'createCustomer', 'createLead', 'updateLead', 'createTask', 'updateTask',
+  'createAppointment', 'createQuoteDraft', 'updateExpense', 'bulkFixReceipts',
+];
+
+// Zusätzliches, von der Positivliste UNABHÄNGIGES Namensmuster-Verbot als
+// letztes Sicherheitsnetz: selbst ein Werkzeugname, der (z.B. durch einen
+// künftigen Tippfehler/eine überstürzte Erweiterung) sowohl in
+// KI_BUEROKRAFT_TOOLS als auch versehentlich in der Positivliste oben
+// landen würde, wird zusätzlich gegen klar gefährliche Aktionswörter
+// geprüft - zwei unabhängige Prüfungen statt einer einzigen Liste.
+const JARVIS_VERBOTENE_WERKZEUG_MUSTER = /delete|loesch|lösch|remove|send|versende|verschick|invoice|rechnung|mahnung|cancel|storno|freigeb|approve/i;
+
+// Phase 10 Punkt 1: begrenzt, wie viele SCHREIBENDE Werkzeugaufrufe EINE
+// einzelne Chat-Anfrage insgesamt ausführen darf - unabhängig von Rolle oder
+// Systemprompt. Schützt davor, dass eine einzelne (z.B. durch injizierte
+// Lead-/E-Mail-Daten manipulierte) Unterhaltung in einer der bis zu 20
+// Modell-Iterationen (siehe oben) eine große Zahl von Schreibaktionen
+// hintereinander auslöst, ohne dass ein Mensch dazwischen eingreifen konnte.
+const JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT = 5;
+
+/**
+ * Phase 10 Punkt 1: GRUNDSÄTZLICHE, IMMER aktive Werkzeug-Sicherung -
+ * unabhängig von Rolle, Aufrufer (JARVIS-Chat, allgemeiner KI-Assistent ODER
+ * der autonome tägliche Büro-Check per Cron, siehe runTagescheck) und
+ * Systemprompt. Wird direkt im Dispatch-Loop von callClaudeAssistentChat für
+ * JEDEN Werkzeugaufruf geprüft, bevor überhaupt eine rollenspezifische
+ * Prüfung (pruefeWerkzeugBerechtigung, nur für JARVIS) zum Zug kommt.
+ */
+function pruefeWerkzeugGrundsicherheit(toolName) {
+  if (JARVIS_VERBOTENE_WERKZEUG_MUSTER.test(toolName)) {
+    const err = new Error(`Werkzeug "${toolName}" entspricht einem grundsätzlich verbotenen Aktionsmuster (z.B. Versand/Löschung/Rechnungsstellung) und darf nie aufgerufen werden.`);
+    err.status = 403;
+    throw err;
+  }
+  const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
+  const istSchreibend = tool && tool.method && tool.method !== 'GET';
+  if (istSchreibend && !JARVIS_ERLAUBTE_SCHREIBWERKZEUGE.includes(toolName)) {
+    const err = new Error(`Werkzeug "${toolName}" ist schreibend, aber NICHT auf der serverseitigen Positivliste erlaubter Schreibwerkzeuge - Aufruf abgelehnt, unabhängig vom Systemprompt.`);
+    err.status = 403;
+    throw err;
+  }
+}
+
+/**
+ * Prüft die Berechtigung für EIN konkretes Werkzeug IM JARVIS-KONTEXT
+ * (zusätzlich zur immer aktiven pruefeWerkzeugGrundsicherheit oben):
+ * Rollenprüfung UND ein Limit, wie viele schreibende Aktionen EINE
+ * JARVIS-Chat-Anfrage insgesamt auslösen darf. "schreibaufrufeZaehler" ist
+ * ein vom Aufrufer übergebenes mutable Objekt ({count}), damit der Zähler
+ * über alle Modell-Iterationen EINER Chat-Anfrage hinweg wirkt, nicht nur
+ * pro Runde. Bewusst NUR für JARVIS (nicht für den autonomen täglichen
+ * Büro-Check, der absichtlich viele bulkFixReceipts-Aufrufe hintereinander
+ * braucht, siehe Kommentar an dessen Aufrufstelle) - die Tool-spezifische
+ * Feinsteuerung pro ROLLE (z.B. "mitarbeiter darf nur eigene Zeiterfassungs-/
+ * Aufgaben-Werkzeuge nutzen") ist absichtlich NICHT schon vorweggenommen,
+ * weil dafür noch keine Geschäftsentscheidung getroffen wurde (siehe
+ * Bericht) - das kommt, sobald JARVIS für buero/mitarbeiter geöffnet wird,
+ * als eigener, zu testender Schritt.
+ */
+function pruefeWerkzeugBerechtigung(toolName, callerRole, schreibaufrufeZaehler = null) {
   pruefeJarvisRolle(callerRole);
+  const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
+  const istSchreibend = tool && tool.method && tool.method !== 'GET';
+  if (istSchreibend && schreibaufrufeZaehler) {
+    schreibaufrufeZaehler.count = (schreibaufrufeZaehler.count || 0) + 1;
+    if (schreibaufrufeZaehler.count > JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT) {
+      const err = new Error(`Limit von ${JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT} schreibenden Aktionen je Chat-Anfrage erreicht - bitte die Anfrage in kleineren Schritten wiederholen, damit ein Mensch zwischendurch prüfen kann.`);
+      err.status = 429;
+      throw err;
+    }
+  }
 }
 
 // --- JARVIS: Kostenzähler (grobe Schätzung aus Claude-Token-Nutzung, siehe
@@ -4725,6 +4818,97 @@ async function holeJarvisControlDaten({ serviceAccount, env }) {
   };
 }
 
+// Alle bekannten täglichen Hintergrund-Job-Typen (siehe jobId-Präfixe oben,
+// z.B. "email-check-2026-10-21") - für die Statusübersicht unten in EINER
+// Stelle gepflegt, damit ein neuer Job-Typ nicht vergessen wird.
+const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'wartung-check', 'projekt-check', 'control-check'];
+
+// Alle bekannten Feature-Flags, die eine autonome JARVIS-Funktion freischalten
+// (Standard IMMER "aus", siehe jeweilige Kommentare an den env.*_AKTIV-Prüfungen).
+const JARVIS_FEATURE_FLAGS = ['JARVIS_EMAIL_AKTIV', 'JARVIS_ANGEBOT_AKTIV', 'JARVIS_RECHNUNG_AKTIV', 'JARVIS_MAHNUNG_AKTIV', 'JARVIS_WARTUNG_AKTIV', 'JARVIS_PROJEKT_AKTIV', 'JARVIS_CONTROL_AKTIV'];
+
+/**
+ * Phase 10 Punkt 5 (Pilotüberwachung) - zentrale, EHRLICHE Statusübersicht:
+ * Zustand der Dienste (nur ob Secrets/Bindings VORHANDEN sind, NIEMALS deren
+ * Werte - siehe Sicherheitsbericht "Umgang mit API-Schlüsseln"), letzter
+ * erfolgreicher Cron-Lauf JE Job-Typ, jüngste Verbindungsfehler, offene/
+ * unklare Aktionen, KI-Kosten, Feature-Flag-Zustand, letzte erfolgreiche
+ * Synchronisierung insgesamt.
+ *
+ * WICHTIG (Vorgabe: "Eine fehlgeschlagene Verbindung darf nicht als
+ * erfolgreicher Lauf angezeigt werden"): "letzterErfolgAm" wird AUSSCHLIESSLICH
+ * aus Jobs mit status "done" berechnet (die bei einem Fehler NIE gesetzte
+ * "abgeschlossenAm" bleibt sonst leer) - ein "failed"/"unklar"/"running"-Job
+ * kann "letzterErfolgAm" niemals verändern, auch nicht versehentlich
+ * überschreiben. Zusätzlich wird der STATUS DES JEWEILS LETZTEN VERSUCHS
+ * (unabhängig vom Ausgang) separat ausgewiesen, damit ein aktuell
+ * fehlschlagender Job sichtbar bleibt, auch wenn ein früherer Lauf einmal
+ * erfolgreich war.
+ */
+async function holeJarvisStatusUebersicht({ serviceAccount, env }) {
+  const [jobs, aktionen, fehlerEintraege, kostenMonat, googleOauthToken] = await Promise.all([
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisJobs' }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisAktionen' }),
+    firestoreListDocuments({ serviceAccount, collection: 'ai_action_log' }),
+    firestoreGetDoc({ serviceAccount, collection: 'jarvisKosten', id: jarvisMonatsId() }),
+    firestoreGetDoc({ serviceAccount, collection: 'google_oauth_tokens', id: 'neuverdrahtet' }),
+  ]);
+
+  const dienste = {
+    anthropicKonfiguriert: !!env.ANTHROPIC_API_KEY,
+    firebaseKonfiguriert: !!env.FIREBASE_SERVICE_ACCOUNT_JSON,
+    googleBueroBindingVorhanden: !!env.GOOGLE_BUERO || !!env.GOOGLE_BUERO_URL,
+    kiBuerokraftBindingVorhanden: !!env.KI_BUEROKRAFT || !!env.KI_BUEROKRAFT_URL,
+    googleKontoVerbunden: !!googleOauthToken?.refresh_token,
+    rateLimiterKonfiguriert: !!env.RATE_LIMITER,
+  };
+
+  const cronLaeufe = JARVIS_JOB_TYPEN.map((typ) => {
+    const zuDiesemTyp = jobs.filter((j) => j.typ === typ).sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
+    const erfolgreiche = zuDiesemTyp.filter((j) => j.status === 'done' && j.abgeschlossenAm);
+    const letzterErfolg = erfolgreiche[0] || null;
+    const letzterVersuch = zuDiesemTyp[0] || null;
+    return {
+      typ,
+      letzterErfolgAm: letzterErfolg?.abgeschlossenAm || null,
+      letzterVersuchStatus: letzterVersuch?.status || 'noch_nie_gelaufen',
+      letzterVersuchAm: letzterVersuch?.erstelltAm || null,
+      letzterFehler: letzterVersuch?.status === 'failed' ? (letzterVersuch.fehler || null) : null,
+    };
+  });
+  const letzteErfolgreicheSynchronisierungAm = cronLaeufe
+    .map((j) => j.letzterErfolgAm)
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+
+  const apiVerbindungsfehler = fehlerEintraege
+    .filter((e) => e.status === 'failed')
+    .sort((a, b) => (b.zeitstempel || '').localeCompare(a.zeitstempel || ''))
+    .slice(0, 20)
+    .map((e) => ({ quelle: e.quelle, fehler: e.fehler, zeitstempel: e.zeitstempel }));
+
+  const offeneAktionen = aktionen.filter((a) => a.status === 'pending').length;
+  const unklareAktionen = aktionen.filter((a) => a.status === 'unklar').length;
+
+  const featureFlags = {};
+  for (const flag of JARVIS_FEATURE_FLAGS) featureFlags[flag] = env[flag] === 'true';
+
+  return {
+    heute: new Date().toISOString(),
+    dienste,
+    cronLaeufe,
+    letzteErfolgreicheSynchronisierungAm,
+    apiVerbindungsfehler,
+    offeneAktionen, unklareAktionen,
+    kiKosten: {
+      monat: jarvisMonatsId(), geschaetzteKostenUsd: kostenMonat?.geschaetzteKostenUsd || 0,
+      limitUsd: env.JARVIS_MONATSLIMIT_USD ? Number(env.JARVIS_MONATSLIMIT_USD) : null,
+    },
+    featureFlags,
+  };
+}
+
 // Schwellenwert für "ungewöhnliche Veränderung" einer Kennzahl gegenüber dem
 // Vormonat (relative Abweichung) - rein regelbasiert, keine KI/Statistik.
 const JARVIS_CONTROL_AUFFAELLIGE_ABWEICHUNG_PROZENT = 30;
@@ -5897,9 +6081,15 @@ export default {
       // läuft automatisch ab) plus dem Rate-Limit unten.
       if (teile[0] === 'kunde-upload' && request.method === 'POST') {
         const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-        if (!(await unterSchwellenwert(env, ip))) {
-          return new Response(JSON.stringify({ error: 'Zu viele Anfragen - bitte kurz warten.' }), {
-            status: 429, headers: { ...headers, 'Content-Type': 'application/json' },
+        const rateLimit = await pruefeRateLimit(env, ip);
+        if (!rateLimit.erlaubt) {
+          const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+          return new Response(JSON.stringify({
+            error: istKonfigurationsproblem
+              ? 'Dieser Upload-Link ist vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet) - bitte später erneut versuchen oder neuverdrahtet direkt kontaktieren.'
+              : 'Zu viele Anfragen - bitte kurz warten.',
+          }), {
+            status: istKonfigurationsproblem ? 503 : 429, headers: { ...headers, 'Content-Type': 'application/json' },
           });
         }
         let uploadBody;
@@ -5930,9 +6120,15 @@ export default {
       // Rate-Limit wie beim Kunden-Upload.
       if (teile[0] === 'siri-abfrage' && request.method === 'POST') {
         const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-        if (!(await unterSchwellenwert(env, `siri:${ip}`))) {
-          return new Response(JSON.stringify({ error: 'Zu viele Anfragen - bitte kurz warten.' }), {
-            status: 429, headers: { ...headers, 'Content-Type': 'application/json' },
+        const rateLimit = await pruefeRateLimit(env, `siri:${ip}`);
+        if (!rateLimit.erlaubt) {
+          const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+          return new Response(JSON.stringify({
+            error: istKonfigurationsproblem
+              ? 'Siri-Abfragen sind vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet).'
+              : 'Zu viele Anfragen - bitte kurz warten.',
+          }), {
+            status: istKonfigurationsproblem ? 503 : 429, headers: { ...headers, 'Content-Type': 'application/json' },
           });
         }
         if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -6396,6 +6592,29 @@ export default {
       }
     }
 
+    // Phase 10 Punkt 5 - Pilotüberwachung: zentrale Statusanzeige (nur lesend,
+    // zeigt NIEMALS Secret-Werte, nur ob sie vorhanden sind).
+    if (body.action === 'jarvis-status') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const status = await holeJarvisStatusUebersicht({ serviceAccount, env });
+        return new Response(JSON.stringify({ ok: true, status }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Phase 6 - Wochenbericht auf Abruf (noch NICHT an den Cron angehängt).
     if (body.action === 'jarvis-wochenbericht') {
       if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -6789,6 +7008,7 @@ export const __test__ = {
   // Phase 6 - sichere Bearbeitung E-Mail/Mahnung, Firestore-Teil-Update, CONTROL
   firestoreMergeFelder, bearbeiteEmailAntwortentwurf, bearbeiteMahnEntwurf,
   holeJarvisControlDaten, runJarvisControlCheck, erzeugeJarvisWochenbericht,
+  holeJarvisStatusUebersicht, JARVIS_JOB_TYPEN, JARVIS_FEATURE_FLAGS,
   berechneUmsatzverlauf, berechneForderungen, berechneAngeboteUndAuftragsbestand,
   berechneProjektDeckungsbeitraege, berechneMitarbeiterAuslastung, berechneWartungsvertraege,
   berechneAufgabenUndVerzoegerungen, vergleicheMitVormonat,
@@ -6798,7 +7018,8 @@ export const __test__ = {
   // Phase 7 - DGUV/VDE-Prüfprotokolle
   erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle, dokumentiereDurchsichtPruefprotokoll,
   erstelleJarvisPruefnorm, setzeJarvisPruefnormAusserKraft, holeJarvisPruefnormen, zeitkonstanterVergleich,
-  ASSISTENT_CHAT_SYSTEM_PROMPT,
+  ASSISTENT_CHAT_SYSTEM_PROMPT, pruefeRateLimit, pruefeWerkzeugGrundsicherheit, pruefeWerkzeugBerechtigung, callClaudeAssistentChat,
+  JARVIS_ERLAUBTE_SCHREIBWERKZEUGE, JARVIS_VERBOTENE_WERKZEUG_MUSTER, JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT,
   berechnePruefprotokollErgebnis, pruefeMesswertGrenzwert, JARVIS_PRUEFARTEN,
   // Phase 8 - Siri-Kurzbefehle
   sha256Hex, fuehreSiriAbfrageAus, fuehreSiriIntentAus, SIRI_ERLAUBTE_INTENTS,

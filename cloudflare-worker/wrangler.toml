@@ -29,11 +29,15 @@ service = "neuverdrahtet-google-buero"
 binding = "KI_BUEROKRAFT"
 service = "neuverdrahtet-ki-buerokraft"
 
-# Begrenzt die öffentliche Kunden-Upload-Route (/kunde-upload, siehe
-# worker.js unterSchwellenwert/handleKundenUpload) auf 10 Anfragen pro IP
-# und Minute - alle übrigen Routen prüfen weiterhin APP_SECRET und sind
-# davon nicht betroffen. Wird von Cloudflare beim ersten Deploy automatisch
-# angelegt, keine manuelle Einrichtung im Dashboard nötig.
+# Begrenzt die öffentlichen, unauthentifizierten Routen /kunde-upload und
+# /siri-abfrage (siehe worker.js pruefeRateLimit/handleKundenUpload) auf
+# 10 Anfragen pro IP und Minute - alle übrigen Routen prüfen weiterhin
+# APP_SECRET und sind davon nicht betroffen. Wird von Cloudflare beim ersten
+# Deploy automatisch angelegt, keine manuelle Einrichtung im Dashboard nötig.
+# WICHTIG (Phase 10 Sicherheitskorrektur): fehlt dieses Binding zur Laufzeit,
+# sperren beide Routen sich jetzt bewusst selbst (fail-closed) statt
+# ungebremst durchzulassen - dieses Binding ist daher eine ZWINGENDE
+# Voraussetzung, nicht nur eine Komfort-Verbesserung.
 [[ratelimits]]
 name = "RATE_LIMITER"
 namespace_id = "1005"
@@ -52,3 +56,67 @@ simple = { limit = 10, period = 60 }
 # z.B. über den GitHub-Actions-Workflow, passiert das automatisch).
 [triggers]
 crons = ["0 5 * * *"]
+
+# =============================================================================
+# Phase 10 - ISOLIERTE STAGING-UMGEBUNG (Vorlage/Platzhalter, bisher OHNE
+# jede Wirkung): dieser Block wird NUR aktiv, wenn explizit mit
+# "wrangler deploy --env staging" deployt wird - ein normaler
+# "wrangler deploy" (z.B. über den bestehenden GitHub-Actions-Workflow)
+# ignoriert ihn vollständig und bleibt unverändert. Vor dem ersten
+# "wrangler deploy --env staging" müssen alle <PLATZHALTER> ersetzt UND die
+# Vorbedingungen aus docs/phase10-staging-setup.md erfüllt sein (eigenes
+# Firebase-Staging-Projekt, eigene Staging-Deployments von
+# neuverdrahtet-google-buero-staging/neuverdrahtet-ki-buerokraft-staging,
+# eigene Secrets - siehe dort). STRUKTURELLE Trennung von der Produktion:
+# ein anderer "name" bedeutet ein komplett eigenständiger Cloudflare Worker
+# mit eigenen Secrets/Bindings - es gibt keinen Mechanismus, über den dieser
+# Block versehentlich die Produktions-Variablen oben überschreiben könnte.
+[env.staging]
+name = "neuverdrahtet-ki-angebote-staging"
+
+[env.staging.vars]
+# Absichtlich NUR die Staging-Domain/einen lokalen Testserver erlauben, NIE
+# die echte Produktionsdomain - verhindert, dass die echte Webseite versehentlich
+# gegen den Staging-Worker statt den Produktions-Worker spricht.
+ALLOWED_ORIGINS = "http://localhost:8080,https://<STAGING-PREVIEW-DOMAIN>"
+# Günstigeres/kleineres Modell für Staging-Tests empfohlen (geringeres Testbudget).
+MODEL_ID = "claude-haiku-4-5"
+
+[[env.staging.services]]
+binding = "GOOGLE_BUERO"
+service = "neuverdrahtet-google-buero-staging"
+
+[[env.staging.services]]
+binding = "KI_BUEROKRAFT"
+service = "neuverdrahtet-ki-buerokraft-staging"
+
+# Eigener, vom Produktions-RATE_LIMITER komplett unabhängiger Staging-Limiter
+# (Phase 10 Sicherheitskorrektur: Pflicht, sonst sperrt sich die Staging-
+# Route selbst fail-closed, siehe pruefeRateLimit in worker.js).
+[[env.staging.ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1006"
+simple = { limit = 10, period = 60 }
+
+# KEIN Cron-Trigger für Staging - der tägliche Büro-Check/die wöchentliche
+# Katalog-Aktualisierung laufen bewusst NUR produktiv (siehe
+# "Keine Aktivierung autonomer Funktionen" in der Vorgabe); ein Staging-Test
+# des Cron-Verhaltens läuft stattdessen über einen manuell ausgelösten
+# Testaufruf (siehe docs/phase10-staging-setup.md, Abschnitt Integrationstests).
+#
+# Secrets (NICHT hier eintragen, sondern separat per
+# "wrangler secret put <NAME> --env staging"):
+#   ANTHROPIC_API_KEY        - EIGENER Anthropic-Schlüssel mit eigenem,
+#                              niedrigem Testbudget-Limit (siehe Setup-Doku),
+#                              NIEMALS der Produktions-Schlüssel.
+#   APP_SECRET               - eigenes, von der Produktion verschiedenes Passwort.
+#   FIREBASE_SERVICE_ACCOUNT_JSON - Service-Account-JSON des SEPARATEN
+#                              Firebase-STAGING-Projekts (nicht der Produktion!).
+#                              Ein Service-Account ist fest an EIN Firebase-
+#                              Projekt gebunden - selbst ein Programmierfehler
+#                              könnte mit diesem Schlüssel technisch nicht auf
+#                              das Produktions-Firestore schreiben.
+#   OAUTH_SETUP_SECRET/GOOGLE_OAUTH_CLIENT_ID/GOOGLE_OAUTH_CLIENT_SECRET -
+#                              eigene Google-Cloud-OAuth-Anwendung für das
+#                              dedizierte Test-Gmail-/Kalender-Konto.
+#   JARVIS_MONATSLIMIT_USD   - niedrig ansetzen (z.B. 5), siehe Sicherheitsbericht.

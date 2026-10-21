@@ -3,6 +3,7 @@ import {
   analysiereJarvisTech, verknuepfeJarvisTechAnalyse, holeJarvisTechAnalysen, erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
   dokumentiereDurchsichtPruefprotokoll, verifiziereJarvisHerstellerBefund,
   erstelleJarvisPruefnorm, setzeJarvisPruefnormAusserKraft, holeJarvisPruefnormen,
+  holeJarvisStatus,
 } from '../ai.js';
 import { escapeHtml, toast, formatDateTime, compressImage } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
@@ -82,6 +83,7 @@ export async function render(container) {
       <button type="button" class="tab-item" data-tab="zentrale">📋 Zentrale</button>
       <button type="button" class="tab-item" data-tab="tech">🔧 TECH</button>
       <button type="button" class="tab-item" data-tab="mobile">📱 Mobile</button>
+      <button type="button" class="tab-item" data-tab="status">📊 Status</button>
       <button type="button" class="tab-item" data-tab="chat">💬 Chat</button>
     </div>
     <div id="jv-tab-inhalt"></div>
@@ -104,6 +106,8 @@ export async function render(container) {
       await renderTech(inhaltEl);
     } else if (tab === 'mobile') {
       await renderMobile(inhaltEl);
+    } else if (tab === 'status') {
+      await renderStatus(inhaltEl);
     } else {
       await renderZentrale(inhaltEl);
     }
@@ -1498,6 +1502,104 @@ async function renderMobile(container) {
   });
 
   ladeTokenListe();
+}
+
+// =============================================================================
+// JARVIS STATUS (Phase 10 Punkt 5) - zentrale Pilotüberwachungs-Anzeige:
+// Dienste, letzter erfolgreicher Cron-Lauf je Job, API-Verbindungsfehler,
+// offene/unklare Aktionen, KI-Kosten, Feature-Flags, letzte erfolgreiche
+// Synchronisierung. WICHTIG: ein fehlgeschlagener Lauf wird NIEMALS als
+// erfolgreich angezeigt (siehe worker.js holeJarvisStatusUebersicht -
+// "letzterErfolgAm" kommt ausschließlich aus Jobs mit status "done").
+// =============================================================================
+
+const JOB_TYP_LABEL = {
+  'email-check': 'E-Mail-Check', 'rechnung-check': 'Rechnungs-Check', 'mahnung-check': 'Mahnungs-Check',
+  'wartung-check': 'Wartungs-Check', 'projekt-check': 'Projekt-Check', 'control-check': 'CONTROL-Check',
+};
+const FEATURE_FLAG_LABEL = {
+  JARVIS_EMAIL_AKTIV: 'Autonomer E-Mail-Check', JARVIS_ANGEBOT_AKTIV: 'Autonome Angebotsentwürfe',
+  JARVIS_RECHNUNG_AKTIV: 'Autonome Rechnungsentwürfe', JARVIS_MAHNUNG_AKTIV: 'Autonome Mahnentwürfe',
+  JARVIS_WARTUNG_AKTIV: 'Autonome Wartungsvorschläge', JARVIS_PROJEKT_AKTIV: 'Autonome Projekthinweise',
+  JARVIS_CONTROL_AKTIV: 'Autonomer CONTROL-Check',
+};
+const JOB_STATUS_BADGE = {
+  done: '<span class="badge badge-success">erfolgreich</span>',
+  failed: '<span class="badge badge-danger">fehlgeschlagen</span>',
+  running: '<span class="badge badge-accent">läuft gerade</span>',
+  unklar: '<span class="badge badge-danger">unklar - prüfen!</span>',
+  noch_nie_gelaufen: '<span class="badge badge-warn">noch nie gelaufen</span>',
+};
+
+function statusZeile(label, ok) {
+  return `<div class="flex-row" style="justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--border-color,#eee)">
+    <span>${escapeHtml(label)}</span><span>${ok ? '✅' : '❌'}</span>
+  </div>`;
+}
+
+async function renderStatus(container) {
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div class="flex-row" style="justify-content:space-between;align-items:center">
+        <h2 style="font-size:14px;margin:0">📊 Pilotüberwachung</h2>
+        <button type="button" class="btn btn-sm" id="jv-status-reload">🔄 Aktualisieren</button>
+      </div>
+      <p class="hint">Rein lesend - zeigt NIEMALS Secret-Werte, nur ob eine Anbindung eingerichtet ist. Ein fehlgeschlagener Lauf wird hier nie als erfolgreich dargestellt.</p>
+      <div id="jv-status-inhalt"><p class="text-mute">Lade …</p></div>
+    </div>
+  `;
+
+  async function laden() {
+    const zielEl = container.querySelector('#jv-status-inhalt');
+    zielEl.innerHTML = '<p class="text-mute">Lade …</p>';
+    try {
+      const s = await holeJarvisStatus();
+      zielEl.innerHTML = `
+        <h3 style="font-size:13px">Dienste</h3>
+        ${statusZeile('Anthropic-API-Schlüssel konfiguriert', s.dienste.anthropicKonfiguriert)}
+        ${statusZeile('Firebase-Service-Account konfiguriert', s.dienste.firebaseKonfiguriert)}
+        ${statusZeile('Google-Büro-Anbindung (Service Binding/URL)', s.dienste.googleBueroBindingVorhanden)}
+        ${statusZeile('KI-Bürokraft-Anbindung (Service Binding/URL)', s.dienste.kiBuerokraftBindingVorhanden)}
+        ${statusZeile('Google-Konto verbunden (Gmail/Kalender)', s.dienste.googleKontoVerbunden)}
+        ${statusZeile('Rate-Limiter konfiguriert (sonst sperren sich /kunde-upload und /siri-abfrage selbst)', s.dienste.rateLimiterKonfiguriert)}
+
+        <h3 style="font-size:13px;margin-top:14px">Letzte Cron-Läufe</h3>
+        <table class="data-table" style="width:100%">
+          <thead><tr><th>Job</th><th>Letzter Versuch</th><th>Zeitpunkt</th><th>Letzter ERFOLG</th></tr></thead>
+          <tbody>
+            ${s.cronLaeufe.map((j) => `
+              <tr>
+                <td>${escapeHtml(JOB_TYP_LABEL[j.typ] || j.typ)}</td>
+                <td>${JOB_STATUS_BADGE[j.letzterVersuchStatus] || escapeHtml(j.letzterVersuchStatus)}${j.letzterFehler ? `<div class="text-mute" style="font-size:11px">${escapeHtml(j.letzterFehler)}</div>` : ''}</td>
+                <td>${j.letzterVersuchAm ? formatDateTime(j.letzterVersuchAm) : '–'}</td>
+                <td>${j.letzterErfolgAm ? formatDateTime(j.letzterErfolgAm) : '<span class="text-mute">noch nie</span>'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="text-mute" style="font-size:12px">Letzte erfolgreiche Synchronisierung insgesamt: ${s.letzteErfolgreicheSynchronisierungAm ? formatDateTime(s.letzteErfolgreicheSynchronisierungAm) : 'noch keine'}</p>
+
+        <h3 style="font-size:13px;margin-top:14px">Aktionen</h3>
+        <p>Offen: <strong>${s.offeneAktionen}</strong> · Unklar (Absturz-Verdacht, manuell prüfen): <strong style="${s.unklareAktionen > 0 ? 'color:var(--danger-color,#c0392b)' : ''}">${s.unklareAktionen}</strong></p>
+
+        <h3 style="font-size:13px;margin-top:14px">KI-Kosten (${escapeHtml(s.kiKosten.monat)})</h3>
+        <p>${s.kiKosten.geschaetzteKostenUsd.toFixed(2)} USD geschätzt${s.kiKosten.limitUsd ? ` von ${s.kiKosten.limitUsd} USD Limit` : ' (kein Limit gesetzt)'}</p>
+
+        <h3 style="font-size:13px;margin-top:14px">Feature-Flags (autonome Funktionen)</h3>
+        ${Object.entries(s.featureFlags).map(([flag, aktiv]) => statusZeile(FEATURE_FLAG_LABEL[flag] || flag, aktiv)).join('')}
+
+        <h3 style="font-size:13px;margin-top:14px">Letzte API-Verbindungsfehler</h3>
+        ${s.apiVerbindungsfehler.length === 0 ? '<p class="text-mute">Keine.</p>' : `
+          <ul class="cal-event-list">
+            ${s.apiVerbindungsfehler.map((e) => `<li><strong>${escapeHtml(e.quelle)}</strong><div class="text-mute" style="font-size:12px">${formatDateTime(e.zeitstempel)} - ${escapeHtml(e.fehler)}</div></li>`).join('')}
+          </ul>`}
+      `;
+    } catch (err) {
+      zielEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
+    }
+  }
+
+  container.querySelector('#jv-status-reload').addEventListener('click', laden);
+  await laden();
 }
 
 // =============================================================================

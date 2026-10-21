@@ -403,6 +403,12 @@ export async function holeJarvisControl() {
   return daten;
 }
 
+/** Phase 10 - Pilotüberwachung: zentrale Statusübersicht (Dienste, Cron-Läufe, Fehler, Kosten, Feature-Flags). */
+export async function holeJarvisStatus() {
+  const { status } = await callJarvisBackend('jarvis-status');
+  return status;
+}
+
 /** JARVIS-Wochenbericht (Phase 6, erste Version - noch nicht automatisch per Cron erzeugt). */
 export async function holeJarvisWochenbericht() {
   const { bericht } = await callJarvisBackend('jarvis-wochenbericht');
