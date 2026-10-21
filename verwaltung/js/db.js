@@ -89,6 +89,7 @@ const STORES = {
   jarvisTechAnalysen: 'id',
   jarvisPruefprotokolle: 'id',
   pruefnormenGrenzwerte: 'id',
+  siriGeraeteTokens: 'id',
 };
 
 export const KALK_KATEGORIEN = [

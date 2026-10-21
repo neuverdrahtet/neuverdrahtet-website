@@ -2188,6 +2188,114 @@ async function handleKundenUpload({ env, body }) {
 }
 
 // =============================================================================
+// JARVIS Phase 8 - Siri-Kurzbefehle: eine sichere, UNABHÄNGIG von Firebase-
+// Login funktionierende Schnittstelle für iOS-Kurzbefehle ("Hey Siri, JARVIS
+// fragen ..."), da ein Kurzbefehl keinen interaktiven Firebase-Login
+// durchführen kann. Bewusst KEIN geteilter API-Master-Key: jedes Gerät
+// bekommt sein EIGENES, zufällig erzeugtes Token, das
+//   - gerätegebunden ist (ein Token pro eingerichtetem Kurzbefehl/Gerät),
+//   - zeitlich begrenzt ist (ablaufAm, von Danny beim Erstellen festgelegt),
+//   - jederzeit widerrufbar ist (widerrufenAm, ohne die übrigen Tokens zu
+//     berühren),
+//   - serverseitig auf eine kleine, feste Liste REIN LESENDER Abfragen
+//     beschränkt ist (erlaubteIntents) - es gibt über diesen Weg KEINE
+//     Möglichkeit, irgendetwas zu schreiben/freizugeben/zu bearbeiten
+//     (Vorgabe Punkt 5: "Keine Freigabe allein aufgrund eines
+//     Sprachbefehls").
+// Das Token selbst wird NIEMALS im Klartext gespeichert - nur sein SHA-256-
+// Hash dient als Firestore-Dokument-ID (siriGeraeteTokens/{hashHex}), analog
+// zu einem gehashten Passwort. Danny sieht das rohe Token genau EINMAL beim
+// Erstellen (verwaltung-Einstellungen) und trägt es manuell in den iOS-
+// Kurzbefehl ein - verliert er es, kann er das Token nur widerrufen und ein
+// neues erstellen, es lässt sich nicht erneut anzeigen.
+// =============================================================================
+
+async function sha256Hex(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Geschlossene Liste erlaubter Siri-Abfragen - rein lesend, keine einzige
+// schreibt/bearbeitet/genehmigt irgendetwas. Ein Kurzbefehl kann also beim
+// besten Willen (oder im Missbrauchsfall bei gestohlenem Token) niemals eine
+// Freigabe auslösen oder Daten verändern.
+const SIRI_ERLAUBTE_INTENTS = ['taetigkeiten-morgen', 'angebote-offen', 'freigaben-offen'];
+
+async function fuehreSiriIntentAus({ serviceAccount, intent }) {
+  const heute = new Date().toISOString().slice(0, 10);
+  if (intent === 'taetigkeiten-morgen') {
+    const morgen = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const [aufgaben, termine] = await Promise.all([
+      firestoreListDocuments({ serviceAccount, collection: 'aufgaben' }),
+      firestoreListDocuments({ serviceAccount, collection: 'termine' }),
+    ]);
+    const faelligeAufgaben = aufgaben.filter((a) => a.status !== 'erledigt' && a.faelligAm === morgen);
+    const termineMorgen = termine.filter((t) => (t.start || '').slice(0, 10) === morgen);
+    const teile = [];
+    if (termineMorgen.length) teile.push(`${termineMorgen.length} Termin${termineMorgen.length === 1 ? '' : 'e'} (${termineMorgen.slice(0, 3).map((t) => t.titel || 'ohne Titel').join(', ')})`);
+    if (faelligeAufgaben.length) teile.push(`${faelligeAufgaben.length} fällige Aufgabe${faelligeAufgaben.length === 1 ? '' : 'n'}`);
+    const sprachantwort = teile.length ? `Morgen stehen an: ${teile.join(' und ')}.` : 'Morgen stehen keine Termine oder fälligen Aufgaben an.';
+    return { sprachantwort, daten: { anzahlTermine: termineMorgen.length, anzahlAufgaben: faelligeAufgaben.length } };
+  }
+  if (intent === 'angebote-offen') {
+    const angebote = await firestoreListDocuments({ serviceAccount, collection: 'angebote' });
+    const offen = angebote.filter((a) => a.status === 'entwurf' || a.status === 'versendet');
+    const sprachantwort = offen.length ? `${offen.length} Angebot${offen.length === 1 ? '' : 'e'} sind noch offen.` : 'Es sind aktuell keine Angebote offen.';
+    return { sprachantwort, daten: { anzahlOffen: offen.length } };
+  }
+  if (intent === 'freigaben-offen') {
+    const aktionen = await firestoreListDocuments({ serviceAccount, collection: 'jarvisAktionen' });
+    const offen = aktionen.filter((a) => a.status === 'pending');
+    const sprachantwort = offen.length ? `${offen.length} JARVIS-Freigabe${offen.length === 1 ? '' : 'n'} warten auf deine Entscheidung.` : 'Aktuell gibt es keine offenen JARVIS-Freigaben.';
+    return { sprachantwort, daten: { anzahlOffenerFreigaben: offen.length } };
+  }
+  void heute;
+  const err = new Error(`Unbekannte Abfrage "${intent}".`);
+  err.status = 400;
+  throw err;
+}
+
+/**
+ * Prüft das Gerätetoken (Hash-Lookup, Widerruf, Ablauf, erlaubte Abfrage)
+ * und führt bei Erfolg GENAU die angefragte, rein lesende Abfrage aus.
+ * Wirft bei jedem Problem einen Fehler mit passendem HTTP-Status - absichtlich
+ * dieselbe generische Fehlermeldung bei "Token existiert nicht" wie bei
+ * "Hash stimmt nicht" (siehe unten), damit ein Angreifer nicht unterscheiden
+ * kann, ob ein geratenes/manipuliertes Token zufällig fast richtig war.
+ */
+async function fuehreSiriAbfrageAus({ serviceAccount, rawToken, intent }) {
+  if (!rawToken || typeof rawToken !== 'string' || rawToken.length < 20) {
+    const err = new Error('Ungültiges oder fehlendes Gerätetoken.'); err.status = 401; throw err;
+  }
+  if (!SIRI_ERLAUBTE_INTENTS.includes(intent)) {
+    const err = new Error(`Unbekannte Abfrage "${intent}".`); err.status = 400; throw err;
+  }
+  const hash = await sha256Hex(rawToken);
+  const tokenDoc = await firestoreGetDoc({ serviceAccount, collection: 'siriGeraeteTokens', id: hash });
+  if (!tokenDoc) { const err = new Error('Ungültiges oder fehlendes Gerätetoken.'); err.status = 401; throw err; }
+  if (tokenDoc.widerrufenAm) { const err = new Error('Dieses Gerätetoken wurde widerrufen.'); err.status = 401; throw err; }
+  const heute = new Date().toISOString().slice(0, 10);
+  if (tokenDoc.ablaufAm && tokenDoc.ablaufAm < heute) { const err = new Error('Dieses Gerätetoken ist abgelaufen.'); err.status = 401; throw err; }
+  if (!Array.isArray(tokenDoc.erlaubteIntents) || !tokenDoc.erlaubteIntents.includes(intent)) {
+    const err = new Error(`Für dieses Gerätetoken nicht freigegeben: "${intent}".`); err.status = 403; throw err;
+  }
+
+  const ergebnis = await fuehreSiriIntentAus({ serviceAccount, intent });
+
+  // Best-effort Audit-Trail (letzte Nutzung) - ein Fehlschlag hier darf die
+  // eigentliche, bereits erfolgreich berechnete Antwort nicht verhindern.
+  try {
+    await firestoreMergeFelder({
+      serviceAccount, collection: 'siriGeraeteTokens', id: hash,
+      felder: { letzteNutzungAm: new Date().toISOString() },
+    });
+  } catch { /* Audit-Trail ist nur informativ, kein Teil des Sicherheitsmodells */ }
+
+  return ergebnis;
+}
+
+// =============================================================================
 // JARVIS - Sicherheitsgrundlage (Firebase-ID-Token-Verifizierung + Rollen-
 // prüfung), Freigabe-Aktionen-Engine (Stufe 2, korrekt OHNE Transaktion um
 // externe Aufrufe) und Kostenzähler. Siehe verwaltung/js/views/jarvis.js
@@ -4769,7 +4877,15 @@ const TECH_ANALYSE_SCHEMA = {
         type: 'object',
         properties: {
           aussage: { type: 'string' },
-          herkunft: { type: 'string', enum: ['messwert', 'herstellerquelle', 'diagnosehypothese'] },
+          // Phase 8 Punkt 6: "herstellerquelle_verifiziert" ist HIER ABSICHTLICH
+          // NICHT Teil des Modell-Schemas - die Analyse-Pipeline darf sich
+          // NIEMALS selbst als "unabhängig verifiziert" einstufen. Was sie
+          // höchstens behaupten darf, ist "herstellertext_hochgeladen" (aus
+          // einem von Danny eingefügten Text abgeleitet, UNGEPRÜFT). Die
+          // Beförderung zu "herstellerquelle_verifiziert" passiert
+          // ausschließlich über die separate, menschliche Aktion
+          // verifiziereHerstellerBefund - nie durch dieses Schema.
+          herkunft: { type: 'string', enum: ['messwert', 'herstellertext_hochgeladen', 'diagnosehypothese'] },
           quelle: { type: ['string', 'null'] },
         },
         required: ['aussage', 'herkunft', 'quelle'],
@@ -4801,8 +4917,9 @@ ZWINGENDE Regeln (Sicherheit vor Vollständigkeit):
 - Erfinde NIEMALS Messwerte, Seriennummern, Fehlercodes oder Herstellerangaben. Ist ein Feld nicht lesbar/nicht ableitbar, setze es auf null (bzw. lasse die Position in "ausgeleseneMesswerte" ganz weg) - schätze NICHTS.
 - Jeder Eintrag in "befunde" MUSS "herkunft" ehrlich setzen:
   - "messwert" NUR für tatsächlich im Bild/Dokument abgelesene Werte.
-  - "herstellerquelle" ${hatHerstellerquelle ? 'ist zulässig, aber NUR wenn sich die Aussage direkt aus dem unten mitgegebenen Herstellertext ableiten lässt - gib in "quelle" an, welcher Teil des Textes gemeint ist.' : 'ist HIER NICHT ZULÄSSIG, da kein Herstellertext mitgegeben wurde - verwende stattdessen IMMER "diagnosehypothese", selbst wenn du aus allgemeinem Wissen etwas über den Hersteller zu wissen glaubst.'}
+  - "herstellertext_hochgeladen" ${hatHerstellerquelle ? 'ist zulässig, aber NUR wenn sich die Aussage direkt aus dem unten mitgegebenen Herstellertext ableiten lässt - gib in "quelle" an, welcher Teil des Textes gemeint ist. Das bedeutet AUSDRÜCKLICH NICHT, dass dieser Text unabhängig geprüft/verifiziert ist - er ist lediglich hochgeladen/eingefügt worden.' : 'ist HIER NICHT ZULÄSSIG, da kein Herstellertext mitgegeben wurde - verwende stattdessen IMMER "diagnosehypothese", selbst wenn du aus allgemeinem Wissen etwas über den Hersteller zu wissen glaubst.'}
   - "diagnosehypothese" für jede allgemeine fachliche Einschätzung ohne Beleg.
+  - Du darfst NIEMALS eine Aussage als "unabhängig verifizierte Herstellerquelle" kennzeichnen - das kann ausschließlich ein Mensch nachträglich, außerhalb dieser Analyse, feststellen.
 - "unsicherheitshinweis" ist PFLICHT und muss ehrlich benennen, was unsicher, nicht erkennbar oder nicht prüfbar ist. Ist nichts davon betroffen, schreibe "Keine besonderen Unsicherheiten."
 - Du triffst NIEMALS eine abschließende Aussage über eine bestandene Prüfung, eine Freigabe zur Inbetriebnahme oder die Sicherheit einer Anlage - das bleibt der Elektrofachkraft vor Ort vorbehalten.
 - "bildLesbar": false, wenn das Bild/Dokument nicht auswertbar ist (unscharf, falsches Motiv, etc.) - in diesem Fall alle anderen Felder so gut wie möglich auf null/leer setzen und den Grund im Unsicherheitshinweis nennen.`;
@@ -4869,7 +4986,7 @@ async function callClaudeTechAnalyse({ apiKey, model, analyseTyp, bildDataUrl, b
  * Eine unbekannte anlagenId wird hart abgelehnt (404) statt ignoriert zu
  * werden - Vorgabe Punkt 7 "falsche Kundenzuordnung"/"falscher Gerätebezug".
  */
-async function fuehreJarvisTechAnalyseAus({ serviceAccount, env, analyseTyp, bildDataUrl, bildUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId, callerUid, callerRole }) {
+async function fuehreJarvisTechAnalyseAus({ serviceAccount, env, analyseTyp, bildDataUrl, bildUrl, herstellerquelleText, herstellerquelleName, herstellerquelleDatum, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId, callerUid, callerRole }) {
   // Defense-in-depth (dieselbe Begründung wie bei fuehreJarvisAktionAus): die
   // HTTP-Ebene prüft die Rolle bereits anhand des verifizierten ID-Tokens,
   // diese interne Prüfung stellt sicher, dass ein direkter Aufruf dieser
@@ -4905,7 +5022,13 @@ async function fuehreJarvisTechAnalyseAus({ serviceAccount, env, analyseTyp, bil
   // auf reine Prompt-Befolgung verlassen wir uns hier bewusst NICHT.
   let korrigiert = false;
   const befunde = (ergebnis.befunde || []).map((b) => {
-    if (b.herkunft === 'herstellerquelle' && !hatHerstellerquelle) {
+    // Doppelte Absicherung (wie beim Rest dieses Abschnitts): der Prompt
+    // verbietet es bereits, aber die Durchsetzung verlässt sich nicht auf
+    // reine Prompt-Befolgung. Zusätzlich kann "herstellerquelle_verifiziert"
+    // HIER NIEMALS vorkommen, da es gar nicht im Modell-Schema erlaubt ist -
+    // ein Treffer wäre ein Hinweis auf eine manipulierte Antwort und wird
+    // ebenfalls sicherheitshalber zurückgestuft.
+    if ((b.herkunft === 'herstellertext_hochgeladen' && !hatHerstellerquelle) || b.herkunft === 'herstellerquelle_verifiziert') {
       korrigiert = true;
       return { ...b, herkunft: 'diagnosehypothese', quelle: null };
     }
@@ -4920,6 +5043,11 @@ async function fuehreJarvisTechAnalyseAus({ serviceAccount, env, analyseTyp, bil
     id, analyseTyp, erkannteGeraetedaten: ergebnis.erkannteGeraetedaten || {}, erkannterFehlercode: ergebnis.erkannterFehlercode || null,
     ausgeleseneMesswerte: ergebnis.ausgeleseneMesswerte || [], befunde, unsicherheitshinweis, bildLesbar: ergebnis.bildLesbar !== false,
     hatHerstellerquelle, kundeIdHinweis: kundeIdHinweis || '', anlagenIdHinweis: anlagenIdHinweis || '',
+    // Phase 8 Punkt 6: nachvollziehbare Quellenangabe (WELCHES Dokument,
+    // WANN) statt nur eines rohen Textblocks - rein deklarativ, von der
+    // Elektrofachkraft selbst eingetragen, NICHT durch Claude geprüft.
+    herstellerquelleName: hatHerstellerquelle ? String(herstellerquelleName || '').slice(0, 300) : '',
+    herstellerquelleDatum: hatHerstellerquelle ? String(herstellerquelleDatum || '').slice(0, 40) : '',
     verknuepftMitAnlageId: anlage ? anlagenId : null, verknuepftMitKundeId: anlage ? (anlage.kundeId || '') : null, version: 1,
     erstelltVonUid: callerUid || '', erstelltAm: new Date().toISOString(),
   };
@@ -4961,6 +5089,43 @@ async function verknuepfeTechAnalyseMitAnlage({ serviceAccount, analyseId, erwar
   return { id: analyseId, version: neueVersion, verknuepftMitAnlageId: anlagenId, verknuepftMitKundeId: anlage.kundeId || kundeId || '' };
 }
 
+/**
+ * Phase 8 Punkt 6 ("klare Unterscheidung zwischen hochgeladenem
+ * Herstellertext und unabhängig verifizierter Herstellerquelle"): befördert
+ * EINEN konkreten Befund explizit von "herstellertext_hochgeladen" zu
+ * "herstellerquelle_verifiziert" - ausschließlich durch eine separate,
+ * menschliche, auditierte Aktion (niemals durch die Analyse-Pipeline selbst,
+ * siehe TECH_ANALYSE_SCHEMA/callClaudeTechAnalyse-Durchsetzung oben). Setzt
+ * voraus, dass die aufrufende Person die Herstellerquelle PERSÖNLICH anhand
+ * des Originaldokuments geprüft hat - das System kann das nicht verifizieren,
+ * nur den Vorgang nachvollziehbar protokollieren (verifiziertVonUid/-Am).
+ */
+async function verifiziereHerstellerBefund({ serviceAccount, analyseId, erwarteteVersion, befundIndex, callerUid, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTechAnalysen', id: analyseId });
+  if (!aktuell) { const err = new Error('Analyse nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Diese Analyse wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  const befunde = Array.isArray(aktuell.befunde) ? aktuell.befunde : [];
+  const i = Number(befundIndex);
+  if (!Number.isInteger(i) || i < 0 || i >= befunde.length) { const err = new Error('Ungültiger Befund-Index.'); err.status = 400; throw err; }
+  if (befunde[i].herkunft !== 'herstellertext_hochgeladen') {
+    const err = new Error('Nur ein Befund mit Herkunft "herstellertext_hochgeladen" kann als verifiziert markiert werden.');
+    err.status = 409;
+    throw err;
+  }
+  const neueBefunde = befunde.map((b, idx) => (idx === i
+    ? { ...b, herkunft: 'herstellerquelle_verifiziert', verifiziertVonUid: callerUid || '', verifiziertAm: new Date().toISOString() }
+    : b));
+  const { id: _ignoriert, ...rest } = aktuell;
+  const neueVersion = (aktuell.version || 0) + 1;
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisTechAnalysen', id: analyseId, data: { ...rest, befunde: neueBefunde, version: neueVersion } });
+  return { id: analyseId, version: neueVersion, befunde: neueBefunde };
+}
+
 async function holeJarvisTechAnalysen({ serviceAccount }) {
   const alle = await firestoreListDocuments({ serviceAccount, collection: 'jarvisTechAnalysen' });
   return alle.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
@@ -4992,17 +5157,31 @@ async function holeJarvisTechAnalysen({ serviceAccount }) {
 
 const JARVIS_PRUEFARTEN = ['dguv-v3', 'e-check', 'sonstiges'];
 
-/** Grenzwertprüfung EINER Messung - siehe Kopfkommentar. */
+/**
+ * Grenzwertprüfung EINER Messung - siehe Kopfkommentar.
+ *
+ * Phase 8 Punkt 6 (TECH-Sicherheitsverbesserungen) - Versionierung +
+ * Gültigkeitsbereich: jedes Ergebnis trägt "normId"/"normVersion" - welche
+ * KONKRETE, zum Prüfzeitpunkt gültige Fassung der Prüfnorm angewendet wurde.
+ * Ändert Danny den Grenzwert später, bleibt die Bewertung ALTER Protokolle
+ * dadurch nachvollziehbar unverändert nachvollziehbar (statt sich rückwirkend
+ * "rückblickend" zu ändern) - ein neues Protokoll verwendet automatisch die
+ * dann aktuelle Fassung. "gueltigkeitsbereich" wird zusätzlich zur reinen
+ * Bedingungsbestätigung durchgereicht, damit die Elektrofachkraft beim
+ * Bestätigen tatsächlich sieht, WAS sie bestätigt (nicht nur eine leere
+ * Checkbox).
+ */
 function pruefeMesswertGrenzwert({ bezeichnung, wert, pruefbedingungBestaetigt }, pruefart, pruefnormenGrenzwerte) {
   if (wert === undefined || wert === null || wert === '' || Number.isNaN(Number(wert))) {
-    return { status: 'fehlend', grund: 'Kein Messwert eingetragen.', normReferenz: null };
+    return { status: 'fehlend', grund: 'Kein Messwert eingetragen.', normReferenz: null, normId: null, normVersion: null, gueltigkeitsbereich: null };
   }
   const passenderEintrag = (pruefnormenGrenzwerte || []).find((g) => g.pruefart === pruefart && g.messgroesse === bezeichnung);
   if (!passenderEintrag) {
-    return { status: 'nicht_bewertbar', grund: 'Keine von Danny hinterlegte Prüfnorm für diese Messgröße - manuell durch die Elektrofachkraft bewerten.', normReferenz: null };
+    return { status: 'nicht_bewertbar', grund: 'Keine von Danny hinterlegte Prüfnorm für diese Messgröße - manuell durch die Elektrofachkraft bewerten.', normReferenz: null, normId: null, normVersion: null, gueltigkeitsbereich: null };
   }
+  const normMeta = { normReferenz: passenderEintrag.normReferenz || null, normId: passenderEintrag.id || null, normVersion: passenderEintrag.version || 1, gueltigkeitsbereich: passenderEintrag.gueltigkeitsbereich || passenderEintrag.bedingung || null };
   if (!pruefbedingungBestaetigt) {
-    return { status: 'nicht_bewertbar', grund: 'Prüfbedingung für diese Messung nicht bestätigt - ein Grenzwertvergleich setzt nachweisbare Prüfbedingungen voraus.', normReferenz: passenderEintrag.normReferenz || null };
+    return { status: 'nicht_bewertbar', grund: 'Prüfbedingung für diese Messung nicht bestätigt - ein Grenzwertvergleich setzt nachweisbare Prüfbedingungen voraus.', ...normMeta };
   }
   const zahl = Number(wert);
   const unterschritten = passenderEintrag.grenzwertMin !== undefined && passenderEintrag.grenzwertMin !== null && zahl < Number(passenderEintrag.grenzwertMin);
@@ -5011,10 +5190,10 @@ function pruefeMesswertGrenzwert({ bezeichnung, wert, pruefbedingungBestaetigt }
     return {
       status: 'auffaellig',
       grund: `Außerhalb des von Danny hinterlegten Bereichs (${passenderEintrag.grenzwertMin ?? '-∞'} bis ${passenderEintrag.grenzwertMax ?? '∞'} ${passenderEintrag.einheit || ''})${passenderEintrag.bedingung ? ` - ${passenderEintrag.bedingung}` : ''}`,
-      normReferenz: passenderEintrag.normReferenz || null,
+      ...normMeta,
     };
   }
-  return { status: 'ok', grund: null, normReferenz: passenderEintrag.normReferenz || null };
+  return { status: 'ok', grund: null, ...normMeta };
 }
 
 /** Bewertet ALLE Messwerte eines Protokolls und bestimmt das Gesamtergebnis - rein regelbasiert, keine KI beteiligt. */
@@ -5034,7 +5213,7 @@ function pruefeMesswerteEingabe(messwerte) {
 }
 
 /** Legt ein NEUES Prüfprotokoll als Entwurf an (ein Protokoll je Prüftermin). Prüft zwingend die Kundenzuordnung (wie bei JARVIS TECH). */
-async function erstelleJarvisPruefprotokoll({ serviceAccount, anlagenId, kundeId, pruefart, messwerte, callerRole }) {
+async function erstelleJarvisPruefprotokoll({ serviceAccount, anlagenId, kundeId, pruefart, messwerte, callerUid, callerRole }) {
   pruefeJarvisRolle(callerRole);
   if (!JARVIS_PRUEFARTEN.includes(pruefart)) { const err = new Error(`Unbekannte Prüfart "${pruefart}" - erlaubt sind: ${JARVIS_PRUEFARTEN.join(', ')}.`); err.status = 400; throw err; }
   if (!anlagenId) { const err = new Error('Feld "anlagenId" fehlt.'); err.status = 400; throw err; }
@@ -5052,10 +5231,40 @@ async function erstelleJarvisPruefprotokoll({ serviceAccount, anlagenId, kundeId
   const daten = {
     id, anlagenId, kundeId: anlage.kundeId || kundeId || '', pruefart, messwerte: bewertet, gesamtergebnis,
     rechtsverbindlicherHinweis: 'Entwurf zur Durchsicht durch eine Elektrofachkraft - KEIN rechtsverbindliches Prüfergebnis, KEINE automatische Bestätigung einer bestandenen Prüfung, KEINE Unterschrift/Freigabe.',
+    // Phase 8 Punkt 6: Ersteller wird dokumentiert; "durchsicht" (siehe
+    // dokumentiereDurchsichtPruefprotokoll) bleibt bis zu einer EXPLIZITEN,
+    // manuellen Eintragung durch eine Elektrofachkraft leer - es gibt KEINEN
+    // automatischen "Freigeber".
+    erstelltVonUid: callerUid || '', durchsicht: null,
     version: 1, erstelltAm: new Date().toISOString(),
   };
   await firestoreSetDoc({ serviceAccount, collection: 'jarvisPruefprotokolle', id, data: daten });
   return daten;
+}
+
+/**
+ * Dokumentiert, dass eine Elektrofachkraft den Protokoll-Entwurf durchgesehen
+ * hat - AUSDRÜCKLICH KEINE Freigabe/Bestätigung einer bestandenen Prüfung
+ * (Vorgabe Punkt 6 "Keine automatische fachliche Prüfungsfreigabe" - und da
+ * dies hier eine manuelle, vom Menschen ausgelöste Aktion ist, auch keine
+ * AUTOMATISCHE Freigabe). gesamtergebnis/messwerte werden durch diese Aktion
+ * NICHT verändert - sie hält nur fest, WER es WANN durchgesehen hat, mit
+ * einer frei editierbaren Notiz (z.B. "Werte vor Ort plausibilisiert").
+ */
+async function dokumentiereDurchsichtPruefprotokoll({ serviceAccount, protokollId, erwarteteVersion, vonUid, vonName, notiz, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisPruefprotokolle', id: protokollId });
+  if (!aktuell) { const err = new Error('Prüfprotokoll nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieses Protokoll wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (!vonName || typeof vonName !== 'string' || !vonName.trim()) { const err = new Error('Feld "vonName" (Name der Elektrofachkraft) fehlt.'); err.status = 400; throw err; }
+  const { id: _ignoriert, ...rest } = aktuell;
+  const durchsicht = { vonUid: vonUid || '', vonName: vonName.trim(), am: new Date().toISOString(), notiz: String(notiz || '').slice(0, 1000) };
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisPruefprotokolle', id: protokollId, data: { ...rest, durchsicht } });
+  return { id: protokollId, durchsicht };
 }
 
 /** Aktualisiert die Messwerte eines bestehenden Protokoll-Entwurfs (Versionssicherung wie überall sonst im Freigabecenter). */
@@ -5546,6 +5755,47 @@ export default {
         }
       }
 
+      // Siri-Kurzbefehle (Phase 8) - läuft wie /kunde-upload VOR der
+      // generellen APP_SECRET-/Origin-Prüfung, da ein iOS-Kurzbefehl keine
+      // Browser-Origin mitschickt und keinen Firebase-Login durchführen
+      // kann. Autorisierung läuft stattdessen ausschließlich über das
+      // gehashte, gerätegebundene, widerrufbare Token (siehe
+      // fuehreSiriAbfrageAus) - eigenes Rate-Limit wie beim Kunden-Upload.
+      if (teile[0] === 'siri-abfrage' && request.method === 'POST') {
+        const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+        if (!(await unterSchwellenwert(env, `siri:${ip}`))) {
+          return new Response(JSON.stringify({ error: 'Zu viele Anfragen - bitte kurz warten.' }), {
+            status: 429, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+          return new Response(JSON.stringify({ error: 'Siri-Abfragen sind serverseitig nicht eingerichtet.' }), {
+            status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        const authHeader = request.headers.get('Authorization') || '';
+        const rawToken = authHeader.replace(/^Bearer\s+/i, '').trim();
+        let siriBody;
+        try {
+          siriBody = await request.json();
+        } catch {
+          return new Response(JSON.stringify({ error: 'Ungültiger Request-Body.' }), {
+            status: 400, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+        try {
+          const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+          const ergebnis = await fuehreSiriAbfrageAus({ serviceAccount, rawToken, intent: siriBody?.intent });
+          return new Response(JSON.stringify({ ok: true, ...ergebnis }), {
+            status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        } catch (err) {
+          return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+            status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+
       if (teile[0] === 'oauth' && teile[1] === 'callback') {
         const code = url.searchParams.get('code');
         const state = url.searchParams.get('state');
@@ -6015,11 +6265,39 @@ export default {
         pruefeJarvisRolle(aufrufer.role);
         const analyse = await fuehreJarvisTechAnalyseAus({
           serviceAccount, env, analyseTyp: body.analyseTyp, bildDataUrl: body.bildDataUrl, bildUrl: body.bildUrl,
-          herstellerquelleText: body.herstellerquelleText, kontextText: body.kontextText,
+          herstellerquelleText: body.herstellerquelleText, herstellerquelleName: body.herstellerquelleName, herstellerquelleDatum: body.herstellerquelleDatum,
+          kontextText: body.kontextText,
           kundeIdHinweis: body.kundeIdHinweis, anlagenIdHinweis: body.anlagenIdHinweis, anlagenId: body.anlagenId,
           callerUid: aufrufer.uid, callerRole: aufrufer.role,
         });
         return new Response(JSON.stringify({ ok: true, analyse }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 8 Punkt 6 - JARVIS TECH: expliziten Befund als unabhängig
+    // verifizierte Herstellerquelle markieren (NIEMALS automatisch - siehe
+    // verifiziereHerstellerBefund).
+    if (body.action === 'jarvis-tech-verifizieren') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await verifiziereHerstellerBefund({
+          serviceAccount, analyseId: body.analyseId, erwarteteVersion: body.erwarteteVersion, befundIndex: body.befundIndex,
+          callerUid: aufrufer.uid, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       } catch (err) {
@@ -6088,7 +6366,7 @@ export default {
         const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
         pruefeJarvisRolle(aufrufer.role);
         const protokoll = await erstelleJarvisPruefprotokoll({
-          serviceAccount, anlagenId: body.anlagenId, kundeId: body.kundeId, pruefart: body.pruefart, messwerte: body.messwerte, callerRole: aufrufer.role,
+          serviceAccount, anlagenId: body.anlagenId, kundeId: body.kundeId, pruefart: body.pruefart, messwerte: body.messwerte, callerRole: aufrufer.role, callerUid: aufrufer.uid,
         });
         return new Response(JSON.stringify({ ok: true, protokoll }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
@@ -6115,6 +6393,32 @@ export default {
           serviceAccount, protokollId: body.protokollId, erwarteteVersion: body.erwarteteVersion, messwerte: body.messwerte, callerRole: aufrufer.role,
         });
         return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Phase 8 - DGUV/VDE-Prüfprotokolle: Durchsicht dokumentieren (AUSDRÜCKLICH
+    // keine Freigabe einer bestandenen Prüfung, siehe dokumentiereDurchsichtPruefprotokoll).
+    if (body.action === 'jarvis-pruefprotokoll-durchsicht') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const protokoll = await dokumentiereDurchsichtPruefprotokoll({
+          serviceAccount, protokollId: body.protokollId, erwarteteVersion: body.erwarteteVersion,
+          vonUid: aufrufer.uid, vonName: body.vonName, notiz: body.notiz, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, protokoll }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       } catch (err) {
@@ -6243,9 +6547,11 @@ export const __test__ = {
   berechneProjektDeckungsbeitraege, berechneMitarbeiterAuslastung, berechneWartungsvertraege,
   berechneAufgabenUndVerzoegerungen, vergleicheMitVormonat,
   // Phase 7 - JARVIS TECH
-  fuehreJarvisTechAnalyseAus, verknuepfeTechAnalyseMitAnlage, holeJarvisTechAnalysen,
+  fuehreJarvisTechAnalyseAus, verknuepfeTechAnalyseMitAnlage, holeJarvisTechAnalysen, verifiziereHerstellerBefund,
   callClaudeTechAnalyse, JARVIS_TECH_ANALYSE_TYPEN,
   // Phase 7 - DGUV/VDE-Prüfprotokolle
-  erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
+  erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle, dokumentiereDurchsichtPruefprotokoll,
   berechnePruefprotokollErgebnis, pruefeMesswertGrenzwert, JARVIS_PRUEFARTEN,
+  // Phase 8 - Siri-Kurzbefehle
+  sha256Hex, fuehreSiriAbfrageAus, fuehreSiriIntentAus, SIRI_ERLAUBTE_INTENTS,
 };

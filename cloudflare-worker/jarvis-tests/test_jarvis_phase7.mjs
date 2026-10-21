@@ -297,13 +297,19 @@ await pruefe('C3: Nachtragsangebot wird korrekt zum Umsatz-Soll desselben Projek
 // =============================================================================
 const WINZIGES_PNG_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
-await pruefe('D1: ohne Herstellerquelle wird "herstellerquelle" serverseitig IMMER zu "diagnosehypothese" herabgestuft (auch wenn Claude es anders liefert)', async () => {
+// Hinweis Phase 8 Punkt 6: die Herkunft "herstellerquelle" wurde in
+// "herstellertext_hochgeladen" umbenannt/aufgetrennt (siehe
+// test_jarvis_phase8.mjs Gruppe F) - ein hochgeladener Herstellertext ist
+// IMMER nur "hochgeladen, ungeprüft", niemals automatisch "verifiziert".
+// Diese Tests hier prüfen weiterhin dieselbe serverseitige Durchsetzungslogik,
+// nur mit dem aktuellen Enum-Namen.
+await pruefe('D1: ohne Herstellerquelle wird "herstellertext_hochgeladen" serverseitig IMMER zu "diagnosehypothese" herabgestuft (auch wenn Claude es anders liefert)', async () => {
   global.__anthropicMock = async () => jsonResponse(200, {
     content: [{ type: 'text', text: JSON.stringify({
       erkannteGeraetedaten: { hersteller: 'Viessmann', modell: 'Vitocal 200', seriennummer: null, geraetetyp: 'Wärmepumpe', baujahr: null },
       erkannterFehlercode: 'F.75',
       ausgeleseneMesswerte: [],
-      befunde: [{ aussage: 'F.75 bedeutet laut Hersteller Kommunikationsfehler.', herkunft: 'herstellerquelle', quelle: 'allgemeines Wissen' }],
+      befunde: [{ aussage: 'F.75 bedeutet laut Hersteller Kommunikationsfehler.', herkunft: 'herstellertext_hochgeladen', quelle: 'allgemeines Wissen' }],
       unsicherheitshinweis: 'Keine besonderen Unsicherheiten.',
       bildLesbar: true,
     }) }],
@@ -316,13 +322,13 @@ await pruefe('D1: ohne Herstellerquelle wird "herstellerquelle" serverseitig IMM
   assert(/automatisch.*korrigiert/.test(analyse.unsicherheitshinweis), 'der Unsicherheitshinweis muss die Korrektur erwähnen');
 });
 
-await pruefe('D2: MIT übergebener Herstellerquelle bleibt "herstellerquelle" erhalten', async () => {
+await pruefe('D2: MIT übergebener Herstellerquelle bleibt "herstellertext_hochgeladen" erhalten (NICHT automatisch "verifiziert")', async () => {
   global.__anthropicMock = async () => jsonResponse(200, {
     content: [{ type: 'text', text: JSON.stringify({
       erkannteGeraetedaten: { hersteller: 'Viessmann', modell: 'Vitocal 200', seriennummer: null, geraetetyp: 'Wärmepumpe', baujahr: null },
       erkannterFehlercode: 'F.75',
       ausgeleseneMesswerte: [],
-      befunde: [{ aussage: 'F.75 bedeutet laut Anleitung Kommunikationsfehler zum Außengerät.', herkunft: 'herstellerquelle', quelle: 'Abschnitt 4.2 der Anleitung' }],
+      befunde: [{ aussage: 'F.75 bedeutet laut Anleitung Kommunikationsfehler zum Außengerät.', herkunft: 'herstellertext_hochgeladen', quelle: 'Abschnitt 4.2 der Anleitung' }],
       unsicherheitshinweis: 'Keine besonderen Unsicherheiten.',
       bildLesbar: true,
     }) }],
@@ -331,7 +337,7 @@ await pruefe('D2: MIT übergebener Herstellerquelle bleibt "herstellerquelle" er
     serviceAccount, env: envBasis(), analyseTyp: 'fehlermeldung', bildDataUrl: WINZIGES_PNG_DATA_URL,
     herstellerquelleText: 'Abschnitt 4.2: Fehlercode F.75 = Kommunikationsfehler zum Außengerät.', callerRole: 'admin',
   });
-  assert(analyse.befunde[0].herkunft === 'herstellerquelle', 'mit Herstellerquelle darf herstellerquelle erhalten bleiben');
+  assert(analyse.befunde[0].herkunft === 'herstellertext_hochgeladen', 'mit Herstellerquelle darf herstellertext_hochgeladen erhalten bleiben');
   assert(analyse.hatHerstellerquelle === true, 'hatHerstellerquelle muss gespeichert werden');
 });
 

@@ -66,13 +66,34 @@ export function mountVoiceRecorder(host, { placeholder = 'Sprachnotiz aufnehmen 
       if (e.error === 'no-speech' || e.error === 'aborted') return;
       statusEl.textContent = e.error === 'not-allowed' ? 'Mikrofon-Zugriff wurde verweigert.' : `Fehler: ${e.error}`;
     });
+    // iOS Safari beendet die Erkennung nach kurzer Zeit von selbst (auch
+    // mitten in einer laufenden Aufnahme) UND reagiert unzuverlässig, wenn
+    // recognition.start() direkt synchron im 'end'-Handler erneut aufgerufen
+    // wird (ein bekannter WebKit-Effekt: kein Fehler, aber die Erkennung
+    // bleibt stumm, obwohl die UI noch "Aufnahme läuft" anzeigt) - ein
+    // kurzer Tick (setTimeout) vor dem Neustart behebt das zuverlässig.
+    // Zusätzlich: bricht die Erkennung mehrfach HINTEREINANDER sehr schnell
+    // ab (Hinweis auf eine echte Fehlschleife statt einer normalen
+    // Sprechpause), automatischen Neustart abbrechen und das dem Nutzer
+    // sichtbar machen, statt endlos (und wirkungslos) weiterzuversuchen.
+    let letzterNeustart = 0;
+    let schnelleNeustartsInFolge = 0;
     recognition.addEventListener('end', () => {
-      // Manche Browser (v.a. iOS Safari) beenden die Erkennung nach kurzer
-      // Zeit von selbst, auch mitten in einer laufenden Aufnahme - solange
-      // der Nutzer nicht selbst gestoppt hat, automatisch neu starten.
-      if (recording) {
-        try { recognition.start(); } catch { /* bereits gestartet */ }
+      if (!recording) return;
+      const jetzt = Date.now();
+      schnelleNeustartsInFolge = (jetzt - letzterNeustart < 1500) ? schnelleNeustartsInFolge + 1 : 0;
+      letzterNeustart = jetzt;
+      if (schnelleNeustartsInFolge >= 5) {
+        recording = false;
+        toggleBtn.textContent = '🎙️ Aufnahme starten';
+        toggleBtn.classList.remove('is-recording');
+        statusEl.textContent = 'Spracherkennung wurde wiederholt unterbrochen - bitte erneut auf "Aufnahme starten" tippen.';
+        return;
       }
+      setTimeout(() => {
+        if (!recording) return;
+        try { recognition.start(); } catch { /* bereits gestartet */ }
+      }, 250);
     });
 
     toggleBtn.addEventListener('click', () => {

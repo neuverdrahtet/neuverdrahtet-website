@@ -414,14 +414,25 @@ export async function holeJarvisWochenbericht() {
 // =============================================================================
 
 /** Analysiert ein Foto/Dokument/Symptom (siehe worker.js fuehreJarvisTechAnalyseAus). */
-export async function analysiereJarvisTech({ analyseTyp, bildDataUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId }) {
-  const { analyse } = await callJarvisBackend('jarvis-tech-analysiere', { analyseTyp, bildDataUrl, herstellerquelleText, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId });
+export async function analysiereJarvisTech({ analyseTyp, bildDataUrl, herstellerquelleText, herstellerquelleName, herstellerquelleDatum, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId }) {
+  const { analyse } = await callJarvisBackend('jarvis-tech-analysiere', { analyseTyp, bildDataUrl, herstellerquelleText, herstellerquelleName, herstellerquelleDatum, kontextText, kundeIdHinweis, anlagenIdHinweis, anlagenId });
   return analyse;
 }
 
 /** Bestätigt EXPLIZIT die Verknüpfung einer TECH-Analyse mit einer echten Anlage (niemals automatisch). */
 export async function verknuepfeJarvisTechAnalyse({ analyseId, erwarteteVersion, anlagenId, kundeId }) {
   const { ergebnis } = await callJarvisBackend('jarvis-tech-verknuepfen', { analyseId, erwarteteVersion, anlagenId, kundeId });
+  return ergebnis;
+}
+
+/**
+ * Markiert EINEN Befund explizit als unabhängig verifizierte Herstellerquelle
+ * - setzt voraus, dass die aufrufende Person die Quelle persönlich geprüft
+ * hat (niemals automatisch durch die Analyse selbst, siehe worker.js
+ * verifiziereHerstellerBefund).
+ */
+export async function verifiziereJarvisHerstellerBefund({ analyseId, erwarteteVersion, befundIndex }) {
+  const { ergebnis } = await callJarvisBackend('jarvis-tech-verifizieren', { analyseId, erwarteteVersion, befundIndex });
   return ergebnis;
 }
 
@@ -441,6 +452,15 @@ export async function erstelleJarvisPruefprotokoll({ anlagenId, kundeId, pruefar
 export async function aktualisiereJarvisPruefprotokoll({ protokollId, erwarteteVersion, messwerte }) {
   const { ergebnis } = await callJarvisBackend('jarvis-pruefprotokoll-aktualisieren', { protokollId, erwarteteVersion, messwerte });
   return ergebnis;
+}
+
+/**
+ * Dokumentiert, dass eine Person das Prüfprotokoll durchgesehen hat - AUSDRÜCKLICH
+ * keine automatische fachliche Prüfungsfreigabe, nur ein nachvollziehbarer Vermerk.
+ */
+export async function dokumentiereDurchsichtPruefprotokoll({ protokollId, erwarteteVersion, vonName, notiz }) {
+  const { protokoll } = await callJarvisBackend('jarvis-pruefprotokoll-durchsicht', { protokollId, erwarteteVersion, vonName, notiz });
+  return protokoll;
 }
 
 /** Liste bisheriger Prüfprotokoll-Entwürfe. */

@@ -254,6 +254,18 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Siri-Kurzbefehl-Gerätetokens (Phase 8): anders als die übrigen
+    // jarvis*-Collections hier bewusst admin-SCHREIBBAR (nicht write:false) -
+    // Danny selbst erstellt/widerruft Tokens direkt aus den Einstellungen
+    // heraus, der Worker liest/aktualisiert sie nur für die eigentliche
+    // Siri-Abfrage (letzteNutzungAm). Dokument-ID ist IMMER der SHA-256-Hash
+    // des rohen Tokens, niemals das rohe Token selbst - siehe worker.js
+    // sha256Hex/fuehreSiriAbfrageAus. Bewusst NICHT admin+büro (anders als
+    // z.B. "katalog"/"pruefnormenGrenzwerte") - Siri-Zugriff auf Geschäfts-
+    // daten bleibt wie JARVIS insgesamt admin-only.
+    match /siriGeraeteTokens/{docId} {
+      allow read, write: if isAdmin();
+    }
 
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (

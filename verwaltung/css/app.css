@@ -1901,3 +1901,22 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 .postfach-body-iframe { width: 100%; min-height: 400px; border: none; background: #fff; border-radius: 6px; }
 .postfach-attachments { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 .postfach-attachment-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+
+/* JARVIS mobil (Phase 8) - Touch-Zielgrößen nach Apple-HIG (min. 44px) für
+   Buttons/Tabs/Select auf Touch-Geräten; betrifft die ganze App (dieselben
+   Elemente wie .btn/.tab-item werden überall verwendet), ist aber speziell
+   für JARVIS (Chat, Freigabecenter, TECH) relevant, wo auf dem iPhone viele
+   kleine Aktionen (Freigeben/Ablehnen/Bearbeiten, Mikrofon, Senden)
+   nebeneinander bedient werden. */
+[data-touch="1"] .btn { min-height: 44px; }
+[data-touch="1"] .btn.btn-sm { min-height: 38px; }
+[data-touch="1"] .tab-item { min-height: 44px; }
+[data-touch="1"] select, [data-touch="1"] .field input, [data-touch="1"] .field textarea { min-height: 44px; }
+
+/* JARVIS-Zentrale/TECH: Karten-Listeneinträge (Freigeben/Ablehnen/Bearbeiten)
+   sollen auf schmalen Bildschirmen umbrechen (Titel über die Aktionen),
+   statt zusammengequetscht zu werden. */
+@media (max-width: 480px) {
+  .jv-item .actions { width: 100%; }
+  .jv-item .actions .btn { flex: 1 1 auto; justify-content: center; }
+}

@@ -1,12 +1,13 @@
 import {
   chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht, holeJarvisControl, holeJarvisWochenbericht,
   analysiereJarvisTech, verknuepfeJarvisTechAnalyse, holeJarvisTechAnalysen, erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
+  dokumentiereDurchsichtPruefprotokoll, verifiziereJarvisHerstellerBefund,
 } from '../ai.js';
-import { escapeHtml, toast, formatDateTime, uid as neueId } from '../utils.js';
+import { escapeHtml, toast, formatDateTime, uid as neueId, compressImage } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
 import { getSession } from '../auth.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
-import { get, put, getAll, remove } from '../db.js';
+import { get, put, getAll, remove, getSettings } from '../db.js';
 import { openModal } from '../ui.js';
 
 // Sprachausgabe ist eine Geräte-/Browsereinstellung, kein Werkora-Setting -
@@ -24,6 +25,12 @@ function formatUsd(n) {
 function sprich(text) {
   if (!window.speechSynthesis) return;
   window.speechSynthesis.cancel();
+  // iOS Safari lässt die Sprachausgabe-Warteschlange nach einem Tab-Wechsel/
+  // Hintergrundaufenthalt manchmal "pausiert" zurück, ohne das selbst zu
+  // melden - ein nachfolgendes speak() bleibt dann stumm, ohne Fehler.
+  // resume() davor ist ein in der Praxis etabliertes, folgenloses Gegenmittel
+  // (auf anderen Browsern ein No-Op, falls bereits "running").
+  window.speechSynthesis.resume();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = 'de-DE';
   window.speechSynthesis.speak(utterance);
@@ -73,6 +80,7 @@ export async function render(container) {
     <div class="tabs" id="jv-tabs">
       <button type="button" class="tab-item" data-tab="zentrale">📋 Zentrale</button>
       <button type="button" class="tab-item" data-tab="tech">🔧 TECH</button>
+      <button type="button" class="tab-item" data-tab="mobile">📱 Mobile</button>
       <button type="button" class="tab-item" data-tab="chat">💬 Chat</button>
     </div>
     <div id="jv-tab-inhalt"></div>
@@ -93,6 +101,8 @@ export async function render(container) {
       await renderChat(inhaltEl, uid);
     } else if (tab === 'tech') {
       await renderTech(inhaltEl);
+    } else if (tab === 'mobile') {
+      await renderMobile(inhaltEl);
     } else {
       await renderZentrale(inhaltEl);
     }
@@ -283,7 +293,7 @@ async function renderZentrale(container) {
         <div id="jv-liste-${k.key}">
           ${(daten[k.key] || []).length === 0 ? `<p class="text-mute">${escapeHtml(k.leer)}</p>` : (daten[k.key] || []).map((item, i) => `
             <div class="jv-item" style="border-top:1px solid var(--border,#333);padding:8px 0">
-              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
                 <strong>${escapeHtml(itemTitel(k.typ, item))}</strong>
                 ${['email', 'angebot', 'rechnung', 'mahnung', 'termin'].includes(k.typ) ? `
                   <span class="actions">
@@ -489,7 +499,98 @@ async function renderZentrale(container) {
     }
   }
 
-  container.querySelectorAll('.jv-freigeben').forEach((btn) => btn.addEventListener('click', () => entscheide(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx), 'freigeben')));
+  // Konkrete, NIEMALS übertriebene Auswirkungsbeschreibung je Aktionstyp -
+  // deckt sich mit der Dokumentation der Aktionstypen in worker.js
+  // (JARVIS_AKTIONS_AUSFUEHRUNG-Kopfkommentar): jede Freigabe ist eine reine
+  // interne Status-Änderung, NIE ein automatischer Versand/eine automatische
+  // Buchung.
+  const FREIGABE_AUSWIRKUNG = {
+    email: 'Setzt den Status dieses Antwortentwurfs auf "freigegeben". Es wird NICHTS automatisch verschickt - der Gmail-Entwurf bleibt zur manuellen Prüfung/zum manuellen Versand in Gmail liegen.',
+    angebot: 'Setzt den Status dieser Angebotsprüfung auf "freigegeben". Das echte Angebot in Werkora wird dadurch NICHT verändert, verschickt oder storniert.',
+    rechnung: 'Setzt den Status dieses Rechnungsentwurfs auf "freigegeben". Es wird KEINE echte Rechnung erzeugt oder versendet - das bleibt eine manuelle Aktion in Werkora.',
+    mahnung: 'Setzt den Status dieses Mahnentwurfs auf "freigegeben". Die echte Mahnung wird dadurch NICHT automatisch versendet.',
+    termin: 'Markiert den unten gezeigten Terminvorschlag als bestätigt. Es wird KEIN verbindlicher Werkora-Termin oder Google-Kalender-Eintrag automatisch angelegt.',
+  };
+
+  function freigabeDetailsHtml(typ, item, kat, idx) {
+    if (typ === 'email') {
+      return `
+        <p><strong>Empfänger (Antwort an):</strong> ${escapeHtml(item.emailVon || 'unbekannt')}</p>
+        <p><strong>Betreff:</strong> ${escapeHtml(item.antwortentwurfBetreff || '(kein Betreff)')}</p>
+        <p><strong>Inhalt:</strong></p>
+        <p class="text-mute" style="white-space:pre-wrap">${escapeHtml(item.antwortentwurfText || '(kein Text)')}</p>
+        <p class="text-mute" style="font-size:12px">Betroffene Daten: jarvisEmailVerarbeitung/${escapeHtml(item.id || '')}</p>
+      `;
+    }
+    if (typ === 'angebot') {
+      const items = item.items || item.positionen || [];
+      return `
+        <p><strong>Kunde:</strong> ${escapeHtml(item.kundeId || 'unbekannt')}</p>
+        ${items.length ? `<p><strong>Positionen:</strong></p><ul>${items.map((p) => `<li>${escapeHtml(p.title || p.bezeichnung || '')} - ${p.quantity ?? p.menge ?? ''} ${escapeHtml(p.unit || p.einheit || '')} x ${p.unit_price_net ?? p.einzelpreis ?? ''} €</li>`).join('')}</ul>` : '<p class="hint">Positionen nicht geladen - echte aktuelle Positionen siehe Werkora-Angebot.</p>'}
+        <p class="text-mute" style="font-size:12px">Betroffene Daten: Angebot ${escapeHtml(item.angebotId || '')} (jarvisAngebotsPruefung-Status)</p>
+      `;
+    }
+    if (typ === 'rechnung') {
+      const items = item.positionen || [];
+      return `
+        <p><strong>Projekt:</strong> ${escapeHtml(item.projektId || 'unbekannt')}</p>
+        ${items.length ? `<p><strong>Positionen:</strong></p><ul>${items.map((p) => `<li>${escapeHtml(p.title || '')} - ${p.quantity ?? ''} ${escapeHtml(p.unit || '')} x ${p.unit_price_net ?? ''} €</li>`).join('')}</ul>` : ''}
+        <p class="text-mute" style="font-size:12px">Betroffene Daten: jarvisRechnungsEntwuerfe/${escapeHtml(item.projektId || '')}</p>
+      `;
+    }
+    if (typ === 'mahnung') {
+      return `
+        <p><strong>Rechnung:</strong> ${escapeHtml(item.rechnungId || 'unbekannt')} · <strong>Mahnstufe:</strong> ${escapeHtml(String(item.stufe ?? '?'))}</p>
+        <p><strong>Offener Betrag:</strong> ${item.offenerBetragBrutto != null ? `${item.offenerBetragBrutto.toFixed(2)} €` : 'unbekannt'} · <strong>Frist:</strong> ${escapeHtml(item.neueFrist || 'unbekannt')}</p>
+        <p><strong>Mahntext:</strong></p>
+        <p class="text-mute" style="white-space:pre-wrap">${escapeHtml(item.aktuellerMahntext || '(kein Text hinterlegt)')}</p>
+        <p class="text-mute" style="font-size:12px">Betroffene Daten: Mahnung ${escapeHtml(item.mahnungId || '')} (echte mahnungen-Collection, nur text/gebuehr)</p>
+      `;
+    }
+    if (typ === 'termin') {
+      const select = container.querySelector(`.jv-slot-auswahl[data-kat="${kat}"][data-idx="${idx}"]`);
+      const slotIndex = Number(select?.value || 0);
+      const slot = (item.vorschlaege || [])[slotIndex];
+      return `
+        <p><strong>Anlage/Objekt:</strong> ${escapeHtml(item.bezeichnung || item.anlageId || 'unbekannt')}</p>
+        <p><strong>Ausgewählter Termin:</strong> ${slot ? `${formatDateTime(slot.start)} – ${formatDateTime(slot.end)}` : 'kein Slot ausgewählt'}</p>
+        <p class="text-mute" style="font-size:12px">Betroffene Daten: jarvisTerminVorschlaege/${escapeHtml(item.id || '')}</p>
+      `;
+    }
+    return '';
+  }
+
+  // Phase 8 (Vorgabe Punkt 5 "Mobile Freigaben"): vor JEDER Freigabe - auch
+  // und besonders am Handy, wo Einträge auf kleinem Bildschirm dicht
+  // beieinander liegen und ein Button leicht aus Versehen getroffen wird -
+  // zeigt ein eigenes Bestätigungs-Modal explizit Empfänger/Inhalt/
+  // betroffene Daten UND die konkrete (sehr begrenzte) Auswirkung der
+  // Freigabe, bevor sie tatsächlich ausgelöst wird. Ablehnen bleibt bewusst
+  // ohne diese zusätzliche Stufe - das ist eine rein interne, folgenlose
+  // Status-Änderung, keine "Freigabe" im Sinne der Vorgabe.
+  function oeffneFreigabeBestaetigung(typ, kat, idx) {
+    const item = holeItem(kat, idx);
+    if (!item) return;
+    const { body, close } = openModal({
+      title: `Freigabe bestätigen - ${escapeHtml(itemTitel(typ, item))}`,
+      bodyHtml: `
+        ${freigabeDetailsHtml(typ, item, kat, idx)}
+        <p class="hint" style="margin-top:10px"><strong>Konkrete Auswirkung:</strong> ${FREIGABE_AUSWIRKUNG[typ] || ''}</p>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="jv-freigabe-abbrechen">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="jv-freigabe-bestaetigen">✅ Jetzt freigeben</button>
+        </div>
+      `,
+    });
+    body.querySelector('#jv-freigabe-abbrechen').addEventListener('click', close);
+    body.querySelector('#jv-freigabe-bestaetigen').addEventListener('click', async () => {
+      close();
+      await entscheide(typ, kat, idx, 'freigeben');
+    });
+  }
+
+  container.querySelectorAll('.jv-freigeben').forEach((btn) => btn.addEventListener('click', () => oeffneFreigabeBestaetigung(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx))));
   container.querySelectorAll('.jv-ablehnen').forEach((btn) => btn.addEventListener('click', () => entscheide(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx), 'ablehnen')));
   container.querySelectorAll('.jv-bearbeiten').forEach((btn) => btn.addEventListener('click', () => bearbeiten(btn.dataset.typ, btn.dataset.kat, Number(btn.dataset.idx))));
 
@@ -563,7 +664,12 @@ const TECH_ANALYSE_TYPEN = [
 
 const HERKUNFT_BADGE = {
   messwert: '<span class="badge badge-accent">Messwert</span>',
-  herstellerquelle: '<span class="badge badge-success">Herstellerquelle</span>',
+  // Phase 8 Punkt 6: zwei getrennte Stufen statt einer - "hochgeladen" ist
+  // ein ungeprüfter, nur eingefügter Text; "verifiziert" wird AUSSCHLIESSLICH
+  // durch die separate, manuelle Aktion verifiziereJarvisHerstellerBefund
+  // gesetzt, niemals durch die Analyse selbst.
+  herstellertext_hochgeladen: '<span class="badge badge-warn">Herstellertext (ungeprüft hochgeladen)</span>',
+  herstellerquelle_verifiziert: '<span class="badge badge-success">Herstellerquelle (verifiziert)</span>',
   diagnosehypothese: '<span class="badge badge-warn">Diagnosehypothese</span>',
 };
 
@@ -574,6 +680,24 @@ const PROTOKOLL_ERGEBNIS_BADGE = {
 };
 
 const PROTOKOLL_HINWEIS = 'Entwurf zur Durchsicht durch eine Elektrofachkraft - KEIN rechtsverbindliches Prüfergebnis, keine automatische Bestätigung einer bestandenen Prüfung, keine Unterschrift/Freigabe.';
+
+const PROTOKOLL_MESSWERT_STATUS_BADGE = {
+  ok: '<span class="badge badge-success">ok</span>',
+  auffaellig: '<span class="badge badge-danger">auffällig</span>',
+  fehlend: '<span class="badge badge-warn">fehlend</span>',
+  nicht_bewertbar: '<span class="badge badge-warn">nicht bewertbar</span>',
+};
+
+// Phase 8 (mobil/Kamera): Fotos werden vor dem Senden client-seitig verkleinert
+// (wiederverwendet aus utils.js, dieselbe Funktion wie bei Zeiterfassungs-
+// Fotos) - eine typische Handyfoto-Auflösung von 12+ MP würde sonst unnötig
+// viele Daten über eine ggf. langsame Baustellen-Mobilfunkverbindung senden
+// und unnötig nah an API-Größenlimits (Anthropic-Bildgröße) heranrücken.
+// Der Rohgrößen-Cap gilt VOR der Komprimierung (fängt z.B. eine versehentlich
+// ausgewählte Video-/RAW-Datei ab, bevor überhaupt versucht wird, sie zu
+// verarbeiten) - PDFs werden nicht komprimiert, nur größenbeschränkt.
+const TECH_UPLOAD_MAX_MB = 15;
+const TECH_UPLOAD_MAX_BYTES = TECH_UPLOAD_MAX_MB * 1024 * 1024;
 
 function dateiZuDataUrl(file) {
   return new Promise((resolve, reject) => {
@@ -592,8 +716,10 @@ function renderTechErgebnis(analyse) {
       <p><strong>Gerät:</strong> ${escapeHtml(g.hersteller || '–')} ${escapeHtml(g.modell || '')}${g.seriennummer ? ` (SN ${escapeHtml(g.seriennummer)})` : ''}${g.geraetetyp ? ` - ${escapeHtml(g.geraetetyp)}` : ''}</p>
       ${analyse.erkannterFehlercode ? `<p><strong>Fehlercode:</strong> ${escapeHtml(analyse.erkannterFehlercode)}</p>` : ''}
       ${(analyse.ausgeleseneMesswerte || []).length ? `<p><strong>Ausgelesene Messwerte:</strong></p><ul>${analyse.ausgeleseneMesswerte.map((m) => `<li>${escapeHtml(m.bezeichnung)}: ${escapeHtml(String(m.wert ?? '–'))} ${escapeHtml(m.einheit || '')}</li>`).join('')}</ul>` : ''}
+      ${analyse.hatHerstellerquelle ? `<p class="text-mute">Herstellerquelle: ${escapeHtml(analyse.herstellerquelleName || 'ohne Dokumentname')}${analyse.herstellerquelleDatum ? ` (${escapeHtml(analyse.herstellerquelleDatum)})` : ''} - noch ungeprüft, bis einzelne Befunde unten explizit verifiziert wurden.</p>` : ''}
       <p><strong>Befunde:</strong></p>
-      <ul>${(analyse.befunde || []).map((b) => `<li>${HERKUNFT_BADGE[b.herkunft] || ''} ${escapeHtml(b.aussage)}${b.quelle ? ` <span class="text-mute">(${escapeHtml(b.quelle)})</span>` : ''}</li>`).join('') || '<li class="text-mute">Keine Befunde.</li>'}</ul>
+      <ul id="jv-tech-befunde">${(analyse.befunde || []).map((b, i) => `<li data-i="${i}">${HERKUNFT_BADGE[b.herkunft] || ''} ${escapeHtml(b.aussage)}${b.quelle ? ` <span class="text-mute">(${escapeHtml(b.quelle)})</span>` : ''}
+        ${b.herkunft === 'herstellertext_hochgeladen' ? ` <button type="button" class="btn btn-sm jv-tech-befund-verifizieren" data-i="${i}">Als verifiziert markieren</button>` : ''}</li>`).join('') || '<li class="text-mute">Keine Befunde.</li>'}</ul>
       <p class="hint">⚠️ ${escapeHtml(analyse.unsicherheitshinweis || '')}</p>
       <div id="jv-tech-verknuepfung"></div>
     </div>
@@ -601,6 +727,33 @@ function renderTechErgebnis(analyse) {
 }
 
 function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen) {
+  // Sowohl Verknüpfung als auch Befund-Verifizierung erhöhen die Version -
+  // eine gemeinsame, mutable Variable statt zwei getrennter sorgt dafür,
+  // dass die zweite Aktion nicht mit einer bereits veralteten erwarteten
+  // Version abgelehnt wird (409), wenn zuvor schon die andere ausgeführt wurde.
+  let aktuelleVersion = analyse.version ?? 1;
+
+  const befundeEl = ergebnisEl.querySelector('#jv-tech-befunde');
+  if (befundeEl) {
+    befundeEl.querySelectorAll('.jv-tech-befund-verifizieren').forEach((btn) => btn.addEventListener('click', async () => {
+      const i = Number(btn.dataset.i);
+      btn.disabled = true;
+      try {
+        await verifiziereJarvisHerstellerBefund({ analyseId: analyse.id, erwarteteVersion: aktuelleVersion, befundIndex: i });
+        aktuelleVersion += 1;
+        const li = befundeEl.querySelector(`li[data-i="${i}"]`);
+        if (li) {
+          li.querySelector('.badge')?.replaceWith(...new DOMParser().parseFromString(HERKUNFT_BADGE.herstellerquelle_verifiziert, 'text/html').body.childNodes);
+          btn.remove();
+        }
+        toast('Befund als verifiziert markiert.', 'success');
+      } catch (err) {
+        btn.disabled = false;
+        toast(err.message, 'danger');
+      }
+    }));
+  }
+
   const zielEl = ergebnisEl.querySelector('#jv-tech-verknuepfung');
   if (!zielEl) return;
   if (analyse.verknuepftMitAnlageId) {
@@ -623,7 +776,8 @@ function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen) {
   zielEl.querySelector('#jv-tech-verknuepfen-btn').addEventListener('click', async () => {
     if (!anlageSel.value) { toast('Bitte eine Anlage auswählen.', 'danger'); return; }
     try {
-      await verknuepfeJarvisTechAnalyse({ analyseId: analyse.id, erwarteteVersion: analyse.version ?? 1, anlagenId: anlageSel.value, kundeId: kundeSel.value });
+      await verknuepfeJarvisTechAnalyse({ analyseId: analyse.id, erwarteteVersion: aktuelleVersion, anlagenId: anlageSel.value, kundeId: kundeSel.value });
+      aktuelleVersion += 1;
       zielEl.innerHTML = '<p class="text-mute">✅ Verknüpft.</p>';
       toast('Verknüpft.', 'success');
     } catch (err) {
@@ -632,7 +786,20 @@ function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen) {
   });
 }
 
-function messwertZeilenHtml(messwerte) {
+// Phase 8 Punkt 6: zeigt der Elektrofachkraft NEBEN der Bestätigungs-Checkbox
+// den tatsächlichen Gültigkeitsbereich/die Bedingung des zu dieser Messgröße
+// passenden, von Danny hinterlegten Grenzwerts - damit nicht einfach eine
+// leere Checkbox blind bestätigt wird, sondern sichtbar ist, WOFÜR der
+// Grenzwert gilt. Rein informativ, client-seitig - die verbindliche Prüfung
+// inkl. normVersion/gueltigkeitsbereich läuft serverseitig in worker.js.
+function gueltigkeitshinweisFuer(pruefart, bezeichnung, normen) {
+  const treffer = (normen || []).find((n) => n.pruefart === pruefart && n.messgroesse === (bezeichnung || '').trim());
+  if (!treffer) return '<span class="text-mute">kein hinterlegter Grenzwert</span>';
+  const teile = [treffer.gueltigkeitsbereich, treffer.bedingung].filter(Boolean);
+  return teile.length ? escapeHtml(teile.join(' · ')) : '<span class="text-mute">ohne Einschränkung</span>';
+}
+
+function messwertZeilenHtml(messwerte, { pruefart = '', normen = [] } = {}) {
   const liste = messwerte.length ? messwerte : [{ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }];
   return liste.map((m, i) => `
     <tr>
@@ -640,6 +807,7 @@ function messwertZeilenHtml(messwerte) {
       <td><input data-feld="wert" data-i="${i}" value="${m.wert ?? ''}" style="width:90px"></td>
       <td><input data-feld="einheit" data-i="${i}" value="${escapeHtml(m.einheit || '')}" style="width:70px"></td>
       <td style="text-align:center"><input type="checkbox" data-feld="pruefbedingungBestaetigt" data-i="${i}" ${m.pruefbedingungBestaetigt ? 'checked' : ''}></td>
+      <td style="font-size:11px;max-width:180px">${gueltigkeitshinweisFuer(pruefart, m.bezeichnung, normen)}</td>
       <td><button type="button" class="btn btn-sm btn-danger jv-messwert-del" data-i="${i}">✕</button></td>
     </tr>`).join('');
 }
@@ -653,7 +821,13 @@ function wireMesswertZeilen(host, zeilen, renderFn) {
 }
 
 async function renderTech(container) {
+  const session = getSession();
   const [kunden, anlagen] = await Promise.all([getAll('kunden'), getAll('anlagen')]);
+  // Für den Gültigkeitshinweis bei den Messwert-Checkboxen (siehe
+  // gueltigkeitshinweisFuer) - wird nach Anlegen/Löschen einer Norm aktuell
+  // gehalten (ladeNormListe), damit neu geöffnete Protokoll-Formulare die
+  // jeweils aktuellen Grenzwerte zeigen.
+  let normenCache = await getAll('pruefnormenGrenzwerte');
 
   container.innerHTML = `
     <div class="card" style="margin-bottom:12px">
@@ -670,9 +844,25 @@ async function renderTech(container) {
           <div class="field"><label>Anlage (optional - echte Werkora-Daten fließen automatisch ein)</label>
             <select id="jv-tech-anlage"><option value="">–</option></select>
           </div>
-          <div class="field col-span-2"><label>Foto/Dokument (optional, JPEG/PNG/WebP/PDF)</label><input type="file" name="datei" accept="image/png,image/jpeg,image/webp,application/pdf"></div>
+          <div class="field col-span-2">
+            <label>Foto/Dokument (Typenschild, Fehlermeldung, Messgerät, Anlage, Prüfprotokoll)</label>
+            <div class="file-dropzone" id="jv-tech-dropzone" tabindex="0">
+              <div class="dz-icon">📷</div>
+              <div>Foto aufnehmen oder Datei wählen</div>
+              <div class="dz-hint">JPEG/PNG/WebP/PDF · max. ${TECH_UPLOAD_MAX_MB} MB · Fotos werden vor dem Senden verkleinert</div>
+              <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+                <button type="button" class="btn btn-sm" id="jv-tech-camera-btn">📷 Foto aufnehmen</button>
+                <button type="button" class="btn btn-sm" id="jv-tech-datei-btn">📁 Datei wählen</button>
+              </div>
+              <input type="file" id="jv-tech-camera-input" accept="image/*" capture="environment" hidden>
+              <input type="file" id="jv-tech-datei-input" accept="image/png,image/jpeg,image/webp,application/pdf" hidden>
+            </div>
+            <div id="jv-tech-preview"></div>
+          </div>
           <div class="field col-span-2"><label>Symptom-/Kontextbeschreibung (optional)</label><textarea name="kontextText" rows="2" placeholder="z.B. „Wärmepumpe zeigt Fehlercode, Leistung seit gestern reduziert“"></textarea></div>
-          <div class="field col-span-2"><label>Herstellerquelle (optional - nur ausfüllen, wenn ein echter Auszug aus einer Montage-/Bedienungsanleitung vorliegt, damit Aussagen als herstellerbestätigt gelten dürfen)</label><textarea name="herstellerquelleText" rows="3"></textarea></div>
+          <div class="field col-span-2"><label>Herstellerquelle (optional - nur ausfüllen, wenn ein echter Auszug aus einer Montage-/Bedienungsanleitung vorliegt; gilt zunächst nur als "hochgeladen, ungeprüft" - eine unabhängige Verifizierung erfolgt separat, siehe Ergebnis unten)</label><textarea name="herstellerquelleText" rows="3"></textarea></div>
+          <div class="field"><label>Dokumentname der Quelle (optional)</label><input name="herstellerquelleName" placeholder="z.B. Montageanleitung WP-12kW Rev.3"></div>
+          <div class="field"><label>Datum/Version der Quelle (optional)</label><input name="herstellerquelleDatum" placeholder="z.B. 2024-03 oder Rev. 3"></div>
         </div>
         <button type="submit" class="btn btn-primary" id="jv-tech-analysieren-btn">🔍 Analysieren</button>
       </form>
@@ -712,16 +902,55 @@ async function renderTech(container) {
   aktualisiereAnlagenOptionen();
   kundeSelect.addEventListener('change', aktualisiereAnlagenOptionen);
 
+  // --- Kamera-/Datei-Upload (Phase 8) - wiederverwendet denselben Ansatz wie
+  // der bestehende Zeiterfassungs-Foto-Upload (capture="environment" für
+  // direkten Kamerazugriff auf dem iPhone, kein separates Plugin nötig).
+  // Das Bild wird bereits HIER beim Auswählen (nicht erst beim Absenden)
+  // komprimiert/geprüft, damit ein zu großes/falsches Foto sofort sichtbar
+  // abgelehnt wird statt erst nach einem erfolglosen Analyse-Versuch.
+  let ausgewaehlteBildDataUrl = null;
+  const previewEl = container.querySelector('#jv-tech-preview');
+  function zeigeVorschau(dataUrl, istBild) {
+    previewEl.innerHTML = !dataUrl ? '' : `
+      <div class="dz-preview-grid">
+        <div class="dz-preview-item" style="width:92px;height:92px">
+          ${istBild ? `<img src="${dataUrl}" alt="Vorschau">` : '<div class="dz-file-icon">📄</div>'}
+          <button type="button" class="dz-remove" id="jv-tech-entfernen" title="Entfernen">✕</button>
+        </div>
+      </div>`;
+    previewEl.querySelector('#jv-tech-entfernen')?.addEventListener('click', () => { ausgewaehlteBildDataUrl = null; zeigeVorschau(null); });
+  }
+  async function verarbeiteDatei(file) {
+    if (!file) return;
+    const istPdf = file.type === 'application/pdf';
+    const istBild = file.type.startsWith('image/');
+    if (!istPdf && !istBild) { toast(`Dateityp nicht unterstützt: ${file.type || file.name}`, 'danger'); return; }
+    if (file.size > TECH_UPLOAD_MAX_BYTES) { toast(`Datei ist zu groß (max. ${TECH_UPLOAD_MAX_MB} MB).`, 'danger'); return; }
+    try {
+      const dataUrl = istBild
+        ? await dateiZuDataUrl(await compressImage(file, { maxWidth: 1600, quality: 0.82 }))
+        : await dateiZuDataUrl(file);
+      ausgewaehlteBildDataUrl = dataUrl;
+      zeigeVorschau(dataUrl, istBild);
+    } catch (err) {
+      toast(err.message || 'Datei konnte nicht verarbeitet werden.', 'danger');
+    }
+  }
+  const camInput = container.querySelector('#jv-tech-camera-input');
+  const datInput = container.querySelector('#jv-tech-datei-input');
+  container.querySelector('#jv-tech-camera-btn').addEventListener('click', () => camInput.click());
+  container.querySelector('#jv-tech-datei-btn').addEventListener('click', () => datInput.click());
+  camInput.addEventListener('change', (e) => { verarbeiteDatei(e.target.files?.[0]); e.target.value = ''; });
+  datInput.addEventListener('change', (e) => { verarbeiteDatei(e.target.files?.[0]); e.target.value = ''; });
+
   container.querySelector('#jv-tech-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const datei = fd.get('datei');
-    let bildDataUrl;
-    if (datei && datei.size > 0) {
-      try { bildDataUrl = await dateiZuDataUrl(datei); } catch (err) { toast(err.message, 'danger'); return; }
-    }
+    const bildDataUrl = ausgewaehlteBildDataUrl || undefined;
     const kontextText = String(fd.get('kontextText') || '').trim();
     const herstellerquelleText = String(fd.get('herstellerquelleText') || '').trim();
+    const herstellerquelleName = String(fd.get('herstellerquelleName') || '').trim();
+    const herstellerquelleDatum = String(fd.get('herstellerquelleDatum') || '').trim();
     const anlagenId = anlageSelect.value || undefined;
     const kundeIdHinweis = kundeSelect.value || '';
     const analyseTyp = fd.get('analyseTyp');
@@ -732,6 +961,7 @@ async function renderTech(container) {
     try {
       const analyse = await analysiereJarvisTech({
         analyseTyp, bildDataUrl, herstellerquelleText: herstellerquelleText || undefined,
+        herstellerquelleName: herstellerquelleName || undefined, herstellerquelleDatum: herstellerquelleDatum || undefined,
         kontextText: kontextText || undefined, kundeIdHinweis, anlagenId,
       });
       ergebnisEl.innerHTML = renderTechErgebnis(analyse);
@@ -772,7 +1002,7 @@ async function renderTech(container) {
         <ul class="cal-event-list">
           ${protokolle.map((p, i) => `
             <li data-idx="${i}" style="cursor:pointer">
-              <div><strong>${escapeHtml(p.pruefart)} - Anlage ${escapeHtml(p.anlagenId)}</strong><div class="text-mute">${formatDateTime(p.erstelltAm)}</div></div>
+              <div><strong>${escapeHtml(p.pruefart)} - Anlage ${escapeHtml(p.anlagenId)}</strong><div class="text-mute">${formatDateTime(p.erstelltAm)}${p.durchsicht ? ' · 👁️ durchgesehen' : ''}</div></div>
               ${PROTOKOLL_ERGEBNIS_BADGE[p.gesamtergebnis] || ''}
             </li>`).join('')}
         </ul>`;
@@ -794,7 +1024,7 @@ async function renderTech(container) {
             <div class="field"><label>Prüfart</label><select name="pruefart"><option value="dguv-v3">DGUV V3</option><option value="e-check">E-Check</option><option value="sonstiges">Sonstiges</option></select></div>
           </div>
           <table class="data-table" style="width:100%;margin-top:8px">
-            <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th></th></tr></thead>
+            <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th>Gültigkeitsbereich</th><th></th></tr></thead>
             <tbody id="jv-protokoll-messwerte"></tbody>
           </table>
           <button type="button" class="btn btn-sm" id="jv-messwert-add" style="margin-top:8px">+ Messwert hinzufügen</button>
@@ -808,6 +1038,7 @@ async function renderTech(container) {
     });
     const kundeSel = body.querySelector('select[name="kundeId"]');
     const anlageSel = body.querySelector('select[name="anlagenId"]');
+    const pruefartSel = body.querySelector('select[name="pruefart"]');
     function aktAnlagen() {
       const gefiltert = anlagen.filter((a) => a.kundeId === kundeSel.value);
       anlageSel.innerHTML = gefiltert.map((a) => `<option value="${a.id}">${escapeHtml(a.bezeichnung)}</option>`).join('');
@@ -815,10 +1046,11 @@ async function renderTech(container) {
     kundeSel.addEventListener('change', aktAnlagen);
     aktAnlagen();
     function renderZeilen() {
-      body.querySelector('#jv-protokoll-messwerte').innerHTML = messwertZeilenHtml(zeilen);
+      body.querySelector('#jv-protokoll-messwerte').innerHTML = messwertZeilenHtml(zeilen, { pruefart: pruefartSel.value, normen: normenCache });
       wireMesswertZeilen(body.querySelector('#jv-protokoll-messwerte'), zeilen, renderZeilen);
     }
     renderZeilen();
+    pruefartSel.addEventListener('change', renderZeilen);
     body.querySelector('#jv-messwert-add').addEventListener('click', () => { zeilen.push({ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }); renderZeilen(); });
     body.querySelector('#jv-protokoll-cancel').addEventListener('click', close);
     body.querySelector('#jv-protokoll-form').addEventListener('submit', async (e) => {
@@ -835,14 +1067,80 @@ async function renderTech(container) {
     });
   }
 
+  // Phase 8 Punkt 6: zeigt pro Messwert das serverseitig berechnete
+  // grenzwertPruefung-Ergebnis (inkl. normVersion/gueltigkeitsbereich) aus dem
+  // zuletzt gespeicherten Protokoll an - rein informativ/read-only.
+  function protokollBewertungHtml(protokoll) {
+    const bewertet = (protokoll.messwerte || []).filter((m) => m.grenzwertPruefung);
+    if (!bewertet.length) return '';
+    return `
+      <table class="data-table" style="width:100%;margin-bottom:8px">
+        <thead><tr><th>Messgröße</th><th>Ergebnis</th><th>Begründung</th><th>Norm</th><th>Version</th><th>Gültigkeitsbereich</th></tr></thead>
+        <tbody>
+          ${bewertet.map((m) => `
+            <tr>
+              <td>${escapeHtml(m.bezeichnung)}</td>
+              <td>${PROTOKOLL_MESSWERT_STATUS_BADGE[m.grenzwertPruefung.status] || escapeHtml(m.grenzwertPruefung.status)}</td>
+              <td style="font-size:11px">${escapeHtml(m.grenzwertPruefung.grund || '')}</td>
+              <td>${escapeHtml(m.grenzwertPruefung.normReferenz || '–')}</td>
+              <td>${m.grenzwertPruefung.normVersion ?? '–'}</td>
+              <td style="font-size:11px">${escapeHtml(m.grenzwertPruefung.gueltigkeitsbereich || '–')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  function durchsichtHtml(protokoll) {
+    if (!protokoll.durchsicht) {
+      return '<p class="hint">Noch keine Durchsicht dokumentiert.</p>';
+    }
+    const d = protokoll.durchsicht;
+    return `<p class="hint">👁️ Durchsicht dokumentiert von <strong>${escapeHtml(d.vonName)}</strong> am ${formatDateTime(d.am)}${d.notiz ? `<br>Notiz: ${escapeHtml(d.notiz)}` : ''}<br><em>Dies ist KEINE Freigabe/Bestätigung einer bestandenen Prüfung, nur ein Vermerk, dass die Werte durchgesehen wurden.</em></p>`;
+  }
+
+  function oeffneDurchsichtModal(protokoll, aufFortschritt) {
+    const { body, close } = openModal({
+      title: 'Durchsicht dokumentieren',
+      bodyHtml: `
+        <p class="hint">Hält AUSDRÜCKLICH nur fest, dass eine Elektrofachkraft die Werte durchgesehen hat - KEINE automatische fachliche Prüfungsfreigabe, KEINE Bestätigung einer bestandenen Prüfung.</p>
+        <form id="jv-durchsicht-form">
+          <div class="field"><label>Name der Elektrofachkraft *</label><input name="vonName" required value="${escapeHtml(session.name || '')}"></div>
+          <div class="field"><label>Notiz (optional)</label><textarea name="notiz" rows="3" placeholder="z.B. Werte vor Ort plausibilisiert"></textarea></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-durchsicht-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Durchsicht dokumentieren</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-durchsicht-cancel').addEventListener('click', close);
+    body.querySelector('#jv-durchsicht-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const vonName = String(fd.get('vonName') || '').trim();
+      if (!vonName) { toast('Name darf nicht leer sein.', 'danger'); return; }
+      try {
+        const ergebnis = await dokumentiereDurchsichtPruefprotokoll({ protokollId: protokoll.id, erwarteteVersion: protokoll.version ?? 1, vonName, notiz: fd.get('notiz') });
+        close();
+        toast('Durchsicht dokumentiert.', 'success');
+        ladeProtokollListe();
+        if (aufFortschritt) aufFortschritt(ergebnis.durchsicht);
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+  }
+
   function oeffneProtokollBearbeiten(protokoll) {
     let zeilen = protokoll.messwerte.map((m) => ({ bezeichnung: m.bezeichnung, wert: m.wert, einheit: m.einheit, pruefbedingungBestaetigt: m.pruefbedingungBestaetigt || false }));
     const { body, close } = openModal({
       title: `Prüfprotokoll bearbeiten - ${protokoll.pruefart}`, wide: true,
       bodyHtml: `
         <p class="hint">${PROTOKOLL_HINWEIS}</p>
+        ${protokollBewertungHtml(protokoll)}
         <table class="data-table" style="width:100%">
-          <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th></th></tr></thead>
+          <thead><tr><th>Messgröße</th><th>Wert</th><th>Einheit</th><th>Bedingung bestätigt</th><th>Gültigkeitsbereich</th><th></th></tr></thead>
           <tbody id="jv-protokoll-messwerte-edit"></tbody>
         </table>
         <button type="button" class="btn btn-sm" id="jv-messwert-add-edit" style="margin-top:8px">+ Messwert hinzufügen</button>
@@ -851,15 +1149,21 @@ async function renderTech(container) {
           <button type="button" class="btn" id="jv-protokoll-edit-cancel">Abbrechen</button>
           <button type="button" class="btn btn-primary" id="jv-protokoll-edit-speichern">Speichern (erneute Prüfung erforderlich)</button>
         </div>
+        <hr>
+        <div id="jv-protokoll-durchsicht">${durchsichtHtml(protokoll)}</div>
+        <button type="button" class="btn btn-sm" id="jv-durchsicht-btn">👁️ Durchsicht dokumentieren</button>
       `,
     });
     function renderZeilen() {
-      body.querySelector('#jv-protokoll-messwerte-edit').innerHTML = messwertZeilenHtml(zeilen);
+      body.querySelector('#jv-protokoll-messwerte-edit').innerHTML = messwertZeilenHtml(zeilen, { pruefart: protokoll.pruefart, normen: normenCache });
       wireMesswertZeilen(body.querySelector('#jv-protokoll-messwerte-edit'), zeilen, renderZeilen);
     }
     renderZeilen();
     body.querySelector('#jv-messwert-add-edit').addEventListener('click', () => { zeilen.push({ bezeichnung: '', wert: '', einheit: '', pruefbedingungBestaetigt: false }); renderZeilen(); });
     body.querySelector('#jv-protokoll-edit-cancel').addEventListener('click', close);
+    body.querySelector('#jv-durchsicht-btn').addEventListener('click', () => oeffneDurchsichtModal(protokoll, (durchsicht) => {
+      body.querySelector('#jv-protokoll-durchsicht').innerHTML = durchsichtHtml({ ...protokoll, durchsicht });
+    }));
     body.querySelector('#jv-protokoll-edit-speichern').addEventListener('click', async () => {
       try {
         await aktualisiereJarvisPruefprotokoll({ protokollId: protokoll.id, erwarteteVersion: protokoll.version ?? 1, messwerte: zeilen });
@@ -876,17 +1180,19 @@ async function renderTech(container) {
   ladeProtokollListe();
 
   async function ladeNormListe() {
-    const normen = await getAll('pruefnormenGrenzwerte');
+    normenCache = await getAll('pruefnormenGrenzwerte');
+    const normen = normenCache;
     const listeEl = container.querySelector('#jv-norm-liste');
     listeEl.innerHTML = normen.length === 0 ? '<p class="text-mute">Noch keine Grenzwerte hinterlegt.</p>' : `
       <table class="data-table" style="width:100%">
-        <thead><tr><th>Prüfart</th><th>Messgröße</th><th>Bereich</th><th>Bedingung</th><th>Norm</th><th></th></tr></thead>
+        <thead><tr><th>Prüfart</th><th>Messgröße</th><th>Bereich</th><th>Bedingung</th><th>Gültigkeitsbereich</th><th>Norm</th><th>Version</th><th>Ersteller</th><th></th></tr></thead>
         <tbody>
           ${normen.map((n) => `
             <tr>
               <td>${escapeHtml(n.pruefart)}</td><td>${escapeHtml(n.messgroesse)}</td>
               <td>${n.grenzwertMin ?? '-∞'} – ${n.grenzwertMax ?? '∞'} ${escapeHtml(n.einheit || '')}</td>
-              <td>${escapeHtml(n.bedingung || '')}</td><td>${escapeHtml(n.normReferenz || '')}</td>
+              <td>${escapeHtml(n.bedingung || '')}</td><td>${escapeHtml(n.gueltigkeitsbereich || '')}</td><td>${escapeHtml(n.normReferenz || '')}</td>
+              <td>${n.version ?? 1}</td><td>${escapeHtml(n.erstelltVon || '')}</td>
               <td><button type="button" class="btn btn-sm btn-danger jv-norm-del" data-id="${n.id}">✕</button></td>
             </tr>`).join('')}
         </tbody>
@@ -909,6 +1215,7 @@ async function renderTech(container) {
             <div class="field"><label>Minimalwert (optional)</label><input type="number" step="any" name="grenzwertMin"></div>
             <div class="field"><label>Maximalwert (optional)</label><input type="number" step="any" name="grenzwertMax"></div>
             <div class="field col-span-2"><label>Bedingung</label><input name="bedingung" placeholder="z.B. bei 1x I∆n, Typ AC/A"></div>
+            <div class="field col-span-2"><label>Gültigkeitsbereich (für welche Anlagen/Fälle gilt dieser Grenzwert - wird der Elektrofachkraft beim Bestätigen angezeigt)</label><input name="gueltigkeitsbereich" placeholder="z.B. Endstromkreise TN-S-Netz, Nennspannung 230V"></div>
             <div class="field col-span-2"><label>Normreferenz (deine Angabe - JARVIS erfindet hier nichts)</label><input name="normReferenz" placeholder="z.B. DIN VDE 0100-410"></div>
           </div>
           <div class="modal-actions">
@@ -931,7 +1238,14 @@ async function renderTech(container) {
         grenzwertMin: fd.get('grenzwertMin') ? Number(fd.get('grenzwertMin')) : null,
         grenzwertMax: fd.get('grenzwertMax') ? Number(fd.get('grenzwertMax')) : null,
         bedingung: String(fd.get('bedingung') || '').trim(),
+        gueltigkeitsbereich: String(fd.get('gueltigkeitsbereich') || '').trim(),
         normReferenz: String(fd.get('normReferenz') || '').trim(),
+        // Phase 8 Punkt 6: Version + Ersteller dokumentiert, damit spätere
+        // Protokolle nachvollziehbar erkennen lassen, welche Fassung des
+        // Grenzwerts zum Prüfzeitpunkt angewendet wurde (siehe worker.js
+        // pruefeMesswertGrenzwert/normVersion) - ein Grenzwert wird aktuell
+        // nur neu angelegt oder gelöscht, nie bearbeitet, daher immer Version 1.
+        version: 1, erstelltVon: session.name || session.role || '', erstelltAm: new Date().toISOString(),
       });
       close();
       toast('Grenzwert gespeichert.', 'success');
@@ -940,6 +1254,143 @@ async function renderTech(container) {
   });
 
   ladeNormListe();
+}
+
+// =============================================================================
+// JARVIS MOBILE (Phase 8) - Siri-Kurzbefehle: Verwaltung gerätegebundener,
+// widerrufbarer, zeitlich begrenzter Gerätetokens (siehe worker.js
+// fuehreSiriAbfrageAus für die serverseitige Durchsetzung). Das rohe Token
+// wird NUR client-seitig erzeugt und NUR EINMAL angezeigt - gespeichert wird
+// ausschließlich sein SHA-256-Hash (als Dokument-ID), niemals das Token
+// selbst. Es gibt bewusst KEINEN "Token erneut anzeigen"-Button.
+// =============================================================================
+
+const SIRI_INTENT_LABELS = {
+  'taetigkeiten-morgen': 'Was steht morgen an (Termine/Aufgaben)',
+  'angebote-offen': 'Welche Angebote sind offen',
+  'freigaben-offen': 'Zeige offene JARVIS-Freigaben (nur Anzeige, keine Freigabe per Sprache)',
+};
+
+async function sha256HexBrowser(text) {
+  const bytes = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function erzeugeZufallsToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function siriTokenStatus(token) {
+  if (token.widerrufenAm) return { text: 'Widerrufen', klasse: 'badge-danger' };
+  const heute = new Date().toISOString().slice(0, 10);
+  if (token.ablaufAm && token.ablaufAm < heute) return { text: 'Abgelaufen', klasse: 'badge-warn' };
+  return { text: 'Aktiv', klasse: 'badge-success' };
+}
+
+async function renderMobile(container) {
+  const settings = await getSettings();
+  const siriUrl = settings.aiWorkerUrl ? `${settings.aiWorkerUrl.replace(/\/$/, '')}/siri-abfrage` : null;
+
+  async function ladeTokenListe() {
+    const listeEl = container.querySelector('#jv-siri-liste');
+    const tokens = (await getAll('siriGeraeteTokens')).sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
+    listeEl.innerHTML = tokens.length === 0 ? '<p class="text-mute">Noch keine Gerätetokens erstellt.</p>' : `
+      <ul class="cal-event-list">
+        ${tokens.map((t, i) => {
+          const status = siriTokenStatus(t);
+          return `
+            <li data-idx="${i}">
+              <div>
+                <strong>${escapeHtml(t.label || t.id.slice(0, 8))}</strong> <span class="badge ${status.klasse}">${status.text}</span>
+                <div class="text-mute" style="font-size:12px">
+                  Erstellt ${formatDateTime(t.erstelltAm)} · Läuft ab ${escapeHtml(t.ablaufAm || '–')}${t.letzteNutzungAm ? ` · Zuletzt genutzt ${formatDateTime(t.letzteNutzungAm)}` : ' · noch nie genutzt'}<br>
+                  Erlaubt: ${(t.erlaubteIntents || []).map((id) => escapeHtml(SIRI_INTENT_LABELS[id] || id)).join('; ') || '–'} · Endung …${escapeHtml(t.anzeigeSuffix || '')}
+                </div>
+              </div>
+              ${!t.widerrufenAm ? `<button type="button" class="btn btn-sm btn-danger jv-siri-widerrufen" data-idx="${i}">Widerrufen</button>` : ''}
+            </li>`;
+        }).join('')}
+      </ul>`;
+    listeEl.querySelectorAll('.jv-siri-widerrufen').forEach((btn) => btn.addEventListener('click', async () => {
+      const token = tokens[Number(btn.dataset.idx)];
+      if (!window.confirm(`Gerätetoken "${token.label || token.id.slice(0, 8)}" wirklich widerrufen? Der zugehörige Kurzbefehl funktioniert danach nicht mehr.`)) return;
+      await put('siriGeraeteTokens', { ...token, widerrufenAm: new Date().toISOString() });
+      toast('Gerätetoken widerrufen.', 'success');
+      ladeTokenListe();
+    }));
+  }
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">📱 JARVIS auf dem iPhone</h2>
+      <p class="hint">Die JARVIS-Zentrale ist eine normale Webseite - auf dem iPhone über Safari "Zum Home-Bildschirm hinzufügen", damit sie sich wie eine eigene App öffnet (kein separater App-Store-Download nötig). Chat, Freigabecenter, Berichte, CONTROL und TECH sind vollständig mobil nutzbar, inklusive Kamera-Upload in TECH.</p>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2 style="font-size:14px;margin:0 0 8px">🗣️ Siri-Kurzbefehle</h2>
+      <p class="hint">Jedes Gerätetoken ist read-only, zeitlich begrenzt und jederzeit widerrufbar - über Siri lässt sich NIEMALS etwas freigeben, bearbeiten oder verändern, nur abfragen. Ein Kurzbefehl kann z.B. „Hey Siri, JARVIS fragen“ heißen und ruft die unten stehende Adresse per „Inhalte von URL abrufen“ (POST) mit dem Token als Authorization-Header auf.</p>
+      ${siriUrl ? `<p class="text-mute" style="font-size:12px;word-break:break-all">Adresse für den Kurzbefehl: <code>${escapeHtml(siriUrl)}</code><br>Header: <code>Authorization: Bearer &lt;Gerätetoken&gt;</code><br>Body (JSON): <code>{"intent": "taetigkeiten-morgen"}</code> (oder "angebote-offen"/"freigaben-offen")<br>Antwort auswerten: Feld <code>sprachantwort</code> aus der JSON-Antwort vorlesen lassen ("Text aussprechen").</p>` : '<p class="hint">KI-Worker-URL noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).</p>'}
+      <button type="button" class="btn btn-sm" id="jv-siri-neu-btn">+ Neues Gerätetoken erstellen</button>
+      <div id="jv-siri-liste" style="margin-top:8px"></div>
+    </div>
+  `;
+
+  container.querySelector('#jv-siri-neu-btn').addEventListener('click', () => {
+    const { body, close } = openModal({
+      title: 'Neues Gerätetoken erstellen',
+      bodyHtml: `
+        <form id="jv-siri-form">
+          <div class="field"><label>Bezeichnung (z.B. "iPhone Danny")</label><input name="label" required placeholder="iPhone Danny"></div>
+          <div class="field"><label>Gültig für wie viele Tage?</label><input type="number" name="tage" value="90" min="1" max="365"></div>
+          <div class="field" style="margin-top:8px"><label>Erlaubte Abfragen</label>
+            ${Object.entries(SIRI_INTENT_LABELS).map(([id, label]) => `
+              <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:4px"><input type="checkbox" name="intent" value="${id}" checked> ${escapeHtml(label)}</label>
+            `).join('')}
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-siri-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Erstellen</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-siri-cancel').addEventListener('click', close);
+    body.querySelector('#jv-siri-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const label = String(fd.get('label') || '').trim();
+      const tage = Number(fd.get('tage')) || 90;
+      const erlaubteIntents = [...body.querySelectorAll('input[name="intent"]:checked')].map((el) => el.value);
+      if (!erlaubteIntents.length) { toast('Mindestens eine erlaubte Abfrage auswählen.', 'danger'); return; }
+      const rawToken = erzeugeZufallsToken();
+      const hash = await sha256HexBrowser(rawToken);
+      const ablaufAm = new Date(Date.now() + tage * 86400000).toISOString().slice(0, 10);
+      await put('siriGeraeteTokens', {
+        id: hash, label, erlaubteIntents, erstelltAm: new Date().toISOString(), ablaufAm, widerrufenAm: null,
+        letzteNutzungAm: null, anzeigeSuffix: rawToken.slice(-6),
+      });
+      close();
+      const { body: tokenBody, close: closeToken } = openModal({
+        title: 'Gerätetoken erstellt - jetzt kopieren!',
+        bodyHtml: `
+          <p class="hint">⚠️ Dieses Token wird NUR JETZT angezeigt und nirgends im Klartext gespeichert. Jetzt in den iOS-Kurzbefehl eintragen - danach lässt es sich nicht erneut anzeigen (nur widerrufen und neu erstellen).</p>
+          <div class="field"><label>Gerätetoken</label><input readonly id="jv-siri-token-wert" value="${escapeHtml(rawToken)}" style="font-family:monospace;font-size:12px" onclick="this.select()"></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-primary" id="jv-siri-token-schliessen">Verstanden, gespeichert</button>
+          </div>
+        `,
+      });
+      tokenBody.querySelector('#jv-siri-token-schliessen').addEventListener('click', closeToken);
+      toast('Gerätetoken erstellt.', 'success');
+      ladeTokenListe();
+    });
+  });
+
+  ladeTokenListe();
 }
 
 // =============================================================================
