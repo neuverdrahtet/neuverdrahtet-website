@@ -450,10 +450,37 @@ await pruefe('F3: verifiziereHerstellerBefund befördert EXPLIZIT einen Befund z
       analyseTyp: 'wartungsvorschlag', herstellerquelleText: 'Montageanleitung Auszug ...', kontextText: 'Testfall F3', callerUid: 'uid-f3', callerRole: 'admin',
     }),
   );
-  const ergebnis = await W.verifiziereHerstellerBefund({ serviceAccount, analyseId: analyse.id, erwarteteVersion: analyse.version, befundIndex: 0, callerUid: 'uid-pruefer-f3', callerRole: 'admin' });
+  const ergebnis = await W.verifiziereHerstellerBefund({
+    serviceAccount, analyseId: analyse.id, erwarteteVersion: analyse.version, befundIndex: 0, callerUid: 'uid-pruefer-f3', callerRole: 'admin',
+    dokumentName: 'Montageanleitung Vitocal 200', dokumentHersteller: 'Viessmann', dokumentVersionOderDatum: 'Rev. 3 / 2024-01',
+    fundstelle: 'Abschnitt 4.2, Seite 12', pruefendePersonName: 'Erika Musterfrau',
+  });
   assert(ergebnis.befunde[0].herkunft === 'herstellerquelle_verifiziert', 'Befund muss nach Verifizierung "herstellerquelle_verifiziert" sein');
   assert(ergebnis.befunde[0].verifiziertVonUid === 'uid-pruefer-f3', 'verifiziertVonUid muss protokolliert werden');
   assert(!!ergebnis.befunde[0].verifiziertAm, 'verifiziertAm muss gesetzt sein');
+  assert(ergebnis.befunde[0].verifizierteQuelle.dokumentName === 'Montageanleitung Vitocal 200', 'Dokumentname muss gespeichert werden');
+  assert(ergebnis.befunde[0].verifizierteQuelle.fundstelle === 'Abschnitt 4.2, Seite 12', 'Fundstelle muss gespeichert werden');
+  assert(ergebnis.befunde[0].verifizierteQuelle.pruefendePersonName === 'Erika Musterfrau', 'prüfende Person muss gespeichert werden');
+});
+
+await pruefe('F3b: verifiziereHerstellerBefund verlangt Dokumentname, Fundstelle und prüfende Person (Phase 9 Sicherheitsprüfung Punkt 4)', async () => {
+  const analyse = await mitGefaketerClaudeAntwort(
+    [{ aussage: 'Laut Anleitung.', herkunft: 'herstellertext_hochgeladen', quelle: 'x' }],
+    () => W.fuehreJarvisTechAnalyseAus({
+      serviceAccount, env: { ANTHROPIC_API_KEY: 'fake', FIREBASE_SERVICE_ACCOUNT_JSON: '{}' },
+      analyseTyp: 'wartungsvorschlag', herstellerquelleText: 'x', kontextText: 'Testfall F3b', callerUid: 'uid-f3b', callerRole: 'admin',
+    }),
+  );
+  for (const fehlendesFeld of ['dokumentName', 'fundstelle', 'pruefendePersonName']) {
+    const vollstaendig = { dokumentName: 'Doku', fundstelle: 'S.1', pruefendePersonName: 'Jemand' };
+    delete vollstaendig[fehlendesFeld];
+    try {
+      await W.verifiziereHerstellerBefund({ serviceAccount, analyseId: analyse.id, erwarteteVersion: analyse.version, befundIndex: 0, callerUid: 'x', callerRole: 'admin', ...vollstaendig });
+      throw new Error(`FEHLSCHLAG: fehlendes Feld "${fehlendesFeld}" hätte abgelehnt werden müssen`);
+    } catch (err) {
+      assert(err.status === 400, `"${fehlendesFeld}" fehlend muss mit 400 abgelehnt werden, war ${err.status}`);
+    }
+  }
 });
 
 await pruefe('F4: verifiziereHerstellerBefund lehnt ab, wenn der Befund NICHT "herstellertext_hochgeladen" ist (z.B. schon diagnosehypothese)', async () => {

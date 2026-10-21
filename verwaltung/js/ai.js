@@ -431,8 +431,10 @@ export async function verknuepfeJarvisTechAnalyse({ analyseId, erwarteteVersion,
  * hat (niemals automatisch durch die Analyse selbst, siehe worker.js
  * verifiziereHerstellerBefund).
  */
-export async function verifiziereJarvisHerstellerBefund({ analyseId, erwarteteVersion, befundIndex }) {
-  const { ergebnis } = await callJarvisBackend('jarvis-tech-verifizieren', { analyseId, erwarteteVersion, befundIndex });
+export async function verifiziereJarvisHerstellerBefund({ analyseId, erwarteteVersion, befundIndex, dokumentName, dokumentHersteller, dokumentVersionOderDatum, fundstelle, pruefendePersonName }) {
+  const { ergebnis } = await callJarvisBackend('jarvis-tech-verifizieren', {
+    analyseId, erwarteteVersion, befundIndex, dokumentName, dokumentHersteller, dokumentVersionOderDatum, fundstelle, pruefendePersonName,
+  });
   return ergebnis;
 }
 
@@ -461,6 +463,28 @@ export async function aktualisiereJarvisPruefprotokoll({ protokollId, erwarteteV
 export async function dokumentiereDurchsichtPruefprotokoll({ protokollId, erwarteteVersion, vonName, notiz }) {
   const { protokoll } = await callJarvisBackend('jarvis-pruefprotokoll-durchsicht', { protokollId, erwarteteVersion, vonName, notiz });
   return protokoll;
+}
+
+/**
+ * Legt eine NEUE Prüfnorm-Fassung an (optional als Nachfolger einer
+ * bestehenden Fassung) - niemals eine Löschung/Überschreibung, siehe
+ * worker.js erstelleJarvisPruefnorm (Phase 9 Sicherheitsprüfung).
+ */
+export async function erstelleJarvisPruefnorm({ pruefart, messgroesse, einheit, grenzwertMin, grenzwertMax, bedingung, gueltigkeitsbereich, normReferenz, vorherigeVersionId, aenderungsgrund }) {
+  const { norm } = await callJarvisBackend('jarvis-pruefnorm-erstellen', { pruefart, messgroesse, einheit, grenzwertMin, grenzwertMax, bedingung, gueltigkeitsbereich, normReferenz, vorherigeVersionId, aenderungsgrund });
+  return norm;
+}
+
+/** Setzt eine Prüfnorm-Fassung ohne Nachfolger außer Kraft (keine Löschung). */
+export async function setzeJarvisPruefnormAusserKraft({ normId, grund }) {
+  const { norm } = await callJarvisBackend('jarvis-pruefnorm-ausser-kraft', { normId, grund });
+  return norm;
+}
+
+/** Vollständige Versionshistorie aller Prüfnormen-Fassungen. */
+export async function holeJarvisPruefnormen() {
+  const { normen } = await callJarvisBackend('jarvis-pruefnormen');
+  return normen;
 }
 
 /** Liste bisheriger Prüfprotokoll-Entwürfe. */

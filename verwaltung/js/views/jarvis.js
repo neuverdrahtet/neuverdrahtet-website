@@ -2,12 +2,13 @@ import {
   chatMitJarvis, holeJarvisZentrale, sendeJarvisFreigabe, holeJarvisTagesbericht, holeJarvisControl, holeJarvisWochenbericht,
   analysiereJarvisTech, verknuepfeJarvisTechAnalyse, holeJarvisTechAnalysen, erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
   dokumentiereDurchsichtPruefprotokoll, verifiziereJarvisHerstellerBefund,
+  erstelleJarvisPruefnorm, setzeJarvisPruefnormAusserKraft, holeJarvisPruefnormen,
 } from '../ai.js';
-import { escapeHtml, toast, formatDateTime, uid as neueId, compressImage } from '../utils.js';
+import { escapeHtml, toast, formatDateTime, compressImage } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
 import { getSession } from '../auth.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
-import { get, put, getAll, remove, getSettings } from '../db.js';
+import { get, put, getAll, getSettings } from '../db.js';
 import { openModal } from '../ui.js';
 
 // Sprachausgabe ist eine Geräte-/Browsereinstellung, kein Werkora-Setting -
@@ -719,38 +720,70 @@ function renderTechErgebnis(analyse) {
       ${analyse.hatHerstellerquelle ? `<p class="text-mute">Herstellerquelle: ${escapeHtml(analyse.herstellerquelleName || 'ohne Dokumentname')}${analyse.herstellerquelleDatum ? ` (${escapeHtml(analyse.herstellerquelleDatum)})` : ''} - noch ungeprüft, bis einzelne Befunde unten explizit verifiziert wurden.</p>` : ''}
       <p><strong>Befunde:</strong></p>
       <ul id="jv-tech-befunde">${(analyse.befunde || []).map((b, i) => `<li data-i="${i}">${HERKUNFT_BADGE[b.herkunft] || ''} ${escapeHtml(b.aussage)}${b.quelle ? ` <span class="text-mute">(${escapeHtml(b.quelle)})</span>` : ''}
-        ${b.herkunft === 'herstellertext_hochgeladen' ? ` <button type="button" class="btn btn-sm jv-tech-befund-verifizieren" data-i="${i}">Als verifiziert markieren</button>` : ''}</li>`).join('') || '<li class="text-mute">Keine Befunde.</li>'}</ul>
+        ${b.herkunft === 'herstellertext_hochgeladen' ? ` <button type="button" class="btn btn-sm jv-tech-befund-verifizieren" data-i="${i}">Als verifiziert markieren</button>` : ''}
+        ${b.herkunft === 'herstellerquelle_verifiziert' && b.verifizierteQuelle ? `<div class="text-mute" style="font-size:11px">Verifiziert von ${escapeHtml(b.verifizierteQuelle.pruefendePersonName || '')} am ${formatDateTime(b.verifiziertAm)} · ${escapeHtml(b.verifizierteQuelle.dokumentName || '')}${b.verifizierteQuelle.dokumentHersteller ? ` (${escapeHtml(b.verifizierteQuelle.dokumentHersteller)})` : ''}${b.verifizierteQuelle.dokumentVersionOderDatum ? `, ${escapeHtml(b.verifizierteQuelle.dokumentVersionOderDatum)}` : ''} · Fundstelle: ${escapeHtml(b.verifizierteQuelle.fundstelle || '')}</div>` : ''}</li>`).join('') || '<li class="text-mute">Keine Befunde.</li>'}</ul>
       <p class="hint">⚠️ ${escapeHtml(analyse.unsicherheitshinweis || '')}</p>
       <div id="jv-tech-verknuepfung"></div>
     </div>
   `;
 }
 
-function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen) {
+function wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen, session) {
   // Sowohl Verknüpfung als auch Befund-Verifizierung erhöhen die Version -
   // eine gemeinsame, mutable Variable statt zwei getrennter sorgt dafür,
   // dass die zweite Aktion nicht mit einer bereits veralteten erwarteten
   // Version abgelehnt wird (409), wenn zuvor schon die andere ausgeführt wurde.
   let aktuelleVersion = analyse.version ?? 1;
 
+  // Phase 9 Sicherheitsprüfung Punkt 4: die Verifizierung ist eine
+  // ausdrückliche fachliche Zusicherung ("ich habe das Originaldokument
+  // persönlich geprüft") - deshalb ein eigenes Modal mit den geforderten
+  // Nachweisfeldern statt eines einzelnen Klicks ohne jede Angabe.
   const befundeEl = ergebnisEl.querySelector('#jv-tech-befunde');
   if (befundeEl) {
-    befundeEl.querySelectorAll('.jv-tech-befund-verifizieren').forEach((btn) => btn.addEventListener('click', async () => {
+    befundeEl.querySelectorAll('.jv-tech-befund-verifizieren').forEach((btn) => btn.addEventListener('click', () => {
       const i = Number(btn.dataset.i);
-      btn.disabled = true;
-      try {
-        await verifiziereJarvisHerstellerBefund({ analyseId: analyse.id, erwarteteVersion: aktuelleVersion, befundIndex: i });
-        aktuelleVersion += 1;
-        const li = befundeEl.querySelector(`li[data-i="${i}"]`);
-        if (li) {
-          li.querySelector('.badge')?.replaceWith(...new DOMParser().parseFromString(HERKUNFT_BADGE.herstellerquelle_verifiziert, 'text/html').body.childNodes);
-          btn.remove();
+      const { body, close } = openModal({
+        title: 'Herstellerquelle als verifiziert markieren',
+        bodyHtml: `
+          <p class="hint">Bestätigt ausdrücklich, dass du das genannte Originaldokument PERSÖNLICH geprüft hast - keine automatische Prüfung durch JARVIS.</p>
+          <form id="jv-verifizieren-form">
+            <div class="field"><label>Dokumentname *</label><input name="dokumentName" required placeholder="z.B. Montageanleitung Vitocal 200"></div>
+            <div class="field"><label>Hersteller</label><input name="dokumentHersteller" placeholder="z.B. Viessmann"></div>
+            <div class="field"><label>Dokumentversion/-datum</label><input name="dokumentVersionOderDatum" placeholder="z.B. Rev. 3 / 2024-01"></div>
+            <div class="field"><label>Fundstelle *</label><input name="fundstelle" required placeholder="z.B. Abschnitt 4.2, Seite 12"></div>
+            <div class="field"><label>Prüfende Person *</label><input name="pruefendePersonName" required value="${escapeHtml(session?.name || '')}"></div>
+            <div class="modal-actions">
+              <span class="spacer"></span>
+              <button type="button" class="btn" id="jv-verifizieren-cancel">Abbrechen</button>
+              <button type="submit" class="btn btn-primary">Verifizierung bestätigen</button>
+            </div>
+          </form>
+        `,
+      });
+      body.querySelector('#jv-verifizieren-cancel').addEventListener('click', close);
+      body.querySelector('#jv-verifizieren-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        try {
+          await verifiziereJarvisHerstellerBefund({
+            analyseId: analyse.id, erwarteteVersion: aktuelleVersion, befundIndex: i,
+            dokumentName: fd.get('dokumentName'), dokumentHersteller: fd.get('dokumentHersteller'),
+            dokumentVersionOderDatum: fd.get('dokumentVersionOderDatum'), fundstelle: fd.get('fundstelle'),
+            pruefendePersonName: fd.get('pruefendePersonName'),
+          });
+          aktuelleVersion += 1;
+          close();
+          const li = befundeEl.querySelector(`li[data-i="${i}"]`);
+          if (li) {
+            li.querySelector('.badge')?.replaceWith(...new DOMParser().parseFromString(HERKUNFT_BADGE.herstellerquelle_verifiziert, 'text/html').body.childNodes);
+            btn.remove();
+          }
+          toast('Befund als verifiziert markiert.', 'success');
+        } catch (err) {
+          toast(err.message, 'danger');
         }
-        toast('Befund als verifiziert markiert.', 'success');
-      } catch (err) {
-        btn.disabled = false;
-        toast(err.message, 'danger');
-      }
+      });
     }));
   }
 
@@ -824,10 +857,13 @@ async function renderTech(container) {
   const session = getSession();
   const [kunden, anlagen] = await Promise.all([getAll('kunden'), getAll('anlagen')]);
   // Für den Gültigkeitshinweis bei den Messwert-Checkboxen (siehe
-  // gueltigkeitshinweisFuer) - wird nach Anlegen/Löschen einer Norm aktuell
-  // gehalten (ladeNormListe), damit neu geöffnete Protokoll-Formulare die
-  // jeweils aktuellen Grenzwerte zeigen.
-  let normenCache = await getAll('pruefnormenGrenzwerte');
+  // gueltigkeitshinweisFuer) - wird nach Anlegen/Außer-Kraft-Setzen einer
+  // Fassung aktuell gehalten (ladeNormListe), damit neu geöffnete
+  // Protokoll-Formulare die jeweils aktuell gültigen Grenzwerte zeigen.
+  // Phase 9: läuft jetzt über die serverseitige Aktion (nicht mehr direkt
+  // per Firestore-Client-Read), konsistent mit der restlichen Normen-
+  // Verwaltung weiter unten.
+  let normenCache = (await holeJarvisPruefnormen()).filter((n) => n.aktuell !== false);
 
   container.innerHTML = `
     <div class="card" style="margin-bottom:12px">
@@ -887,7 +923,7 @@ async function renderTech(container) {
     <div class="card" style="margin-bottom:12px">
       <h2 style="font-size:14px;margin:0 0 8px">⚙️ Prüfnormen/Grenzwerte (von dir konfiguriert)</h2>
       <p class="hint">JARVIS kennt/erfindet selbst KEINE DIN-VDE-/DGUV-Grenzwerte - eine Grenzwertprüfung findet nur gegen hier eingetragene Werte statt.</p>
-      <button type="button" class="btn btn-sm" id="jv-norm-neu-btn">+ Grenzwert hinzufügen</button>
+      <button type="button" class="btn btn-sm" id="jv-norm-neu-btn">+ Neue Prüfnorm anlegen</button>
       <div id="jv-norm-liste" style="margin-top:8px"></div>
     </div>
   `;
@@ -965,7 +1001,7 @@ async function renderTech(container) {
         kontextText: kontextText || undefined, kundeIdHinweis, anlagenId,
       });
       ergebnisEl.innerHTML = renderTechErgebnis(analyse);
-      wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen);
+      wireTechErgebnisAktionen(ergebnisEl, analyse, kunden, anlagen, session);
       toast('Analyse abgeschlossen.', 'success');
     } catch (err) {
       ergebnisEl.innerHTML = `<p class="hint">${escapeHtml(err.message)}</p>`;
@@ -1179,44 +1215,102 @@ async function renderTech(container) {
   container.querySelector('#jv-protokoll-neu-btn').addEventListener('click', oeffneProtokollNeu);
   ladeProtokollListe();
 
+  // Phase 9 Sicherheitsprüfung Punkt 3: Prüfnormen sind jetzt eine
+  // unveränderliche Versionshistorie (siehe worker.js erstelleJarvisPruefnorm/
+  // setzeJarvisPruefnormAusserKraft) - KEINE Löschfunktion mehr im UI, nur
+  // noch "Neue Fassung erstellen" (ersetzt die aktuelle, alte bleibt als
+  // Historie erhalten) und "Außer Kraft setzen" (ohne Nachfolger).
+  const NORM_STATUS_BADGE = {
+    aktuell: '<span class="badge badge-success">aktuell</span>',
+    abgeloest: '<span class="badge badge-warn">abgelöst durch neuere Fassung</span>',
+    ausserKraft: '<span class="badge badge-danger">außer Kraft gesetzt</span>',
+  };
+  function normStatus(n) {
+    if (n.aktuell === false && n.abgeloestDurchId) return 'abgeloest';
+    if (n.aktuell === false) return 'ausserKraft';
+    return 'aktuell';
+  }
+
   async function ladeNormListe() {
-    normenCache = await getAll('pruefnormenGrenzwerte');
-    const normen = normenCache;
+    const alleNormen = await holeJarvisPruefnormen();
+    normenCache = alleNormen.filter((n) => n.aktuell !== false);
     const listeEl = container.querySelector('#jv-norm-liste');
-    listeEl.innerHTML = normen.length === 0 ? '<p class="text-mute">Noch keine Grenzwerte hinterlegt.</p>' : `
+    listeEl.innerHTML = alleNormen.length === 0 ? '<p class="text-mute">Noch keine Grenzwerte hinterlegt.</p>' : `
       <table class="data-table" style="width:100%">
-        <thead><tr><th>Prüfart</th><th>Messgröße</th><th>Bereich</th><th>Bedingung</th><th>Gültigkeitsbereich</th><th>Norm</th><th>Version</th><th>Ersteller</th><th></th></tr></thead>
+        <thead><tr><th>Status</th><th>Prüfart</th><th>Messgröße</th><th>Bereich</th><th>Bedingung</th><th>Gültigkeitsbereich</th><th>Norm</th><th>Version</th><th>Ersteller/Grund</th><th></th></tr></thead>
         <tbody>
-          ${normen.map((n) => `
+          ${alleNormen.map((n) => {
+            const status = normStatus(n);
+            return `
             <tr>
+              <td>${NORM_STATUS_BADGE[status]}</td>
               <td>${escapeHtml(n.pruefart)}</td><td>${escapeHtml(n.messgroesse)}</td>
               <td>${n.grenzwertMin ?? '-∞'} – ${n.grenzwertMax ?? '∞'} ${escapeHtml(n.einheit || '')}</td>
               <td>${escapeHtml(n.bedingung || '')}</td><td>${escapeHtml(n.gueltigkeitsbereich || '')}</td><td>${escapeHtml(n.normReferenz || '')}</td>
-              <td>${n.version ?? 1}</td><td>${escapeHtml(n.erstelltVon || '')}</td>
-              <td><button type="button" class="btn btn-sm btn-danger jv-norm-del" data-id="${n.id}">✕</button></td>
-            </tr>`).join('')}
+              <td>${n.version ?? 1}</td>
+              <td style="font-size:11px">${formatDateTime(n.erstelltAm)}${n.aenderungsgrund ? `<br>Grund: ${escapeHtml(n.aenderungsgrund)}` : ''}${n.ausserKraftGrund ? `<br>Außer Kraft: ${escapeHtml(n.ausserKraftGrund)}` : ''}</td>
+              <td>${status === 'aktuell' ? `
+                <button type="button" class="btn btn-sm jv-norm-neue-fassung" data-id="${n.id}">Neue Fassung</button>
+                <button type="button" class="btn btn-sm btn-danger jv-norm-ausser-kraft" data-id="${n.id}">Außer Kraft</button>
+              ` : ''}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>`;
-    listeEl.querySelectorAll('.jv-norm-del').forEach((btn) => btn.addEventListener('click', async () => {
-      await remove('pruefnormenGrenzwerte', btn.dataset.id);
-      ladeNormListe();
-    }));
+    listeEl.querySelectorAll('.jv-norm-neue-fassung').forEach((btn) => btn.addEventListener('click', () => oeffneNormFormular(alleNormen.find((n) => n.id === btn.dataset.id))));
+    listeEl.querySelectorAll('.jv-norm-ausser-kraft').forEach((btn) => btn.addEventListener('click', () => oeffneAusserKraftModal(btn.dataset.id)));
   }
 
-  container.querySelector('#jv-norm-neu-btn').addEventListener('click', () => {
+  function oeffneAusserKraftModal(normId) {
     const { body, close } = openModal({
-      title: 'Grenzwert hinzufügen',
+      title: 'Prüfnorm-Fassung außer Kraft setzen',
       bodyHtml: `
+        <p class="hint">Setzt diese Fassung außer Kraft, OHNE sie zu löschen - sie bleibt für bereits damit bewertete Prüfprotokolle nachvollziehbar erhalten, wird aber für neue Protokolle nicht mehr angewendet.</p>
+        <form id="jv-norm-ak-form">
+          <div class="field"><label>Grund *</label><textarea name="grund" rows="2" required placeholder="z.B. Messgröße wird nicht mehr geprüft"></textarea></div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="jv-norm-ak-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-danger">Außer Kraft setzen</button>
+          </div>
+        </form>
+      `,
+    });
+    body.querySelector('#jv-norm-ak-cancel').addEventListener('click', close);
+    body.querySelector('#jv-norm-ak-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const grund = String(new FormData(e.target).get('grund') || '').trim();
+      if (!grund) { toast('Grund darf nicht leer sein.', 'danger'); return; }
+      try {
+        await setzeJarvisPruefnormAusserKraft({ normId, grund });
+        close();
+        toast('Fassung außer Kraft gesetzt.', 'success');
+        ladeNormListe();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
+    });
+  }
+
+  // vorgaenger: vorhandene aktuelle Fassung, die ersetzt werden soll - oder
+  // null/undefined für eine komplett neue Messgröße.
+  function oeffneNormFormular(vorgaenger) {
+    const istNeueFassung = !!vorgaenger;
+    const { body, close } = openModal({
+      title: istNeueFassung ? `Neue Fassung erstellen - ${vorgaenger.messgroesse}` : 'Neue Prüfnorm anlegen',
+      bodyHtml: `
+        ${istNeueFassung ? `<p class="hint">Ersetzt Version ${vorgaenger.version ?? 1} - die bisherige Fassung bleibt als Historie erhalten, wird aber für neue Protokolle nicht mehr angewendet.</p>` : ''}
         <form id="jv-norm-form">
           <div class="form-grid">
-            <div class="field"><label>Prüfart</label><select name="pruefart"><option value="dguv-v3">DGUV V3</option><option value="e-check">E-Check</option><option value="sonstiges">Sonstiges</option></select></div>
-            <div class="field"><label>Messgröße *</label><input name="messgroesse" required placeholder="z.B. Auslösezeit RCD"></div>
-            <div class="field"><label>Einheit</label><input name="einheit" placeholder="z.B. ms, MΩ, V"></div>
-            <div class="field"><label>Minimalwert (optional)</label><input type="number" step="any" name="grenzwertMin"></div>
-            <div class="field"><label>Maximalwert (optional)</label><input type="number" step="any" name="grenzwertMax"></div>
-            <div class="field col-span-2"><label>Bedingung</label><input name="bedingung" placeholder="z.B. bei 1x I∆n, Typ AC/A"></div>
-            <div class="field col-span-2"><label>Gültigkeitsbereich (für welche Anlagen/Fälle gilt dieser Grenzwert - wird der Elektrofachkraft beim Bestätigen angezeigt)</label><input name="gueltigkeitsbereich" placeholder="z.B. Endstromkreise TN-S-Netz, Nennspannung 230V"></div>
-            <div class="field col-span-2"><label>Normreferenz (deine Angabe - JARVIS erfindet hier nichts)</label><input name="normReferenz" placeholder="z.B. DIN VDE 0100-410"></div>
+            <div class="field"><label>Prüfart</label><select name="pruefart" ${istNeueFassung ? 'disabled' : ''}><option value="dguv-v3">DGUV V3</option><option value="e-check">E-Check</option><option value="sonstiges">Sonstiges</option></select></div>
+            <div class="field"><label>Messgröße *</label><input name="messgroesse" required placeholder="z.B. Auslösezeit RCD" ${istNeueFassung ? 'readonly' : ''} value="${istNeueFassung ? escapeHtml(vorgaenger.messgroesse) : ''}"></div>
+            <div class="field"><label>Einheit</label><input name="einheit" placeholder="z.B. ms, MΩ, V" value="${istNeueFassung ? escapeHtml(vorgaenger.einheit || '') : ''}"></div>
+            <div class="field"><label>Minimalwert (optional)</label><input type="number" step="any" name="grenzwertMin" value="${istNeueFassung && vorgaenger.grenzwertMin != null ? vorgaenger.grenzwertMin : ''}"></div>
+            <div class="field"><label>Maximalwert (optional)</label><input type="number" step="any" name="grenzwertMax" value="${istNeueFassung && vorgaenger.grenzwertMax != null ? vorgaenger.grenzwertMax : ''}"></div>
+            <div class="field col-span-2"><label>Bedingung</label><input name="bedingung" placeholder="z.B. bei 1x I∆n, Typ AC/A" value="${istNeueFassung ? escapeHtml(vorgaenger.bedingung || '') : ''}"></div>
+            <div class="field col-span-2"><label>Gültigkeitsbereich (für welche Anlagen/Fälle gilt dieser Grenzwert - wird der Elektrofachkraft beim Bestätigen angezeigt)</label><input name="gueltigkeitsbereich" placeholder="z.B. Endstromkreise TN-S-Netz, Nennspannung 230V" value="${istNeueFassung ? escapeHtml(vorgaenger.gueltigkeitsbereich || '') : ''}"></div>
+            <div class="field col-span-2"><label>Normreferenz (deine Angabe - JARVIS erfindet hier nichts)</label><input name="normReferenz" placeholder="z.B. DIN VDE 0100-410" value="${istNeueFassung ? escapeHtml(vorgaenger.normReferenz || '') : ''}"></div>
+            ${istNeueFassung ? '<div class="field col-span-2"><label>Änderungsgrund *</label><textarea name="aenderungsgrund" rows="2" required placeholder="z.B. Grenzwert gemäß neuer Herstellerangabe angepasst"></textarea></div>' : ''}
           </div>
           <div class="modal-actions">
             <span class="spacer"></span>
@@ -1232,37 +1326,42 @@ async function renderTech(container) {
       const fd = new FormData(e.target);
       const messgroesse = String(fd.get('messgroesse') || '').trim();
       if (!messgroesse) { toast('Messgröße darf nicht leer sein.', 'danger'); return; }
-      await put('pruefnormenGrenzwerte', {
-        id: neueId(), pruefart: fd.get('pruefart'), messgroesse,
-        einheit: String(fd.get('einheit') || '').trim(),
-        grenzwertMin: fd.get('grenzwertMin') ? Number(fd.get('grenzwertMin')) : null,
-        grenzwertMax: fd.get('grenzwertMax') ? Number(fd.get('grenzwertMax')) : null,
-        bedingung: String(fd.get('bedingung') || '').trim(),
-        gueltigkeitsbereich: String(fd.get('gueltigkeitsbereich') || '').trim(),
-        normReferenz: String(fd.get('normReferenz') || '').trim(),
-        // Phase 8 Punkt 6: Version + Ersteller dokumentiert, damit spätere
-        // Protokolle nachvollziehbar erkennen lassen, welche Fassung des
-        // Grenzwerts zum Prüfzeitpunkt angewendet wurde (siehe worker.js
-        // pruefeMesswertGrenzwert/normVersion) - ein Grenzwert wird aktuell
-        // nur neu angelegt oder gelöscht, nie bearbeitet, daher immer Version 1.
-        version: 1, erstelltVon: session.name || session.role || '', erstelltAm: new Date().toISOString(),
-      });
-      close();
-      toast('Grenzwert gespeichert.', 'success');
-      ladeNormListe();
+      try {
+        await erstelleJarvisPruefnorm({
+          pruefart: istNeueFassung ? vorgaenger.pruefart : fd.get('pruefart'), messgroesse,
+          einheit: String(fd.get('einheit') || '').trim(),
+          grenzwertMin: fd.get('grenzwertMin') || null, grenzwertMax: fd.get('grenzwertMax') || null,
+          bedingung: String(fd.get('bedingung') || '').trim(),
+          gueltigkeitsbereich: String(fd.get('gueltigkeitsbereich') || '').trim(),
+          normReferenz: String(fd.get('normReferenz') || '').trim(),
+          vorherigeVersionId: istNeueFassung ? vorgaenger.id : undefined,
+          aenderungsgrund: fd.get('aenderungsgrund') || undefined,
+        });
+        close();
+        toast('Prüfnorm-Fassung gespeichert.', 'success');
+        ladeNormListe();
+      } catch (err) {
+        toast(err.message, 'danger');
+      }
     });
-  });
+  }
+
+  container.querySelector('#jv-norm-neu-btn').addEventListener('click', () => oeffneNormFormular(null));
 
   ladeNormListe();
 }
 
 // =============================================================================
-// JARVIS MOBILE (Phase 8) - Siri-Kurzbefehle: Verwaltung gerätegebundener,
-// widerrufbarer, zeitlich begrenzter Gerätetokens (siehe worker.js
-// fuehreSiriAbfrageAus für die serverseitige Durchsetzung). Das rohe Token
-// wird NUR client-seitig erzeugt und NUR EINMAL angezeigt - gespeichert wird
-// ausschließlich sein SHA-256-Hash (als Dokument-ID), niemals das Token
-// selbst. Es gibt bewusst KEINEN "Token erneut anzeigen"-Button.
+// JARVIS MOBILE (Phase 8) - Siri-Kurzbefehle: Verwaltung widerrufbarer,
+// zeitlich begrenzter, PRO GERÄT AUSGESTELLTER Bearer-Tokens (siehe
+// worker.js fuehreSiriAbfrageAus für die serverseitige Durchsetzung).
+// Phase 9 Sicherheitsprüfung: dies ist AUSDRÜCKLICH keine kryptografisch
+// nachweisbare Gerätebindung, nur ein gewöhnliches, widerrufbares
+// Bearer-Token, das im iOS-Kurzbefehl gespeichert wird - siehe Hinweistext
+// im UI unten. Das rohe Token wird NUR client-seitig erzeugt und NUR EINMAL
+// angezeigt - gespeichert wird ausschließlich sein SHA-256-Hash (als
+// Dokument-ID), niemals das Token selbst. Es gibt bewusst KEINEN
+// "Token erneut anzeigen"-Button.
 // =============================================================================
 
 const SIRI_INTENT_LABELS = {
@@ -1292,6 +1391,14 @@ function siriTokenStatus(token) {
 async function renderMobile(container) {
   const settings = await getSettings();
   const siriUrl = settings.aiWorkerUrl ? `${settings.aiWorkerUrl.replace(/\/$/, '')}/siri-abfrage` : null;
+  // Phase 9 Sicherheitsprüfung: Token-Erstellung/-Widerruf ist bereits
+  // ausschließlich für eingeloggte Admins möglich (firestore.rules
+  // siriGeraeteTokens: allow read, write: if isAdmin() - das ist eine
+  // SERVERSEITIGE Prüfung, Firestore-Regeln laufen auf Googles Servern,
+  // nicht im Browser). erstelltVonUid ergänzt zusätzlich einen Audit-Trail,
+  // WER welches Token angelegt hat (bisher nur beim Widerruf nachvollziehbar).
+  const { auth } = await import('../firebase.js');
+  const erstellerUid = auth.currentUser?.uid || '';
 
   async function ladeTokenListe() {
     const listeEl = container.querySelector('#jv-siri-liste');
@@ -1316,7 +1423,7 @@ async function renderMobile(container) {
     listeEl.querySelectorAll('.jv-siri-widerrufen').forEach((btn) => btn.addEventListener('click', async () => {
       const token = tokens[Number(btn.dataset.idx)];
       if (!window.confirm(`Gerätetoken "${token.label || token.id.slice(0, 8)}" wirklich widerrufen? Der zugehörige Kurzbefehl funktioniert danach nicht mehr.`)) return;
-      await put('siriGeraeteTokens', { ...token, widerrufenAm: new Date().toISOString() });
+      await put('siriGeraeteTokens', { ...token, widerrufenAm: new Date().toISOString(), widerrufenVonUid: erstellerUid });
       toast('Gerätetoken widerrufen.', 'success');
       ladeTokenListe();
     }));
@@ -1330,7 +1437,7 @@ async function renderMobile(container) {
 
     <div class="card" style="margin-bottom:12px">
       <h2 style="font-size:14px;margin:0 0 8px">🗣️ Siri-Kurzbefehle</h2>
-      <p class="hint">Jedes Gerätetoken ist read-only, zeitlich begrenzt und jederzeit widerrufbar - über Siri lässt sich NIEMALS etwas freigeben, bearbeiten oder verändern, nur abfragen. Ein Kurzbefehl kann z.B. „Hey Siri, JARVIS fragen“ heißen und ruft die unten stehende Adresse per „Inhalte von URL abrufen“ (POST) mit dem Token als Authorization-Header auf.</p>
+      <p class="hint">Jedes Gerätetoken ist read-only, zeitlich begrenzt und jederzeit widerrufbar - über Siri lässt sich NIEMALS etwas freigeben, bearbeiten oder verändern, nur abfragen. Ein Kurzbefehl kann z.B. „Hey Siri, JARVIS fragen“ heißen und ruft die unten stehende Adresse per „Inhalte von URL abrufen“ (POST) mit dem Token als Authorization-Header auf.<br><strong>Wichtig:</strong> Das ist ein gewöhnliches, widerrufbares Zugangs-Token, keine kryptografisch nachweisbare Gerätebindung - wer das Token kennt (z.B. nach Verlust des entsperrten iPhones), kann es bis zum Widerruf von jedem Gerät aus nutzen. Bei Verlust/Diebstahl des iPhones das zugehörige Token sofort unten widerrufen.</p>
       ${siriUrl ? `<p class="text-mute" style="font-size:12px;word-break:break-all">Adresse für den Kurzbefehl: <code>${escapeHtml(siriUrl)}</code><br>Header: <code>Authorization: Bearer &lt;Gerätetoken&gt;</code><br>Body (JSON): <code>{"intent": "taetigkeiten-morgen"}</code> (oder "angebote-offen"/"freigaben-offen")<br>Antwort auswerten: Feld <code>sprachantwort</code> aus der JSON-Antwort vorlesen lassen ("Text aussprechen").</p>` : '<p class="hint">KI-Worker-URL noch nicht eingerichtet (Einstellungen → KI-Angebotserstellung).</p>'}
       <button type="button" class="btn btn-sm" id="jv-siri-neu-btn">+ Neues Gerätetoken erstellen</button>
       <div id="jv-siri-liste" style="margin-top:8px"></div>
@@ -1370,7 +1477,7 @@ async function renderMobile(container) {
       const ablaufAm = new Date(Date.now() + tage * 86400000).toISOString().slice(0, 10);
       await put('siriGeraeteTokens', {
         id: hash, label, erlaubteIntents, erstelltAm: new Date().toISOString(), ablaufAm, widerrufenAm: null,
-        letzteNutzungAm: null, anzeigeSuffix: rawToken.slice(-6),
+        letzteNutzungAm: null, anzeigeSuffix: rawToken.slice(-6), erstelltVonUid: erstellerUid,
       });
       close();
       const { body: tokenBody, close: closeToken } = openModal({

@@ -36,7 +36,7 @@ service cloud.firestore {
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
-        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks', 'pruefnormenGrenzwerte'
+        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
@@ -251,6 +251,18 @@ service cloud.firestore {
     // -aktualisieren veränderbar, die die Grenzwertprüfung und
     // Kundenzuordnung erzwingen.
     match /jarvisPruefprotokolle/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    // Prüfnormen-Grenzwerte (Phase 9 Sicherheitsprüfung): bis Phase 8 eine
+    // normale admin+büro-schreibbare Stammdaten-Collection wie "katalog" -
+    // AB PHASE 9 bewusst "write: if false", da jede Änderung jetzt
+    // ausschließlich über die serverseitigen, versionierenden Aktionen
+    // erstelleJarvisPruefnorm/setzeJarvisPruefnormAusserKraft läuft (niemals
+    // eine Löschung/Überschreibung einer bereits in Prüfprotokollen
+    // verwendeten Fassung - siehe worker.js Kopfkommentar dort). Admin-only
+    // lesbar wie die anderen jarvis*-Collections (vorher admin+büro).
+    match /pruefnormenGrenzwerte/{docId} {
       allow read: if isAdmin();
       allow write: if false;
     }
