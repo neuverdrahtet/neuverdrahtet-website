@@ -158,9 +158,24 @@ await pruefe('L3: unterschiedliche Titel bleiben unbegrenzt erlaubt (bis zum reg
 //    aus Phase 11 - siehe jarvisJobs/tagescheck-${heute}).
 // =============================================================================
 
-const BASIS_ENV = { ANTHROPIC_API_KEY: 'fake', KI_BUEROKRAFT_URL: 'https://fake-kibuerokraft.test', KI_BUEROKRAFT_API_KEY: 'fake-key', FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount) };
+const BASIS_ENV = { JARVIS_TAGESCHECK_AKTIV: 'true', ANTHROPIC_API_KEY: 'fake', KI_BUEROKRAFT_URL: 'https://fake-kibuerokraft.test', KI_BUEROKRAFT_API_KEY: 'fake-key', FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount) };
 const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' });
 const jobId = `tagescheck-${heute}`;
+
+await pruefe('M0a: OHNE JARVIS_TAGESCHECK_AKTIV läuft der Tagescheck NICHT, auch wenn alle übrigen Secrets gesetzt sind (Standard: aus, Direktstart ohne Staging)', async () => {
+  const { JARVIS_TAGESCHECK_AKTIV, ...ohneFlag } = BASIS_ENV;
+  claudeAufrufe = 0;
+  await W.runTagescheck(ohneFlag);
+  assert(claudeAufrufe === 0, `ohne gesetzten Schalter darf KEIN Claude-Aufruf erfolgen, war ${claudeAufrufe}`);
+  assert(!firestoreDb.get(`jarvisJobs/${jobId}`), 'ohne gesetzten Schalter darf nicht einmal ein Job-Dokument angelegt werden');
+});
+
+await pruefe('M0b: JARVIS_TAGESCHECK_AKTIV="false" (oder ein anderer Wert als "true") blockiert den Lauf genauso wie ein fehlender Wert', async () => {
+  claudeAufrufe = 0;
+  await W.runTagescheck({ ...BASIS_ENV, JARVIS_TAGESCHECK_AKTIV: 'false' });
+  assert(claudeAufrufe === 0, `bei "false" darf KEIN Claude-Aufruf erfolgen, war ${claudeAufrufe}`);
+  assert(!firestoreDb.get(`jarvisJobs/${jobId}`), 'bei "false" darf kein Job-Dokument angelegt werden');
+});
 
 await pruefe('M1: ein bereits erledigter Tagescheck-Job für heute lässt den Lauf überspringen (KEIN Claude-Aufruf)', async () => {
   setDoc('jarvisJobs', jobId, { typ: 'tagescheck', status: 'done', abgeschlossenAm: new Date().toISOString() });

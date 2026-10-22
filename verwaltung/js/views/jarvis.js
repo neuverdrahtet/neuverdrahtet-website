@@ -1521,7 +1521,7 @@ const FEATURE_FLAG_LABEL = {
   JARVIS_EMAIL_AKTIV: 'Autonomer E-Mail-Check', JARVIS_ANGEBOT_AKTIV: 'Autonome Angebotsentwürfe',
   JARVIS_RECHNUNG_AKTIV: 'Autonome Rechnungsentwürfe', JARVIS_MAHNUNG_AKTIV: 'Autonome Mahnentwürfe',
   JARVIS_WARTUNG_AKTIV: 'Autonome Wartungsvorschläge', JARVIS_PROJEKT_AKTIV: 'Autonome Projekthinweise',
-  JARVIS_CONTROL_AKTIV: 'Autonomer CONTROL-Check',
+  JARVIS_CONTROL_AKTIV: 'Autonomer CONTROL-Check', JARVIS_TAGESCHECK_AKTIV: 'Autonomer täglicher Büro-Check',
 };
 const JOB_STATUS_BADGE = {
   done: '<span class="badge badge-success">erfolgreich</span>',

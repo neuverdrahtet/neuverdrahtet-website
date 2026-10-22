@@ -169,6 +169,16 @@
  *   Zentrale/Tagesbericht/Wochenbericht-Abrufe (Actions "jarvis-control"/
  *   "jarvis-tagesbericht"/"jarvis-wochenbericht") laufen unabhängig von
  *   diesem Schalter immer live auf Abruf, lesend, ohne Nebenwirkung.
+ *
+ *   JARVIS Phase 11 (täglicher autonomer Büro-Check, siehe runTagescheck) –
+ *   Sicherheitsschalter JARVIS_TAGESCHECK_AKTIV (Variable, Standard: aus),
+ *   konsistent mit allen anderen autonomen Checks oben - ohne explizit
+ *   "true" gesetzten Wert läuft der tägliche Büro-Check nicht, auch wenn
+ *   die übrigen dafür nötigen Secrets (ANTHROPIC_API_KEY/KI_BUEROKRAFT_URL/
+ *   KI_BUEROKRAFT_API_KEY/FIREBASE_SERVICE_ACCOUNT_JSON) bereits gesetzt
+ *   sind - wichtig für einen stufenweisen Produktivstart ohne separates
+ *   Staging, bei dem die autonomen Funktionen nacheinander statt alle
+ *   gleichzeitig scharf geschaltet werden sollen.
  */
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -4906,7 +4916,7 @@ const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'war
 
 // Alle bekannten Feature-Flags, die eine autonome JARVIS-Funktion freischalten
 // (Standard IMMER "aus", siehe jeweilige Kommentare an den env.*_AKTIV-Prüfungen).
-const JARVIS_FEATURE_FLAGS = ['JARVIS_EMAIL_AKTIV', 'JARVIS_ANGEBOT_AKTIV', 'JARVIS_RECHNUNG_AKTIV', 'JARVIS_MAHNUNG_AKTIV', 'JARVIS_WARTUNG_AKTIV', 'JARVIS_PROJEKT_AKTIV', 'JARVIS_CONTROL_AKTIV'];
+const JARVIS_FEATURE_FLAGS = ['JARVIS_EMAIL_AKTIV', 'JARVIS_ANGEBOT_AKTIV', 'JARVIS_RECHNUNG_AKTIV', 'JARVIS_MAHNUNG_AKTIV', 'JARVIS_WARTUNG_AKTIV', 'JARVIS_PROJEKT_AKTIV', 'JARVIS_CONTROL_AKTIV', 'JARVIS_TAGESCHECK_AKTIV'];
 
 /**
  * Phase 10 Punkt 5 (Pilotüberwachung) - zentrale, EHRLICHE Statusübersicht:
@@ -5925,6 +5935,12 @@ Antworte danach zusätzlich mit einer kurzen Fließtext-Zusammenfassung (max. 3-
 }
 
 async function runTagescheck(env) {
+  // Sicherheitsschalter: JARVIS_TAGESCHECK_AKTIV muss explizit "true" sein -
+  // Standard ist AUS, konsistent mit allen anderen autonomen Checks (siehe
+  // Kopfkommentar). Ermöglicht einen stufenweisen Produktivstart, bei dem
+  // die bereits gesetzten Secrets (ANTHROPIC_API_KEY usw.) allein NICHT
+  // ausreichen, um diesen autonomen Lauf scharf zu schalten.
+  if (env.JARVIS_TAGESCHECK_AKTIV !== 'true') return;
   if (!env.ANTHROPIC_API_KEY || !env.KI_BUEROKRAFT_URL || !env.KI_BUEROKRAFT_API_KEY) {
     console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY/KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlt.');
     return;
