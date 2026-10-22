@@ -48,12 +48,16 @@ export function summeVerrechneterGutschriften(r) {
 export function effektivErhaltenerBetrag(r) {
   const gutschriftSumme = summeVerrechneterGutschriften(r);
   if (r.status === 'teilbezahlt') {
-    // teilzahlungBetrag ist der tatsächlich über Bank/Kasse eingegangene
-    // Betrag - unabhängig von einer zusätzlich verrechneten Gutschrift (die
-    // eigene, separate Buchungszeilen weiter unten erzeugt). Beide
-    // Reduzierungen sind additiv (siehe offenerRestbetrag in utils.js),
-    // hier also keine weitere Anpassung nötig.
-    const teilbetrag = r.teilzahlungBetrag || 0;
+    // teilzahlungBetrag soll der tatsächlich über Bank/Kasse eingegangene
+    // Betrag sein, unabhängig von einer zusätzlich verrechneten Gutschrift
+    // (die eigene, separate Buchungszeilen weiter unten erzeugt) - diese
+    // beiden Reduzierungen sind additiv gedacht (siehe offenerRestbetrag in
+    // utils.js). Das ist aber NICHT an jeder Eingabestelle erzwungen (z.B.
+    // der einfache window.prompt-Schnelleditor in rechnungen.js kennt keine
+    // Gutschriften) - deshalb hier als Sicherheitsnetz hart gekappt: die
+    // Summe aus Teilzahlung und Gutschrift darf den Bruttobetrag nie
+        // übersteigen, sonst würde über 100% des Rechnungsbetrags verbucht.
+    const teilbetrag = Math.max(0, Math.min(r.teilzahlungBetrag || 0, (r.brutto || 0) - gutschriftSumme));
     if (!teilbetrag || !r.brutto) return { netto: 0, steuer: 0, brutto: 0, textZusatz: ' (Teilzahlung)' };
     const faktor = Math.min(teilbetrag / r.brutto, 1);
     return {
@@ -85,6 +89,30 @@ export function effektivErhaltenerBetrag(r) {
   return { netto: 0, steuer: 0, brutto: 0, textZusatz: '' };
 }
 
+/** Gesamter, tatsächlich in den Buchungssätzen anerkannter Netto-/USt.-/
+ * Brutto-Umsatz einer Rechnung - Summe aus dem Bank-/Kasse-Anteil
+ * (effektivErhaltenerBetrag) UND einem ggf. per Gutschrift verrechneten
+ * Anteil (siehe erzeugeBuchungenFuerRechnung, Abschnitt 1 unten). Für
+ * cash-basis-Auswertungen (z.B. die Einnahmen-Übersicht in buchhaltung.js),
+ * die sonst einen per Gutschrift (teil-)beglichenen, aber nie als "bezahlt"
+ * markierten Umsatz schlicht unterschlagen würden - siehe offenerRestbetrag,
+ * das dieselbe Rechnung bereits korrekt als "nichts mehr offen" zeigt.
+ * NICHT für die Buchungserzeugung selbst verwenden - erzeugeBuchungenFuer-
+ * Rechnung bucht beide Anteile bereits einzeln, das hier würde dort doppelt
+ * zählen. */
+export function gesamtAnerkannterUmsatz(r) {
+  const bank = effektivErhaltenerBetrag(r);
+  const gutschriftSumme = summeVerrechneterGutschriften(r);
+  if (gutschriftSumme <= 0 || !r.brutto || r.status === 'storniert') return bank;
+  const faktor = Math.min(gutschriftSumme / r.brutto, 1);
+  return {
+    netto: Math.round((bank.netto + r.netto * faktor) * 100) / 100,
+    steuer: Math.round((bank.steuer + r.steuer * faktor) * 100) / 100,
+    brutto: Math.round((bank.brutto + gutschriftSumme) * 100) / 100,
+    textZusatz: bank.textZusatz,
+  };
+}
+
 /** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine bezahlte
  * oder teilbezahlte Rechnung, UND/ODER für einen gegen sie per Gutschrift
  * verrechneten Anteil (siehe summeVerrechneterGutschriften oben - läuft
@@ -92,6 +120,12 @@ export function effektivErhaltenerBetrag(r) {
  * sofort wirksamer Vorgang ist, genau wie die Ausstellung der Gutschrift
  * selbst in erzeugeBuchungenFuerGutschrift). */
 export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
+  // Eine stornierte Rechnung darf NIE gebucht werden, auch wenn an ihr noch
+  // ein (eigentlich beim Stornieren freizugebender) verrechneteGutschriften-
+  // Eintrag hängt - sonst würde eine stornierte Rechnung Phantomumsatz
+  // erzeugen. Das Stornieren selbst gibt die Gutschrift(en) separat wieder
+  // frei (siehe rechnungen.js openStornoGrundDialog-Handler).
+  if (r.status === 'storniert') return [];
   const gutschriftSumme = summeVerrechneterGutschriften(r);
   const istBezahltStatus = r.status === 'bezahlt' || r.status === 'teilbezahlt';
   if (!istBezahltStatus && gutschriftSumme <= 0) return [];
@@ -116,16 +150,21 @@ export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
     const faktor = Math.min(gutschriftSumme / r.brutto, 1);
     const gNetto = Math.round(r.netto * faktor * 100) / 100;
     const gSteuer = Math.round(r.steuer * faktor * 100) / 100;
+    // Gebucht auf den Tag der tatsächlichen Verrechnung (gutschriftVerrechnetAm,
+    // siehe rechnungen.js), NICHT auf das ursprüngliche Rechnungsdatum - sonst
+    // könnte eine erst Monate später verrechnete Gutschrift rückwirkend in
+    // eine bereits abgeschlossene/gemeldete UStVA-Periode gebucht werden.
+    const datum = r.gutschriftVerrechnetAm || r.datum;
     if (kontoGuthaben && erloesKonto && gNetto) {
       buchungen.push({
-        id: uid(), datum: r.datum, text: `${belegtext} (per Gutschrift verrechnet)`,
+        id: uid(), datum, text: `${belegtext} (per Gutschrift verrechnet)`,
         sollKontoId: kontoGuthaben.id, habenKontoId: erloesKonto.id,
         betrag: gNetto, quelle, manuell: false, createdAt: new Date().toISOString(),
       });
     }
     if (kontoGuthaben && ustKonto && gSteuer) {
       buchungen.push({
-        id: uid(), datum: r.datum, text: `${belegtext} (per Gutschrift verrechnet, USt.)`,
+        id: uid(), datum, text: `${belegtext} (per Gutschrift verrechnet, USt.)`,
         sollKontoId: kontoGuthaben.id, habenKontoId: ustKonto.id,
         betrag: gSteuer, quelle, manuell: false, createdAt: new Date().toISOString(),
       });

@@ -1099,7 +1099,24 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             };
             await put('rechnungen', storno);
             await syncBuchung(storno);
-            const stornierteOriginal = { ...data, status: 'storniert', storniertDurchNummer: stornoNummer };
+            // Eine gegen diese Rechnung verrechnete Gutschrift wird beim
+            // Stornieren wieder freigegeben (die Verrechnung war an eine jetzt
+            // nicht mehr gültige Rechnung gebunden) - sonst bliebe das
+            // Guthaben dauerhaft "verbraucht", obwohl es nie wirksam genutzt
+            // wurde, UND die stornierte Rechnung würde weiterhin Umsatz über
+            // die Gutschrift-Verrechnung buchen (siehe erzeugeBuchungenFuerRechnung).
+            for (const { gutschriftId } of data.verrechneteGutschriften || []) {
+              const gObj = gutschriften.find((x) => x.id === gutschriftId);
+              if (!gObj) continue;
+              const neueVerwendungen = (gObj.verwendungen || []).filter((v) => v.rechnungId !== data.id);
+              const gFreigegeben = {
+                ...gObj, verwendungen: neueVerwendungen,
+                status: gObj.status === 'storniert' ? 'storniert' : (offenerGutschriftBetrag({ ...gObj, verwendungen: neueVerwendungen }) > 0 ? 'offen' : 'eingeloest'),
+              };
+              await put('gutschriften', gFreigegeben);
+              await syncGutschriftBuchung(gFreigegeben);
+            }
+            const stornierteOriginal = { ...data, status: 'storniert', storniertDurchNummer: stornoNummer, verrechneteGutschriften: [], gutschriftVerrechnetAm: '' };
             await put('rechnungen', stornierteOriginal);
             await syncBuchung(stornierteOriginal);
             toast(`Stornorechnung ${stornoNummer} angelegt`, 'success');
@@ -1292,6 +1309,22 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             const gObj = gutschriften.find((x) => x.id === gutschriftId);
             return { gutschriftId, gutschriftNummer: gObj?.nummer || '', betrag };
           });
+        // gutschriftVerrechnetAm nur neu setzen, wenn sich die Verrechnung
+        // TATSÄCHLICH geändert hat (nicht bei jedem Speichern aus anderem
+        // Anlass, z.B. nur die Notizen bearbeitet) - sonst würde der bereits
+        // verbuchte Umsatz bei jedem Resave rückwirkend in eine andere
+        // UStVA-Periode verschoben (siehe erzeugeBuchungenFuerRechnung).
+        const normalisiert = (liste) => liste.map((v) => `${v.gutschriftId}:${v.betrag}`).sort().join(',');
+        const hatSichGeaendert = normalisiert(data.verrechneteGutschriften || []) !== normalisiert(updated.verrechneteGutschriften);
+        updated.gutschriftVerrechnetAm = hatSichGeaendert ? todayISO() : (data.gutschriftVerrechnetAm || '');
+        // Sicherheitsnetz: Teilzahlung + Gutschrift dürfen zusammen nie den
+        // Bruttobetrag übersteigen (die reine HTML-max-Validierung oben
+        // deckt nicht jeden Eingabeweg ab, siehe effektivErhaltenerBetrag).
+        if (updated.status === 'teilbezahlt') {
+          const neueGutschriftSumme = updated.verrechneteGutschriften.reduce((s, v) => s + v.betrag, 0);
+          const maxTeilzahlung = Math.max(0, (updated.brutto || 0) - neueGutschriftSumme);
+          if ((updated.teilzahlungBetrag || 0) > maxTeilzahlung) updated.teilzahlungBetrag = Math.round(maxTeilzahlung * 100) / 100;
+        }
         // Jede betroffene Gutschrift (neu verrechnet, geändert oder entfernt)
         // in ihrer eigenen verwendungen-Liste nachführen und ihren Status
         // (offen/eingeloest) anhand des verbleibenden Restbetrags neu setzen.

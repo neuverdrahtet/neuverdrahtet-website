@@ -8,7 +8,7 @@
 // einen fiktiven, nie tatsächlich geflossenen Bankeingang gebucht.
 //
 // Ausführen: node verwaltung/tests/journal-gutschriften.test.mjs
-import { erzeugeBuchungenFuerRechnung, erzeugeBuchungenFuerGutschrift, effektivErhaltenerBetrag, summeVerrechneterGutschriften } from '../js/journal.js';
+import { erzeugeBuchungenFuerRechnung, erzeugeBuchungenFuerGutschrift, effektivErhaltenerBetrag, gesamtAnerkannterUmsatz, summeVerrechneterGutschriften } from '../js/journal.js';
 import { DEFAULT_KONTEN } from '../js/db.js';
 
 const konten = DEFAULT_KONTEN;
@@ -132,6 +132,40 @@ pruefe('G8: eine Rechnung ohne jede Gutschrift und ohne Zahlungsstatus ("offen")
 pruefe('G9: summeVerrechneterGutschriften summiert korrekt über mehrere Gutschriften', () => {
   const rechnung = { verrechneteGutschriften: [{ betrag: 10 }, { betrag: 15.5 }, { betrag: 0 }] };
   nahe(summeVerrechneterGutschriften(rechnung), 25.5);
+});
+
+// =============================================================================
+// Nachträgliche Review-Befunde (code-review-Skill, Oct 2026) - vier echte
+// Lücken im ursprünglichen Fix, jeweils hier nachgewiesen:
+// =============================================================================
+
+pruefe('G10 (Review-Befund 1): eine STORNIERTE Rechnung erzeugt KEINE Buchung, auch wenn an ihr noch verrechneteGutschriften hängen (müsste eigentlich beim Stornieren freigegeben werden, siehe rechnungen.js)', () => {
+  const rechnung = {
+    id: 'r6', nummer: 'RE-6', datum: '2026-03-05', status: 'storniert', zahlungsart: 'ueberweisung',
+    netto: 84.03, steuer: 15.97, brutto: 100,
+    verrechneteGutschriften: [{ gutschriftId: 'g1', betrag: 40 }], // sollte beim Stornieren geleert worden sein - Verteidigung in der Tiefe
+  };
+  const buchungen = erzeugeBuchungenFuerRechnung(rechnung, { konten, settings });
+  assert(buchungen.length === 0, 'eine stornierte Rechnung darf NIEMALS einen Buchungssatz erzeugen, unabhängig von verrechneteGutschriften');
+});
+
+pruefe('G11 (Review-Befund 2): effektivErhaltenerBetrag kappt eine zu hoch eingetragene Teilzahlung hart, falls sie zusammen mit einer Gutschrift den Bruttobetrag übersteigen würde (z.B. über den window.prompt-Schnelleditor ohne Gutschrift-Kenntnis gesetzt)', () => {
+  const rechnung = { status: 'teilbezahlt', netto: 84.03, steuer: 15.97, brutto: 100, teilzahlungBetrag: 90, verrechneteGutschriften: [{ betrag: 40 }] };
+  const { brutto } = effektivErhaltenerBetrag(rechnung);
+  nahe(brutto, 60, 'die Teilzahlung muss auf (Brutto - Gutschriftsumme) = 60 gekappt werden, nicht die eingetragenen 90 verwenden (90+40=130% wären sonst verbucht worden)');
+});
+
+pruefe('G12 (Review-Befund 3): gesamtAnerkannterUmsatz zeigt den per Gutschrift verrechneten Umsatz auch bei einer Rechnung, die NIE als "bezahlt" markiert wurde (Status bleibt "offen")', () => {
+  const rechnung = { status: 'offen', netto: 84.03, steuer: 15.97, brutto: 100, verrechneteGutschriften: [{ betrag: 100 }] };
+  const bank = effektivErhaltenerBetrag(rechnung);
+  nahe(bank.brutto, 0, 'effektivErhaltenerBetrag selbst bleibt bei "offen" bei 0 (unverändert, keine Bank-/Kassenbuchung)');
+  const gesamt = gesamtAnerkannterUmsatz(rechnung);
+  nahe(gesamt.brutto, 100, 'gesamtAnerkannterUmsatz muss den vollständig per Gutschrift anerkannten Umsatz zeigen, obwohl die Rechnung nie "bezahlt" markiert wurde - sonst fehlt er in der Einnahmen-Übersicht/dem Steuerberater-Export');
+});
+
+pruefe('G12b: gesamtAnerkannterUmsatz addiert Bank- und Gutschrift-Anteil korrekt bei gemischter Zahlung', () => {
+  const rechnung = { status: 'bezahlt', netto: 84.03, steuer: 15.97, brutto: 100, verrechneteGutschriften: [{ betrag: 40 }] };
+  nahe(gesamtAnerkannterUmsatz(rechnung).brutto, 100, 'Bank-Anteil (60) + Gutschrift-Anteil (40) müssen sich zum vollen Rechnungsbetrag summieren');
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
