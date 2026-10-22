@@ -384,6 +384,10 @@ export async function render(container, route) {
     { store: 'rechnungen', liste: rechnungen, feld: 'kundeId' },
     { store: 'ausgaben', liste: ausgaben, feld: 'kundeId' },
     { store: 'aufgaben', liste: aufgaben, feld: 'kundeId' },
+    // Review-Befund: fehlte hier - Gutschriften eines zusammengeführten
+    // (gelöschten) Kunden hingen sonst weiterhin an dessen nicht mehr
+    // existierender kundeId und verschwanden aus der Kundenakte.
+    { store: 'gutschriften', liste: gutschriften, feld: 'kundeId' },
   ];
 
   function verknuepfteAnzahl(kundeId) {

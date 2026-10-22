@@ -74,7 +74,12 @@ export async function render(container, route) {
     if (items.length === 0) { toast('Keine Gutschriften zum Exportieren', 'info'); return; }
     const rows = [['Nummer', 'Kunde', 'Datum', 'Status', 'Grund', 'Brutto', 'Noch offen']];
     for (const g of items) {
-      rows.push([g.nummer, kundenById[g.kundeId]?.firma || '', formatDate(g.datum), STATUS_LABEL[g.status] || g.status, GRUENDE_GUTSCHRIFT.find((r) => r.id === g.grund)?.titel || g.grund, g.brutto, offenerGutschriftBetrag(g)]);
+      // Review-Befund: eine stornierte Gutschrift hat kein "noch offen" mehr
+      // (siehe dieselbe Regel in der Tabellen-Ansicht/Kundenakte) - ohne
+      // diese Ausnahme hätte der Export fälschlich weiterhin den vollen
+      // Betrag als verfügbares Guthaben ausgewiesen.
+      const nochOffen = g.status === 'storniert' ? 0 : offenerGutschriftBetrag(g);
+      rows.push([g.nummer, kundenById[g.kundeId]?.firma || '', formatDate(g.datum), STATUS_LABEL[g.status] || g.status, GRUENDE_GUTSCHRIFT.find((r) => r.id === g.grund)?.titel || g.grund, g.brutto, nochOffen]);
     }
     downloadCsv(rows, 'Gutschriften-Export.csv');
   }
@@ -406,8 +411,13 @@ export async function render(container, route) {
         const brutto = Number(fd.get('betragBrutto'));
         if (!(brutto > 0)) { toast('Bitte einen Betrag größer 0 angeben', 'danger'); return; }
         const steuersatz = Number(fd.get('steuersatz')) || 0;
-        const einzelpreis = Math.round((brutto / (1 + steuersatz / 100)) * 100) / 100;
-        const totals = calcTotals([{ menge: 1, einzelpreis, steuersatz }]);
+        // Review-Befund: dieselbe Brutto->Netto/USt.-Umrechnung stand hier UND
+        // in liveTotals() verdoppelt - eine künftige Änderung an der Rundungs-
+        // /Umrechnungslogik hätte sonst leicht nur an einer der beiden Stellen
+        // angepasst werden können und Vorschau/Gespeichertes auseinanderlaufen
+        // lassen. Jetzt einzige Quelle: liveTotals() (liest exakt dieselben
+        // Formularfelder, die FormData hier gerade ausgelesen hat).
+        const totals = liveTotals();
 
         const updated = {
           ...data, kundeId: kundeIdValue, datum: fd.get('datum') || todayISO(),
@@ -427,8 +437,18 @@ export async function render(container, route) {
           await setSettings({ gutschriftNummerDatum: nDatum, gutschriftNummerZaehler: nZaehler });
         }
 
+        // Review-Befund: gegen die beim Öffnen des Formulars geladene (ggf.
+        // inzwischen veraltete) Liste zu prüfen, hätte bei zwei nahezu
+        // gleichzeitig offenen "Neue Gutschrift"-Formularen (z.B. zwei Tabs)
+        // denselben vorgeschlagenen Nummer-Treffer beide als "frei" ansehen
+        // können. Unmittelbar vor dem Speichern NOCH EINMAL frisch aus der
+        // Datenbank lesen, statt der möglicherweise längst veralteten
+        // In-Memory-Liste zu vertrauen - schließt das Zeitfenster fast
+        // vollständig (kein Ersatz für eine echte serverseitige Transaktion,
+        // aber für dieses Admin/büro-interne Formular ausreichend).
         const nummerNorm = updated.nummer.trim().toLowerCase();
-        const dupe = gutschriften.some((x) => x.id !== updated.id && (x.nummer || '').trim().toLowerCase() === nummerNorm);
+        const aktuelleGutschriften = await getAll('gutschriften');
+        const dupe = aktuelleGutschriften.some((x) => x.id !== updated.id && (x.nummer || '').trim().toLowerCase() === nummerNorm);
         if (dupe) { toast(`Gutschriftsnummer "${updated.nummer}" ist bereits vergeben – GoBD verlangt eindeutige Nummern.`, 'danger'); return; }
 
         await put('gutschriften', updated);
