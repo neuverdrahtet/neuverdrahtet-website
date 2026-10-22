@@ -25,15 +25,34 @@ function bankOderKasse(konten, settings, zahlungsart) {
   return findKonto(konten, id, fallbackNummer);
 }
 
-/** Tatsächlich erhaltener Netto-/USt.-/Brutto-Anteil einer bezahlten oder
- * teilbezahlten Rechnung - berücksichtigt einen Skonto-Abzug bzw. eine
- * erfasste Teilzahlung. Einzige Quelle dieser Berechnung (wird sowohl von
- * erzeugeBuchungenFuerRechnung unten als auch von cash-basis-Auswertungen
- * wie der Buchhaltung-Übersicht/dem Dashboard verwendet), damit eine
- * Rechnung überall denselben tatsächlich eingegangenen Betrag zeigt wie die
- * daraus erzeugten Buchungssätze. */
+/** Summe der gegen diese Rechnung verrechneten Gutschriften (siehe
+ * verrechneteGutschriften, gesetzt in rechnungen.js) - einzige Quelle dieser
+ * Summe, analog zu effektivErhaltenerBetrag unten. */
+export function summeVerrechneterGutschriften(r) {
+  return (r?.verrechneteGutschriften || []).reduce((s, v) => s + (v.betrag || 0), 0);
+}
+
+/** Tatsächlich über Bank/Kasse erhaltener Netto-/USt.-/Brutto-Anteil einer
+ * bezahlten oder teilbezahlten Rechnung - berücksichtigt einen Skonto-Abzug,
+ * eine erfasste Teilzahlung UND einen per Gutschrift bereits anderweitig
+ * verrechneten Anteil (der NICHT über Bank/Kasse läuft, siehe
+ * erzeugeBuchungenFuerRechnung unten - sonst würde eine per Gutschrift
+ * (teil-)ausgeglichene Rechnung fälschlich den vollen Betrag als Bank-/
+ * Kasseneingang verbuchen, obwohl tatsächlich weniger oder gar kein Geld
+ * geflossen ist - das würde sowohl den Bankkontensaldo als auch den
+ * Kontenabgleich (zahlungsabgleich.js) verfälschen). Einzige Quelle dieser
+ * Berechnung (wird sowohl von erzeugeBuchungenFuerRechnung unten als auch
+ * von cash-basis-Auswertungen wie der Buchhaltung-Übersicht/dem Dashboard
+ * verwendet), damit eine Rechnung überall denselben tatsächlich
+ * eingegangenen Betrag zeigt wie die daraus erzeugten Buchungssätze. */
 export function effektivErhaltenerBetrag(r) {
+  const gutschriftSumme = summeVerrechneterGutschriften(r);
   if (r.status === 'teilbezahlt') {
+    // teilzahlungBetrag ist der tatsächlich über Bank/Kasse eingegangene
+    // Betrag - unabhängig von einer zusätzlich verrechneten Gutschrift (die
+    // eigene, separate Buchungszeilen weiter unten erzeugt). Beide
+    // Reduzierungen sind additiv (siehe offenerRestbetrag in utils.js),
+    // hier also keine weitere Anpassung nötig.
     const teilbetrag = r.teilzahlungBetrag || 0;
     if (!teilbetrag || !r.brutto) return { netto: 0, steuer: 0, brutto: 0, textZusatz: ' (Teilzahlung)' };
     const faktor = Math.min(teilbetrag / r.brutto, 1);
@@ -45,51 +64,96 @@ export function effektivErhaltenerBetrag(r) {
     };
   }
   if (r.status === 'bezahlt') {
+    const bankBrutto = Math.max(0, (r.brutto || 0) - gutschriftSumme);
+    if (bankBrutto <= 0) {
+      return { netto: 0, steuer: 0, brutto: 0, textZusatz: gutschriftSumme > 0 ? ' (vollständig per Gutschrift ausgeglichen)' : '' };
+    }
+    const bankFaktor = r.brutto ? bankBrutto / r.brutto : 1;
     if (r.skontoGenutzt && r.skontoProzent > 0) {
       // Genutztes Skonto mindert nach § 17 UStG die Bemessungsgrundlage
-      // anteilig (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag.
-      const faktor = 1 - r.skontoProzent / 100;
+      // anteilig (Netto UND USt.), nicht nur den überwiesenen Bruttobetrag -
+      // angewendet auf den bereits um eine Gutschrift bereinigten Anteil.
+      const faktor = bankFaktor * (1 - r.skontoProzent / 100);
       const netto = Math.round(r.netto * faktor * 100) / 100;
       const steuer = Math.round(r.steuer * faktor * 100) / 100;
-      return { netto, steuer, brutto: Math.round((netto + steuer) * 100) / 100, textZusatz: ` (abzgl. ${r.skontoProzent}% Skonto)` };
+      return { netto, steuer, brutto: Math.round((netto + steuer) * 100) / 100, textZusatz: ` (abzgl. ${r.skontoProzent}% Skonto${gutschriftSumme > 0 ? ', teilw. per Gutschrift' : ''})` };
     }
-    return { netto: r.netto || 0, steuer: r.steuer || 0, brutto: r.brutto || 0, textZusatz: '' };
+    const netto = Math.round(r.netto * bankFaktor * 100) / 100;
+    const steuer = Math.round(r.steuer * bankFaktor * 100) / 100;
+    return { netto, steuer, brutto: Math.round((netto + steuer) * 100) / 100, textZusatz: gutschriftSumme > 0 ? ' (teilw. per Gutschrift ausgeglichen)' : '' };
   }
   return { netto: 0, steuer: 0, brutto: 0, textZusatz: '' };
 }
 
 /** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine bezahlte
- * oder teilbezahlte Rechnung. */
+ * oder teilbezahlte Rechnung, UND/ODER für einen gegen sie per Gutschrift
+ * verrechneten Anteil (siehe summeVerrechneterGutschriften oben - läuft
+ * bewusst UNABHÄNGIG vom Zahlungsstatus, da eine Verrechnung ein eigener,
+ * sofort wirksamer Vorgang ist, genau wie die Ausstellung der Gutschrift
+ * selbst in erzeugeBuchungenFuerGutschrift). */
 export function erzeugeBuchungenFuerRechnung(r, { konten, settings }) {
-  if (r.status !== 'bezahlt' && r.status !== 'teilbezahlt') return [];
-  const geldKonto = bankOderKasse(konten, settings, r.zahlungsart);
-  if (!geldKonto) return [];
-  const datum = r.bezahltAm || r.datum;
+  const gutschriftSumme = summeVerrechneterGutschriften(r);
+  const istBezahltStatus = r.status === 'bezahlt' || r.status === 'teilbezahlt';
+  if (!istBezahltStatus && gutschriftSumme <= 0) return [];
   const belegtext = `Rechnung ${r.nummer}`;
   const quelle = { typ: 'rechnung', id: r.id };
   const buchungen = [];
-
-  const { netto, steuer, textZusatz } = effektivErhaltenerBetrag(r);
 
   const steuerfrei = r.steuerart && r.steuerart !== 'regel';
   const satz = effektiverSteuersatz(r.netto, r.steuer);
   const erloesKonto = steuerfrei
     ? findKonto(konten, 'konto-8125', '8125')
     : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
-  if (erloesKonto && netto) {
-    buchungen.push({
-      id: uid(), datum, text: `${belegtext}${textZusatz}`,
-      sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
-      betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
-    });
-  }
-  if (steuer) {
-    const ustKonto = findKonto(konten, satz === 7 ? 'konto-1771' : 'konto-1776', satz === 7 ? '1771' : '1776');
-    if (ustKonto) {
+  const ustKonto = findKonto(konten, satz === 7 ? 'konto-1771' : 'konto-1776', satz === 7 ? '1771' : '1776');
+
+  // 1) Per Gutschrift verrechneter Anteil: löst die bei Ausstellung der
+  //    Gutschrift gebuchte Verbindlichkeit (Konto 1790) anteilig wieder auf
+  //    UND erkennt dabei den entsprechenden Umsatz für DIESE (neue) Rechnung
+  //    an - die ursprüngliche Gutschrift hat nur ihren EIGENEN, davon
+  //    unabhängigen Umsatz gemindert, siehe erzeugeBuchungenFuerGutschrift.
+  if (gutschriftSumme > 0 && r.brutto) {
+    const kontoGuthaben = findKonto(konten, settings.kontoKundenguthabenId, '1790');
+    const faktor = Math.min(gutschriftSumme / r.brutto, 1);
+    const gNetto = Math.round(r.netto * faktor * 100) / 100;
+    const gSteuer = Math.round(r.steuer * faktor * 100) / 100;
+    if (kontoGuthaben && erloesKonto && gNetto) {
       buchungen.push({
-        id: uid(), datum, text: `${belegtext} (USt.)`, sollKontoId: geldKonto.id, habenKontoId: ustKonto.id,
-        betrag: Math.round(steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+        id: uid(), datum: r.datum, text: `${belegtext} (per Gutschrift verrechnet)`,
+        sollKontoId: kontoGuthaben.id, habenKontoId: erloesKonto.id,
+        betrag: gNetto, quelle, manuell: false, createdAt: new Date().toISOString(),
       });
+    }
+    if (kontoGuthaben && ustKonto && gSteuer) {
+      buchungen.push({
+        id: uid(), datum: r.datum, text: `${belegtext} (per Gutschrift verrechnet, USt.)`,
+        sollKontoId: kontoGuthaben.id, habenKontoId: ustKonto.id,
+        betrag: gSteuer, quelle, manuell: false, createdAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  // 2) Tatsächlich über Bank/Kasse eingegangener Anteil - wie bisher, aber
+  //    effektivErhaltenerBetrag berücksichtigt jetzt bereits oben 1),
+  //    sodass hier nur noch der NICHT per Gutschrift gedeckte Teil verbucht
+  //    wird (kein doppelt verbuchter Umsatz, kein fiktiver Bankeingang).
+  if (istBezahltStatus) {
+    const geldKonto = bankOderKasse(konten, settings, r.zahlungsart);
+    if (geldKonto) {
+      const datum = r.bezahltAm || r.datum;
+      const { netto, steuer, textZusatz } = effektivErhaltenerBetrag(r);
+      if (erloesKonto && netto) {
+        buchungen.push({
+          id: uid(), datum, text: `${belegtext}${textZusatz}`,
+          sollKontoId: geldKonto.id, habenKontoId: erloesKonto.id,
+          betrag: Math.round(netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+        });
+      }
+      if (ustKonto && steuer) {
+        buchungen.push({
+          id: uid(), datum, text: `${belegtext} (USt.)`, sollKontoId: geldKonto.id, habenKontoId: ustKonto.id,
+          betrag: Math.round(steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+        });
+      }
     }
   }
   return buchungen;
