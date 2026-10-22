@@ -9,6 +9,7 @@ import { analyzeBeleg } from '../ai.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as journal from '../journal.js';
 import { freigebenBelegVorschlag, ablehnenBelegVorschlag, freigebenBelegVorschlaegeSammel, BelegVorschlagVeraltetError } from '../belegvorschlaege.js';
+import { getSession } from '../auth.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -60,8 +61,14 @@ const DOKUMENTTYP_LABEL = {
 };
 
 export async function render(container) {
+  // belegVorschlaege ist per firestore.rules bewusst admin-only (siehe
+  // Phase 11.1 - JARVIS/KI-Bürokraft-Automation ist konsequent auf admin
+  // beschränkt) - für büro/mitarbeiter würde ein Lesezugriff mit
+  // PERMISSION_DENIED fehlschlagen, deshalb hier gar nicht erst anfragen.
+  const istAdmin = getSession().role === 'admin';
   let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen, belegVorschlaege] = await Promise.all([
-    getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'), getAll('belegVorschlaege'),
+    getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'),
+    istAdmin ? getAll('belegVorschlaege') : Promise.resolve([]),
   ]);
   let offeneVorschlaege = belegVorschlaege.filter((v) => v.status === 'offen');
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));

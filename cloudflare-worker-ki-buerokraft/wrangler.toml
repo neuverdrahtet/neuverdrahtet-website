@@ -29,3 +29,12 @@ crons = ["0 6 * * *", "0 6 * * 1-5", "0 10 * * 1-5", "0 14 * * 1-5"]
 # Firebase-Staging-Projekt - niemals die Produktions-Werte wiederverwenden.
 [env.staging]
 name = "neuverdrahtet-ki-buerokraft-staging"
+
+[env.staging.vars]
+# Phase 11.1 Sicherheitskorrektur: ohne diesen Wert würde der Beleg-Scan
+# (AI_WORKER-Service-Binding-Aufruf, siehe analysiereBeleg) in Staging mit
+# 403 "Origin nicht erlaubt" scheitern, weil die fest verdrahtete
+# Produktions-Domain nicht in der Staging-ALLOWED_ORIGINS-Liste des
+# Haupt-Workers steht (siehe dessen [env.staging.vars] ALLOWED_ORIGINS).
+# MUSS exakt mit einem der dort gelisteten Werte übereinstimmen.
+AI_WORKER_ORIGIN = "<STAGING-PREVIEW-DOMAIN, identisch zu ALLOWED_ORIGINS im Haupt-Worker>"

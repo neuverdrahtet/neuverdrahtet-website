@@ -40,14 +40,16 @@ const firestoreDb = new Map(); // "collection/id" -> fields
 function setDoc(collection, id, data) { firestoreDb.set(`${collection}/${id}`, toFirestoreFields(data)); }
 
 let aiWorkerAufrufe = 0;
+let letzteAiWorkerHeaders = null;
 let aiWorkerAntwort = () => ({ haendler: 'Test-Lieferant GmbH', datum: '2026-01-15', betragNetto: 84.03, betragBrutto: 100, steuersatz: 19, kategorie: 'Material', beschreibung: 'Testmaterial', lesbar: true, kategorieSicher: true });
 
 const env = {
   API_KEY,
   FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount),
   AI_WORKER: {
-    async fetch() {
+    async fetch(url, init) {
       aiWorkerAufrufe++;
+      letzteAiWorkerHeaders = init?.headers || {};
       return { ok: true, json: async () => aiWorkerAntwort() };
     },
   },
@@ -150,6 +152,28 @@ await pruefe('K4: ohne gültigen API-Schlüssel wird bulk-fix-receipts abgelehnt
   });
   const res = await worker.fetch(req, env);
   assert(res.status === 401, `erwartet 401, war ${res.status}`);
+});
+
+// =============================================================================
+// Phase 11.1 Punkt 3 ("API-Basisadressen"): der Origin-Header beim Aufruf
+// des AI_WORKER-Service-Bindings (Beleg-Scan) war fest auf die
+// Produktions-Domain verdrahtet - das hätte in Staging (eigene
+// ALLOWED_ORIGINS) jeden Beleg-Scan mit 403 scheitern lassen. Jetzt über
+// AI_WORKER_ORIGIN konfigurierbar, mit der Produktions-Domain als
+// unverändertem Standardwert.
+// =============================================================================
+
+await pruefe('K5: ohne AI_WORKER_ORIGIN wird weiterhin die bisherige Produktions-Domain als Origin-Header gesendet (Rückwärtskompatibilität für Produktion)', async () => {
+  setDoc('ausgaben', 'a-k5', { betragBrutto: 0, beleg: { url: 'https://fake-storage.test/beleg.jpg', mime: 'image/jpeg' } });
+  await worker.fetch(authRequest('/expenses/bulk-fix-receipts', { body: { limit: 1 } }), env);
+  assert(letzteAiWorkerHeaders.Origin === 'https://neuverdrahtet.com', `erwartet Produktions-Origin als Standard, war ${letzteAiWorkerHeaders.Origin}`);
+});
+
+await pruefe('K6: mit gesetztem AI_WORKER_ORIGIN (z.B. Staging-Vorschau-Domain) wird GENAU dieser Wert als Origin-Header gesendet, nicht die Produktions-Domain', async () => {
+  setDoc('ausgaben', 'a-k6', { betragBrutto: 0, beleg: { url: 'https://fake-storage.test/beleg.jpg', mime: 'image/jpeg' } });
+  const stagingEnv = { ...env, AI_WORKER_ORIGIN: 'https://staging-preview.example.pages.dev' };
+  await worker.fetch(authRequest('/expenses/bulk-fix-receipts', { body: { limit: 1 } }), stagingEnv);
+  assert(letzteAiWorkerHeaders.Origin === 'https://staging-preview.example.pages.dev', `erwartet konfigurierte Staging-Origin, war ${letzteAiWorkerHeaders.Origin}`);
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

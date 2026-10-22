@@ -5929,34 +5929,42 @@ async function runTagescheck(env) {
     console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY/KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlt.');
     return;
   }
-
+  // Phase 11.1 Sicherheitskorrektur: FIREBASE_SERVICE_ACCOUNT_JSON ist jetzt
+  // eine ZWINGENDE Voraussetzung (vorher nur für den Push "nice to have") -
+  // ohne Service-Account gibt es keinen atomaren Lauf-Claim (siehe unten),
+  // und ein ungeschützter Lauf ist riskanter als ein ausbleibender Lauf
+  // (fail-closed, dasselbe Prinzip wie das Rate-Limiting in Phase 10).
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    console.log('Täglicher Büro-Check übersprungen: FIREBASE_SERVICE_ACCOUNT_JSON fehlt (zwingend für den atomaren Lauf-Claim, siehe Phase 11.1).');
+    return;
+  }
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
   const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
   const googleConfig = buildGoogleConfig(env);
 
-  // Phase 11 Punkt 1 ("Aufgabenfluten"/doppelte Aufgaben): deterministische
-  // Idempotenz-Prüfung VOR jedem Claude-Aufruf - verhindert, dass ein
-  // doppelt ausgelöster Lauf (z.B. ein erneut angestoßener scheduled()-
-  // Handler oder eine Plattform-Retry) denselben Tag ein zweites Mal
-  // komplett durchlaufen lässt und dabei doppelte Aufgaben anlegt,
-  // insbesondere die abschließende Tages-Zusammenfassung. Analog zum
-  // deterministischen Doc-ID-Muster (z.B. "bueroablauf-${checkpoint}-${heute}"
-  // in cloudflare-worker-ki-buerokraft/worker.js), hier als Lese-Vorab-Check
-  // statt deterministischer ID, weil createTask über die externe KI-
-  // Bürokraft-API läuft (ohne eigene ID-Kontrolle hier). Best-effort: ohne
-  // FIREBASE_SERVICE_ACCOUNT_JSON (optional, nur für den Push gedacht) läuft
-  // der Check einfach nicht, blockiert aber auch nichts.
-  if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    try {
-      const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
-      const heutigeAufgaben = await firestoreListDocuments({ serviceAccount, collection: 'aufgaben' });
-      const zusammenfassungsTitel = normalisiereAufgabenTitel(`Tages-Zusammenfassung ${heute}`);
-      if (heutigeAufgaben.some((a) => normalisiereAufgabenTitel(a.titel) === zusammenfassungsTitel)) {
-        console.log(`Täglicher Büro-Check übersprungen: Tages-Zusammenfassung für ${heute} existiert bereits (doppelter Lauf verhindert).`);
-        return;
-      }
-    } catch (err) {
-      console.log('Täglicher Büro-Check: Idempotenz-Vorab-Prüfung fehlgeschlagen (Lauf wird trotzdem fortgesetzt):', err.message);
-    }
+  // Phase 11.1 Punkt 2: ersetzt die in Phase 11 eingeführte reine Lese-
+  // Vorab-Prüfung ("existiert die Tages-Zusammenfassung schon?") durch einen
+  // ATOMAREN Lauf-Claim über dasselbe, bereits für alle anderen täglichen
+  // JARVIS-Hintergrund-Jobs genutzte Gerüst (beanspracheTagesJob, siehe
+  // runJarvisControlCheck/runJarvisEmailCheck usw.) - EIN Dokument pro Tag
+  // in jarvisJobs (id "tagescheck-${heute}"), atomar per
+  // firestoreCreateIfMissing+firestoreBeanspruche angelegt/übernommen. Die
+  // reine Lese-Prüfung aus Phase 11 hatte eine echte Race Condition: zwei
+  // nahezu gleichzeitige Läufe (z.B. ein doppelt ausgelöster Cron-Trigger)
+  // hätten BEIDE "noch keine Zusammenfassung vorhanden" gelesen, bevor
+  // irgendeiner von beiden etwas anlegt - und wären dann BEIDE komplett
+  // durchgelaufen. beanspracheTagesJob schließt das aus: nur EINER der
+  // beiden Aufrufe bekommt den Job jemals atomar zugesprochen, der andere
+  // bekommt sofort null zurück. Stürzt der Worker zwischen Claim ("running")
+  // und Abschluss ab, bleibt der Job hängen und wird NACH
+  // JARVIS_JOB_STALE_MINUTEN als "unklar" erkannt (nie automatisch
+  // wiederholt) - exakt dasselbe, bereits getestete Verhalten wie bei jedem
+  // anderen JARVIS-Hintergrund-Job.
+  const jobId = `tagescheck-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'tagescheck' });
+  if (!job) {
+    console.log(`Täglicher Büro-Check übersprungen: Job ${jobId} ist bereits erledigt, läuft gerade oder wurde als unklar markiert.`);
+    return;
   }
 
   let ergebnis;
@@ -5972,13 +5980,13 @@ async function runTagescheck(env) {
     });
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
     return;
   }
 
-  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return; // Aufgabe(n) wurden trotzdem angelegt, nur der Push entfällt
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'done', abgeschlossenAm: new Date().toISOString() } });
 
   try {
-    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
     const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });
     const tokens = tokenDocs.filter((t) => ['admin', 'buero'].includes(t.role)).map((t) => t.id);
     if (tokens.length === 0) return;
@@ -7153,4 +7161,6 @@ export const __test__ = {
   buildTagescheckPrompt,
   // Phase 11 - Tagescheck gegen Aufgabenfluten/doppelte Aufgaben absichern
   normalisiereAufgabenTitel, runTagescheck,
+  // Phase 11.1 Punkt 4 - Google-Kalender-Trennung Verfügbarkeit/Vorschlag/Buchung
+  KI_BUEROKRAFT_TOOLS, callGoogleTool,
 };

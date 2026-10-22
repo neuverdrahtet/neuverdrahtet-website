@@ -53,6 +53,7 @@ Die Vorlage ist bereits in den drei betroffenen `wrangler.toml`-Dateien als `[en
 2. Für jeden der drei Worker: `wrangler deploy --env staging`.
 3. Secrets setzen (**eigene** Werte, siehe Schritt 4/5): `wrangler secret put ANTHROPIC_API_KEY --env staging`, `wrangler secret put APP_SECRET --env staging`, `wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON --env staging` (Inhalt der in Schritt 1.5 erzeugten Datei) usw. für die beiden anderen Worker entsprechend ihrer eigenen Secret-Liste.
 4. Das `RATE_LIMITER`-Binding für `--env staging` wird von Cloudflare beim ersten `wrangler deploy --env staging` automatisch angelegt (wie in Produktion) – **Pflicht**, da die Routen seit der Phase-10-Sicherheitskorrektur sonst fail-closed sperren.
+5. **Phase 11.1:** `AI_WORKER_ORIGIN` in `cloudflare-worker-ki-buerokraft/wrangler.toml` (`[env.staging.vars]`) auf genau denselben Wert wie `ALLOWED_ORIGINS` im Haupt-Worker setzen (die Staging-Vorschau-Domain aus Schritt 2.1) – ohne diese Übereinstimmung scheitert jeder Beleg-Scan (bulkFixReceipts) in Staging mit „Origin nicht erlaubt" (403).
 
 ## Schritt 3: Dedizierte Gmail-/Google-Kalender-Testkonten ⏸ Wartet auf Danny
 
@@ -60,6 +61,12 @@ Die Vorlage ist bereits in den drei betroffenen `wrangler.toml`-Dateien als `[en
 2. In der [Google Cloud Console](https://console.cloud.google.com) ein **eigenes** OAuth-Client-Projekt für Staging anlegen (Gmail-API + Calendar-API aktivieren).
 3. `GOOGLE_OAUTH_CLIENT_ID`/`GOOGLE_OAUTH_CLIENT_SECRET`/`OAUTH_SETUP_SECRET` als Staging-Secrets setzen (siehe Schritt 2.3).
 4. Die Google-Verbindung einmalig über `/oauth/authorize?setup_key=<OAUTH_SETUP_SECRET>` auf dem **Staging**-Worker herstellen (mit dem Test-Google-Konto einloggen, NICHT mit dem echten Geschäftskonto).
+5. **Phase 11.1 Punkt 4 – Dreiteilung bei Google Kalender (geprüft, siehe `cloudflare-worker/jarvis-tests/test_jarvis_phase11_1_kalender.mjs`):**
+   JARVIS unterscheidet strikt drei Kategorien, und nur die letzte ist ein echter, bindender Schreibvorgang:
+   1. **Verfügbarkeitsabfrage/Terminabfrage** – `searchCalendarEvents` (direkte, eigene Google-Anbindung des Haupt-Workers, `callGoogleTool`) und `/calendar/availability` über `callGoogleBuero` (für Wartungstermin-Vorschläge) sind reines Lesen (nur GET-Aufrufe gegen die Calendar-API).
+   2. **Terminvorschlag** – autonome Wartungstermin-Vorschläge landen ausschließlich in der Firestore-Collection `jarvisTerminVorschlaege` und erzeugen NIEMALS automatisch einen echten Kalendereintrag; ein Mensch prüft und bucht ggf. manuell.
+   3. **Tatsächliche Terminbuchung** – das Werkzeug `createAppointment` ist menschlich ausgelöst (Chat) und legt ausschließlich einen internen Werkora-Termin an (`POST /appointments` auf dem KI-Bürokraft-Worker, kein Google-Kalender-Zugriff). Der separate Worker `cloudflare-worker-google-buero` besitzt zwar echte, bindende `createCalendarEvent`/`updateCalendarEvent`-Endpunkte – diese sind aber für eine ANDERE ChatGPT-Action gedacht und über JARVIS' Werkzeugliste (`KI_BUEROKRAFT_TOOLS`) nicht erreichbar; dort existiert kein einziges Kalender-Schreibwerkzeug.
+   Alle externen Schreibaktionen (echte Kalenderbuchung, E-Mail-Versand) bleiben damit bis zu ihrer gesonderten Freigabe gesperrt – lokal durch die genannte Testdatei nachgewiesen, nicht nur dokumentiert.
 
 ## Schritt 4: Anthropic-API mit begrenztem Testbudget ⏸ Wartet auf Danny
 
@@ -103,3 +110,23 @@ Empfehlung: dafür einen eigenen Lesezweig/eine eigene Vorschau-Bereitstellung n
 ## Nach Abschluss von Schritt 1–6
 
 Erst wenn alle sechs Schritte durchgeführt und von Danny als abgeschlossen bestätigt wurden, können die in Abschnitt 3 des Phase-10-Berichts aufgelisteten echten Integrationstests tatsächlich ausgeführt werden. Bis dahin bleiben sie offen – siehe dort.
+
+---
+
+## Was ist lokal geprüft, was erst nach echtem Staging? (Phase 11.1)
+
+Explizite Trennung, damit nicht der Eindruck entsteht, hier wäre mehr geprüft worden, als in dieser Sandbox (kein Cloudflare-/Firebase-/Google-/Anthropic-Zugang) tatsächlich möglich ist:
+
+| Prüfung | Lokal möglich? | Wie/wo |
+|---|---|---|
+| Firestore-Regeln (Rollen, belegVorschlaege-Härtung, Versionskontrolle) | ✅ Ja | `firestore-tests/rules.test.mjs` + `belegvorschlaege.test.mjs` gegen echten Firestore-Emulator |
+| Worker-Logik (Tagescheck-Claim, bulkFixReceipts-Vorschläge, Siri, Uploads) | ✅ Ja | `cloudflare-worker*/jarvis-tests/`, `tests/` - Mock-HTTP gegen den echten Worker-Code |
+| Browser-UI (Login-Screen, Mobile-Viewport) | ✅ Ja (eingeschränkt) | `verwaltung/tests/browser-smoke.test.mjs`, echtes Chromium, ohne echtes Backend |
+| `wrangler.toml`/`firebase.json`-Syntax | ✅ Ja | `tomllib`/`firebase emulators:exec` validieren Syntax, nicht das reale Deployment |
+| Tatsächliche IAM-Rollen eines echten Service-Accounts | ❌ Nein | nur die SOLL-Rollen sind dokumentiert (Abschnitt "Benötigte Rechte") - ob sie in der Google Cloud Console korrekt vergeben wurden, kann nur Danny nach der Einrichtung prüfen |
+| Cloudflare Service Bindings zwischen echten `-staging`-Workern | ❌ Nein | Bindings existieren erst nach echtem Deploy aller drei Worker |
+| Echte Gmail-/Kalender-OAuth-Verbindung | ❌ Nein | braucht das dedizierte Test-Google-Konto + echten OAuth-Flow |
+| Tatsächliches Cron-Verhalten (Cloudflare Scheduled Trigger) | ❌ Nein | der Cron-Trigger selbst existiert erst nach Deploy; lokal nur die aufgerufene Funktion (`runTagescheck`) testbar, nicht der Trigger-Mechanismus |
+| Tatsächliche Netzwerk-Isolation (kann Staging wirklich NICHT auf Produktion zugreifen?) | ⚠️ Nur strukturell/durch Code-Review | belegt durch getrennte Projekt-IDs/Worker-Namen (siehe oben), aber nicht durch einen echten Verbindungsversuch - das lässt sich erst mit zwei echten, parallel existierenden Umgebungen wirklich "beweisen" |
+
+Alles in der linken Spalte mit ✅ ist in dieser Sitzung tatsächlich ausgeführt und grün (siehe Abschlussbericht). Alles mit ❌/⚠️ bleibt offen, bis die echte Staging-Umgebung gemäß Schritt 1–6 eingerichtet ist.

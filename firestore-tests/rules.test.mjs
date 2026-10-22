@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 const hierDir = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(hierDir, '..', 'firestore.rules'), 'utf8');
@@ -52,6 +52,7 @@ await testEnv.clearFirestore();
 await seedUser('admin-1', { role: 'admin' });
 await seedUser('buero-1', { role: 'buero' });
 await seedUser('mitarbeiter-1', { role: 'mitarbeiter' });
+await seedUser('admin-2', { role: 'admin' });
 await seedUser('kunde-1', { role: 'kunde', kundeId: 'kunde-1' });
 await seedUser('kunde-2', { role: 'kunde', kundeId: 'kunde-2' });
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
@@ -59,7 +60,10 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(ctx.firestore(), 'jarvisAktionen', 'akt-1'), { status: 'pending' });
   await setDoc(doc(ctx.firestore(), 'kunden', 'kunde-1'), { firma: 'Test' });
   await setDoc(doc(ctx.firestore(), 'angebote', 'angebot-1'), { kundeId: 'kunde-1', titel: 'Test-Angebot' });
-  await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-1'), { ausgabeId: 'a1', status: 'offen' });
+  await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-1'), {
+    ausgabeId: 'a1', status: 'offen',
+    alteWerte: { betragBrutto: 0 }, neueWerte: { betragBrutto: 100 }, erwarteteVersion: 'v1',
+  });
   await setDoc(doc(ctx.firestore(), 'aufgaben', 'aufgabe-1'), { titel: 'Test-Aufgabe' });
 });
 
@@ -137,15 +141,77 @@ await pruefe('R12: alle drei internen Rollen (admin/büro/mitarbeiter) dürfen d
   }
 });
 
-await pruefe('R13: Rolle "admin" KANN belegVorschlaege lesen und schreiben (Phase 11, Freigabe/Ablehnung von Beleg-Vorschlägen)', async () => {
+await pruefe('R13: Rolle "admin" KANN einen offenen Beleg-Vorschlag per Teil-Update korrekt ablehnen (eigene uid als abgelehntVonUid, keine inhaltlichen Felder geändert)', async () => {
   const admin = testEnv.authenticatedContext('admin-1');
   await assertSucceeds(getDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1')));
-  await assertSucceeds(setDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1'), { ausgabeId: 'a1', status: 'abgelehnt' }));
+  await assertSucceeds(updateDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1'), { status: 'abgelehnt', abgelehntVonUid: 'admin-1' }));
 });
 
-await pruefe('R14: Rolle "mitarbeiter" kann belegVorschlaege NICHT lesen (nur admin/büro, wie "ausgaben" selbst)', async () => {
+await pruefe('R14: Rolle "mitarbeiter" kann belegVorschlaege NICHT lesen UND NICHT schreiben (bewusst admin-only, siehe unten)', async () => {
   const mitarbeiter = testEnv.authenticatedContext('mitarbeiter-1');
   await assertFails(getDoc(doc(mitarbeiter.firestore(), 'belegVorschlaege', 'vorschlag-1')));
+  await assertFails(updateDoc(doc(mitarbeiter.firestore(), 'belegVorschlaege', 'vorschlag-1'), { status: 'abgelehnt', abgelehntVonUid: 'mitarbeiter-1' }));
+});
+
+await pruefe('R14b: Rolle "büro" kann belegVorschlaege NICHT lesen/schreiben - bewusst ADMIN-ONLY, anders als "ausgaben" selbst (JARVIS/KI-Bürokraft-Automation ist im gesamten Rollout auf admin beschränkt)', async () => {
+  const buero = testEnv.authenticatedContext('buero-1');
+  await assertFails(getDoc(doc(buero.firestore(), 'belegVorschlaege', 'vorschlag-1')));
+  await assertFails(updateDoc(doc(buero.firestore(), 'belegVorschlaege', 'vorschlag-1'), { status: 'abgelehnt', abgelehntVonUid: 'buero-1' }));
+});
+
+// =============================================================================
+// Phase 11.1 Punkt 1: Belegfreigaben dürfen NICHT allein durch Client-Code
+// (belegvorschlaege.js) abgesichert sein - die folgenden Angriffe müssen
+// SERVERSEITIG (durch firestore.rules selbst) abgelehnt werden, unabhängig
+// davon, ob sie über die echte App, eine manipulierte Browseranfrage oder
+// eine veränderte JavaScript-Datei kommen. Jeder dieser Tests simuliert
+// genau das: ein direkter Firestore-Schreibzugriff, der belegvorschlaege.js
+// komplett umgeht.
+// =============================================================================
+
+await pruefe('R16: ein admin/büro-Nutzer kann über einen direkten Schreibzugriff NICHT die inhaltlichen Felder eines Vorschlags verändern (z.B. neueWerte nachträglich erhöhen) und ihn dabei "freigeben"', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await assertFails(updateDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1'), {
+    status: 'freigegeben', freigegebenVonUid: 'admin-1', neueWerte: { betragBrutto: 999999 },
+  }));
+});
+
+await pruefe('R17: ein bereits entschiedener Vorschlag (nicht mehr "offen") kann NICHT erneut freigegeben/abgelehnt werden - verhindert eine doppelte Anwendung über einen direkten Schreibzugriff', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-entschieden'), {
+      ausgabeId: 'a1', status: 'freigegeben', alteWerte: { betragBrutto: 0 }, neueWerte: { betragBrutto: 100 }, erwarteteVersion: 'v1',
+    });
+  });
+  await assertFails(updateDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-entschieden'), { status: 'abgelehnt', abgelehntVonUid: 'admin-1' }));
+});
+
+await pruefe('R18: ein zweiter, ebenfalls berechtigter admin kann eine Freigabe NICHT im Namen eines ANDEREN Nutzers eintragen (freigegebenVonUid muss der eigenen uid entsprechen, auch wenn die Rolle an sich passt)', async () => {
+  const admin2 = testEnv.authenticatedContext('admin-2');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-fremd'), {
+      ausgabeId: 'a1', status: 'offen', alteWerte: { betragBrutto: 0 }, neueWerte: { betragBrutto: 100 }, erwarteteVersion: 'v1',
+    });
+  });
+  await assertFails(updateDoc(doc(admin2.firestore(), 'belegVorschlaege', 'vorschlag-fremd'), { status: 'freigegeben', freigegebenVonUid: 'admin-1' }));
+  await assertSucceeds(updateDoc(doc(admin2.firestore(), 'belegVorschlaege', 'vorschlag-fremd'), { status: 'freigegeben', freigegebenVonUid: 'admin-2' }));
+});
+
+await pruefe('R19: aus dem Browser kann NIE ein neuer Beleg-Vorschlag angelegt werden - das darf ausschließlich der KI-Bürokraft-Worker per Service-Account (umgeht Regeln per Definition)', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await assertFails(setDoc(doc(admin.firestore(), 'belegVorschlaege', 'selbst-erfunden'), {
+    ausgabeId: 'a1', status: 'offen', alteWerte: {}, neueWerte: { betragBrutto: 50000 }, erwarteteVersion: 'x',
+  }));
+});
+
+await pruefe('R20: ein Beleg-Vorschlag kann NICHT auf einen willkürlichen Zielstatus gesetzt werden (z.B. direkt zurück auf "offen" oder einen erfundenen Status)', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-status-check'), {
+      ausgabeId: 'a1', status: 'offen', alteWerte: { betragBrutto: 0 }, neueWerte: { betragBrutto: 100 }, erwarteteVersion: 'v1',
+    });
+  });
+  await assertFails(updateDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-status-check'), { status: 'erfundener-status' }));
 });
 
 await pruefe('R15: ein nicht angemeldeter Nutzer kann KEINE einzige der oben genannten Collections lesen', async () => {

@@ -198,7 +198,14 @@ async function analysiereBeleg({ ausgabe, accessToken, projectId, env }) {
         // Der KI-Worker prüft den Origin-Header gegen ALLOWED_ORIGINS (normalerweise
         // nur für Aufrufe aus dem Browser gedacht) - bei einem Worker-zu-Worker-Aufruf
         // gibt es keinen echten Origin, deshalb hier explizit einen erlaubten setzen.
-        Origin: 'https://neuverdrahtet.com',
+        // Phase 11.1 Sicherheitskorrektur: war bisher fest auf die PRODUKTIONS-
+        // Domain verdrahtet - das hätte in Staging (wo ALLOWED_ORIGINS auf die
+        // Staging-Vorschau-Domain zeigt) jeden Beleg-Scan mit 403 "Origin nicht
+        // erlaubt" scheitern lassen, weil "https://neuverdrahtet.com" dort nicht
+        // in der Allowlist steht. AI_WORKER_ORIGIN (neue, optionale Variable, je
+        // Umgebung eigener Wert) macht das umgebungsabhängig konfigurierbar,
+        // fällt ohne sie weiterhin auf die bisherige Produktions-Domain zurück.
+        Origin: env.AI_WORKER_ORIGIN || 'https://neuverdrahtet.com',
       },
       body: JSON.stringify({ action: 'beleg-scan', imageDataUrl, kategorien: AUSGABEN_KATEGORIEN }),
     });

@@ -32,7 +32,7 @@ service cloud.firestore {
     function isSensitiveCollection(collectionId) {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
-        'mahnungen', 'ausgaben', 'belegVorschlaege', 'vorlagen', 'textbausteine', 'kanbanSpalten',
+        'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
@@ -277,6 +277,52 @@ service cloud.firestore {
     // daten bleibt wie JARVIS insgesamt admin-only.
     match /siriGeraeteTokens/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // Beleg-Vorschläge (Phase 11, bulkFixReceipts-Vorschlagsmodus, siehe
+    // cloudflare-worker-ki-buerokraft/worker.js + verwaltung/js/
+    // belegvorschlaege.js). Phase 11.1 Sicherheitskorrektur: lag diese
+    // Collection bisher in isSensitiveCollection, griff also die GENERELLE
+    // admin/büro-Regel unten (beliebiges read/write) - ein manipulierter
+    // Browser-Request oder eine veränderte belegvorschlaege.js hätte damit
+    // z.B. ausgabeId/alteWerte/neueWerte eines Vorschlags nachträglich
+    // verändern, einen bereits entschiedenen Vorschlag erneut "freigeben"
+    // oder sich selbst als Genehmiger eintragen können - die eigentliche
+    // Versions-/Freigabelogik in belegvorschlaege.js ist NUR eine
+    // Client-Konvention, keine Sicherheitsgrenze (siehe "Systemprompts sind
+    // keine Sicherheitsgrenze", Phase 10 Punkt 1 - dasselbe Prinzip gilt für
+    // Client-JavaScript). Diese Regel erzwingt serverseitig (durch Firestore
+    // selbst), dass ein Vorschlag aus dem Browser NUR von offen in einen der
+    // drei Endzustände wechseln kann, alle inhaltlichen Felder dabei
+    // unverändert bleiben, und sich niemand als jemand anderes eintragen kann.
+    //
+    // Bewusst ADMIN-ONLY (nicht admin+büro wie "ausgaben" selbst): JARVIS/
+    // KI-Bürokraft-Automation ist im gesamten bisherigen Rollout konsequent
+    // auf admin beschränkt (siehe jarvisAktionen oben, siriGeraeteTokens,
+    // und der Kommentar zu isSensitiveCollection weiter oben) - eine
+    // Erweiterung auf büro ist eine eigene Geschäftsentscheidung, die (wie
+    // dort beschrieben) explizit hier UND im Worker gemeinsam passieren
+    // muss, nicht implizit dadurch, dass "ausgaben" zufällig admin+büro ist.
+    match /belegVorschlaege/{docId} {
+      allow read: if isAdmin();
+      // Erzeugt wird ein Vorschlag ausschließlich serverseitig durch den
+      // KI-Bürokraft-Worker (Service-Account, umgeht Security Rules per
+      // Definition wie jeder authentifizierte Google-Cloud-Dienstzugriff) -
+      // aus dem Browser (Firebase-Auth-Nutzer) darf NIE einer neu angelegt werden.
+      allow create: if false;
+      allow update: if isAdmin()
+        && resource.data.status == 'offen'
+        && request.resource.data.status in ['freigegeben', 'abgelehnt', 'veraltet']
+        // Inhaltliche Felder (was vorgeschlagen wurde) dürfen eine Freigabe-
+        // Entscheidung nicht nachträglich verändern.
+        && request.resource.data.ausgabeId == resource.data.ausgabeId
+        && request.resource.data.alteWerte == resource.data.alteWerte
+        && request.resource.data.neueWerte == resource.data.neueWerte
+        && request.resource.data.erwarteteVersion == resource.data.erwarteteVersion
+        // Niemand darf eine Freigabe/Ablehnung im Namen eines anderen Nutzers eintragen.
+        && (request.resource.data.status != 'freigegeben' || request.resource.data.freigegebenVonUid == request.auth.uid)
+        && (request.resource.data.status != 'abgelehnt' || request.resource.data.abgelehntVonUid == request.auth.uid);
+      allow delete: if false;
     }
 
     match /{collectionId}/{docId} {
