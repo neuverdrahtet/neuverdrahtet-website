@@ -17,8 +17,9 @@
  * Messaging-Push-Benachrichtigung an einzelne Geräte-Tokens aus. Zusätzlich
  * läuft einmal täglich morgens automatisch ein "Büro-Check" (Cloudflare Cron
  * Trigger, siehe scheduled()): dieselbe Tool-Loop wie der Chat prüft ohne
- * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads, unvollständige
- * Belege (per bulkFixReceipts automatisch per KI ausgelesen und übernommen),
+ * Mitarbeiter-Interaktion Aufgaben/Rechnungen/Termine/Leads, weist auf
+ * unvollständige Belege nur per Aufgabe hin (bulkFixReceipts bleibt dem
+ * interaktiven Chat vorbehalten, siehe Phase 10.1/11),
  * einen Soll-/Ist-Zeitvergleich (kalkulierte Std.-Positionen vs. echte
  * Zeiterfassung) sowie - falls eingerichtet - ungelesene E-Mails/Kalender-
  * termine (Gmail/Google Kalender, direkt in diesem Worker per eigenem
@@ -1561,7 +1562,7 @@ const KI_BUEROKRAFT_TOOLS = [
     method: 'POST',
     path: () => '/expenses/bulk-fix-receipts',
     body: bodyOhneId,
-    description: 'Verarbeitet in einem Aufruf mehrere unvollständige Belege (ohne/mit 0 Euro Betrag) automatisch per KI-Belegerkennung: liest jeden Beleg wirklich aus und übernimmt bei sicher lesbaren Belegen Betrag/Datum/Lieferant sofort (Kategorie nur bei hoher KI-Sicherheit, sonst bleibt sie unverändert). Nicht sicher lösbare Belege werden mit kiAnalyseUnsicher=true markiert (verschwinden dadurch aus dem Kandidatenkreis künftiger Aufrufe) und im Feld needs_manual_review gemeldet - erfinde bei denen nichts, sondern melde sie ehrlich als "manuell zu prüfen". Antwort: { processed, updated, needs_manual_review, remaining_incomplete, has_more }. Bei has_more=true erneut aufrufen, um den restlichen Rückstand abzuarbeiten - dabei die Anzahl Aufrufe pro Gespräch/Lauf sinnvoll begrenzen (z.B. höchstens 6), der Rest folgt beim nächsten Lauf.',
+    description: 'Verarbeitet in einem Aufruf mehrere unvollständige Belege (ohne/mit 0 Euro Betrag) automatisch per KI-Belegerkennung: liest jeden Beleg wirklich aus und legt bei sicher lesbaren Belegen einen VORSCHLAG (alte+neue Werte) in "Beleg-Vorschläge" an - übernimmt NICHTS automatisch in die echten Ausgaben-Daten, das bleibt einer ausdrücklichen Freigabe durch einen Mitarbeiter in Werkora vorbehalten (einzeln oder als Sammelfreigabe). Nicht sicher lösbare Belege werden mit kiAnalyseUnsicher=true markiert (verschwinden dadurch aus dem Kandidatenkreis künftiger Aufrufe) und im Feld needs_manual_review gemeldet - erfinde bei denen nichts, sondern melde sie ehrlich als "manuell zu prüfen". Bereits vorgeschlagene (noch offene) Belege werden nicht doppelt vorgeschlagen. Antwort: { processed, vorschlaege, needs_manual_review, remaining_incomplete, has_more }. Bei has_more=true erneut aufrufen, um den restlichen Rückstand abzuarbeiten - dabei die Anzahl Aufrufe pro Gespräch/Lauf sinnvoll begrenzen (z.B. höchstens 6), der Rest folgt beim nächsten Lauf.',
     input_schema: {
       type: 'object',
       properties: { limit: { type: 'integer', description: 'Wie viele Belege je Aufruf verarbeitet werden (Standard 10, maximal 25).' } },
@@ -1746,7 +1747,7 @@ Du hast über die bereitgestellten Werkzeuge (Tools) LESENDEN und teilweise SCHR
 - Vor dem Anlegen eines neuen Kunden IMMER zuerst mit searchCustomers prüfen, ob er schon existiert (E-Mail/Telefon).
 - Bei reinen Zählfragen ("Wie viele offene Aufgaben haben wir?") das jeweilige Tool nach Möglichkeit mit count=true aufrufen statt die volle Liste zu laden.
 - Rechnungen anlegen, Angebote/Rechnungen versenden oder freigeben sowie jedes Löschen ist über diese API technisch gesperrt (Sicherheitsregeln der Werkora-API) - wenn danach gefragt wird, erkläre freundlich, dass das aktuell nur direkt in Werkora selbst geht, und biete stattdessen die verfügbare Alternative an (z.B. einen Angebots-Entwurf statt einer Rechnung anlegen).
-- Unvollständige Belege/Ausgaben (ohne oder mit 0 Euro Betrag) kannst du eigenständig per bulkFixReceipts automatisch nachlesen und korrigieren lassen - das liest den tatsächlichen Beleginhalt per KI aus, erfindet nichts. Nicht sicher lösbare Belege werden ehrlich als "manuell zu prüfen" gemeldet (needs_manual_review), nie als erledigt ausgegeben. Bei vielen offenen Belegen mehrere bulkFixReceipts-Aufrufe hintereinander nutzen (has_more prüfen), aber sinnvoll begrenzen statt endlos zu wiederholen.
+- Unvollständige Belege/Ausgaben (ohne oder mit 0 Euro Betrag) kannst du eigenständig per bulkFixReceipts automatisch nachlesen lassen - das liest den tatsächlichen Beleginhalt per KI aus und legt bei sicher lesbaren Belegen einen VORSCHLAG an (erfindet nichts), übernimmt aber NICHTS automatisch - die eigentliche Korrektur bleibt einer ausdrücklichen Freigabe durch einen Mitarbeiter in Werkora vorbehalten. Sage dem Mitarbeiter ehrlich, dass die Vorschläge dort geprüft/freigegeben werden müssen. Nicht sicher lösbare Belege werden ehrlich als "manuell zu prüfen" gemeldet (needs_manual_review), nie als erledigt ausgegeben. Bei vielen offenen Belegen mehrere bulkFixReceipts-Aufrufe hintereinander nutzen (has_more prüfen), aber sinnvoll begrenzen statt endlos zu wiederholen.
 - Erfinde niemals Ergebnisse, IDs oder Daten - nutze ausschließlich das, was die Tools tatsächlich zurückgeben. Bei einem Tool-Fehler erkläre ehrlich, was schiefging.
 - Antworte präzise und knapp auf Deutsch. Bei Listen mit vielen Treffern eine sinnvolle, kompakte Zusammenfassung liefern statt jeden Datensatz einzeln auszuschreiben, außer explizit nach Details gefragt wird.
 - Schreibende Aktionen (Kunde/Lead/Aufgabe/Termin/Angebot anlegen oder ändern) nur nach klarem Auftrag ausführen, nicht auf Verdacht.
@@ -1851,7 +1852,7 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         // pruefeWerkzeugGrundsicherheit. Das ist die vom Systemprompt
         // unabhängige serverseitige Grenze, die Phase 10 Punkt 1 verlangt.
         pruefeWerkzeugGrundsicherheit(toolUse.name);
-        if (pruefeWerkzeug) pruefeWerkzeug(toolUse.name, callerRole, schreibaufrufeZaehler);
+        if (pruefeWerkzeug) pruefeWerkzeug(toolUse.name, callerRole, schreibaufrufeZaehler, toolUse.input);
       } catch (err) {
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: `Nicht berechtigt: ${err.message}`, is_error: true });
         debugLog.push({ tool: toolUse.name, input: toolUse.input, error: `Berechtigung verweigert: ${err.message}` });
@@ -2599,7 +2600,12 @@ function pruefeWerkzeugBerechtigung(toolName, callerRole, schreibaufrufeZaehler 
  * die Absicherung ist hier die Werkzeug-Positivliste selbst, nicht eine
  * Nutzerrolle.
  */
-function pruefeTagescheckWerkzeugErlaubt(toolName, _callerRole, schreibaufrufeZaehler = null) {
+/** Normalisiert einen Aufgaben-Titel für den Duplikat-Vergleich (Groß-/Kleinschreibung und mehrfache/führende/folgende Leerzeichen dürfen keine Lücke sein). */
+function normalisiereAufgabenTitel(titel) {
+  return String(titel || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function pruefeTagescheckWerkzeugErlaubt(toolName, _callerRole, schreibaufrufeZaehler = null, toolInput = null) {
   const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
   const istSchreibend = tool && tool.method && tool.method !== 'GET';
   if (!istSchreibend) return;
@@ -2609,6 +2615,21 @@ function pruefeTagescheckWerkzeugErlaubt(toolName, _callerRole, schreibaufrufeZa
     throw err;
   }
   if (schreibaufrufeZaehler) {
+    // Phase 11 Punkt 1 ("doppelte Aufgaben"): verhindert, dass derselbe Titel
+    // (z.B. durch mehrere sehr ähnliche injizierte Leads/E-Mails) innerhalb
+    // EINES Laufs mehrfach als eigene Aufgabe angelegt wird - unabhängig vom
+    // ohnehin bestehenden Gesamtlimit unten ("Aufgabenfluten"). Nur für
+    // createTask relevant (das einzige hier erlaubte Schreibwerkzeug).
+    if (toolName === 'createTask' && toolInput?.title) {
+      if (!schreibaufrufeZaehler.erstellteTaskTitel) schreibaufrufeZaehler.erstellteTaskTitel = new Set();
+      const normalisiert = normalisiereAufgabenTitel(toolInput.title);
+      if (schreibaufrufeZaehler.erstellteTaskTitel.has(normalisiert)) {
+        const err = new Error(`Eine Aufgabe mit dem Titel "${toolInput.title}" wurde in diesem Lauf bereits angelegt - doppelte Aufgabe abgelehnt.`);
+        err.status = 409;
+        throw err;
+      }
+      schreibaufrufeZaehler.erstellteTaskTitel.add(normalisiert);
+    }
     schreibaufrufeZaehler.count = (schreibaufrufeZaehler.count || 0) + 1;
     if (schreibaufrufeZaehler.count > JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF) {
       const err = new Error(`Limit von ${JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF} Schreibaktionen je täglichem Lauf erreicht - verhindert, dass injizierter Inhalt eine Flut an Aufgaben auslöst.`);
@@ -5911,6 +5932,33 @@ async function runTagescheck(env) {
 
   const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
   const googleConfig = buildGoogleConfig(env);
+
+  // Phase 11 Punkt 1 ("Aufgabenfluten"/doppelte Aufgaben): deterministische
+  // Idempotenz-Prüfung VOR jedem Claude-Aufruf - verhindert, dass ein
+  // doppelt ausgelöster Lauf (z.B. ein erneut angestoßener scheduled()-
+  // Handler oder eine Plattform-Retry) denselben Tag ein zweites Mal
+  // komplett durchlaufen lässt und dabei doppelte Aufgaben anlegt,
+  // insbesondere die abschließende Tages-Zusammenfassung. Analog zum
+  // deterministischen Doc-ID-Muster (z.B. "bueroablauf-${checkpoint}-${heute}"
+  // in cloudflare-worker-ki-buerokraft/worker.js), hier als Lese-Vorab-Check
+  // statt deterministischer ID, weil createTask über die externe KI-
+  // Bürokraft-API läuft (ohne eigene ID-Kontrolle hier). Best-effort: ohne
+  // FIREBASE_SERVICE_ACCOUNT_JSON (optional, nur für den Push gedacht) läuft
+  // der Check einfach nicht, blockiert aber auch nichts.
+  if (env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    try {
+      const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      const heutigeAufgaben = await firestoreListDocuments({ serviceAccount, collection: 'aufgaben' });
+      const zusammenfassungsTitel = normalisiereAufgabenTitel(`Tages-Zusammenfassung ${heute}`);
+      if (heutigeAufgaben.some((a) => normalisiereAufgabenTitel(a.titel) === zusammenfassungsTitel)) {
+        console.log(`Täglicher Büro-Check übersprungen: Tages-Zusammenfassung für ${heute} existiert bereits (doppelter Lauf verhindert).`);
+        return;
+      }
+    } catch (err) {
+      console.log('Täglicher Büro-Check: Idempotenz-Vorab-Prüfung fehlgeschlagen (Lauf wird trotzdem fortgesetzt):', err.message);
+    }
+  }
+
   let ergebnis;
   try {
     ergebnis = await callClaudeAssistentChat({
@@ -7103,4 +7151,6 @@ export const __test__ = {
   // Phase 10.1 - Tagescheck-Schreibrechte begrenzen
   pruefeTagescheckWerkzeugErlaubt, JARVIS_TAGESCHECK_ERLAUBTE_SCHREIBWERKZEUGE, JARVIS_TAGESCHECK_MAX_SCHREIBAUFRUFE_PRO_LAUF,
   buildTagescheckPrompt,
+  // Phase 11 - Tagescheck gegen Aufgabenfluten/doppelte Aufgaben absichern
+  normalisiereAufgabenTitel, runTagescheck,
 };

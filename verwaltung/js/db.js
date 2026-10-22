@@ -42,6 +42,7 @@ const STORES = {
   fotos: 'id',
   vorlagen: 'id',
   ausgaben: 'id',
+  belegVorschlaege: 'id',
   aufgaben: 'id',
   dokumente: 'id',
   kategorien: 'id',

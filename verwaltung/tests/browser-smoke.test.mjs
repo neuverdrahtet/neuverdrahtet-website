@@ -106,6 +106,20 @@ await pruefe('B2: das Login-Formular (E-Mail/Passwort) ist nach dem Laden tatsä
   await page.close();
 });
 
+await pruefe('B3 (Mobile Ansichten): Login-Bildschirm läuft bei iPhone-SE-Viewportbreite (375px, siehe Phase 8 Mobile-CSS) ohne horizontales Scrollen/Überlauf', async () => {
+  const page = await browser.newPage({ viewport: { width: 375, height: 667 } });
+  await page.route(/^https?:\/\/.*\.(googleapis|google|firebaseapp|gstatic|firebaseio)\.com.*/, (route) => route.abort());
+  await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#lock-auth-box:not([hidden])', { timeout: 15000 });
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  assert(scrollWidth <= clientWidth + 1, `Seite darf bei 375px Breite nicht horizontal überlaufen (scrollWidth=${scrollWidth}, clientWidth=${clientWidth})`);
+  assert(await page.locator('#auth-submit').isVisible(), 'Anmelden-Button muss auch im Phone-Viewport sichtbar/erreichbar sein');
+  await page.close();
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await browser.close();
 server.close();

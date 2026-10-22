@@ -1,0 +1,4 @@
+{
+  "firestore": { "rules": "open-rules-for-logic-tests.rules" },
+  "emulators": { "firestore": { "port": 8080 }, "ui": { "enabled": false } }
+}

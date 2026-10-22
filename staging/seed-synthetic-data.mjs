@@ -31,6 +31,12 @@
 //      istTestdatensatz:true, bricht das Skript ab - sieht nach einem
 //      Projekt mit echten Daten aus, selbst wenn alle Flags/Freigaben
 //      stimmen (z.B. ein aus Versehen von Produktion geklontes Projekt).
+//   5. (Phase 11) Explizite SPERRLISTE bekannter produktiver Firebase-
+//      Projekt-IDs (PRODUKTIVE_PROJEKT_IDS unten) - wird GANZ ZUERST
+//      geprüft, noch vor jeder anderen Prüfung. Die echte Produktions-ID
+//      wird direkt aus verwaltung/js/firebase-config.js importiert (bleibt
+//      dadurch automatisch aktuell, falls sich der Wert dort je ändert),
+//      plus ein paar offensichtliche Varianten als zusätzliches Sicherheitsnetz.
 //
 // Freigabe-Dokument einmalig anlegen (Danny, NACH Einrichtung des Staging-
 // Projekts, VOR dem ersten Seed-Lauf) - z.B. per kleinem eigenen Skript oder
@@ -49,6 +55,7 @@
 import fs from 'node:fs';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { firebaseConfig } from '../verwaltung/js/firebase-config.js';
 
 const args = process.argv.slice(2);
 const projectArgIndex = args.indexOf('--project');
@@ -59,6 +66,23 @@ if (!projectId || !bestaetigt) {
   console.error('Abgebrochen: --project <projekt-id> UND --confirm-staging sind zwingend erforderlich.');
   console.error('Beispiel: node staging/seed-synthetic-data.mjs --project neuverdrahtet-staging --confirm-staging');
   console.error('Das ist eine bewusste Sicherheitshürde - prüfe die Projekt-ID sorgfältig, bevor du bestätigst.');
+  process.exit(1);
+}
+
+// Prüfung 5 (Phase 11): explizite Sperrliste bekannter produktiver
+// Firebase-Projekt-IDs - läuft VOR jeder anderen Prüfung, braucht keine
+// Dateizugriffe/Netzwerk. firebaseConfig.projectId ist die tatsächliche,
+// im Code hinterlegte Produktions-ID (siehe verwaltung/js/firebase-
+// config.js) - zusätzlich ein paar naheliegende Varianten, falls Danny aus
+// Versehen eine davon als Staging-Projekt-ID eintippt.
+const PRODUKTIVE_PROJEKT_IDS = new Set(
+  [firebaseConfig.projectId, 'neuverdrahtet-verwaltung', 'neuverdrahtet']
+    .filter(Boolean)
+    .map((id) => id.toLowerCase()),
+);
+if (PRODUKTIVE_PROJEKT_IDS.has(projectId.toLowerCase())) {
+  console.error(`ABGEBROCHEN: "${projectId}" steht auf der Sperrliste bekannter PRODUKTIVER Firebase-Projekt-IDs (siehe PRODUKTIVE_PROJEKT_IDS in dieser Datei).`);
+  console.error('Dieses Skript darf NIEMALS gegen ein produktives Projekt laufen, unabhängig davon, ob --confirm-staging gesetzt ist oder ein Freigabe-Dokument existiert.');
   process.exit(1);
 }
 

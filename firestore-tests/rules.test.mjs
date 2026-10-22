@@ -52,10 +52,15 @@ await testEnv.clearFirestore();
 await seedUser('admin-1', { role: 'admin' });
 await seedUser('buero-1', { role: 'buero' });
 await seedUser('mitarbeiter-1', { role: 'mitarbeiter' });
+await seedUser('kunde-1', { role: 'kunde', kundeId: 'kunde-1' });
+await seedUser('kunde-2', { role: 'kunde', kundeId: 'kunde-2' });
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(ctx.firestore(), 'siriGeraeteTokens', 'tok-1'), { label: 'Test' });
   await setDoc(doc(ctx.firestore(), 'jarvisAktionen', 'akt-1'), { status: 'pending' });
   await setDoc(doc(ctx.firestore(), 'kunden', 'kunde-1'), { firma: 'Test' });
+  await setDoc(doc(ctx.firestore(), 'angebote', 'angebot-1'), { kundeId: 'kunde-1', titel: 'Test-Angebot' });
+  await setDoc(doc(ctx.firestore(), 'belegVorschlaege', 'vorschlag-1'), { ausgabeId: 'a1', status: 'offen' });
+  await setDoc(doc(ctx.firestore(), 'aufgaben', 'aufgabe-1'), { titel: 'Test-Aufgabe' });
 });
 
 await pruefe('R1: nicht angemeldeter Nutzer kann siriGeraeteTokens NICHT lesen', async () => {
@@ -99,6 +104,55 @@ await pruefe('R8: ein Nutzer kann sein EIGENES users-Dokument lesen, aber nicht 
   await assertFails(getDoc(doc(buero.firestore(), 'users', 'mitarbeiter-1')));
   const admin = testEnv.authenticatedContext('admin-1');
   await assertSucceeds(getDoc(doc(admin.firestore(), 'users', 'mitarbeiter-1')));
+});
+
+// =============================================================================
+// Phase 11 Punkt 3: erweiterte Rollenprüfung - Kundenportal (strikt auf
+// eigene kundeId beschränkt), gemeinsam genutzte Collections (alle drei
+// internen Rollen), und die neue belegVorschlaege-Collection (Phase 11
+// Punkt 1, bulkFixReceipts-Vorschlagsmodus - admin/büro wie "ausgaben").
+// =============================================================================
+
+await pruefe('R9: Rolle "kunde" kann NUR das eigene Kunden-Dokument lesen, nicht das eines anderen Kunden', async () => {
+  const kunde1 = testEnv.authenticatedContext('kunde-1');
+  await assertSucceeds(getDoc(doc(kunde1.firestore(), 'kunden', 'kunde-1')));
+  await assertFails(getDoc(doc(kunde1.firestore(), 'kunden', 'kunde-2')));
+});
+
+await pruefe('R10: Rolle "kunde" kann ein Angebot lesen, das zur eigenen kundeId gehört, aber keine interne Collection wie "aufgaben"', async () => {
+  const kunde1 = testEnv.authenticatedContext('kunde-1');
+  await assertSucceeds(getDoc(doc(kunde1.firestore(), 'angebote', 'angebot-1')));
+  await assertFails(getDoc(doc(kunde1.firestore(), 'aufgaben', 'aufgabe-1')));
+});
+
+await pruefe('R11: "kunde" hat KEINEN Zugriff über die generelle isSensitiveCollection/isSharedCollection-Regel (nicht Teil von isAnyRole())', async () => {
+  const kunde1 = testEnv.authenticatedContext('kunde-1');
+  await assertFails(getDoc(doc(kunde1.firestore(), 'kunden', 'kunde-1-nicht-vorhanden')));
+  await assertFails(setDoc(doc(kunde1.firestore(), 'angebote', 'angebot-1'), { titel: 'manipuliert' }));
+});
+
+await pruefe('R12: alle drei internen Rollen (admin/büro/mitarbeiter) dürfen die geteilte Collection "aufgaben" lesen', async () => {
+  for (const uid of ['admin-1', 'buero-1', 'mitarbeiter-1']) {
+    await assertSucceeds(getDoc(doc(testEnv.authenticatedContext(uid).firestore(), 'aufgaben', 'aufgabe-1')));
+  }
+});
+
+await pruefe('R13: Rolle "admin" KANN belegVorschlaege lesen und schreiben (Phase 11, Freigabe/Ablehnung von Beleg-Vorschlägen)', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await assertSucceeds(getDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1')));
+  await assertSucceeds(setDoc(doc(admin.firestore(), 'belegVorschlaege', 'vorschlag-1'), { ausgabeId: 'a1', status: 'abgelehnt' }));
+});
+
+await pruefe('R14: Rolle "mitarbeiter" kann belegVorschlaege NICHT lesen (nur admin/büro, wie "ausgaben" selbst)', async () => {
+  const mitarbeiter = testEnv.authenticatedContext('mitarbeiter-1');
+  await assertFails(getDoc(doc(mitarbeiter.firestore(), 'belegVorschlaege', 'vorschlag-1')));
+});
+
+await pruefe('R15: ein nicht angemeldeter Nutzer kann KEINE einzige der oben genannten Collections lesen', async () => {
+  const unauth = testEnv.unauthenticatedContext();
+  await assertFails(getDoc(doc(unauth.firestore(), 'belegVorschlaege', 'vorschlag-1')));
+  await assertFails(getDoc(doc(unauth.firestore(), 'aufgaben', 'aufgabe-1')));
+  await assertFails(getDoc(doc(unauth.firestore(), 'kunden', 'kunde-1')));
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

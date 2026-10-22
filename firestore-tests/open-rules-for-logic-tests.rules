@@ -1,0 +1,18 @@
+// NUR für firestore-tests/belegvorschlaege.test.mjs (npm run test:belegvorschlaege)
+// - NIEMALS gegen ein echtes Firebase-Projekt deployen. Dieser Test prüft
+// die Versionsbindungs-/Transaktionslogik von verwaltung/js/belegvorschlaege.js
+// selbst (Phase 11 Punkt 3 "Versionierung und konkurrierende Freigaben"),
+// nicht die Zugriffsrollen - die echten Rollen/Rechte auf belegVorschlaege/
+// ausgaben/users sind bereits in firestore-tests/rules.test.mjs gegen die
+// ECHTEN firestore.rules abgedeckt. Deshalb hier bewusst offene Regeln, rein
+// damit der Firestore-Client-SDK-Test (vendorte SDK-Kopie, siehe Kommentar
+// in belegvorschlaege.test.mjs) ohne einen zusätzlichen Auth-Emulator laufen
+// kann.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

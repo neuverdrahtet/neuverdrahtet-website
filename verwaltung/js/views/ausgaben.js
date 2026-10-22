@@ -8,6 +8,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import { analyzeBeleg } from '../ai.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as journal from '../journal.js';
+import { freigebenBelegVorschlag, ablehnenBelegVorschlag, freigebenBelegVorschlaegeSammel, BelegVorschlagVeraltetError } from '../belegvorschlaege.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
@@ -59,9 +60,10 @@ const DOKUMENTTYP_LABEL = {
 };
 
 export async function render(container) {
-  let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen] = await Promise.all([
-    getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'),
+  let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen, belegVorschlaege] = await Promise.all([
+    getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'), getAll('belegVorschlaege'),
   ]);
+  let offeneVorschlaege = belegVorschlaege.filter((v) => v.status === 'offen');
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   ausgaben.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -127,9 +129,81 @@ export async function render(container) {
         ${MONATSNAMEN.map((name, i) => `<option value="${String(i + 1).padStart(2, '0')}">${name}</option>`).join('')}
       </select>
     </div>
+    <div id="vorschlaege-host"></div>
     <div id="table-host"></div>
   `;
   const tableHost = container.querySelector('#table-host');
+
+  // --- Beleg-Vorschläge (Phase 11): bulkFixReceipts legt hier nur noch
+  // Vorschläge an (alte+neue Werte), die ein admin/büro-Nutzer einzeln oder
+  // als Sammelfreigabe bestätigen oder ablehnen muss - siehe
+  // belegvorschlaege.js für die versionsgebundene Freigabelogik selbst.
+  const BELEGVORSCHLAG_FELD_LABEL = { betragBrutto: 'Betrag (brutto)', betragNetto: 'Betrag (netto)', steuersatz: 'MwSt.-Satz', datum: 'Datum', lieferant: 'Lieferant', kategorie: 'Kategorie' };
+  function formatVorschlagWert(feld, wert) {
+    if (wert === null || wert === undefined || wert === '') return '–';
+    if (feld === 'betragBrutto' || feld === 'betragNetto') return formatCurrency(wert);
+    if (feld === 'steuersatz') return `${wert}%`;
+    if (feld === 'datum') return formatDate(wert);
+    return escapeHtml(String(wert));
+  }
+  function renderVorschlaege() {
+    const host = container.querySelector('#vorschlaege-host');
+    if (!host) return;
+    if (offeneVorschlaege.length === 0) { host.innerHTML = ''; return; }
+    host.innerHTML = `
+      <div class="card" style="margin-bottom:12px;border:1px solid var(--color-warn,#f0a020)">
+        <h2 style="font-size:14px;margin:0 0 8px">🧾 Beleg-Vorschläge (KI-Belegerkennung, noch nicht übernommen) · ${offeneVorschlaege.length}</h2>
+        <p class="hint">Diese Werte wurden von der KI aus dem Beleg-Foto ausgelesen, aber NICHT automatisch übernommen - bitte je Vorschlag prüfen und freigeben oder ablehnen.</p>
+        <button type="button" class="btn btn-sm btn-primary" id="btn-vorschlaege-alle-freigeben">✓ Alle anzeigen freigeben</button>
+        <table class="data-table" style="margin-top:8px">
+          <thead><tr><th>Beleg</th><th>Feld</th><th>Bisher</th><th>Vorschlag</th><th></th></tr></thead>
+          <tbody>
+            ${offeneVorschlaege.map((v) => Object.keys(v.neueWerte).map((feld, i) => `
+              <tr data-vorschlag-id="${v.id}">
+                ${i === 0 ? `<td rowspan="${Object.keys(v.neueWerte).length}">${escapeHtml(v.ausgabeLieferant || v.ausgabeDatum || v.ausgabeId)}</td>` : ''}
+                <td>${BELEGVORSCHLAG_FELD_LABEL[feld] || escapeHtml(feld)}</td>
+                <td>${formatVorschlagWert(feld, v.alteWerte?.[feld])}</td>
+                <td><strong>${formatVorschlagWert(feld, v.neueWerte[feld])}</strong></td>
+                ${i === 0 ? `<td rowspan="${Object.keys(v.neueWerte).length}">
+                  <button type="button" class="btn btn-sm btn-primary btn-vorschlag-freigeben" data-id="${v.id}">✓ Freigeben</button>
+                  <button type="button" class="btn btn-sm btn-danger btn-vorschlag-ablehnen" data-id="${v.id}">✗ Ablehnen</button>
+                </td>` : ''}
+              </tr>`).join('')).join('')}
+          </tbody>
+        </table>
+      </div>`;
+
+    host.querySelectorAll('.btn-vorschlag-freigeben').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        const { auth } = await import('../firebase.js');
+        await freigebenBelegVorschlag(btn.dataset.id, { freigegebenVonUid: auth.currentUser?.uid });
+        toast('Beleg-Vorschlag freigegeben, Ausgabe aktualisiert.', 'success');
+      } catch (err) {
+        toast(err instanceof BelegVorschlagVeraltetError ? err.message : `Freigabe fehlgeschlagen: ${err.message}`, 'danger');
+      }
+      render(container);
+    }));
+    host.querySelectorAll('.btn-vorschlag-ablehnen').forEach((btn) => btn.addEventListener('click', async () => {
+      try {
+        const { auth } = await import('../firebase.js');
+        await ablehnenBelegVorschlag(btn.dataset.id, { abgelehntVonUid: auth.currentUser?.uid });
+        toast('Beleg-Vorschlag abgelehnt.', 'success');
+      } catch (err) {
+        toast(`Ablehnen fehlgeschlagen: ${err.message}`, 'danger');
+      }
+      render(container);
+    }));
+    const alleBtn = host.querySelector('#btn-vorschlaege-alle-freigeben');
+    if (alleBtn) alleBtn.addEventListener('click', async () => {
+      const { auth } = await import('../firebase.js');
+      const ergebnisse = await freigebenBelegVorschlaegeSammel(offeneVorschlaege.map((v) => v.id), { freigegebenVonUid: auth.currentUser?.uid });
+      const erfolge = ergebnisse.filter((e) => e.erfolg).length;
+      const fehlgeschlagen = ergebnisse.length - erfolge;
+      toast(fehlgeschlagen === 0 ? `${erfolge} Beleg-Vorschläge freigegeben.` : `${erfolge} freigegeben, ${fehlgeschlagen} übersprungen (veraltet/fehlgeschlagen) - bitte einzeln prüfen.`, fehlgeschlagen === 0 ? 'success' : 'danger');
+      render(container);
+    });
+  }
+  renderVorschlaege();
 
   function applyFilter() {
     const q = container.querySelector('#search').value.trim().toLowerCase();

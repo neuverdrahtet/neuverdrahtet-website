@@ -421,7 +421,14 @@ function fromFirestoreFields(fields) {
 
 function docToPlain(doc) {
   const id = (doc.name || '').split('/').pop();
-  return { id, ...fromFirestoreFields(doc.fields) };
+  // _firestoreUpdateTime: das Server-Zeitstempel-Feld aus der Firestore-REST-
+  // Antwort (nicht Teil der eigentlichen Felddaten) - wird für die
+  // versionsgebundene Belegvorschlags-Freigabe (Phase 11, siehe
+  // bulk-fix-receipts/belegvorschlaege) gebraucht, um zu erkennen, ob sich
+  // eine Ausgabe seit dem Erzeugen eines Vorschlags verändert hat. Mit
+  // führendem Unterstrich benannt, damit es nicht mit einem echten
+  // Werkora-Feld kollidiert.
+  return { id, _firestoreUpdateTime: doc.updateTime || null, ...fromFirestoreFields(doc.fields) };
 }
 
 function firestoreBaseUrl(projectId, collection) {
@@ -2921,14 +2928,24 @@ export default {
           return okResponse({ current: expenseToApi(ausgabe), detected: ergebnis.detected });
         }
 
-        // --- Mehrere 0-Euro-Belege in EINEM Aufruf abarbeiten (statt einzeln je Beleg
-        // analyze-receipt + updateExpense aufzurufen) - bei hunderten fehlerhaft
-        // importierten Belegen lässt sich das sonst in einer einzelnen ChatGPT-Antwort
-        // technisch nicht zuverlässig zu Ende bringen. Läuft serverseitig in einer
-        // Schleife über bis zu "limit" unvollständige Ausgaben, wendet bei lesbaren
-        // Belegen die erkannten Werte SOFORT an (Kategorie nur bei kategorieSicher=true,
-        // sonst bleibt sie unverändert) und meldet unsichere/nicht lesbare Fälle separat
-        // zur manuellen Prüfung zurück, statt sie zu raten.
+        // --- Mehrere 0-Euro-Belege in EINEM Aufruf prüfen (statt einzeln je Beleg
+        // analyze-receipt aufzurufen) - bei hunderten fehlerhaft importierten Belegen
+        // lässt sich das sonst in einer einzelnen ChatGPT-Antwort technisch nicht
+        // zuverlässig zu Ende bringen. Läuft serverseitig in einer Schleife über bis
+        // zu "limit" unvollständige Ausgaben.
+        //
+        // Phase 11 Sicherheitskorrektur (Vorgabe Punkt 1): wendet erkannte Werte NICHT
+        // mehr selbst auf "ausgaben" an (das war eine unbeaufsichtigte finanzielle
+        // Änderung ohne jede menschliche Prüfung) - legt statt dessen für jeden sicher
+        // lesbaren Beleg einen VORSCHLAG in der neuen Collection "belegVorschlaege" an
+        // (alte UND neue Werte, versionsgebunden über _firestoreUpdateTime der Ausgabe
+        // zum Zeitpunkt des Vorschlags). Freigabe/Ablehnung geschieht ausschließlich
+        // über die Werkora-Oberfläche (verwaltung/js/belegvorschlaege.js,
+        // JARVIS-Zentrale "Beleg-Vorschläge") durch einen angemeldeten admin/büro-
+        // Nutzer, einzeln oder als Sammelfreigabe - NIEMALS automatisch durch diese
+        // API. Nicht sicher lösbare Belege werden wie bisher direkt als
+        // kiAnalyseUnsicher markiert (das ist kein finanzieller Wert, nur ein interner
+        // Status, der verhindert, dass derselbe Beleg jeden Lauf erneut blockiert).
         if (teile[1] === 'bulk-fix-receipts' && request.method === 'POST') {
           let body; try { body = await request.json(); } catch { body = {}; }
           const limit = Math.min(Math.max(Number(body.limit) || 10, 1), 25);
@@ -2938,9 +2955,15 @@ export default {
           // "hängende" Beleg bei jedem weiteren Aufruf erneut den ganzen Batch blockieren,
           // ohne dass die dahinterliegenden Belege je an die Reihe kommen.
           ausgaben = ausgaben.filter((a) => !Number(a.betragBrutto) && a.beleg?.url && !a.kiAnalyseUnsicher).sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+          // Für bereits offene Vorschläge nicht erneut einen zweiten Vorschlag für
+          // dieselbe Ausgabe anlegen (Dedup) - sonst würde ein wiederholter Lauf (z.B.
+          // weil has_more weiterhin true ist) denselben Beleg mehrfach vorschlagen.
+          const bestehendeVorschlaege = await firestoreList({ accessToken, projectId, collection: 'belegVorschlaege' });
+          const bereitsVorgeschlagen = new Set(bestehendeVorschlaege.filter((v) => v.status === 'offen').map((v) => v.ausgabeId));
+          ausgaben = ausgaben.filter((a) => !bereitsVorgeschlagen.has(a.id));
           const restAnzahlVorher = ausgaben.length;
           const batch = ausgaben.slice(0, limit);
-          const aktualisiert = [];
+          const vorschlaege = [];
           const manuellePruefung = [];
           for (const ausgabe of batch) {
             const ergebnis = await analysiereBeleg({ ausgabe, accessToken, projectId, env });
@@ -2951,29 +2974,43 @@ export default {
             if (!ergebnis.ok) { await alsUnsicherMarkieren(`${ergebnis.code}: ${ergebnis.message}`); continue; }
             const d = ergebnis.detected;
             if (!d.readable || !d.amount_gross) { await alsUnsicherMarkieren('Beleg nicht sicher lesbar oder kein Betrag erkannt.'); continue; }
-            const changes = {
+            const neueWerte = {
               betragBrutto: d.amount_gross,
               betragNetto: d.amount_net ?? Math.round((d.amount_gross / (1 + (d.vat_rate ?? 19) / 100)) * 100) / 100,
               steuersatz: d.vat_rate ?? 19,
             };
-            if (d.date) changes.datum = d.date;
-            if (d.supplier) changes.lieferant = d.supplier;
+            if (d.date) neueWerte.datum = d.date;
+            if (d.supplier) neueWerte.lieferant = d.supplier;
             // Kategorie nur übernehmen, wenn die KI sich wirklich sicher war - sonst
             // bleibt die bisherige (meist "Sonstiges") stehen, damit keine falsche
             // Kategorie unbemerkt durchrutscht.
-            if (d.category_confident && d.category) changes.kategorie = d.category;
-            const updated = { ...ausgabe, ...changes };
-            await firestoreUpdate({ accessToken, projectId, collection: 'ausgaben', id: ausgabe.id, data: changes });
-            await logAction(ctx, { action: 'expenses.bulk_fix_receipt', entityType: 'ausgaben', entityId: ausgabe.id, oldValue: ausgabe, newValue: changes, status: 'success' });
-            aktualisiert.push(expenseToApi(updated));
+            if (d.category_confident && d.category) neueWerte.kategorie = d.category;
+            const alteWerte = {};
+            for (const feld of Object.keys(neueWerte)) alteWerte[feld] = ausgabe[feld] ?? null;
+            const vorschlagId = crypto.randomUUID();
+            const vorschlag = {
+              ausgabeId: ausgabe.id,
+              ausgabeDatum: ausgabe.datum || '',
+              ausgabeLieferant: ausgabe.lieferant || '',
+              alteWerte,
+              neueWerte,
+              erwarteteVersion: ausgabe._firestoreUpdateTime,
+              status: 'offen',
+              quelle: 'bulkFixReceipts',
+              erstelltAm: new Date().toISOString(),
+            };
+            await firestoreCreate({ accessToken, projectId, collection: 'belegVorschlaege', id: vorschlagId, data: vorschlag });
+            await logAction(ctx, { action: 'expenses.bulk_fix_receipt_vorschlag', entityType: 'ausgaben', entityId: ausgabe.id, oldValue: alteWerte, newValue: neueWerte, status: 'success' });
+            vorschlaege.push({ id: vorschlagId, ...vorschlag });
           }
           const restAnzahlNachher = restAnzahlVorher - batch.length;
           return okResponse({
             processed: batch.length,
-            updated: aktualisiert,
+            vorschlaege,
             needs_manual_review: manuellePruefung,
             remaining_incomplete: restAnzahlNachher,
             has_more: restAnzahlNachher > 0,
+            hinweis: 'Diese Vorschläge wurden NICHT automatisch übernommen - Freigabe/Ablehnung erfolgt einzeln oder als Sammelfreigabe in Werkora (Beleg-Vorschläge).',
           });
         }
         if (request.method === 'GET' && !teile[1]) {

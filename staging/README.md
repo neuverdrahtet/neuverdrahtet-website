@@ -1,4 +1,4 @@
-# JARVIS Phase 10 – Isolierte Staging-Umgebung (Konfigurationsvorlage)
+# JARVIS Phase 10/11 – Isolierte Staging-Umgebung (Konfigurationsvorlage)
 
 **Status: Vorlage/Anleitung. Es wurde noch KEIN echtes Cloudflare-, Firebase-, Google- oder Anthropic-Konto/Ressource angelegt oder verändert.** Diese Entwicklungsumgebung hat keinen Zugriff auf solche Konten (kein Cloudflare-/Google-/Firebase-Login, kein Anthropic-API-Schlüssel für den JARVIS-Worker). Jeder der folgenden Schritte, der eine echte Ressource erzeugen oder verändern würde, ist ausdrücklich als **"⏸ Wartet auf Danny"** gekennzeichnet.
 
@@ -15,6 +15,8 @@ Staging bekommt **für jede einzelne Komponente eine eigene, von der Produktion 
 | Gmail/Google Kalender | echtes Geschäftskonto | **dediziertes Test-/Dummy-Google-Konto** |
 | Anthropic API | Produktions-API-Key | **eigener** API-Key mit niedrigem Budget-Limit |
 
+**Keine produktiven Daten in Staging, in keiner Richtung:** niemals echte Kunden, Belege, Kalendereinträge oder E-Mails in die Staging-Umgebung importieren/kopieren (auch nicht "nur zum Testen") – ausschließlich die synthetischen Testdaten aus Schritt 5 verwenden. Das dedizierte Test-Google-Konto (Schritt 3) darf niemals mit dem echten Geschäfts-Gmail/-Kalender verknüpft oder synchronisiert werden.
+
 **Warum das "keine Schreibzugriffe auf produktive Systeme" sicherstellt:** Ein Firebase-Service-Account ist kryptografisch an genau EIN Firebase-Projekt gebunden – der Staging-Service-Account kann technisch nicht gegen die Produktions-Firestore-API authentifizieren, selbst bei einem Programmierfehler. Ein Cloudflare Worker mit einem anderen `name` ist ein komplett eigenständiger Worker mit eigenen Bindings/Secrets – es gibt keine Konfiguration, die "versehentlich" beide verbindet. Dieselbe `firestore.rules`-Datei wird für beide Projekte verwendet (identische Regeln), aber jeweils nur gegen die zugehörige Projekt-Datenbank deployt.
 
 ---
@@ -26,7 +28,22 @@ Staging bekommt **für jede einzelne Komponente eine eigene, von der Produktion 
 3. Firestore (Native-Modus) aktivieren.
 4. Die bestehenden `firestore.rules` UND `storage.rules` aus diesem Repo gegen das Staging-Projekt deployen: `firebase deploy --only firestore:rules,storage --project neuverdrahtet-staging` (ohne `storage.rules` würde ein frisches Firebase-Projekt Storage-Zugriffe aus dem Browser standardmäßig komplett sperren statt wie in Produktion zu regeln - sicher, aber die echten Integrationstests in Abschnitt "Echte Integrationstests" würden daran scheitern).
 5. Einen Service-Account-Schlüssel für dieses Projekt erzeugen (Projekteinstellungen → Dienstkonten → Neuen privaten Schlüssel generieren) – wird später als `FIREBASE_SERVICE_ACCOUNT_JSON`-Secret gebraucht.
+   **Phase 11 – tatsächlich benötigte Rechte (geprüft, siehe unten "Benötigte Rechte"):** der von Firebase automatisch erzeugte Standard-Service-Account ("firebase-adminsdk-...") bekommt per Voreinstellung die Rolle **Editor** auf dem gesamten GCP-Projekt – deutlich mehr, als dieser Code tatsächlich braucht. Für Staging empfohlen (muss nicht, kann aber in der [Google Cloud Console](https://console.cloud.google.com) → IAM gemacht werden): die Editor-Rolle entfernen und statt dessen nur die drei unten gelisteten, konkret benötigten Rollen zuweisen.
 6. Einen eigenen Web-API-Key für `verwaltung/js/firebase-config.js` (nur für eine separate Staging-Instanz der Verwaltungs-Software, falls diese ebenfalls separat gehostet werden soll – optional, siehe Hinweis unten).
+
+### Benötigte Rechte (Phase 11, tatsächlich im Code geprüft – nicht angenommen)
+
+Jeder Aufruf, der eine Google-Zugriffsberechtigung (OAuth-Scope) anfordert, wurde im gesamten Code der drei Cloudflare-Worker nachgeschlagen (`getGoogleAccessToken(...)`-Aufrufe). Der Firebase-Service-Account braucht dafür in der Google Cloud Console (IAM → den Service-Account auswählen → Rolle hinzufügen) **ausschließlich** diese drei vordefinierten Rollen – keine einzige Stelle im Code braucht mehr:
+
+| Scope im Code | Wofür | Benötigte IAM-Rolle |
+|---|---|---|
+| `datastore` | Firestore lesen/schreiben (alle drei Worker) | `roles/datastore.user` (Cloud Datastore User) |
+| `firebase.messaging` | Push-Benachrichtigungen (Haupt-Worker, KI-Bürokraft) | `roles/firebasecloudmessaging.admin` (Firebase Cloud Messaging API Admin) |
+| `devstorage.read_write` | Datei-Upload (`/kunde-upload`, Haupt-Worker) | `roles/storage.objectAdmin` (idealerweise nur auf den konkreten Storage-Bucket beschränkt, nicht projektweit) |
+
+**Nicht benötigt, obwohl man es vermuten könnte:** keine Admin-SDK-Rolle für Authentication (`roles/firebaseauth.admin`) – die ID-Token-Prüfung läuft über eine eigene, manuelle JWKS-Signaturprüfung (`verifyFirebaseIdToken` in `cloudflare-worker/worker.js`), nicht über die Firebase Admin SDK. Keine Rolle für Cloud Functions, Compute, IAM-Verwaltung oder sonstige GCP-Dienste.
+
+**Cloudflare Service Bindings (GOOGLE_BUERO/KI_BUEROKRAFT) haben KEINE eigene Rechteverwaltung:** ein Service Binding gewährt dem aufrufenden Worker vollen Zugriff auf JEDE Route des gebundenen Ziel-Workers (es gibt keine Möglichkeit, ein Binding auf bestimmte Pfade/Methoden einzuschränken). Die Isolation zwischen Produktion und Staging kommt deshalb ausschließlich daher, dass Staging auf komplett eigenständige, separat deployte Ziel-Worker (`-staging`-Suffix) bindet – nicht aus einer Einschränkung des Bindings selbst. Das wurde in Phase 10.1 bereits strukturell geprüft (eigener `name` je Worker, keine Vererbung von Produktions-Bindings in `[env.staging]`) und bleibt unverändert gültig.
 
 ## Schritt 2: Cloudflare-Staging-Worker ⏸ Wartet auf Danny
 
@@ -53,12 +70,15 @@ Die Vorlage ist bereits in den drei betroffenen `wrangler.toml`-Dateien als `[en
 
 ## Schritt 5: Synthetische Testdaten
 
-Das Skript `staging/seed-synthetic-data.mjs` (in diesem Repo, siehe Datei) legt ausschließlich klar als Test gekennzeichnete, fiktive Kunden/Anlagen/Angebote/Rechnungen an. Es tut nichts von selbst und verlangt seit Phase 10.1 VIER unabhängige Bestätigungen, bevor irgendetwas geschrieben wird (Details im Kopfkommentar der Datei) – ein Projektname mit „staging" im Namen allein reicht nicht als Sicherheitsnachweis:
+Das Skript `staging/seed-synthetic-data.mjs` (in diesem Repo, siehe Datei) legt ausschließlich klar als Test gekennzeichnete, fiktive Kunden/Anlagen/Angebote/Rechnungen an. Es tut nichts von selbst und verlangt seit Phase 10.1/11 FÜNF unabhängige Bestätigungen, bevor irgendetwas geschrieben wird (Details im Kopfkommentar der Datei) – ein Projektname mit „staging" im Namen allein reicht nicht als Sicherheitsnachweis:
 
 1. `--project <id>` + `--confirm-staging` als CLI-Flags.
-2. Die Projekt-ID in der tatsächlichen `GOOGLE_APPLICATION_CREDENTIALS`-Datei muss exakt mit `--project` übereinstimmen (verhindert eine Verwechslung der Credentials selbst).
-3. **Neu, einmalig von Danny im Zielprojekt anzulegen:** das Dokument `_stagingFreigabe/freigabe` muss existieren, z.B. direkt in der Firebase Console unter Firestore, mit den Feldern `{ freigegeben: true, projektId: "neuverdrahtet-staging", freigegebenAm: "<ISO-Datum>", freigegebenVon: "Danny Berger" }`. Das verlagert die eigentliche „ist das wirklich Staging"-Entscheidung in eine bewusste, im Zielsystem selbst hinterlegte Bestätigung statt in einen Kommandozeilen-Text.
-4. Automatische Heuristik: existieren in `kunden` bereits Dokumente ohne `istTestdatensatz:true`, bricht das Skript ab (sieht nach echten Daten aus, z.B. ein versehentlich geklontes Projekt).
+2. **(Phase 11, läuft als Erstes)** Sperrliste bekannter PRODUKTIVER Firebase-Projekt-IDs (`PRODUKTIVE_PROJEKT_IDS` im Skript, inkl. der echten, aus `firebase-config.js` importierten Produktions-ID) – ein Treffer bricht sofort ab, unabhängig von allen anderen Flags/Freigaben.
+3. Die Projekt-ID in der tatsächlichen `GOOGLE_APPLICATION_CREDENTIALS`-Datei muss exakt mit `--project` übereinstimmen (verhindert eine Verwechslung der Credentials selbst).
+4. **Einmalig von Danny im Zielprojekt anzulegen:** das Dokument `_stagingFreigabe/freigabe` muss existieren, z.B. direkt in der Firebase Console unter Firestore, mit den Feldern `{ freigegeben: true, projektId: "neuverdrahtet-staging", freigegebenAm: "<ISO-Datum>", freigegebenVon: "Danny Berger" }`. Das verlagert die eigentliche „ist das wirklich Staging"-Entscheidung in eine bewusste, im Zielsystem selbst hinterlegte Bestätigung statt in einen Kommandozeilen-Text.
+5. Automatische Heuristik: existieren in `kunden` bereits Dokumente ohne `istTestdatensatz:true`, bricht das Skript ab (sieht nach echten Daten aus, z.B. ein versehentlich geklontes Projekt).
+
+Getestet gegen den tatsächlichen Skriptprozess (nicht nur gegen die Logik isoliert): `staging/tests/test_seed_guards.mjs` (`node staging/tests/test_seed_guards.mjs`).
 
 Ausführung (NACH Anlegen des Freigabe-Dokuments aus Punkt 3):
 
