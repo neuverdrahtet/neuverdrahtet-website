@@ -31,7 +31,7 @@ service cloud.firestore {
     // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
     function isSensitiveCollection(collectionId) {
       return collectionId in [
-        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen',
+        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen', 'gutschriften',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',

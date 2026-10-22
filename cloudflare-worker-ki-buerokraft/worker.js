@@ -80,12 +80,17 @@ const AUFGABEN_STATUS_GESCHLOSSEN = ['erledigt'];
 const KUNDEN_STATUS_GESCHLOSSEN = ['verloren', 'kunde'];
 const RECHNUNG_OFFEN_STATUS = ['offen', 'teilbezahlt'];
 // Tatsächlich noch offener Betrag - berücksichtigt eine bereits erfasste
-// Teilzahlung (teilzahlungBetrag), analog zu offenerRestbetrag() in
+// Teilzahlung (teilzahlungBetrag) UND gegen diese Rechnung verrechnete
+// Gutschriften (verrechneteGutschriften), analog zu offenerRestbetrag() in
 // verwaltung/js/utils.js. Ohne das würde z.B. das Dashboard-Tool bei einer
-// teilbezahlten Rechnung weiterhin den vollen statt des tatsächlichen Rests
-// als offenen Betrag melden.
+// teilbezahlten oder per Gutschrift bereits teilweise ausgeglichenen
+// Rechnung weiterhin den vollen statt des tatsächlichen Rests als offenen
+// Betrag melden - und JARVIS (naechsteFaelligeMahnstufe, siehe
+// cloudflare-worker/worker.js) würde für eine bereits per Gutschrift
+// ausgeglichene Rechnung weiterhin eine Mahnung vorschlagen.
 function offenerRestbetrag(r) {
-  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0));
+  const gutschriften = (r?.verrechneteGutschriften || []).reduce((s, g) => s + (g.betrag || 0), 0);
+  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0) - gutschriften);
 }
 // 1:1 aus verwaltung/js/views/mahnungen.js portiert (STUFE_TEXT) - muss mit
 // den dort in Werkora angezeigten/druckbaren Mahntexten übereinstimmen.

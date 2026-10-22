@@ -25,7 +25,15 @@ export function farbeAusText(text, palette) {
 // Buchhaltung, Kundenakte, Mahnungen/Mahnschreiben) nicht versehentlich
 // weiterhin den vollen Rechnungsbetrag statt des tatsächlichen Rests zeigen.
 export function offenerRestbetrag(r) {
-  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0));
+  const gutschriften = (r?.verrechneteGutschriften || []).reduce((s, g) => s + (g.betrag || 0), 0);
+  return Math.max(0, (r?.brutto || 0) - (r?.teilzahlungBetrag || 0) - gutschriften);
+}
+
+/** Tatsächlich noch verfügbarer (nicht bereits gegen Rechnungen verrechneter)
+ * Betrag einer Gutschrift - analog zu offenerRestbetrag() bei Rechnungen. */
+export function offenerGutschriftBetrag(g) {
+  const verwendet = (g?.verwendungen || []).reduce((s, v) => s + (v.betrag || 0), 0);
+  return Math.max(0, (g?.brutto || 0) - verwendet);
 }
 
 export function formatCurrency(n) {

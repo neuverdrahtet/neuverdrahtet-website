@@ -17,7 +17,7 @@ if (FIREBASE_ENABLED) {
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
-const DB_VERSION = 28;
+const DB_VERSION = 29;
 
 // 'einstellungen' ist keine normale Collection, sondern ein einzelnes Dokument
 // (einstellungen/global) mit allen Settings als Feldern – siehe die Sonderfälle
@@ -36,6 +36,7 @@ const STORES = {
   angebote: 'id',
   auftragsbestaetigungen: 'id',
   rechnungen: 'id',
+  gutschriften: 'id',
   mahnungen: 'id',
   einstellungen: 'key',
   zeiterfassung: 'id',
@@ -339,7 +340,7 @@ export async function openDB() {
 // Termine, E-Mails oder Verwendungen bleiben normale Hard-Deletes.
 export const TRASH_STORES = [
   'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
-  'katalog', 'angebote', 'rechnungen', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen', 'lieferanten',
+  'katalog', 'angebote', 'rechnungen', 'gutschriften', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen', 'lieferanten',
   'subunternehmer',
 ];
 export function isTrashStore(storeName) {
@@ -510,12 +511,15 @@ const DEFAULT_SETTINGS = {
   angebotPrefix: 'AN-',
   auftragsbestaetigungPrefix: 'AB-',
   rechnungPrefix: 'RE-',
+  gutschriftPrefix: 'GS-',
   angebotNummerDatum: '',
   angebotNummerZaehler: 0,
   auftragsbestaetigungNummerDatum: '',
   auftragsbestaetigungNummerZaehler: 0,
   rechnungNummerDatum: '',
   rechnungNummerZaehler: 0,
+  gutschriftNummerDatum: '',
+  gutschriftNummerZaehler: 0,
   kundeNummerDatum: '',
   kundeNummerZaehler: 0,
   zahlungszielTage: 14,
@@ -570,6 +574,7 @@ const DEFAULT_SETTINGS = {
   kontoAnlagevermoegenId: 'konto-0400',
   kontoGwgId: 'konto-0480',
   kontoAbschreibungenId: 'konto-6220',
+  kontoKundenguthabenId: 'konto-1790',
   ustvaZeitraum: 'monatlich',
   bankImportSpalten: {},
   aiWorkerUrl: '',
@@ -2324,6 +2329,7 @@ export const DEFAULT_KONTEN = [
   { id: 'konto-1571', nummer: '1571', name: 'Abziehbare Vorsteuer 7 %', klasse: 'aktiv' },
   { id: 'konto-1576', nummer: '1576', name: 'Abziehbare Vorsteuer 19 %', klasse: 'aktiv' },
   { id: 'konto-1600', nummer: '1600', name: 'Verbindlichkeiten aus Lieferungen und Leistungen', klasse: 'passiv' },
+  { id: 'konto-1790', nummer: '1790', name: 'Verbindlichkeiten aus Kundengutschriften', klasse: 'passiv' },
   { id: 'konto-1771', nummer: '1771', name: 'Umsatzsteuer 7 %', klasse: 'passiv' },
   { id: 'konto-1776', nummer: '1776', name: 'Umsatzsteuer 19 %', klasse: 'passiv' },
   { id: 'konto-1800', nummer: '1800', name: 'Privatentnahmen allgemein', klasse: 'passiv' },
@@ -2398,6 +2404,7 @@ export const ROUTE_ROLLEN = {
   angebote: ['admin', 'buero'],
   auftragsbestaetigung: ['admin', 'buero'],
   rechnungen: ['admin', 'buero'],
+  gutschriften: ['admin', 'buero'],
   briefe: ['admin', 'buero'],
   mahnungen: ['admin', 'buero'],
   ausgaben: ['admin', 'buero'],

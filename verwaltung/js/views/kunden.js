@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, resolveMarkeSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText, offenerRestbetrag } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText, offenerRestbetrag, offenerGutschriftBetrag } from '../utils.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
@@ -210,9 +210,9 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container, route) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben, emails] = await Promise.all([
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben, emails, gutschriften] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
-    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'), getAll('emails'),
+    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'), getAll('emails'), getAll('gutschriften'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -940,6 +940,8 @@ export async function render(container, route) {
     const heute = todayISO();
     const umsatz = kRechnungen.filter((r) => r.status !== 'storniert').reduce((s, r) => s + (r.brutto || 0), 0);
     const offenerBetrag = kRechnungen.filter((r) => r.status === 'offen' || r.status === 'teilbezahlt').reduce((s, r) => s + offenerRestbetrag(r), 0);
+    const kGutschriften = gutschriften.filter((g) => g.kundeId === kunde.id).sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+    const guthaben = kGutschriften.filter((g) => g.status !== 'storniert').reduce((s, g) => s + offenerGutschriftBetrag(g), 0);
     const offen = kProjekte.filter((p) => !spaltenById[p.status]?.geschlossen).length;
     const kAusgaben = ausgaben
       .filter((a) => a.kundeId === kunde.id || projektIds.has(a.projektId))
@@ -983,6 +985,7 @@ export async function render(container, route) {
           <div class="kpi-card"><div class="kpi-value">${formatCurrency(umsatz)}</div><div class="kpi-label">Umsatz (alle Rechnungen)</div></div>
           <div class="kpi-card"><div class="kpi-value">${formatCurrency(kAusgabenSumme)}</div><div class="kpi-label">Ausgaben</div></div>
           <div class="kpi-card ${offenerBetrag > 0 ? 'kpi-warn' : ''}"><div class="kpi-value">${formatCurrency(offenerBetrag)}</div><div class="kpi-label">Offener Betrag</div></div>
+          ${guthaben > 0 ? `<div class="kpi-card kpi-success"><div class="kpi-value">${formatCurrency(guthaben)}</div><div class="kpi-label">Guthaben (Gutschriften)</div></div>` : ''}
         </div>
         <div class="tabs akte-mobile-tabs">
           <button type="button" class="tab-item active" data-akte-tab="details">Details</button>
@@ -1089,6 +1092,26 @@ export async function render(container, route) {
                 </table>
               `}
               <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>
+            </div>
+
+            <div class="akte-bereich" data-tab="details">
+              <h2 style="font-size:14px;margin:0 0 8px">Gutschriften${kGutschriften.length ? ` (${kGutschriften.length}${guthaben > 0 ? `, Guthaben ${formatCurrency(guthaben)}` : ''})` : ''}</h2>
+              ${kGutschriften.length === 0 ? '<p class="text-mute">Noch keine Gutschriften.</p>' : `
+                <table class="data-table">
+                  <thead><tr><th>Datum</th><th>Nr.</th><th>Status</th><th>Grund</th><th class="text-right">Brutto</th><th class="text-right">Noch offen</th></tr></thead>
+                  <tbody>${kGutschriften.map((g) => `
+                    <tr class="akte-row-link" data-href="#/gutschriften/${g.id}">
+                      <td>${formatDate(g.datum)}</td>
+                      <td>${escapeHtml(g.nummer)}</td>
+                      <td><span class="badge ${g.status === 'eingeloest' ? 'badge-success' : g.status === 'storniert' ? 'badge-danger' : 'badge-warn'}">${g.status === 'eingeloest' ? 'Eingelöst' : g.status === 'storniert' ? 'Storniert' : 'Offen'}</span></td>
+                      <td>${escapeHtml(g.betreff || '')}</td>
+                      <td class="text-right">${formatCurrency(g.brutto)}</td>
+                      <td class="text-right">${g.status === 'storniert' ? '–' : formatCurrency(offenerGutschriftBetrag(g))}</td>
+                    </tr>
+                  `).join('')}</tbody>
+                </table>
+              `}
+              <p class="hint"><a href="#/gutschriften/neu/${kunde.id}">+ Neue Gutschrift für diesen Kunden</a> · <a href="#/gutschriften">Alle Gutschriften →</a></p>
             </div>
 
             <div class="akte-bereich" data-tab="details">

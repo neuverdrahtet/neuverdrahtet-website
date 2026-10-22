@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, offenerRestbetrag } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, offenerRestbetrag, offenerGutschriftBetrag } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
@@ -105,8 +105,8 @@ function openStornoGrundDialog(nummer, onConfirm) {
 }
 
 export async function render(container, route) {
-  let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken] = await Promise.all([
-    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'),
+  let [rechnungen, kunden, projekte, katalog, settings, zeiterfassung, vorlagen, textbausteine, marken, gutschriften] = await Promise.all([
+    getAll('rechnungen'), getAll('kunden'), getAll('projekte'), getAll('katalog'), getSettings(), getAll('zeiterfassung'), getAll('vorlagen'), getAll('textbausteine'), getAll('marken'), getAll('gutschriften'),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
@@ -119,6 +119,9 @@ export async function render(container, route) {
   // Rechnung nie verhindern.
   async function syncBuchung(r) {
     try { await journal.syncBuchungFuerRechnung(r, settings); } catch { /* siehe oben */ }
+  }
+  async function syncGutschriftBuchung(g) {
+    try { await journal.syncBuchungFuerGutschrift(g, settings); } catch { /* siehe oben */ }
   }
 
   function exportOptsFor(r) {
@@ -722,6 +725,7 @@ export async function render(container, route) {
           <div id="pos-host"></div>
           ${!locked ? '<div id="tb-picker-host"></div>' : ''}
           <div id="abschlaege-host"></div>
+          <div id="gutschriften-host"></div>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen</label><textarea name="notizen" ${locked ? 'disabled' : ''}>${escapeHtml(data.notizen || '')}</textarea></div>
           <div id="bar-sig-section" ${(data.zahlungsart || 'ueberweisung') === 'bar' ? '' : 'hidden'}>
             <div class="divider"></div>
@@ -887,6 +891,67 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       body.querySelector('[name="projektId"]').addEventListener('change', renderAbschlaegeHost);
       body._getAbschlaegeChecked = () => Array.from(abschlaegeChecked);
       body._getManuelleAbschlaege = () => manuelleAbschlaege;
+
+      // Offene Gutschriften (Kundenguthaben, siehe gutschriften.js) GANZ ODER
+      // TEILWEISE gegen diese Rechnung verrechnen - unabhängig vom
+      // Rechnungstyp (anders als die Abschlagsverrechnung oben). Der Betrag
+      // ist bewusst editierbar (bis maximal den noch offenen Gutschriftbetrag),
+      // da ein Guthaben über mehrere Rechnungen hinweg aufgeteilt verwendet
+      // werden kann. Reduziert NUR den angezeigten/offenen Restbetrag dieser
+      // Rechnung (siehe offenerRestbetrag in utils.js) - erzeugt bewusst KEINE
+      // eigene Buchung (die Gutschrift wurde bereits bei ihrer eigenen
+      // Ausstellung verbucht, siehe journal.js erzeugeBuchungenFuerGutschrift).
+      const gutschriftBetraege = new Map((data.verrechneteGutschriften || []).map((v) => [v.gutschriftId, v.betrag]));
+      function renderGutschriftenHost() {
+        const host = body.querySelector('#gutschriften-host');
+        const kundeIdLive = kundePicker.getValue() || data.kundeId;
+        const kandidaten = gutschriften.filter((gObj) =>
+          gObj.kundeId === kundeIdLive && gObj.status !== 'storniert' &&
+          (offenerGutschriftBetrag(gObj) > 0 || gutschriftBetraege.has(gObj.id))
+        );
+        if (!kundeIdLive || kandidaten.length === 0) { host.innerHTML = ''; return; }
+        host.innerHTML = `
+          <div class="divider"></div>
+          <h2 style="font-size:13px;margin:0 0 8px">Gutschriften (Kundenguthaben) verrechnen</h2>
+          <div class="tag-list" style="margin-bottom:8px;flex-direction:column;align-items:stretch;gap:6px">
+            ${kandidaten.map((gObj) => {
+              const verfuegbar = offenerGutschriftBetrag(gObj) + (gutschriftBetraege.get(gObj.id) || 0);
+              const checked = gutschriftBetraege.has(gObj.id);
+              return `
+                <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" class="gutschrift-check" value="${gObj.id}" ${checked ? 'checked' : ''}>
+                  <span style="flex:1">${escapeHtml(gObj.nummer)} · verfügbar ${formatCurrency(verfuegbar)}</span>
+                  <input type="number" step="0.01" min="0" max="${verfuegbar}" class="gutschrift-betrag" data-id="${gObj.id}" value="${checked ? gutschriftBetraege.get(gObj.id) : Math.min(verfuegbar, editor.getTotals().brutto)}" style="width:110px" ${checked ? '' : 'disabled'}>
+                </label>
+              `;
+            }).join('')}
+          </div>
+        `;
+        host.querySelectorAll('.gutschrift-check').forEach((chk) => {
+          chk.addEventListener('change', () => {
+            const betragInput = host.querySelector(`.gutschrift-betrag[data-id="${chk.value}"]`);
+            betragInput.disabled = !chk.checked;
+            if (chk.checked) {
+              const betrag = Number(betragInput.value) || 0;
+              gutschriftBetraege.set(chk.value, betrag);
+            } else {
+              gutschriftBetraege.delete(chk.value);
+            }
+          });
+        });
+        host.querySelectorAll('.gutschrift-betrag').forEach((inp) => {
+          inp.addEventListener('change', () => {
+            const max = Number(inp.max) || 0;
+            let betrag = Number(inp.value) || 0;
+            if (betrag > max) { betrag = max; inp.value = max; }
+            if (betrag < 0) { betrag = 0; inp.value = 0; }
+            if (gutschriftBetraege.has(inp.dataset.id)) gutschriftBetraege.set(inp.dataset.id, betrag);
+          });
+        });
+      }
+      renderGutschriftenHost();
+      body.querySelector('[name="kundeId"]')?.addEventListener('change', renderGutschriftenHost);
+      body._getGutschriftBetraege = () => gutschriftBetraege;
     }
 
     let uebernommeneZeitIds = [];
@@ -1214,6 +1279,39 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             const ar = rechnungen.find((r) => r.id === id);
             if (ar) await put('rechnungen', { ...ar, verrechnetIn: '' });
           }
+        }
+      }
+
+      if (!locked) {
+        const neueBetraege = body._getGutschriftBetraege ? body._getGutschriftBetraege() : new Map();
+        const vorherigeIds = new Set((data.verrechneteGutschriften || []).map((v) => v.gutschriftId));
+        const neueIds = new Set(neueBetraege.keys());
+        updated.verrechneteGutschriften = Array.from(neueBetraege.entries())
+          .filter(([, betrag]) => betrag > 0)
+          .map(([gutschriftId, betrag]) => {
+            const gObj = gutschriften.find((x) => x.id === gutschriftId);
+            return { gutschriftId, gutschriftNummer: gObj?.nummer || '', betrag };
+          });
+        // Jede betroffene Gutschrift (neu verrechnet, geändert oder entfernt)
+        // in ihrer eigenen verwendungen-Liste nachführen und ihren Status
+        // (offen/eingeloest) anhand des verbleibenden Restbetrags neu setzen.
+        const betroffeneIds = new Set([...vorherigeIds, ...neueIds]);
+        for (const gutschriftId of betroffeneIds) {
+          const gObj = gutschriften.find((x) => x.id === gutschriftId);
+          if (!gObj) continue;
+          const betrag = neueBetraege.get(gutschriftId) || 0;
+          const andereVerwendungen = (gObj.verwendungen || []).filter((v) => v.rechnungId !== updated.id);
+          const neueVerwendungen = betrag > 0
+            ? [...andereVerwendungen, { rechnungId: updated.id, rechnungNummer: updated.nummer, betrag, datum: todayISO() }]
+            : andereVerwendungen;
+          const gAktualisiert = {
+            ...gObj, verwendungen: neueVerwendungen,
+            status: gObj.status === 'storniert' ? 'storniert' : (offenerGutschriftBetrag({ ...gObj, verwendungen: neueVerwendungen }) > 0 ? 'offen' : 'eingeloest'),
+          };
+          await put('gutschriften', gAktualisiert);
+          await syncGutschriftBuchung(gAktualisiert);
+          const idx = gutschriften.findIndex((x) => x.id === gutschriftId);
+          if (idx >= 0) gutschriften[idx] = gAktualisiert;
         }
       }
 

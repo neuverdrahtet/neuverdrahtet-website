@@ -33,6 +33,12 @@ const CATEGORIES = [
     filterValue: (r) => r.nummer || '',
   },
   {
+    store: 'gutschriften', route: 'gutschriften', label: 'Gutschriften', icon: '💳',
+    query: (g) => [g.nummer, g.betreff].filter(Boolean).join(' '),
+    title: (g) => g.nummer || '(ohne Nummer)', sub: (g) => g.betreff || '',
+    filterValue: (g) => g.nummer || '',
+  },
+  {
     store: 'katalog', route: 'katalog', label: 'Artikel & Leistungen', icon: '🧾',
     query: (k) => k.bezeichnung || '', title: (k) => k.bezeichnung || '(ohne Bezeichnung)', sub: (k) => k.einheit || '',
     filterValue: (k) => k.bezeichnung || '',
@@ -42,7 +48,7 @@ const CATEGORIES = [
 async function runSearch(q, host, session) {
   const ql = q.trim().toLowerCase();
   if (!ql) {
-    host.innerHTML = '<p class="text-mute">Tippe, um in Kunden, Projekten, Angeboten, Rechnungen und Artikeln/Leistungen zu suchen.</p>';
+    host.innerHTML = '<p class="text-mute">Tippe, um in Kunden, Projekten, Angeboten, Rechnungen, Gutschriften und Artikeln/Leistungen zu suchen.</p>';
     return;
   }
   const groups = [];

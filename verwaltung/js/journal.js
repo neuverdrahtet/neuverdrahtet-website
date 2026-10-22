@@ -157,6 +157,55 @@ export function erzeugeBuchungenFuerAusgabe(a, { konten, settings }) {
   return buchungen;
 }
 
+/** Erzeugt (ohne zu speichern) die Buchungssatz-Zeilen für eine ausgestellte
+ * Gutschrift (Kundenguthaben, unabhängig von einer bestehenden Rechnung).
+ * Gebucht wird EINMALIG bei Ausstellung, unabhängig davon, ob/wann sie später
+ * gegen eine Rechnung verrechnet wird: Soll Erlöskonto (satzspezifisch wie bei
+ * einer Rechnung - mindert den Umsatz), Haben "Verbindlichkeiten aus
+ * Kundengutschriften" (Konto 1790, siehe DEFAULT_KONTEN) - die Verbindlichkeit
+ * bleibt bestehen, bis sie entweder gegen eine künftige Rechnung verrechnet
+ * (siehe rechnungen.js verrechneteGutschriften - dort wird bewusst KEINE
+ * weitere Buchung erzeugt, da der tatsächlich noch offene Zahlungseingang der
+ * Rechnung bereits über deren eigenen teilzahlungBetrag/status korrekt erfasst
+ * wird) oder separat ausgezahlt wird (dann als manuelle Buchung in der
+ * Buchhaltung zu erfassen, siehe buchhaltung.js). Eine stornierte Gutschrift
+ * bekommt keine Buchung (bzw. eine bestehende wird entfernt). */
+export function erzeugeBuchungenFuerGutschrift(g, { konten, settings }) {
+  // Gebucht wird erst, wenn die Gutschrift tatsächlich ausgestellt (versendet)
+  // wurde - ein noch unversendeter Entwurf (z.B. während der Betrag noch
+  // korrigiert wird) darf nicht vorzeitig in die Buchhaltung einfließen,
+  // analog dazu, dass eine Rechnung erst ab "bezahlt" gebucht wird.
+  if (!g || !g.versendet || g.status === 'storniert' || !g.brutto) return [];
+  const kontoGuthaben = findKonto(konten, settings.kontoKundenguthabenId, '1790');
+  if (!kontoGuthaben) return [];
+  const belegtext = `Gutschrift ${g.nummer}`;
+  const quelle = { typ: 'gutschrift', id: g.id };
+  const buchungen = [];
+  const satz = effektiverSteuersatz(g.netto, g.steuer);
+  const steuerfrei = g.steuerart && g.steuerart !== 'regel';
+  const erloesKonto = steuerfrei
+    ? findKonto(konten, 'konto-8125', '8125')
+    : findKonto(konten, satz === 7 ? 'konto-8300' : 'konto-8400', satz === 7 ? '8300' : '8400');
+  if (erloesKonto && g.netto) {
+    buchungen.push({
+      id: uid(), datum: g.datum, text: belegtext,
+      sollKontoId: erloesKonto.id, habenKontoId: kontoGuthaben.id,
+      betrag: Math.round(g.netto * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+    });
+  }
+  if (g.steuer) {
+    const ustKonto = findKonto(konten, satz === 7 ? 'konto-1771' : 'konto-1776', satz === 7 ? '1771' : '1776');
+    if (ustKonto) {
+      buchungen.push({
+        id: uid(), datum: g.datum, text: `${belegtext} (USt.)`,
+        sollKontoId: ustKonto.id, habenKontoId: kontoGuthaben.id,
+        betrag: Math.round(g.steuer * 100) / 100, quelle, manuell: false, createdAt: new Date().toISOString(),
+      });
+    }
+  }
+  return buchungen;
+}
+
 /** Erzeugt (ohne zu speichern) die Kapitalisierungsbuchung für eine neu
  * angelegte Anlage (Anlagenverzeichnis): Soll Anlagevermögen-/GWG-Konto
  * (aktiv, je nach `anlage.gwg`), Haben Bank/Kasse, plus eigene Zeile für die
@@ -234,6 +283,14 @@ export async function syncBuchungFuerRechnung(r, settings) {
   const konten = await getAll('konten');
   const neueBuchungen = erzeugeBuchungenFuerRechnung(r, { konten, settings });
   await ersetzeAutomatischeBuchungen('rechnung', r.id, neueBuchungen);
+}
+
+/** Hält die automatisch erzeugte Buchung einer Gutschrift mit ihrem aktuellen
+ * Status synchron: ausgestellt (nicht storniert) → Buchung vorhanden, storniert → keine. */
+export async function syncBuchungFuerGutschrift(g, settings) {
+  const konten = await getAll('konten');
+  const neueBuchungen = erzeugeBuchungenFuerGutschrift(g, { konten, settings });
+  await ersetzeAutomatischeBuchungen('gutschrift', g.id, neueBuchungen);
 }
 
 /** Hält die automatisch erzeugten Buchungssätze einer Ausgabe mit ihrem aktuellen

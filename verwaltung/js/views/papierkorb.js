@@ -16,6 +16,7 @@ const LABELS = {
   katalog: { label: 'Artikel & Leistungen', icon: '🧾', title: (k) => k.bezeichnung || '(ohne Bezeichnung)' },
   angebote: { label: 'Angebote', icon: '📄', title: (a) => a.nummer || '(ohne Nummer)' },
   rechnungen: { label: 'Rechnungen', icon: '💶', title: (r) => r.nummer || '(ohne Nummer)' },
+  gutschriften: { label: 'Gutschriften', icon: '💳', title: (g) => g.nummer || '(ohne Nummer)' },
   mahnungen: { label: 'Mahnungen', icon: '⚠️', title: (m) => m.nummer || m.art || '(ohne Nummer)' },
   ausgaben: { label: 'Ausgaben', icon: '💸', title: (a) => a.beschreibung || '(ohne Beschreibung)' },
   zeiterfassung: { label: 'Zeiterfassung', icon: '⏱️', title: (z) => formatDateTime(z.datum) || z.datum || '(ohne Datum)' },
