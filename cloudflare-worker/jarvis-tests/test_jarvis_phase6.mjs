@@ -357,6 +357,12 @@ await pruefe('E1: runJarvisControlCheck erstellt Hinweise aus echten Daten, idem
 
   const jobVorher = liesDoc('jarvisJobs', `control-check-${HEUTE}`);
   assert(jobVorher.status === 'done', 'Job muss erfolgreich abgeschlossen sein');
+  // Review-Befund: der Abschluss-Schreibvorgang nutzte firestoreSetDoc (volles
+  // Überschreiben statt Teil-Update) und hätte dabei typ/erstelltAm gelöscht -
+  // das Pilot-Dashboard (holeJarvisStatusUebersicht) ordnet abgeschlossene Jobs
+  // aber über genau das typ-Feld zu, siehe test_jarvis_phase10.mjs F1-F3.
+  assert(jobVorher.typ === 'control-check', `typ-Feld darf beim Abschluss nicht verlorengehen, war "${jobVorher.typ}"`);
+  assert(jobVorher.erstelltAm, 'erstelltAm darf beim Abschluss nicht verlorengehen');
 
   // Zweiter Lauf am selben Tag: Job ist bereits "done" -> No-Op, kein zweiter Hinweis/Duplikat.
   const inhaltVorher = JSON.stringify(liesDoc('aufgaben', 'jarvis-control-forderungen'));

@@ -2845,7 +2845,7 @@ async function beanspracheTagesJob({ serviceAccount, jobId, typ }) {
     const gestartetMs = bisherigerJob.gestartetAm ? new Date(bisherigerJob.gestartetAm).getTime() : 0;
     const minutenSeitStart = (Date.now() - gestartetMs) / 60000;
     if (minutenSeitStart < JARVIS_JOB_STALE_MINUTEN) return null; // vermutlich noch aktiv
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'unklar', unklarSeit: new Date().toISOString() } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'unklar', unklarSeit: new Date().toISOString() } });
     await protokolliereJarvisFehler({
       serviceAccount, quelle: `${typ}-stale`, kritisch: true,
       fehler: new Error(`Job ${jobId} war länger als ${JARVIS_JOB_STALE_MINUTEN} Minuten "running" ohne Abschluss - vermutlich abgestürzt. Wird NICHT automatisch wiederholt, Status manuell prüfen/zurücksetzen.`),
@@ -3938,15 +3938,15 @@ async function runJarvisEmailCheck(env) {
       }
     }
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: {
+      felder: {
         status: 'done', abgeschlossenAm: new Date().toISOString(),
         ergebnisZusammenfassung: `${verarbeitet} verarbeitet, ${aufgabenErstellt} Aufgabe(n), ${entwuerfeErstellt} Entwurf/Entwürfe, ${uebersprungen} übersprungen (schon bekannt), ${fehlerAnzahl} Fehler.`,
       },
     });
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'email-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
@@ -4148,15 +4148,15 @@ async function runJarvisRechnungsCheck(env) {
       }
     }
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: {
+      felder: {
         status: 'done', abgeschlossenAm: new Date().toISOString(),
         ergebnisZusammenfassung: `${geprueft} geprüft, ${entwuerfeErstellt} Entwurf/Entwürfe, ${bereitsVorhanden} Rechnung bereits vorhanden, ${unvollstaendig} unvollständig, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.`,
       },
     });
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'rechnung-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
@@ -4264,12 +4264,12 @@ async function runJarvisMahnungCheck(env) {
       }
     }
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${geprueft} geprüft, ${erstellt} Mahnung(en) erstellt, ${nichtFaellig} noch nicht fällig, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.` },
+      felder: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${geprueft} geprüft, ${erstellt} Mahnung(en) erstellt, ${nichtFaellig} noch nicht fällig, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.` },
     });
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'mahnung-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
@@ -4458,15 +4458,15 @@ async function runJarvisWartungsCheck(env) {
       }
     }
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: {
+      felder: {
         status: 'done', abgeschlossenAm: new Date().toISOString(),
         ergebnisZusammenfassung: `${geprueft} geprüft, ${vorschlaegeErstellt} Vorschlag/Vorschläge erstellt, ${bereitsGeplant} bereits geplant, ${keinVorschlagMoeglich} ohne Vorschlag, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.`,
       },
     });
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'wartung-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
@@ -4530,12 +4530,12 @@ async function runJarvisProjektCheck(env) {
       }
     }
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${projekteMitHinweis} Projekt(e) mit Hinweis, ${fehlerAnzahl} Fehler.` },
+      felder: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${projekteMitHinweis} Projekt(e) mit Hinweis, ${fehlerAnzahl} Fehler.` },
     });
   } catch (err) {
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'projekt-check', fehler: err, kontext: { jobId }, kritisch: true });
   }
 }
@@ -4912,7 +4912,7 @@ async function holeJarvisControlDaten({ serviceAccount, env }) {
 // Alle bekannten täglichen Hintergrund-Job-Typen (siehe jobId-Präfixe oben,
 // z.B. "email-check-2026-10-21") - für die Statusübersicht unten in EINER
 // Stelle gepflegt, damit ein neuer Job-Typ nicht vergessen wird.
-const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'wartung-check', 'projekt-check', 'control-check'];
+const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'wartung-check', 'projekt-check', 'control-check', 'tagescheck'];
 
 // Alle bekannten Feature-Flags, die eine autonome JARVIS-Funktion freischalten
 // (Standard IMMER "aus", siehe jeweilige Kommentare an den env.*_AKTIV-Prüfungen).
@@ -5070,13 +5070,13 @@ async function runJarvisControlCheck(env) {
     }
     await firestoreSetDoc({ serviceAccount, collection: 'jarvisKennzahlenVerlauf', id: monatsId, data: { monat: monatsId, rechnungsumsatzNetto: laufenderMonatsUmsatz, aktualisiertAm: new Date().toISOString() } });
 
-    await firestoreSetDoc({
+    await firestoreMergeFelder({
       serviceAccount, collection: 'jarvisJobs', id: jobId,
-      data: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${hinweiseErstellt} Hinweis(e) erstellt/aktualisiert.` },
+      felder: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `${hinweiseErstellt} Hinweis(e) erstellt/aktualisiert.` },
     });
   } catch (err) {
     fehlerAnzahl++;
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     await protokolliereJarvisFehler({ serviceAccount, quelle: 'control-check', fehler: err, kontext: { jobId }, kritisch: true });
     void fehlerAnzahl;
   }
@@ -5996,11 +5996,11 @@ async function runTagescheck(env) {
     });
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
-    await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'failed', fehler: err.message } });
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
     return;
   }
 
-  await firestoreSetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId, data: { status: 'done', abgeschlossenAm: new Date().toISOString() } });
+  await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'done', abgeschlossenAm: new Date().toISOString() } });
 
   try {
     const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });

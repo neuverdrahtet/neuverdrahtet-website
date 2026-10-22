@@ -304,6 +304,16 @@ await pruefe('F3: ein Job-Typ ohne jeden bisherigen Lauf wird ehrlich als "noch_
   assert(job.letzterErfolgAm === null, 'letzterErfolgAm muss null sein');
 });
 
+await pruefe('F3b (Review-Befund): der tägliche Büro-Check (tagescheck) taucht im Pilot-Dashboard als eigener Job-Typ auf, inkl. korrekt zugeordnetem Erfolgs-/Fehlerstatus', async () => {
+  assert(W.JARVIS_JOB_TYPEN.includes('tagescheck'), 'JARVIS_JOB_TYPEN muss "tagescheck" enthalten, sonst zeigt das Dashboard den täglichen Büro-Check gar nicht erst an');
+  setDoc('jarvisJobs', 'tagescheck-2026-10-20', { typ: 'tagescheck', status: 'done', erstelltAm: '2026-10-20T05:00:00.000Z', abgeschlossenAm: '2026-10-20T05:02:00.000Z' });
+  const status = await W.holeJarvisStatusUebersicht({ serviceAccount, env: {} });
+  const job = status.cronLaeufe.find((j) => j.typ === 'tagescheck');
+  assert(job, 'Dashboard muss einen Eintrag für "tagescheck" enthalten');
+  assert(job.letzterVersuchStatus === 'done', `muss "done" zeigen, war "${job.letzterVersuchStatus}"`);
+  assert(job.letzterErfolgAm === '2026-10-20T05:02:00.000Z', 'letzterErfolgAm muss vom echten Lauf stammen');
+});
+
 await pruefe('F4: offene/unklare Aktionen werden korrekt gezählt, Dienste-Status spiegelt echte env-Werte (keine Secret-Werte im Ergebnis)', async () => {
   setDoc('jarvisAktionen', 'akt-f4-pending', { status: 'pending' });
   setDoc('jarvisAktionen', 'akt-f4-unklar-1', { status: 'unklar' });

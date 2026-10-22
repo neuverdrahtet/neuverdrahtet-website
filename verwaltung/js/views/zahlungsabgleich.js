@@ -1,7 +1,92 @@
 import { getAll, put, getSettings } from '../db.js';
-import { escapeHtml, formatCurrency, formatDate, toast } from '../utils.js';
+import { escapeHtml, formatCurrency, formatDate, toast, offenerRestbetrag, calcTotals, uid, todayISO } from '../utils.js';
 import { holeQontoTransaktionen } from '../qonto.js';
 import * as journal from '../journal.js';
+
+const TOLERANZ = 0.01;
+
+// Betrag, den der Kunde bei Ausnutzung des angebotenen Skontos tatsächlich
+// überweist - eine Zahlung, die exakt auf diesen (kleineren) Betrag statt
+// auf den vollen Rechnungsbetrag lautet, ist ebenfalls ein gültiger Treffer.
+function betragBeiSkonto(r) {
+  return r.skontoProzent > 0 ? r.brutto - Math.round(r.brutto * r.skontoProzent) / 100 : null;
+}
+
+/**
+ * Prüft, ob ein eingegangener Betrag ein plausibler Zahlungs-Treffer für
+ * diese Rechnung ist - gegen den vollen ursprünglichen Rechnungsbetrag ODER
+ * (Review-Befund) gegen den tatsächlich noch offenen Restbetrag (berück-
+ * sichtigt eine bereits erfasste Teilzahlung UND eine verrechnete Gutschrift,
+ * siehe offenerRestbetrag in utils.js - bei einer unberührten Rechnung
+ * identisch mit r.brutto) ODER gegen den Skonto-reduzierten Betrag. Exportiert
+ * und testbar, da diese Entscheidung sonst nur in einem DOM-Click-Handler
+ * verborgen wäre - siehe zahlungsabgleich.test.mjs.
+ */
+export function istZahlungsKandidat(rechnung, betrag) {
+  const rest = offenerRestbetrag(rechnung);
+  const voll = Math.round(Number(rechnung.brutto) * 100) === Math.round(Number(betrag) * 100)
+    || Math.round(rest * 100) === Math.round(Number(betrag) * 100);
+  const skontoBetrag = betragBeiSkonto(rechnung);
+  const mitSkonto = skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(Number(betrag) * 100);
+  return voll || mitSkonto;
+}
+
+/**
+ * Kernentscheidung beim Bestätigen eines Zahlungsabgleich-Treffers - exportiert
+ * und rein (keine DOM-/Firestore-Zugriffe), damit sie unabhängig vom Click-
+ * Handler getestet werden kann (siehe zahlungsabgleich.test.mjs). Gibt die
+ * aktualisierten Rechnungsfelder, einen Hinweistext und - bei einer erkannten
+ * Überzahlung (Review-Befund: wurde vorher stillschweigend verschluckt) -
+ * einen neuen, noch nicht versendeten Gutschrift-ENTWURF zurück, den der
+ * Aufrufer nur noch speichert. Bucht selbst nichts.
+ */
+export function berechneZahlungsabgleichErgebnis(rechnung, bezahlterBetrag, { settings, bezahltAm }) {
+  const restVorDieserZahlung = offenerRestbetrag(rechnung);
+  const vollBetrag = Math.abs(restVorDieserZahlung - bezahlterBetrag) < TOLERANZ;
+  const skontoBetrag = betragBeiSkonto(rechnung);
+  const skontoGenutzt = !vollBetrag && skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(bezahlterBetrag * 100);
+  const ueberschuss = Math.round((bezahlterBetrag - restVorDieserZahlung) * 100) / 100;
+  const istUeberzahlung = !vollBetrag && !skontoGenutzt && ueberschuss > TOLERANZ;
+
+  let aktualisiert;
+  let hinweis;
+  if (vollBetrag || skontoGenutzt || istUeberzahlung) {
+    aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt, teilzahlungBetrag: 0 };
+    hinweis = istUeberzahlung
+      ? `Rechnung ${rechnung.nummer} als bezahlt markiert - Überschuss von ${formatCurrency(ueberschuss)} als Gutschrift-Entwurf angelegt (bitte prüfen).`
+      : `Rechnung ${rechnung.nummer} als bezahlt markiert.`;
+  } else {
+    // Weder voller noch Skonto-Betrag: Teilzahlung - bisher per
+    // Zahlungsabgleich bestätigte Teilbeträge werden addiert, damit mehrere
+    // Teilzahlungen zur selben Rechnung korrekt aufsummiert werden (siehe
+    // journal.js, das teilzahlungBetrag anteilig bucht).
+    const bisher = rechnung.status === 'teilbezahlt' ? (rechnung.teilzahlungBetrag || 0) : 0;
+    const neuerBetrag = bisher + bezahlterBetrag;
+    if (neuerBetrag >= (rechnung.brutto || 0) - TOLERANZ) {
+      aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt: false, teilzahlungBetrag: 0 };
+      hinweis = `Rechnung ${rechnung.nummer} ist mit dieser Zahlung komplett beglichen - als bezahlt markiert.`;
+    } else {
+      aktualisiert = { ...rechnung, status: 'teilbezahlt', bezahltAm, teilzahlungBetrag: neuerBetrag };
+      hinweis = `Teilzahlung für Rechnung ${rechnung.nummer} erfasst (${formatCurrency(neuerBetrag)} von ${formatCurrency(rechnung.brutto)}).`;
+    }
+  }
+
+  let gutschriftEntwurf = null;
+  if (istUeberzahlung) {
+    const steuersatz = rechnung.steuerart === 'kleinunternehmer' ? 0 : (rechnung.steuersatz ?? settings.standardSteuersatz ?? 19);
+    const einzelpreis = Math.round((ueberschuss / (1 + steuersatz / 100)) * 100) / 100;
+    const totals = calcTotals([{ menge: 1, einzelpreis, steuersatz }]);
+    gutschriftEntwurf = {
+      id: uid(), nummer: '', kundeId: rechnung.kundeId, datum: todayISO(),
+      grund: 'ueberzahlung', grundText: `Überzahlung bei Rechnung ${rechnung.nummer} (Zahlungsabgleich, ${formatDate(bezahltAm)})`,
+      betreff: '', steuersatz, steuerart: rechnung.steuerart === 'kleinunternehmer' ? 'kleinunternehmer' : 'regel',
+      netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto, notizen: '', status: 'offen', verwendungen: [],
+      createdAt: new Date().toISOString(), versendet: false, versendetAm: '',
+    };
+  }
+
+  return { aktualisiert, hinweis, gutschriftEntwurf, istUeberzahlung };
+}
 
 /**
  * Gleicht eingehende Qonto-Kontobewegungen mit offenen Rechnungen ab.
@@ -18,11 +103,6 @@ export async function render(container) {
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const rechnungenById = Object.fromEntries(rechnungen.map((r) => [r.id, r]));
   const offenNichtStorniert = (r) => (r.status === 'offen' || r.status === 'teilbezahlt');
-  // Betrag, den der Kunde bei Ausnutzung des angebotenen Skontos tatsächlich
-  // überweist - eine Zahlung, die exakt auf diesen (kleineren) Betrag statt
-  // auf den vollen Rechnungsbetrag lautet, ist ebenfalls ein gültiger Treffer.
-  const betragBeiSkonto = (r) => (r.skontoProzent > 0 ? r.brutto - Math.round(r.brutto * r.skontoProzent) / 100 : null);
-  const TOLERANZ = 0.01;
 
   function renderList() {
     const offen = abgleiche.filter((a) => a.status === 'offen').sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
@@ -85,41 +165,17 @@ export async function render(container) {
       try {
         const bezahlterBetrag = Number(abgleich.betrag);
         const bezahltAm = (abgleich.datum || '').slice(0, 10) || rechnung.bezahltAm;
-        const vollBetrag = Math.abs((rechnung.brutto || 0) - bezahlterBetrag) < TOLERANZ;
-        // Entspricht der eingegangene Betrag genau dem Skonto-reduzierten
-        // Betrag (statt dem vollen Rechnungsbetrag), hat der Kunde das
-        // angebotene Skonto offensichtlich genutzt - dann auch so verbuchen
-        // (siehe journal.js erzeugeBuchungenFuerRechnung).
-        const skontoBetrag = betragBeiSkonto(rechnung);
-        const skontoGenutzt = !vollBetrag && skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(bezahlterBetrag * 100);
-        let aktualisiert;
-        let hinweis;
-        if (vollBetrag || skontoGenutzt) {
-          aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt, teilzahlungBetrag: 0 };
-          hinweis = `Rechnung ${rechnung.nummer} als bezahlt markiert.`;
-        } else {
-          // Weder voller noch Skonto-Betrag: Teilzahlung - bisher per
-          // Zahlungsabgleich bestätigte Teilbeträge werden addiert, damit
-          // mehrere Teilzahlungen zur selben Rechnung korrekt aufsummiert
-          // werden (siehe journal.js, das teilzahlungBetrag anteilig bucht).
-          const bisher = rechnung.status === 'teilbezahlt' ? (rechnung.teilzahlungBetrag || 0) : 0;
-          const neuerBetrag = bisher + bezahlterBetrag;
-          if (neuerBetrag >= (rechnung.brutto || 0) - TOLERANZ) {
-            aktualisiert = { ...rechnung, status: 'bezahlt', bezahltAm, skontoGenutzt: false, teilzahlungBetrag: 0 };
-            hinweis = `Rechnung ${rechnung.nummer} ist mit dieser Zahlung komplett beglichen - als bezahlt markiert.`;
-          } else {
-            aktualisiert = { ...rechnung, status: 'teilbezahlt', bezahltAm, teilzahlungBetrag: neuerBetrag };
-            hinweis = `Teilzahlung für Rechnung ${rechnung.nummer} erfasst (${formatCurrency(neuerBetrag)} von ${formatCurrency(rechnung.brutto)}).`;
-          }
-        }
+        const { aktualisiert, hinweis, gutschriftEntwurf, istUeberzahlung } =
+          berechneZahlungsabgleichErgebnis(rechnung, bezahlterBetrag, { settings, bezahltAm });
         await put('rechnungen', aktualisiert);
         await journal.syncBuchungFuerRechnung(aktualisiert, settings);
         rechnungenById[rechnungId] = aktualisiert;
         const rIndex = rechnungen.findIndex((r) => r.id === rechnungId);
         if (rIndex !== -1) rechnungen[rIndex] = aktualisiert;
+        if (gutschriftEntwurf) await put('gutschriften', gutschriftEntwurf);
         await put('zahlungsabgleich', { ...abgleich, status: 'bestaetigt', rechnungId, erledigtAm: new Date().toISOString() });
         abgleiche = abgleiche.map((a) => (a.id === id ? { ...a, status: 'bestaetigt', rechnungId, erledigtAm: new Date().toISOString() } : a));
-        toast(hinweis, 'success');
+        toast(hinweis, istUeberzahlung ? 'info' : 'success');
         renderList();
       } catch (err) {
         toast(err.message, 'danger');
@@ -172,12 +228,7 @@ export async function render(container) {
         if (!t.transactionId || bekannteIds.has(t.transactionId)) continue;
         const kandidatenRechnungIds = rechnungen
           .filter(offenNichtStorniert)
-          .filter((r) => {
-            const voll = Math.round(Number(r.brutto) * 100) === Math.round(Number(t.betrag) * 100);
-            const skontoBetrag = betragBeiSkonto(r);
-            const mitSkonto = skontoBetrag != null && Math.round(skontoBetrag * 100) === Math.round(Number(t.betrag) * 100);
-            return voll || mitSkonto;
-          })
+          .filter((r) => istZahlungsKandidat(r, t.betrag))
           .map((r) => r.id);
         const abgleichDoc = {
           id: t.transactionId, betrag: t.betrag, datum: t.datum, gegenpart: t.gegenpart, referenz: t.referenz,

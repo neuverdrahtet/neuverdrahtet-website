@@ -291,15 +291,32 @@ export async function render(container, route) {
       return calcTotals([{ menge: 1, einzelpreis, steuersatz }]);
     }
 
+    // Review-Befund: liveTotals() allein wurde an mehreren Stellen berechnet,
+    // aber NICHT überall tatsächlich verwendet (markVersendetUndSperren
+    // persistierte weiterhin das alte "data"), und E-Mail/WhatsApp lasen gar
+    // keine Live-Werte. EIN gemeinsamer Helfer für ALLE bearbeitbaren Felder
+    // (nicht nur den Betrag), konsequent überall verwendet - verhindert, dass
+    // Drucken/PDF einen anderen Betrag zeigt als das, was tatsächlich
+    // gespeichert, gesperrt und gebucht wird.
+    function liveFormDaten() {
+      if (locked) return data;
+      const totals = liveTotals();
+      return {
+        ...data,
+        kundeId: kundePicker.getValue() || data.kundeId,
+        datum: body.querySelector('[name="datum"]')?.value || data.datum,
+        grund: body.querySelector('[name="grund"]')?.value || data.grund,
+        grundText: body.querySelector('[name="grundText"]')?.value ?? data.grundText ?? '',
+        betreff: body.querySelector('[name="betreff"]')?.value ?? data.betreff ?? '',
+        notizen: body.querySelector('[name="notizen"]')?.value ?? data.notizen ?? '',
+        steuersatz: Number(body.querySelector('[name="steuersatz"]')?.value) || 0,
+        netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+      };
+    }
+
     mountDocPreviewToggle({
       body, settings, defaultView: settings.dokStandardansicht,
-      getDocOpts: () => {
-        const totals = liveTotals();
-        const kundeIdLive = kundePicker.getValue() || data.kundeId;
-        const betreffLive = body.querySelector('input[name="betreff"]')?.value ?? data.betreff ?? '';
-        const notizenLive = body.querySelector('textarea[name="notizen"]')?.value ?? data.notizen ?? '';
-        return docOpts({ ...data, kundeId: kundeIdLive, betreff: betreffLive, notizen: notizenLive, netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto, steuersatz: Number(body.querySelector('[name="steuersatz"]')?.value) || 0 });
-      },
+      getDocOpts: () => docOpts(liveFormDaten()),
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
@@ -327,10 +344,14 @@ export async function render(container, route) {
           render(container);
         });
       }
-      async function markVersendetUndSperren() {
+      // Nimmt die bereits live gelesenen Formular-Werte entgegen (statt sie
+      // selbst erneut zu lesen), damit garantiert exakt das gespeichert/
+      // gesperrt/gebucht wird, was dem Nutzer gerade im Druck/E-Mail/
+      // WhatsApp-Dokument angezeigt wurde - keine zwei unabhängigen Lesungen,
+      // die auseinanderlaufen könnten.
+      async function markVersendetUndSperren(liveDaten) {
         if (data.versendet) return;
-        const totals = liveTotals();
-        const persisted = { ...data, versendet: true, versendetAm: new Date().toISOString() };
+        const persisted = { ...liveDaten, versendet: true, versendetAm: new Date().toISOString() };
         await put('gutschriften', persisted);
         await syncBuchung(persisted);
         Object.assign(data, persisted);
@@ -339,36 +360,39 @@ export async function render(container, route) {
         openForm({ ...data });
       }
       body.querySelector('#btn-print').addEventListener('click', async () => {
-        const opts = docOpts(locked ? data : { ...data, netto: liveTotals().netto, steuer: liveTotals().steuer, brutto: liveTotals().brutto });
+        const liveDaten = liveFormDaten();
+        const opts = docOpts(liveDaten);
         await printDokument({ bodyHtml: buildDocHtml(opts), settings, buildPdfBlob: () => buildDocPdfBlob(opts) });
-        if (!locked) await markVersendetUndSperren();
+        if (!locked) await markVersendetUndSperren(liveDaten);
       });
       const emailBtn = body.querySelector('#btn-email');
       if (emailBtn) {
         emailBtn.addEventListener('click', async () => {
-          const kunde = kundenById[data.kundeId];
-          const opts = docOpts(data);
+          const liveDaten = liveFormDaten();
+          const kunde = kundenById[liveDaten.kundeId];
+          const opts = docOpts(liveDaten);
           openEmailComposer({
             to: kunde?.email || '',
-            subject: `Gutschrift ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
-            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Gutschrift ${data.nummer} über ${formatCurrency(data.brutto)}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
-            filename: `Gutschrift-${data.nummer}.pdf`,
+            subject: `Gutschrift ${liveDaten.nummer}${liveDaten.betreff ? ' – ' + liveDaten.betreff : ''}`,
+            bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Gutschrift ${liveDaten.nummer} über ${formatCurrency(liveDaten.brutto)}.\n\nMit freundlichen Grüßen\n${settings.firmenname}`,
+            filename: `Gutschrift-${liveDaten.nummer}.pdf`,
             buildPdfBlob: () => buildDocPdfBlob(opts),
           });
-          if (!locked) await markVersendetUndSperren();
+          if (!locked) await markVersendetUndSperren(liveDaten);
         });
       }
       const whatsappBtn = body.querySelector('#btn-whatsapp');
       if (whatsappBtn) {
         whatsappBtn.addEventListener('click', async () => {
-          const kunde = kundenById[data.kundeId];
+          const liveDaten = liveFormDaten();
+          const kunde = kundenById[liveDaten.kundeId];
           sendDocumentViaWhatsApp({
             phone: kunde?.telefon,
-            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Gutschrift ${data.nummer} über ${formatCurrency(data.brutto)}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
-            pdfBlob: await buildDocPdfBlob(docOpts(data)),
-            filename: `Gutschrift-${data.nummer}.pdf`,
+            text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Gutschrift ${liveDaten.nummer} über ${formatCurrency(liveDaten.brutto)}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${settings.firmenname}`,
+            pdfBlob: await buildDocPdfBlob(docOpts(liveDaten)),
+            filename: `Gutschrift-${liveDaten.nummer}.pdf`,
           });
-          if (!locked) await markVersendetUndSperren();
+          if (!locked) await markVersendetUndSperren(liveDaten);
         });
       }
     }
