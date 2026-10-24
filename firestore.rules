@@ -14,6 +14,21 @@ service cloud.firestore {
     function isAdminOrBuero() { return hasRole(['admin', 'buero']); }
     function isAnyRole() { return hasRole(['admin', 'buero', 'mitarbeiter']); }
 
+    // Techniker (Service-/Techniker-/Personalverwaltung, Phase 0/1): bewusst
+    // NICHT Teil von isAnyRole() - anders als "mitarbeiter" bekommt
+    // "techniker" dadurch KEINEN pauschalen Zugriff auf isSharedCollection
+    // (termine/zeiterfassung/aufgaben/dokumente/...). Laut Spezifikation
+    // ("Techniker sehen nur ihre eigenen Aufträge/Informationen", Phase 4+15)
+    // braucht jede dieser Collections eine eigene, auf "eigene Datensätze"
+    // geprüfte Regel, sobald die jeweilige Mobile-Funktion (Phase 4ff.)
+    // tatsächlich gebaut wird - nicht pauschal vorab.
+    function isTechniker() { return myRole() == 'techniker'; }
+    function myMitarbeiterId() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.mitarbeiterId
+        : null;
+    }
+
     // Kundenportal (rein lesend): eigene Rolle 'kunde', verknüpft über
     // users/{uid}.kundeId statt mitarbeiterId. Bewusst NICHT Teil von
     // isAnyRole()/hasRole() oben - ein Kunde bekommt dadurch aus der
@@ -93,7 +108,7 @@ service cloud.firestore {
     // Logo, Firmendaten werden auf praktisch jeder Seite gebraucht), aber nur
     // Admin darf etwas ändern.
     match /einstellungen/{docId} {
-      allow read: if isAnyRole();
+      allow read: if isAnyRole() || isTechniker();
       allow write: if isAdmin();
     }
 
@@ -105,7 +120,7 @@ service cloud.firestore {
     // öffentliche Teilmenge (nur Name/Farbe/Gewerk) in mitarbeiterOeffentlich,
     // die für alle drei Rollen lesbar ist.
     match /mitarbeiterOeffentlich/{docId} {
-      allow read: if isAnyRole();
+      allow read: if isAnyRole() || isTechniker();
       allow write: if isAdminOrBuero();
     }
 
@@ -323,6 +338,39 @@ service cloud.firestore {
         && (request.resource.data.status != 'freigegeben' || request.resource.data.freigegebenVonUid == request.auth.uid)
         && (request.resource.data.status != 'abgelehnt' || request.resource.data.abgelehntVonUid == request.auth.uid);
       allow delete: if false;
+    }
+
+    // Service-Auftragsverwaltung (Phase 1 der Service-/Techniker-/
+    // Personalverwaltung) - externe Herstellerwartungsaufträge (z.B.
+    // Stiebel-Eltron-Wärmepumpenservice), bewusst eine EIGENE Collection statt
+    // "projekte" (die bestehenden "service"/"wartung"-Ansichten sind nur
+    // bereichsgefilterte Projekt-Ansichten ohne externe Auftragsnummer,
+    // Hersteller/Anlagentyp, Dublettenprüfung oder Wartungshistorie).
+    //
+    // admin/büro: voller Zugriff (Anlegen, Zuweisen, jedes Feld ändern) - wie
+    // die übrigen Geschäftsdaten in isSensitiveCollection.
+    //
+    // techniker: NUR lesend für Aufträge, denen die eigene mitarbeiterId in
+    // technikerIds zugewiesen ist, und NUR ein eingeschränktes Status-Update
+    // für den eigenen Wartungsfortschritt - niemals Anlegen (kein
+    // Hauptauftrag, siehe Spezifikation Phase 4 "Keine Berechtigung zum
+    // Anlegen von Hauptaufträgen"), niemals Löschen, niemals Kundenstammdaten/
+    // Zuweisung/Planfelder ändern (Spezifikation Phase 4 "... oder zum Ändern
+    // von Kundenstammdaten"). Die erlaubten Zielstatus sind bewusst wie bei
+    // belegVorschlaege als Literal-Array geprüft (nicht "alles außer offen"),
+    // damit ein Techniker einen Auftrag nicht zurück auf "offen"/"abgebrochen"
+    // setzen oder sich selbst neu zuweisen kann - beides bleibt eine
+    // Büro-/Dispatch-Entscheidung (Phase 2/3).
+    match /serviceauftraege/{docId} {
+      allow read, create, delete: if isAdminOrBuero();
+      allow update: if isAdminOrBuero()
+        || (
+          isTechniker()
+          && myMitarbeiterId() in resource.data.technikerIds
+          && request.resource.data.status in ['in_bearbeitung', 'abgeschlossen']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'technikerNotizen', 'aktualisiertAm'])
+        );
+      allow read: if isTechniker() && myMitarbeiterId() in resource.data.technikerIds;
     }
 
     match /{collectionId}/{docId} {

@@ -92,6 +92,7 @@ const STORES = {
   jarvisPruefprotokolle: 'id',
   pruefnormenGrenzwerte: 'id',
   siriGeraeteTokens: 'id',
+  serviceauftraege: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2371,7 +2372,24 @@ export const ZUGRIFFSROLLEN = [
   { id: 'admin', titel: 'Administrator', beschreibung: 'Voller Zugriff auf alle Bereiche, inkl. Einstellungen und Buchhaltung.' },
   { id: 'buero', titel: 'Büro', beschreibung: 'Kunden, Projekte, Termine, Angebote/Rechnungen, Katalog – ohne Einstellungen und Buchhaltungs-Export.' },
   { id: 'mitarbeiter', titel: 'Mitarbeiter', beschreibung: 'Nur Zeiterfassung, eigene Aufgaben, Kalender/Plantafel und Geräte – keine Finanz- oder Personaldaten.' },
+  { id: 'techniker', titel: 'Techniker (mobil)', beschreibung: 'Nur die eigenen zugewiesenen Serviceaufträge – kein Zugriff auf Kundenstammdaten, Finanzdaten oder Aufträge anderer Techniker.' },
 ];
+
+// Service-Auftragsverwaltung (Phase 1 der Service-/Techniker-/
+// Personalverwaltung) - siehe firestore.rules match /serviceauftraege/{docId}
+// für die genauen Berechtigungen. SERVICEAUFTRAG_TECHNIKER_STATUS ist
+// bewusst dieselbe Liste wie dort (literal, nicht "alles außer offen") -
+// ein Techniker darf einen Auftrag nur in diese beiden Zielstatus versetzen,
+// niemals zurück auf "offen"/"zugewiesen" oder auf "abgebrochen" (das bleibt
+// eine Büro-/Dispatch-Entscheidung).
+export const SERVICEAUFTRAG_STATUS = [
+  { id: 'offen', titel: 'Offen (nicht zugewiesen)' },
+  { id: 'zugewiesen', titel: 'Zugewiesen' },
+  { id: 'in_bearbeitung', titel: 'In Bearbeitung' },
+  { id: 'abgeschlossen', titel: 'Abgeschlossen' },
+  { id: 'abgebrochen', titel: 'Abgebrochen' },
+];
+export const SERVICEAUFTRAG_TECHNIKER_STATUS = ['in_bearbeitung', 'abgeschlossen'];
 
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],

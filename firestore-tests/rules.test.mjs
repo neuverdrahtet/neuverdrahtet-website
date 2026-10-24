@@ -23,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const hierDir = path.dirname(fileURLToPath(import.meta.url));
 const rules = fs.readFileSync(path.join(hierDir, '..', 'firestore.rules'), 'utf8');
@@ -55,6 +55,8 @@ await seedUser('mitarbeiter-1', { role: 'mitarbeiter' });
 await seedUser('admin-2', { role: 'admin' });
 await seedUser('kunde-1', { role: 'kunde', kundeId: 'kunde-1' });
 await seedUser('kunde-2', { role: 'kunde', kundeId: 'kunde-2' });
+await seedUser('techniker-1', { role: 'techniker', mitarbeiterId: 'ma-tech-1' });
+await seedUser('techniker-2', { role: 'techniker', mitarbeiterId: 'ma-tech-2' });
 await testEnv.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(ctx.firestore(), 'siriGeraeteTokens', 'tok-1'), { label: 'Test' });
   await setDoc(doc(ctx.firestore(), 'jarvisAktionen', 'akt-1'), { status: 'pending' });
@@ -65,6 +67,10 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
     alteWerte: { betragBrutto: 0 }, neueWerte: { betragBrutto: 100 }, erwarteteVersion: 'v1',
   });
   await setDoc(doc(ctx.firestore(), 'aufgaben', 'aufgabe-1'), { titel: 'Test-Aufgabe' });
+  await setDoc(doc(ctx.firestore(), 'serviceauftraege', 'sa-1'), {
+    externeAuftragsnummer: 'SE-001', kundenname: 'Max Mustermann', kundeId: 'kunde-1',
+    technikerIds: ['ma-tech-1'], status: 'zugewiesen', technikerNotizen: '',
+  });
 });
 
 await pruefe('R1: nicht angemeldeter Nutzer kann siriGeraeteTokens NICHT lesen', async () => {
@@ -219,6 +225,78 @@ await pruefe('R15: ein nicht angemeldeter Nutzer kann KEINE einzige der oben gen
   await assertFails(getDoc(doc(unauth.firestore(), 'belegVorschlaege', 'vorschlag-1')));
   await assertFails(getDoc(doc(unauth.firestore(), 'aufgaben', 'aufgabe-1')));
   await assertFails(getDoc(doc(unauth.firestore(), 'kunden', 'kunde-1')));
+});
+
+// =============================================================================
+// Phase 0/1 der Service-/Techniker-/Personalverwaltung: neue Rolle
+// "techniker" + neue Collection "serviceauftraege" (siehe firestore.rules
+// Kommentar dort für die Begründung jeder einzelnen Einschränkung).
+// =============================================================================
+
+await pruefe('R21: ein Techniker kann einen ihm zugewiesenen Serviceauftrag lesen', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(getDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1')));
+});
+
+await pruefe('R22: ein Techniker kann einen ihm NICHT zugewiesenen Serviceauftrag NICHT lesen', async () => {
+  const tech2 = testEnv.authenticatedContext('techniker-2');
+  await assertFails(getDoc(doc(tech2.firestore(), 'serviceauftraege', 'sa-1')));
+});
+
+await pruefe('R23: ein Techniker kann den Status des eigenen Auftrags auf "in_bearbeitung" setzen (nur status/technikerNotizen/aktualisiertAm geändert)', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung', technikerNotizen: 'Vor Ort, Anlage läuft.', aktualisiertAm: '2026-10-24',
+  }));
+});
+
+await pruefe('R24: ein Techniker kann einen Serviceauftrag NICHT auf einen willkürlichen/unzulässigen Status setzen (z.B. zurück auf "offen")', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), { status: 'offen' }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), { status: 'abgebrochen' }));
+});
+
+await pruefe('R25: ein Techniker kann Kundenstammdaten oder die Technikerzuweisung eines eigenen Auftrags NICHT ändern', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung', kundenname: 'Manipuliert',
+  }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung', technikerIds: ['ma-tech-1', 'ma-tech-2'],
+  }));
+});
+
+await pruefe('R26: ein Techniker kann KEINEN neuen Serviceauftrag anlegen (kein Hauptauftrag) und keinen löschen', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(setDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-neu'), {
+    externeAuftragsnummer: 'SE-002', technikerIds: ['ma-tech-1'], status: 'offen',
+  }));
+  await assertFails(deleteDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1')));
+});
+
+await pruefe('R27: admin/büro haben vollen Zugriff auf serviceauftraege (lesen, anlegen, beliebig ändern, löschen)', async () => {
+  const buero = testEnv.authenticatedContext('buero-1');
+  await assertSucceeds(getDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-1')));
+  await assertSucceeds(updateDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-1'), { technikerIds: ['ma-tech-2'] }));
+  await assertSucceeds(setDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-2'), {
+    externeAuftragsnummer: 'SE-003', technikerIds: [], status: 'offen',
+  }));
+  await assertSucceeds(deleteDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-2')));
+});
+
+await pruefe('R28: ein Techniker hat KEINEN pauschalen Zugriff auf gemeinsame Collections (anders als "mitarbeiter" - bewusst nicht Teil von isAnyRole())', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(getDoc(doc(tech1.firestore(), 'aufgaben', 'aufgabe-1')));
+  await assertFails(getDoc(doc(tech1.firestore(), 'kunden', 'kunde-1')));
+});
+
+await pruefe('R29: ein Techniker darf einstellungen/mitarbeiterOeffentlich trotzdem lesen (Basis-UI), aber nicht schreiben', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'einstellungen', 'global'), { firma: 'Test' });
+  });
+  await assertSucceeds(getDoc(doc(tech1.firestore(), 'einstellungen', 'global')));
+  await assertFails(setDoc(doc(tech1.firestore(), 'einstellungen', 'global'), { firma: 'manipuliert' }));
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
