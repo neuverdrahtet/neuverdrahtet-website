@@ -460,6 +460,41 @@ await pruefe('R43: benefitSteuerregeln ist admin/büro lesbar, aber nur admin da
   await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'benefitSteuerregeln', 's-1'), { regelBeschreibung: 'Sachbezugsfreigrenze 50 EUR/Monat (korrigiert)' }));
 });
 
+// =============================================================================
+// Phase 15 (Sicherheits-Härtungspass) - zwei bei der Prüfung gefundene Lücken:
+// serviceauftraege erlaubte bisher jeden ZIELstatus-Wechsel unabhängig vom
+// AUSGANGSstatus (ein Techniker konnte einen bereits "abgebrochen"en Auftrag
+// auf "abgeschlossen" setzen und damit eine Büro-Entscheidung umgehen);
+// reisekostenabrechnungen erlaubte inhaltliche Änderungen auch noch NACH dem
+// Einreichen, solange der Status in ['entwurf','eingereicht'] blieb.
+// =============================================================================
+
+await pruefe('R44: ein Techniker kann einen bereits ABGEBROCHENEN Serviceauftrag NICHT per Status-Update "abschließen" (Büro-Entscheidung darf nicht umgangen werden)', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'serviceauftraege', 'sa-abgebrochen'), {
+      externeAuftragsnummer: 'SE-005', technikerIds: ['ma-tech-1'], status: 'abgebrochen',
+    });
+  });
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-abgebrochen'), { status: 'abgeschlossen' }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-abgebrochen'), { status: 'in_bearbeitung' }));
+});
+
+await pruefe('R45: ein Mitarbeiter kann eine bereits EINGEREICHTE Reisekostenabrechnung nicht mehr inhaltlich ändern (nur noch den Status selbst, z.B. zurückziehen)', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), {
+      mitarbeiterId: 'ma-tech-1', status: 'eingereicht', von: '2026-03-10T08:00', bis: '2026-03-10T18:00', anlass: 'Kundentermin', kilometer: 10,
+    });
+  });
+  await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), { kilometer: 500 }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), { anlass: 'nachträglich erhöht' }));
+  // Zurückziehen auf "entwurf" bleibt erlaubt (nur der Status ändert sich) -
+  // und erst DANACH darf wieder inhaltlich bearbeitet werden.
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), { status: 'entwurf' }));
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), { kilometer: 500 }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);

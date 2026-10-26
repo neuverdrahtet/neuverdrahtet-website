@@ -320,7 +320,12 @@ export async function render(container) {
       checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '', terminId: '',
     };
     const { body, close } = openModal({
-      title: isEdit ? `Serviceauftrag ${data.externeAuftragsnummer || ''}` : 'Neuer Serviceauftrag',
+      // Anders als z.B. "Rechnung ${data.nummer}" in anderen Ansichten ist
+      // externeAuftragsnummer KEINE intern erzeugte Sequenznummer, sondern
+      // ein vom Hersteller/Auftraggeber per E-Mail/Portal übernommener Wert
+      // (siehe findeDublette oben) - openModal() setzt den title ungeprüft
+      // als innerHTML (siehe ui.js), deshalb hier explizit escapeHtml().
+      title: isEdit ? `Serviceauftrag ${escapeHtml(data.externeAuftragsnummer || '')}` : 'Neuer Serviceauftrag',
       wide: true,
       bodyHtml: `
         <form id="sa-form">

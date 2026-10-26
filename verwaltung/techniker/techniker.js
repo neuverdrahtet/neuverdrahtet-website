@@ -298,7 +298,11 @@ function checklisteHtml(punkte) {
 
 function openDetail(auftrag) {
   const { body, close } = openModal({
-    title: auftrag.externeAuftragsnummer || 'Serviceauftrag',
+    // externeAuftragsnummer stammt vom Hersteller/Auftraggeber (E-Mail/
+    // Portal), nicht aus einer intern erzeugten Sequenz - openModal() setzt
+    // den title ungeprüft als innerHTML (siehe ui.js), deshalb hier
+    // explizit escapeHtml().
+    title: escapeHtml(auftrag.externeAuftragsnummer || 'Serviceauftrag'),
     fullscreen: true,
     bodyHtml: `
       <div class="form-grid">
@@ -398,7 +402,9 @@ function openReisekostenForm(abrechnungen, saetze, vorhanden) {
   const data = vorhanden || { id: uid(), mitarbeiterId: session.mitarbeiterId, anlass: '', von: '', bis: '', kilometer: '', status: 'entwurf' };
 
   const { body, close } = openModal({
-    title: isEdit ? (data.anlass || 'Reisekostenabrechnung') : 'Neue Reisekostenabrechnung',
+    // openModal() setzt den title ungeprüft als innerHTML (siehe ui.js) -
+    // "anlass" ist freier Text, deshalb explizit escapeHtml().
+    title: isEdit ? escapeHtml(data.anlass || 'Reisekostenabrechnung') : 'Neue Reisekostenabrechnung',
     fullscreen: true,
     bodyHtml: `
       <form id="rk-form">

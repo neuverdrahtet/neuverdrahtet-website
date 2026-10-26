@@ -395,6 +395,14 @@ service cloud.firestore {
         || (
           isTechniker()
           && myMitarbeiterId() in resource.data.technikerIds
+          // Phase 15 Härtung: zusätzlich zum erlaubten ZIELstatus auch der
+          // bisherige AUSGANGSstatus geprüft - ohne das könnte ein Techniker
+          // einen von büro bereits "abgebrochen"en (oder schon
+          // "abgeschlossen"en) Auftrag einfach auf "abgeschlossen" setzen
+          // und damit eine Dispatch-/Abbruch-Entscheidung des Büros
+          // umgehen (die vorherige Regel prüfte nur den NEUEN Status, nicht
+          // den alten - siehe firestore-tests/rules.test.mjs R44).
+          && resource.data.status in ['zugewiesen', 'in_bearbeitung']
           && request.resource.data.status in ['in_bearbeitung', 'abgeschlossen']
           && request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['status', 'technikerNotizen', 'aktualisiertAm', 'checklistenPunkte', 'maengel', 'zusatzarbeitVorschlag', 'berichtsentwurf'])
@@ -431,7 +439,20 @@ service cloud.firestore {
         && myMitarbeiterId() == resource.data.mitarbeiterId
         && request.resource.data.mitarbeiterId == resource.data.mitarbeiterId
         && resource.data.status in ['entwurf', 'eingereicht']
-        && request.resource.data.status in ['entwurf', 'eingereicht'];
+        && request.resource.data.status in ['entwurf', 'eingereicht']
+        // Phase 15 Härtung: einmal eingereicht ("eingereicht"), dürfen
+        // inhaltliche Felder (von/bis/kilometer/anlass/...) NICHT mehr
+        // geändert werden, solange sich der Eintrag noch im Entscheidungs-
+        // prozess des Büros befindet - sonst könnte ein Mitarbeiter nach dem
+        // Einreichen, während das Büro ggf. schon auf Basis der
+        // eingereichten Werte prüft, Beträge/Zeiten unbemerkt nachträglich
+        // erhöhen. Einzig erlaubte Änderung in diesem Zustand: der Status
+        // selbst (z.B. Zurückziehen auf "entwurf", um dann wieder normal zu
+        // bearbeiten).
+        && (
+          resource.data.status == 'entwurf'
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        );
     }
     // Service-/Techniker-/Personalverwaltung Phase 8 (Performance- und
     // Bonus-Simulation) - Referenzwerte sind eine Geschäftsentscheidung
