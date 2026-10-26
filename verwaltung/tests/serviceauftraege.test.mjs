@@ -15,7 +15,10 @@
 // statischen - ein statischer "import" wird vor jedem anderen Code im
 // Modul ausgeführt (auch vor dieser Zeile), der Shim wäre dann zu spät.
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-const { normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte } = await import('../js/views/serviceauftraege.js');
+const {
+  normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte,
+  terminUeberlappt, findeTerminKonflikte, brauchtBestaetigungVorVerschieben, berechneTerminEnde,
+} = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
 function pruefe(name, fn) {
@@ -123,6 +126,68 @@ pruefe('C5: eine führende "[x] "/"[ ] "-Markierung (aus der Anzeige) wird beim 
   const punkte = baueChecklistenPunkte('[x] Sichtprüfung\n[ ] Filter geprüft', vorherige);
   assert(punkte[0].titel === 'Sichtprüfung' && punkte[0].erledigt === true, 'Titel ohne Markierung muss wieder auf den vorherigen Punkt matchen');
   assert(punkte[1].titel === 'Filter geprüft' && punkte[1].erledigt === false);
+});
+
+// =============================================================================
+// Phase 7: Google-Kalender-Integration - Terminkonflikte, Bestätigungs-
+// Rückfrage vor dem Verschieben, Ende-Berechnung aus Start+Dauer.
+// =============================================================================
+
+pruefe('K1: zwei Termine desselben Technikers mit überlappendem Zeitraum gelten als Konflikt', () => {
+  assert(terminUeberlappt({ start: '2026-11-03T08:00', ende: '2026-11-03T10:00' }, { start: '2026-11-03T09:00', ende: '2026-11-03T11:00' }));
+});
+
+pruefe('K2: zwei unmittelbar aneinander anschließende Termine (Ende = Start) überlappen sich NICHT', () => {
+  assert(!terminUeberlappt({ start: '2026-11-03T08:00', ende: '2026-11-03T10:00' }, { start: '2026-11-03T10:00', ende: '2026-11-03T12:00' }));
+});
+
+pruefe('K3: findeTerminKonflikte findet nur Termine, die mindestens einen gemeinsamen Techniker UND einen überlappenden Zeitraum haben', () => {
+  const termine = [
+    { id: 't1', mitarbeiterIds: ['ma-1'], start: '2026-11-03T08:00', ende: '2026-11-03T10:00' },
+    { id: 't2', mitarbeiterIds: ['ma-2'], start: '2026-11-03T08:30', ende: '2026-11-03T09:30' },
+    { id: 't3', mitarbeiterIds: ['ma-1'], start: '2026-11-04T08:00', ende: '2026-11-04T10:00' },
+  ];
+  const konflikte = findeTerminKonflikte(termine, ['ma-1'], '2026-11-03T09:00', '2026-11-03T11:00', null);
+  assert(konflikte.length === 1 && konflikte[0].id === 't1', 't2 hat einen anderen Techniker, t3 einen anderen Tag - nur t1 ist ein echter Konflikt');
+});
+
+pruefe('K4: der eigene (gerade bearbeitete) Termin zählt nicht als Konflikt mit sich selbst', () => {
+  const termine = [{ id: 't1', mitarbeiterIds: ['ma-1'], start: '2026-11-03T08:00', ende: '2026-11-03T10:00' }];
+  assert(findeTerminKonflikte(termine, ['ma-1'], '2026-11-03T08:00', '2026-11-03T10:00', 't1').length === 0);
+});
+
+pruefe('K5: ohne Techniker-Zuweisung oder ohne Start gibt es keine Konfliktprüfung', () => {
+  const termine = [{ id: 't1', mitarbeiterIds: ['ma-1'], start: '2026-11-03T08:00', ende: '2026-11-03T10:00' }];
+  assert(findeTerminKonflikte(termine, [], '2026-11-03T08:00', '2026-11-03T10:00', null).length === 0);
+  assert(findeTerminKonflikte(termine, ['ma-1'], '', '', null).length === 0);
+});
+
+pruefe('B1 (Spezifikation: "bereits bestätigte Kundentermine nicht ohne Bürofreigabe verschieben"): eine Zeitänderung an einem bestätigten Termin braucht eine Rückfrage', () => {
+  const vorher = { start: '2026-11-03T08:00', ende: '2026-11-03T10:00', kundenBestaetigtAm: '2026-11-01T12:00:00.000Z' };
+  assert(brauchtBestaetigungVorVerschieben(vorher, '2026-11-04T08:00', '2026-11-04T10:00') === true);
+});
+
+pruefe('B2: ein unveränderter Zeitraum braucht KEINE Rückfrage, auch wenn der Termin bestätigt ist', () => {
+  const vorher = { start: '2026-11-03T08:00', ende: '2026-11-03T10:00', kundenBestaetigtAm: '2026-11-01T12:00:00.000Z' };
+  assert(brauchtBestaetigungVorVerschieben(vorher, '2026-11-03T08:00', '2026-11-03T10:00') === false);
+});
+
+pruefe('B3: ein noch NICHT bestätigter Termin braucht auch bei einer Zeitänderung keine Rückfrage', () => {
+  const vorher = { start: '2026-11-03T08:00', ende: '2026-11-03T10:00', kundenBestaetigtAm: '' };
+  assert(brauchtBestaetigungVorVerschieben(vorher, '2026-11-04T08:00', '2026-11-04T10:00') === false);
+});
+
+pruefe('B4: ein neuer Termin (kein vorheriger) braucht keine Rückfrage', () => {
+  assert(brauchtBestaetigungVorVerschieben(null, '2026-11-04T08:00', '2026-11-04T10:00') === false);
+});
+
+pruefe('E1: berechneTerminEnde addiert die Dauer in Stunden korrekt (inkl. halber Stunden)', () => {
+  assert(berechneTerminEnde('2026-11-03T08:00', 2) === '2026-11-03T10:00');
+  assert(berechneTerminEnde('2026-11-03T08:00', 1.5) === '2026-11-03T09:30');
+});
+
+pruefe('E2: berechneTerminEnde rechnet korrekt über Mitternacht hinaus', () => {
+  assert(berechneTerminEnde('2026-11-03T23:00', 2) === '2026-11-04T01:00');
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

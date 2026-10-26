@@ -1,4 +1,4 @@
-import { getAll, put, getSettings, SERVICEAUFTRAG_STATUS, STANDARD_WARTUNGSCHECKLISTE } from '../db.js';
+import { getAll, put, remove, getSettings, SERVICEAUFTRAG_STATUS, STANDARD_WARTUNGSCHECKLISTE } from '../db.js';
 import { uid, escapeHtml, toast, formatDate, formatCurrency, todayISO } from '../utils.js';
 import { openModal } from '../ui.js';
 import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../dokumente.js';
@@ -67,9 +67,70 @@ function checklistenPunkteAlsText(punkte) {
   return (punkte || []).map((p) => `${p.erledigt ? '[x]' : '[ ]'} ${p.titel}`).join('\n');
 }
 
+// --- Phase 7: Google-Kalender-Integration für die Terminierung ---
+//
+// Bewusst KEINE eigene Google-Calendar-API-Anbindung für Serviceaufträge:
+// ein verknüpfter Eintrag in der bestehenden "termine"-Collection nimmt
+// automatisch an der bereits vorhandenen, nutzergesteuerten Kalender-
+// Synchronisation teil (siehe googlesync.js syncCalendar(), aufgerufen
+// von dashboard.js/plantafel.js) - dieselbe Dreiteilung wie bei JARVIS
+// (Verfügbarkeit/Vorschlag/Buchung, siehe staging/README.md): hier ist
+// das Büro selbst die bedienende Person, die Synchronisation also bereits
+// die geforderte menschliche Freigabe, ohne dass ein weiterer Schritt
+// erfunden werden müsste.
+
+// Zwei Zeiträume (start/ende als "YYYY-MM-DDTHH:MM", vergleichbar wie an
+// jeder anderen Stelle dieser App per String-Vergleich) überlappen sich.
+export function terminUeberlappt(a, b) {
+  const aStart = a.start || '', aEnde = a.ende || aStart;
+  const bStart = b.start || '', bEnde = b.ende || bStart;
+  return aStart < bEnde && bStart < aEnde;
+}
+
+// Doppelbelegung eines Technikers: findet andere Termine (irgendeines
+// Typs - auch Urlaub/Krank/ein anderer Serviceauftrag), die sich mit dem
+// geplanten Zeitraum überlappen UND mindestens einen der hier
+// zugewiesenen Techniker betreffen. Bewusst kein hartes Verbot (z.B. zwei
+// kurze Außendienst-Termine am selben Tag können sich überschneiden und
+// trotzdem machbar sein) - die Oberfläche warnt, admin/büro entscheidet.
+export function findeTerminKonflikte(alleTermine, mitarbeiterIds, start, ende, eigeneTerminId) {
+  if (!start || !(mitarbeiterIds || []).length) return [];
+  const kandidat = { start, ende };
+  return alleTermine.filter((t) => t.id !== eigeneTerminId
+    && (t.mitarbeiterIds || []).some((id) => mitarbeiterIds.includes(id))
+    && terminUeberlappt(t, kandidat));
+}
+
+// Spezifikationsauflage "bereits bestätigte Kundentermine dürfen nicht
+// ohne erneute Bürofreigabe verschoben werden": sobald ein Termin
+// kundenBestaetigtAm trägt, muss eine Verschiebung von Datum/Uhrzeit
+// extra bestätigt werden (siehe mountTerminSection unten, confirm()-
+// Dialog) - das Setzen anderer Felder (z.B. Techniker-Notiz) oder ein
+// unveränderter Zeitraum braucht keine erneute Rückfrage.
+export function brauchtBestaetigungVorVerschieben(vorherigerTermin, neuerStart, neuesEnde) {
+  if (!vorherigerTermin || !vorherigerTermin.kundenBestaetigtAm) return false;
+  return vorherigerTermin.start !== neuerStart || (vorherigerTermin.ende || '') !== (neuesEnde || '');
+}
+
+// Datetime-local-Eingabe ("YYYY-MM-DDTHH:MM") + Dauer in Stunden -> Ende
+// im selben String-Format (keine Date-Arithmetik über Mitternacht/
+// Zeitzonen hinaus nötig, da hier ausschließlich mit lokalen
+// Wanduhrzeiten gerechnet wird, genau wie der Rest der App).
+export function berechneTerminEnde(start, dauerStunden) {
+  if (!start) return '';
+  const [datum, uhrzeit] = start.split('T');
+  if (!uhrzeit) return start;
+  const [h, m] = uhrzeit.split(':').map(Number);
+  const gesamtMinuten = (h * 60 + m) + Math.round((Number(dauerStunden) || 0) * 60);
+  const tag = new Date(`${datum}T00:00`);
+  tag.setMinutes(gesamtMinuten);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${tag.getFullYear()}-${pad(tag.getMonth() + 1)}-${pad(tag.getDate())}T${pad(tag.getHours())}:${pad(tag.getMinutes())}`;
+}
+
 export async function render(container) {
-  let [auftraege, kunden, anlagen, mitarbeiter, settings] = await Promise.all([
-    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(),
+  let [auftraege, kunden, anlagen, mitarbeiter, settings, termine] = await Promise.all([
+    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(), getAll('termine'),
   ]);
   auftraege.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
@@ -136,6 +197,98 @@ export async function render(container) {
     `).join('');
   }
 
+  // Siehe Kommentar bei terminUeberlappt/findeTerminKonflikte oben für die
+  // Begründung ("bewusst kein eigener Google-Calendar-Code hier"). Mutiert
+  // "auftrag" (= "data" aus openForm, dieselbe Objektreferenz wie in der
+  // Liste) direkt bei terminId, damit ein anschließendes Absenden des
+  // Hauptformulars die Verknüpfung nicht versehentlich wieder verwirft.
+  function mountTerminSection(host, auftrag) {
+    function draw() {
+      const termin = auftrag.terminId ? termine.find((t) => t.id === auftrag.terminId) : null;
+      if (!termin) {
+        host.innerHTML = `
+          <p class="hint">Noch kein Termin geplant.</p>
+          <div class="form-grid">
+            <div class="field"><label>Start</label><input type="datetime-local" id="termin-start"></div>
+            <div class="field"><label>Dauer (Std.)</label><input type="number" step="0.5" min="0.5" id="termin-dauer" value="${auftrag.geplanteWartungsdauer || 2}"></div>
+          </div>
+          <button type="button" class="btn btn-sm btn-primary" id="termin-anlegen">Termin planen</button>
+        `;
+        host.querySelector('#termin-anlegen').addEventListener('click', () => speichern(null));
+        return;
+      }
+      const technikerNamen = (termin.mitarbeiterIds || []).map((id) => technikerById[id]?.name).filter(Boolean).join(', ') || '–';
+      const dauerStd = termin.ende ? Math.max(0.5, (new Date(termin.ende) - new Date(termin.start)) / 3600000) : (auftrag.geplanteWartungsdauer || 2);
+      host.innerHTML = `
+        <p class="hint">${escapeHtml(technikerNamen)}${termin.kundenBestaetigtAm ? ' · <span class="badge badge-success">beim Kunden bestätigt</span>' : ''}</p>
+        <div class="form-grid">
+          <div class="field"><label>Start</label><input type="datetime-local" id="termin-start" value="${escapeHtml(termin.start || '')}"></div>
+          <div class="field"><label>Dauer (Std.)</label><input type="number" step="0.5" min="0.5" id="termin-dauer" value="${dauerStd}"></div>
+          <label class="field-checkbox col-span-2"><input type="checkbox" id="termin-bestaetigt" ${termin.kundenBestaetigtAm ? 'checked' : ''}> Beim Kunden bestätigt (eine Verschiebung danach braucht erneute Rückfrage)</label>
+        </div>
+        <div class="flex-row flex-wrap">
+          <button type="button" class="btn btn-sm btn-primary" id="termin-speichern">Speichern</button>
+          <button type="button" class="btn btn-sm btn-danger" id="termin-loeschen">Termin entfernen</button>
+        </div>
+      `;
+      host.querySelector('#termin-speichern').addEventListener('click', () => speichern(termin));
+      host.querySelector('#termin-loeschen').addEventListener('click', async () => {
+        if (!confirm('Termin wirklich entfernen? Ein zugehöriger Kalendereintrag verschwindet beim nächsten Sync ebenfalls.')) return;
+        await remove('termine', termin.id);
+        termine = termine.filter((t) => t.id !== termin.id);
+        auftrag.terminId = '';
+        await put('serviceauftraege', { ...auftrag, terminId: '' });
+        toast('Termin entfernt', 'success');
+        draw();
+      });
+    }
+
+    async function speichern(vorherigerTermin) {
+      const start = host.querySelector('#termin-start').value;
+      const dauer = Number(host.querySelector('#termin-dauer').value || 0);
+      if (!start) { toast('Bitte Startzeit angeben', 'error'); return; }
+      if ((auftrag.technikerIds || []).length === 0 && !confirm('Noch kein Techniker zugewiesen - Termin trotzdem ohne Techniker planen?')) return;
+      const ende = berechneTerminEnde(start, dauer);
+
+      if (brauchtBestaetigungVorVerschieben(vorherigerTermin, start, ende)
+          && !confirm('Dieser Termin ist bereits beim Kunden bestätigt. Wirklich verschieben? Der Kunde muss dann erneut informiert werden.')) {
+        return;
+      }
+
+      const konflikte = findeTerminKonflikte(termine, auftrag.technikerIds, start, ende, vorherigerTermin?.id);
+      if (konflikte.length > 0) {
+        const liste = konflikte.map((k) => `${k.titel || 'Termin'} (${formatDate((k.start || '').slice(0, 10))})`).join(', ');
+        if (!confirm(`Terminkonflikt mit: ${liste}. Trotzdem speichern?`)) return;
+      }
+
+      const neu = {
+        id: vorherigerTermin?.id || uid(),
+        titel: `Serviceauftrag ${auftrag.externeAuftragsnummer || ''}`.trim(),
+        typ: 'service',
+        start, ende,
+        mitarbeiterIds: [...(auftrag.technikerIds || [])],
+        kundeId: auftrag.kundeId || '',
+        ort: auftrag.einsatzadresse || '',
+        beschreibung: auftrag.hinweise || '',
+        serviceauftragId: auftrag.id,
+        kundenBestaetigtAm: host.querySelector('#termin-bestaetigt')?.checked
+          ? (vorherigerTermin?.kundenBestaetigtAm || new Date().toISOString())
+          : '',
+      };
+      await put('termine', neu);
+      const idx = termine.findIndex((t) => t.id === neu.id);
+      if (idx === -1) termine.push(neu); else termine[idx] = neu;
+      if (auftrag.terminId !== neu.id) {
+        auftrag.terminId = neu.id;
+        await put('serviceauftraege', { ...auftrag, terminId: neu.id });
+      }
+      toast('Termin gespeichert', 'success');
+      draw();
+    }
+
+    draw();
+  }
+
   function openForm(auftrag) {
     const isEdit = !!auftrag;
     const data = auftrag || {
@@ -143,7 +296,7 @@ export async function render(container) {
       anlagenId: '', herstellerUndAnlagentyp: '', anlagenmodell: '', seriennummer: '', wartungsart: '',
       auftragsfrist: '', geplanteWartungsdauer: '', geplanterNettoumsatz: '', hinweise: '',
       technikerIds: [], status: 'offen', technikerNotizen: '',
-      checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '',
+      checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '', terminId: '',
     };
     const { body, close } = openModal({
       title: isEdit ? `Serviceauftrag ${data.externeAuftragsnummer || ''}` : 'Neuer Serviceauftrag',
@@ -192,6 +345,9 @@ export async function render(container) {
             ${isEdit && data.berichtsentwurf ? `<div class="field col-span-2"><label>📝 Berichtsentwurf des Technikers (nur lesend - als Grundlage für den Bericht unten verwenden)</label><p class="hint">${escapeHtml(data.berichtsentwurf)}</p></div>` : ''}
           </div>
           ${isEdit ? `
+            <h3 style="margin-top:24px">Termin</h3>
+            <div id="termin-host"></div>
+
             <h3 style="margin-top:24px">Wartungsdokumentation</h3>
             <p class="hint">Wartungsprotokoll (Checkliste, Ja/Nein-Abschnitte, Unterschrift) aus Vorlage erzeugen, Fotos und Stundenzettel anhängen. Technikerrückmeldungen (oben: Mängel/Zusatzarbeit/Berichtsentwurf) hier als Grundlage verwenden - der eigentliche Versand bleibt bewusst Büro-Sache.</p>
             <div id="dok-host"></div>
@@ -213,6 +369,7 @@ export async function render(container) {
       body.querySelector('textarea[name="checklistenPunkteText"]').value = STANDARD_WARTUNGSCHECKLISTE.join('\n');
     });
     if (isEdit) {
+      mountTerminSection(body.querySelector('#termin-host'), data);
       const technikerNamen = (data.technikerIds || []).map((id) => technikerById[id]?.name).filter(Boolean).join(', ');
       renderDokumenteSection(body.querySelector('#dok-host'), 'serviceauftrag', data.id, {
         kategorien: SERVICEAUFTRAG_DOKUMENT_KATEGORIEN, title: 'Dokumente',

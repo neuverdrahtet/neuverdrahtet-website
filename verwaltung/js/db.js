@@ -2306,6 +2306,7 @@ Ort, Datum: {{datum}}`,
 export const TERMIN_TYPEN = [
   { id: 'termin', titel: 'Termin', farbe: '#2b7fd6' },
   { id: 'baustelle', titel: 'Baustelle', farbe: '#f0a020' },
+  { id: 'service', titel: 'Serviceauftrag', farbe: '#14b8a6' },
   { id: 'schulung', titel: 'Schulung', farbe: '#8e44ad' },
   { id: 'krank', titel: 'Krank', farbe: '#c0392b' },
   { id: 'urlaub', titel: 'Urlaub', farbe: '#1f8a4c' },
