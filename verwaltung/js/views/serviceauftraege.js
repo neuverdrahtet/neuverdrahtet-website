@@ -1,6 +1,7 @@
-import { getAll, put, SERVICEAUFTRAG_STATUS } from '../db.js';
+import { getAll, put, getSettings, SERVICEAUFTRAG_STATUS } from '../db.js';
 import { uid, escapeHtml, toast, formatDate, formatCurrency, todayISO } from '../utils.js';
 import { openModal } from '../ui.js';
+import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 
 // Service-Auftragsverwaltung (Phase 1 der Service-/Techniker-/
 // Personalverwaltung, siehe Architektur-/Sicherheitsbericht Phase 0) -
@@ -45,8 +46,8 @@ export function istUeberfaellig(auftrag, heute = todayISO()) {
 }
 
 export async function render(container) {
-  let [auftraege, kunden, anlagen, mitarbeiter] = await Promise.all([
-    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'),
+  let [auftraege, kunden, anlagen, mitarbeiter, settings] = await Promise.all([
+    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(),
   ]);
   auftraege.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
@@ -157,6 +158,11 @@ export async function render(container) {
             <div class="field col-span-2"><label>Hinweise</label><textarea name="hinweise">${escapeHtml(data.hinweise || '')}</textarea></div>
             ${isEdit && data.technikerNotizen ? `<div class="field col-span-2"><label>Notizen des Technikers (nur lesend)</label><p class="hint">${escapeHtml(data.technikerNotizen)}</p></div>` : ''}
           </div>
+          ${isEdit ? `
+            <h3 style="margin-top:24px">Wartungsdokumentation</h3>
+            <p class="hint">Wartungsprotokoll (Checkliste, Ja/Nein-Abschnitte, Unterschrift) aus Vorlage erzeugen, Fotos und Stundenzettel anhängen. Die mobile Techniker-Erfassung folgt in einer späteren Phase - bis dahin pflegt das Büro diesen Bereich.</p>
+            <div id="dok-host"></div>
+          ` : ''}
           <div class="modal-actions">
             <span class="spacer"></span>
             <button type="button" class="btn" id="sa-cancel">Abbrechen</button>
@@ -170,6 +176,16 @@ export async function render(container) {
       const sel = body.querySelector('select[name="anlagenId"]');
       sel.innerHTML = anlagenOptionen(e.target.value, '');
     });
+    if (isEdit) {
+      const technikerNamen = (data.technikerIds || []).map((id) => technikerById[id]?.name).filter(Boolean).join(', ');
+      renderDokumenteSection(body.querySelector('#dok-host'), 'serviceauftrag', data.id, {
+        kategorien: SERVICEAUFTRAG_DOKUMENT_KATEGORIEN, title: 'Dokumente',
+        berichtContext: {
+          settings, kunde: kundenById[data.kundeId] || null,
+          projekt: data.externeAuftragsnummer || '', mitarbeiter: technikerNamen,
+        },
+      });
+    }
     body.querySelector('#sa-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const fd = new FormData(e.target);

@@ -4,7 +4,18 @@
 // Service-/Techniker-/Personalverwaltung).
 //
 // Ausführen: node verwaltung/tests/serviceauftraege.test.mjs
-import { normalisiereAuftragsnummer, findeDublette, istUeberfaellig } from '../js/views/serviceauftraege.js';
+//
+// serviceauftraege.js importiert seit Phase 5/6 (Wartungsdokumentation)
+// dokumente.js, das transitiv über emailsend.js -> google.js beim bloßen
+// Modul-Laden (nicht erst bei Aufruf) auf localStorage zugreift - unter
+// Node ohne Browser-DOM gibt es das nicht. Ein winziger In-Memory-Shim
+// reicht, da dieser Test ausschließlich die reinen Funktionen
+// (Dublettenprüfung/Fristüberwachung) prüft, nie tatsächlich mit
+// Google/E-Mail interagiert. Per dynamischem import() statt eines
+// statischen - ein statischer "import" wird vor jedem anderen Code im
+// Modul ausgeführt (auch vor dieser Zeile), der Shim wäre dann zu spät.
+globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
+const { normalisiereAuftragsnummer, findeDublette, istUeberfaellig } = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
 function pruefe(name, fn) {

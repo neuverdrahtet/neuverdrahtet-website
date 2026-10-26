@@ -417,6 +417,16 @@ export const KUNDE_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['rec
 // den übrigen Unterlagen dieses Kunden/Projekts).
 export const FIRMA_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['bericht', 'vertrag', 'sonstiges'].includes(k.id));
 
+// Für die Serviceauftrag-Akte (Phase 5/6 der Service-/Techniker-
+// Personalverwaltung, siehe verwaltung/js/views/serviceauftraege.js) -
+// bewusst KEINE eigene "Wartungschecklisten"/"Wartungsberichte"-Engine
+// parallel zu diesem bestehenden Dokumenten-/Berichte-Baukasten aufgebaut
+// (der schon die passende "Wartungsprotokoll"-Vorlage mit Ja/Nein- und
+// Checklisten-Abschnitten enthält, siehe db.js vorlage-wartung) - nur um
+// die für einen Serviceauftrag sinnvollen Kategorien eingeschränkt
+// (kein Vertrag/Rechnung/Angebot, die bleiben an Kunde/Projekt gebunden).
+export const SERVICEAUFTRAG_DOKUMENT_KATEGORIEN = DOKUMENT_KATEGORIEN.filter((k) => ['bericht', 'bild', 'stundenzettel', 'sonstiges'].includes(k.id));
+
 function katLabel(id) {
   return DOKUMENT_KATEGORIEN.find((k) => k.id === id)?.titel || 'Sonstiges';
 }
