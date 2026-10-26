@@ -557,3 +557,27 @@ export async function sendPushNotification({ tokens, title, body, url }) {
     body: JSON.stringify({ action: 'push-send', tokens, title, body, url }),
   }).catch(() => { /* Push ist ein Komfort-Feature, darf den Aufrufer nicht stören */ });
 }
+
+// =============================================================================
+// KI-Wartungsdisposition MVP Phase 1 (Screenshot-Import Partner-Wartungs-
+// aufträge, siehe "Entwicklungsfreigabe MVP Phase 1") - admin-only wie JARVIS
+// insgesamt, siehe worker.js Kopfkommentar zum Abschnitt.
+// =============================================================================
+
+/** Analysiert EINEN Screenshot und führt ihn in den (ggf. bestehenden) Entwurfs-Batch zusammen. */
+export async function analysierePartnerImportScreenshot({ batchId, partnerId, bildDataUrl, screenshotIndex }) {
+  const { batch } = await callJarvisBackend('partnerimport-screenshot-analysieren', { batchId, partnerId, bildDataUrl, screenshotIndex });
+  return batch;
+}
+
+/** Übernimmt ausgewählte, geprüfte Entwurfszeilen in echte Serviceaufträge. */
+export async function uebernehmePartnerImportZeilen({ batchId, erwarteteVersion, zeilenIds }) {
+  const { ergebnis } = await callJarvisBackend('partnerimport-uebernehmen', { batchId, erwarteteVersion, zeilenIds });
+  return ergebnis;
+}
+
+/** Verwirft ausgewählte Entwurfszeilen (z.B. erkannte Fehlerkennungen) ohne sie zu übernehmen. */
+export async function verwirfPartnerImportZeilen({ batchId, erwarteteVersion, zeilenIds }) {
+  const { ergebnis } = await callJarvisBackend('partnerimport-verwerfen', { batchId, erwarteteVersion, zeilenIds });
+  return ergebnis;
+}

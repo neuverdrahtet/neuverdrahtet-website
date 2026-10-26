@@ -495,6 +495,26 @@ await pruefe('R45: ein Mitarbeiter kann eine bereits EINGEREICHTE Reisekostenabr
   await assertSucceeds(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-eingereicht'), { kilometer: 500 }));
 });
 
+// =============================================================================
+// KI-Wartungsdisposition MVP Phase 1 (Screenshot-Import Partner-
+// Wartungsaufträge): jarvisPartnerImportEntwuerfe ist admin-only lesbar und
+// NIEMALS clientseitig beschreibbar, wie alle anderen jarvis*-Collections.
+// =============================================================================
+
+await pruefe('R46: jarvisPartnerImportEntwuerfe ist NUR für admin lesbar, nicht für büro/mitarbeiter/techniker', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1'), { partnerId: 'wr-gruppe', zeilen: [] });
+  });
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1')));
+});
+
+await pruefe('R47: jarvisPartnerImportEntwuerfe ist NIEMALS clientseitig beschreibbar, auch nicht für admin', async () => {
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1'), { partnerId: 'manipuliert' }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);

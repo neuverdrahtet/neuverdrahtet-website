@@ -4523,6 +4523,357 @@ async function wendeEinsatzFreigabeAn({ serviceAccount, id, erwarteteVersion, en
   return { id, freigabeStatus: 'freigegeben', ausgewaehlterSlot: slot };
 }
 
+// =============================================================================
+// JARVIS/Werkora - KI-Wartungsdisposition, MVP Phase 1: Screenshot-basierter
+// Import von Partner-Wartungsaufträgen (z.B. WR-Gruppe-Plantafel aus dem
+// Salesforce-Partnerportal). Freigegeben per "Entwicklungsfreigabe MVP
+// Phase 1" - siehe Bestandsaufnahme-Dokument.
+//
+// WICHTIG - dieselben Leitplanken wie bei JARVIS TECH:
+// - Screenshots werden NIEMALS persistiert (kein Firestore-/Storage-Eintrag
+//   für das Bild selbst) - nur die extrahierten, strukturierten Textdaten
+//   werden gespeichert ("datensparsame Speicherung", Vorgabe Punkt 13). Das
+//   Bild existiert ausschließlich für die Dauer des einzelnen Vision-API-
+//   Aufrufs im Arbeitsspeicher des Workers.
+// - Diese Pipeline erzeugt ausschließlich ENTWÜRFE (jarvisPartnerImport-
+//   Entwuerfe, write:false wie alle anderen jarvis*-Collections) - niemals
+//   direkt einen echten Serviceauftrag. Die Übernahme in die echte
+//   serviceauftraege-Collection ist ein SEPARATER, von einem Menschen
+//   ausgelöster Schritt (fuehrePartnerImportUebernahmeAus), nie automatisch.
+// - Ein erneuter Import darf NIE unkontrolliert überschreiben (Vorgabe
+//   Punkt 12): baueServiceauftragAktualisierungAusPartnerImportZeile füllt
+//   ausschließlich leere Felder, jede Abweichung zu einem bereits
+//   vorhandenen, befüllten Feld wird gemeldet statt angewendet.
+// - Admin-only wie JARVIS insgesamt (pruefeJarvisRolle) - keine Erweiterung
+//   auf büro in dieser Phase, konsistent mit jarvis-tech-* und allen
+//   anderen jarvis*-Aktionen.
+// - KEINE Kunden-/Anlagen-Zuordnung in dieser Phase (nicht Teil der
+//   Freigabe MVP Phase 1) - kundeId/kundenname bleiben nach dem Import
+//   leer und werden vom Büro manuell in der bestehenden Serviceauftrags-
+//   Ansicht nachgetragen. KEIN automatischer Kundenkontakt, KEINE
+//   Terminbuchung, KEIN Salesforce-Schreibzugriff - diese Pipeline endet
+//   mit einem ganz normalen, offenen Serviceauftrag wie jeder andere.
+// =============================================================================
+
+// Geschlossene Liste bekannter Partner (Vorgabe: "eindeutige Kombination aus
+// Partner-ID und externer Auftrags-ID") - bewusst erweiterbar angelegt,
+// aktuell nur die WR-Gruppe freigegeben.
+const PARTNER_QUELLEN = { 'wr-gruppe': 'WR-Gruppe (Salesforce-Partnerportal)' };
+
+// Felder, die aus einem Screenshot extrahiert und über mehrere Screenshots
+// hinweg zusammengeführt werden (OHNE die Auftragsnummer selbst, die als
+// Gruppierungsschlüssel dient, siehe gruppierePartnerImportRohzeilen).
+const PARTNERIMPORT_FELDER = ['partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'sachbearbeiter', 'auftragsart'];
+
+function normalisierePartnerAuftragsnummer(nummer) {
+  return (nummer || '').toString().trim().toLowerCase();
+}
+
+function istGueltigesIsoDatum(text) {
+  return typeof text === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(text);
+}
+
+// Reine Merge-Funktion für EIN Feld: niemals eine bereits vorhandene
+// Information stillschweigend durch eine abweichende neue ersetzen - ein
+// Widerspruch wird gemeldet, nicht automatisch aufgelöst (Vorgabe Punkt 8
+// "widersprüchliche Daten zur Prüfung vorlegen").
+function mergePartnerImportFeld(bestehenderWert, neuerWert) {
+  const b = (bestehenderWert || '').toString().trim();
+  const n = (neuerWert || '').toString().trim();
+  if (!n) return { wert: b || null, konflikt: false };
+  if (!b) return { wert: n, konflikt: false };
+  if (b.toLowerCase() === n.toLowerCase()) return { wert: b, konflikt: false };
+  return { wert: b, konflikt: true, abweichenderWert: n };
+}
+
+// Führt die rohen Felder EINES Screenshots für EINE bereits bekannte (oder
+// neue) Auftragsnummer in die bestehende Entwurfszeile zusammen - das ist
+// der Kern von Vorgabe Punkt 6 ("mehrere Screenshots, Zuordnung aufgeklappter
+// Details zur richtigen Auftragsnummer").
+function mergePartnerImportZeile(bestehendeZeile, rohdaten, screenshotIndex) {
+  const basis = bestehendeZeile || {
+    zeilenId: crypto.randomUUID(), auftragsnummer: rohdaten.auftragsnummer,
+    quelleScreenshotIndices: [], widersprueche: [], unsicherheitshinweise: [],
+  };
+  const neueWidersprueche = [...basis.widersprueche];
+  const zeile = { ...basis };
+  for (const feld of PARTNERIMPORT_FELDER) {
+    const { wert, konflikt, abweichenderWert } = mergePartnerImportFeld(basis[feld], rohdaten[feld]);
+    zeile[feld] = wert;
+    if (konflikt) {
+      const vorhandenerEintrag = neueWidersprueche.find((w) => w.feld === feld);
+      if (vorhandenerEintrag) {
+        if (!vorhandenerEintrag.werte.includes(abweichenderWert)) vorhandenerEintrag.werte.push(abweichenderWert);
+      } else {
+        neueWidersprueche.push({ feld, werte: [wert, abweichenderWert] });
+      }
+    }
+  }
+  zeile.widersprueche = neueWidersprueche;
+  zeile.quelleScreenshotIndices = [...new Set([...basis.quelleScreenshotIndices, screenshotIndex])];
+  if (rohdaten.unsicherheitshinweis && !basis.unsicherheitshinweise.includes(rohdaten.unsicherheitshinweis)) {
+    zeile.unsicherheitshinweise = [...basis.unsicherheitshinweise, rohdaten.unsicherheitshinweis];
+  }
+  zeile.fehlendeFelder = PARTNERIMPORT_FELDER.filter((f) => !zeile[f]);
+  return zeile;
+}
+
+// Gruppiert/merged ALLE Rohzeilen eines einzelnen Screenshots in die bereits
+// vorhandenen Entwurfszeilen eines Batches - Zuordnung ausschließlich über
+// die (normalisierte) Auftragsnummer, niemals über Reihenfolge/Position.
+function gruppierePartnerImportRohzeilen(vorhandeneZeilen, rohZeilen, screenshotIndex) {
+  const ergebnis = [...vorhandeneZeilen];
+  for (const roh of (rohZeilen || [])) {
+    if (!roh.auftragsnummer) continue; // ohne Auftragsnummer keine Zuordnung möglich - wird nicht übernommen, siehe Aufrufer für die Meldung
+    const normiert = normalisierePartnerAuftragsnummer(roh.auftragsnummer);
+    const index = ergebnis.findIndex((z) => normalisierePartnerAuftragsnummer(z.auftragsnummer) === normiert);
+    if (index === -1) {
+      ergebnis.push(mergePartnerImportZeile(null, roh, screenshotIndex));
+    } else {
+      ergebnis[index] = mergePartnerImportZeile(ergebnis[index], roh, screenshotIndex);
+    }
+  }
+  return ergebnis;
+}
+
+// Dublettenprüfung GEGEN DIE ECHTE serviceauftraege-Collection (Vorgabe
+// Punkt 10) - unabhängig von der Batch-interne Zusammenführung oben, die nur
+// Mehrfach-Screenshots DESSELBEN Imports betrifft.
+function findePartnerAuftragsDublette(bestehendeServiceauftraege, partnerId, auftragsnummer) {
+  const normiert = normalisierePartnerAuftragsnummer(auftragsnummer);
+  if (!normiert) return null;
+  return bestehendeServiceauftraege.find((a) => a.partnerId === partnerId && normalisierePartnerAuftragsnummer(a.externeAuftragsnummer) === normiert) || null;
+}
+
+function formatierePartnerImportAdresse(strasse, plz, stadt) {
+  const ort = [plz, stadt].filter(Boolean).join(' ');
+  return [strasse, ort].filter(Boolean).join(', ');
+}
+
+// Baut einen NEUEN Serviceauftrag aus einer Entwurfszeile - bewusst OHNE
+// kundeId/kundenname/anlagenId (Vorgabe: keine Kunden-/Anlagenzuordnung in
+// dieser Phase) und OHNE technikerIds (bleibt "offen", wie jeder andere neu
+// angelegte Auftrag - SmartDispatch/die Serviceauftragsverwaltung übernehmen
+// ab hier unverändert, siehe Kopfkommentar).
+function baueServiceauftragAusPartnerImportZeile(zeile, partnerId, batchId) {
+  const jetzt = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    externeAuftragsnummer: zeile.auftragsnummer, partnerId,
+    auftraggeber: PARTNER_QUELLEN[partnerId] || partnerId,
+    partnerSachbearbeiter: zeile.sachbearbeiter || '', partnerStatusText: zeile.partnerStatus || '',
+    wartungsart: zeile.auftragsart || '', wartungsdauerPartnerText: zeile.wartungsdauerText || '',
+    auftragsfrist: istGueltigesIsoDatum(zeile.faelligkeitsdatum) ? zeile.faelligkeitsdatum : '',
+    einsatzadresse: formatierePartnerImportAdresse(zeile.strasse, zeile.plz, zeile.stadt),
+    telefonnummer: zeile.telefonnummer || '',
+    kundeId: '', kundenname: '', anlagenId: '',
+    technikerIds: [], status: 'offen', technikerNotizen: '',
+    checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '', terminId: '',
+    herkunftPartnerImportBatchId: batchId, herkunftPartnerImportZeilenId: zeile.zeilenId,
+    erstelltAm: jetzt, aktualisiertAm: jetzt,
+  };
+}
+
+// Nicht-destruktiver Merge in einen BEREITS VORHANDENEN Serviceauftrag
+// (Vorgabe Punkt 12 "kein unkontrolliertes Überschreiben"): füllt
+// ausschließlich Felder, die am bestehenden Auftrag noch leer sind. Ein
+// bereits befülltes Feld mit abweichendem neuen Wert wird NIE überschrieben,
+// sondern als "abweichung" gemeldet, damit das Büro es manuell prüft.
+// technikerIds/status/checklistenPunkte/maengel/... werden HIER NIE berührt -
+// die laufende Techniker-Dokumentation eines bereits zugewiesenen Auftrags
+// darf ein erneuter Partner-Import niemals verändern.
+function baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag) {
+  const kandidatenFelder = {
+    partnerSachbearbeiter: zeile.sachbearbeiter || '', partnerStatusText: zeile.partnerStatus || '',
+    wartungsart: zeile.auftragsart || '', wartungsdauerPartnerText: zeile.wartungsdauerText || '',
+    auftragsfrist: istGueltigesIsoDatum(zeile.faelligkeitsdatum) ? zeile.faelligkeitsdatum : '',
+    einsatzadresse: formatierePartnerImportAdresse(zeile.strasse, zeile.plz, zeile.stadt),
+    telefonnummer: zeile.telefonnummer || '',
+  };
+  const aktualisierteFelder = {};
+  const abweichungen = [];
+  for (const [feld, neuerWert] of Object.entries(kandidatenFelder)) {
+    const bestehenderWert = (bestehenderAuftrag[feld] || '').toString().trim();
+    if (!neuerWert) continue;
+    if (!bestehenderWert) { aktualisierteFelder[feld] = neuerWert; continue; }
+    if (bestehenderWert.toLowerCase() !== neuerWert.toLowerCase()) {
+      abweichungen.push({ feld, bestehenderWert, neuerWert });
+    }
+  }
+  return { aktualisierteFelder, abweichungen };
+}
+
+const PARTNERIMPORT_ZEILE_SCHEMA = {
+  type: 'object',
+  properties: {
+    auftragsnummer: { type: ['string', 'null'] },
+    partnerStatus: { type: ['string', 'null'] },
+    faelligkeitsdatum: { type: ['string', 'null'] },
+    wartungsdauerText: { type: ['string', 'null'] },
+    plz: { type: ['string', 'null'] },
+    stadt: { type: ['string', 'null'] },
+    strasse: { type: ['string', 'null'] },
+    telefonnummer: { type: ['string', 'null'] },
+    sachbearbeiter: { type: ['string', 'null'] },
+    auftragsart: { type: ['string', 'null'] },
+    unsicherheitshinweis: { type: 'string' },
+  },
+  required: ['auftragsnummer', 'partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'sachbearbeiter', 'auftragsart', 'unsicherheitshinweis'],
+  additionalProperties: false,
+};
+
+const PARTNERIMPORT_SCHEMA = {
+  type: 'object',
+  properties: {
+    lesbar: { type: 'boolean' },
+    zeilen: { type: 'array', items: PARTNERIMPORT_ZEILE_SCHEMA },
+  },
+  required: ['lesbar', 'zeilen'],
+  additionalProperties: false,
+};
+
+// Bewusst zurückhaltend formuliert, genau wie bei JARVIS TECH: niemals
+// Daten erfinden, lieber null setzen. "faelligkeitsdatum" MUSS im Format
+// JJJJ-MM-TT geliefert werden oder null, wenn das Datum nicht eindeutig in
+// dieses Format übersetzbar ist (keine Ratequalität, siehe
+// istGueltigesIsoDatum).
+const PARTNERIMPORT_SYSTEM_PROMPT = `Du liest einen Screenshot einer Auftrags-/Plantafel-Übersicht aus einem Partner-Portal für Wartungsaufträge aus (z.B. WR-Gruppe/Salesforce-Partnerportal). Pro sichtbarer Auftragszeile extrahierst du strukturierte Daten.
+
+ZWINGENDE Regeln:
+- Antworte ausschließlich auf Deutsch.
+- Erfinde NIEMALS einen Wert. Ist ein Feld nicht lesbar oder nicht vorhanden, setze es auf null - schätze oder rate NICHTS.
+- "faelligkeitsdatum": NUR im Format JJJJ-MM-TT übernehmen, wenn Tag/Monat/Jahr eindeutig erkennbar sind. Ist das Datum unvollständig, mehrdeutig oder in einem anderen Format nicht sicher übersetzbar, setze null UND erwähne das rohe, gesehene Datum im "unsicherheitshinweis".
+- "wartungsdauerText": übernimm den auf dem Screenshot sichtbaren Text wörtlich (z.B. "2 Std.", "90 Min") - rechne NICHTS um, interpretiere NICHTS.
+- "strasse"/"plz"/"stadt" sind oft nur sichtbar, wenn ein einzelner Auftrag im Portal AUFGEKLAPPT wurde (Detailansicht) - ein Screenshot der reinen Listenübersicht enthält diese Felder häufig nicht; setze sie dann null, erfinde keine Adresse.
+- "auftragsnummer" ist das wichtigste Feld - ist sie auf einer Zeile nicht lesbar, überspringe diese Zeile komplett statt sie mit auftragsnummer:null zurückzugeben (ohne Auftragsnummer ist eine Zeile später nicht zuordenbar).
+- "unsicherheitshinweis" ist PFLICHT je Zeile und muss ehrlich benennen, was unklar/nicht sicher lesbar war. Ist nichts unklar, schreibe "Keine besonderen Unsicherheiten."
+- "lesbar": false auf oberster Ebene, wenn das Bild gar keine auswertbare Auftragsübersicht zeigt (z.B. falsches Motiv, zu unscharf) - dann "zeilen" als leeres Array zurückgeben.
+- Erfasse NUR, was tatsächlich auf dem Screenshot sichtbar ist - keine Rückschlüsse auf nicht gezeigte Informationen (z.B. keine Vermutungen über Kundennamen, keine Zuordnung zu bereits bekannten Werkora-Kunden).`;
+
+async function callClaudePartnerImportAnalyse({ apiKey, model, bildDataUrl }) {
+  const match = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(bildDataUrl || '');
+  if (!match) { const err = new Error('Ungültiges Bildformat (unterstützt: JPEG/PNG/WebP-Screenshots).'); err.status = 400; throw err; }
+  const [, mediaType, base64Data] = match;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model, max_tokens: 4096,
+      system: PARTNERIMPORT_SYSTEM_PROMPT,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+          { type: 'text', text: 'Lies alle sichtbaren Auftragszeilen aus diesem Screenshot aus.' },
+        ],
+      }],
+      output_config: { format: { type: 'json_schema', schema: PARTNERIMPORT_SCHEMA } },
+    }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Anthropic-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  if (data.stop_reason === 'refusal') throw new Error('Die Anfrage wurde von Claude aus Sicherheitsgründen abgelehnt.');
+  const textBlock = (data.content || []).find((b) => b.type === 'text');
+  if (!textBlock) throw new Error('Keine Antwort erhalten.');
+  return JSON.parse(textBlock.text);
+}
+
+/**
+ * Analysiert EINEN Screenshot und führt das Ergebnis in den (ggf. bereits
+ * bestehenden) Entwurfs-Batch zusammen. Das Bild selbst wird NIE
+ * gespeichert (siehe Kopfkommentar) - nur das strukturierte Ergebnis.
+ */
+async function fuehrePartnerImportAnalyseAus({ serviceAccount, env, batchId, partnerId, bildDataUrl, screenshotIndex, callerUid, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  if (!PARTNER_QUELLEN[partnerId]) { const err = new Error(`Unbekannte partnerId "${partnerId}".`); err.status = 400; throw err; }
+  if (!bildDataUrl) { const err = new Error('Kein Screenshot übergeben.'); err.status = 400; throw err; }
+  if (!env.ANTHROPIC_API_KEY) { const err = new Error('JARVIS ist serverseitig nicht eingerichtet (ANTHROPIC_API_KEY fehlt).'); err.status = 500; throw err; }
+
+  const ergebnis = await callClaudePartnerImportAnalyse({ apiKey: env.ANTHROPIC_API_KEY, model: env.MODEL_ID || 'claude-opus-4-8', bildDataUrl });
+
+  const vorhanden = await firestoreGetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId });
+  const vorhandeneZeilen = (vorhanden?.zeilen || []).filter((z) => z.uebernahmeStatus !== 'uebernommen' && z.uebernahmeStatus !== 'verworfen');
+  const bereitsEntschiedeneZeilen = (vorhanden?.zeilen || []).filter((z) => z.uebernahmeStatus === 'uebernommen' || z.uebernahmeStatus === 'verworfen');
+  const neuZusammengefuehrt = gruppierePartnerImportRohzeilen(vorhandeneZeilen, ergebnis.zeilen, screenshotIndex).map((z) => ({ ...z, uebernahmeStatus: z.uebernahmeStatus || 'offen' }));
+  const uebersprungeneZeilenOhneAuftragsnummer = (ergebnis.zeilen || []).filter((z) => !z.auftragsnummer).length;
+
+  const daten = {
+    id: batchId, partnerId, status: 'offen',
+    zeilen: [...bereitsEntschiedeneZeilen, ...neuZusammengefuehrt],
+    screenshotAnzahl: (vorhanden?.screenshotAnzahl || 0) + 1,
+    bildLesbar: ergebnis.lesbar !== false,
+    uebersprungeneZeilenOhneAuftragsnummer: (vorhanden?.uebersprungeneZeilenOhneAuftragsnummer || 0) + uebersprungeneZeilenOhneAuftragsnummer,
+    erstelltVonUid: vorhanden?.erstelltVonUid || callerUid || '', erstelltAm: vorhanden?.erstelltAm || new Date().toISOString(),
+    aktualisiertAm: new Date().toISOString(), version: (vorhanden?.version || 0) + 1,
+  };
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId, data: daten });
+  return daten;
+}
+
+/**
+ * Übernimmt ausgewählte, vom Büro geprüfte Entwurfszeilen in die ECHTE
+ * serviceauftraege-Collection - der einzige Schritt in dieser Pipeline, der
+ * echte Geschäftsdaten anlegt/ändert, und ausschließlich auf explizite
+ * menschliche Auswahl hin (niemals automatisch, niemals alle Zeilen pauschal).
+ */
+async function fuehrePartnerImportUebernahmeAus({ serviceAccount, batchId, erwarteteVersion, zeilenIds, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const batch = await firestoreGetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId });
+  if (!batch) { const err = new Error('Import-Batch nicht gefunden.'); err.status = 404; throw err; }
+  if ((batch.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Import-Batch wurde seit deiner Prüfung aktualisiert (Version ${batch.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  if (!Array.isArray(zeilenIds) || zeilenIds.length === 0) { const err = new Error('Keine Zeilen zur Übernahme ausgewählt.'); err.status = 400; throw err; }
+
+  const bestehendeServiceauftraege = await firestoreListDocuments({ serviceAccount, collection: 'serviceauftraege' });
+  let neu = 0, aktualisiert = 0, uebersprungen = 0;
+  const abweichungenGesamt = [];
+
+  const aktualisierteZeilen = await Promise.all(batch.zeilen.map(async (zeile) => {
+    if (!zeilenIds.includes(zeile.zeilenId) || zeile.uebernahmeStatus !== 'offen') return zeile;
+    const dublette = findePartnerAuftragsDublette(bestehendeServiceauftraege, batch.partnerId, zeile.auftragsnummer);
+    if (!dublette) {
+      const neuerAuftrag = baueServiceauftragAusPartnerImportZeile(zeile, batch.partnerId, batchId);
+      await firestoreSetDoc({ serviceAccount, collection: 'serviceauftraege', id: neuerAuftrag.id, data: neuerAuftrag });
+      neu++;
+      return { ...zeile, uebernahmeStatus: 'uebernommen', uebernommenAlsServiceauftragId: neuerAuftrag.id, uebernommenAm: new Date().toISOString() };
+    }
+    const { aktualisierteFelder, abweichungen } = baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, dublette);
+    if (Object.keys(aktualisierteFelder).length > 0) {
+      await firestoreMergeFelder({ serviceAccount, collection: 'serviceauftraege', id: dublette.id, felder: { ...aktualisierteFelder, aktualisiertAm: new Date().toISOString() } });
+      aktualisiert++;
+    } else {
+      uebersprungen++;
+    }
+    if (abweichungen.length > 0) abweichungenGesamt.push({ auftragsnummer: zeile.auftragsnummer, serviceauftragId: dublette.id, abweichungen });
+    return { ...zeile, uebernahmeStatus: 'uebernommen', uebernommenAlsServiceauftragId: dublette.id, uebernommenAm: new Date().toISOString(), uebersprungeneAbweichungen: abweichungen };
+  }));
+
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId, data: { ...batch, zeilen: aktualisierteZeilen, version: (batch.version || 0) + 1, aktualisiertAm: new Date().toISOString() } });
+  return { neu, aktualisiert, uebersprungen, abweichungen: abweichungenGesamt };
+}
+
+/** Verwirft ausgewählte Entwurfszeilen (z.B. erkannte Dubletten innerhalb des Batches, offensichtlich fehlerhafte Zeilen) - NIE eine automatische Entscheidung, immer explizit ausgewählt. */
+async function fuehrePartnerImportVerwerfAus({ serviceAccount, batchId, erwarteteVersion, zeilenIds, callerRole }) {
+  pruefeJarvisRolle(callerRole);
+  const batch = await firestoreGetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId });
+  if (!batch) { const err = new Error('Import-Batch nicht gefunden.'); err.status = 404; throw err; }
+  if ((batch.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Import-Batch wurde seit deiner Prüfung aktualisiert (Version ${batch.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  const aktualisierteZeilen = batch.zeilen.map((z) => (zeilenIds.includes(z.zeilenId) && z.uebernahmeStatus === 'offen') ? { ...z, uebernahmeStatus: 'verworfen', verworfenAm: new Date().toISOString() } : z);
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisPartnerImportEntwuerfe', id: batchId, data: { ...batch, zeilen: aktualisierteZeilen, version: (batch.version || 0) + 1, aktualisiertAm: new Date().toISOString() } });
+  return { verworfen: zeilenIds.length };
+}
+
 async function runJarvisWartungsCheck(env) {
   if (env.JARVIS_WARTUNG_AKTIV !== 'true') return;
   if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
@@ -7050,6 +7401,81 @@ export default {
       }
     }
 
+    // KI-Wartungsdisposition MVP Phase 1 - Screenshot eines Partner-Portal-
+    // Plantafel-Auftrags analysieren und in den Entwurfs-Batch zusammenführen.
+    if (body.action === 'partnerimport-screenshot-analysieren') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const batch = await fuehrePartnerImportAnalyseAus({
+          serviceAccount, env, batchId: body.batchId, partnerId: body.partnerId, bildDataUrl: body.bildDataUrl, screenshotIndex: Number(body.screenshotIndex) || 0,
+          callerUid: aufrufer.uid, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, batch }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // KI-Wartungsdisposition MVP Phase 1 - ausgewählte, geprüfte Entwurfszeilen
+    // in echte Serviceaufträge übernehmen (niemals automatisch/pauschal).
+    if (body.action === 'partnerimport-uebernehmen') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await fuehrePartnerImportUebernahmeAus({
+          serviceAccount, batchId: body.batchId, erwarteteVersion: body.erwarteteVersion, zeilenIds: body.zeilenIds, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // KI-Wartungsdisposition MVP Phase 1 - ausgewählte Entwurfszeilen verwerfen.
+    if (body.action === 'partnerimport-verwerfen') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await fuehrePartnerImportVerwerfAus({
+          serviceAccount, batchId: body.batchId, erwarteteVersion: body.erwarteteVersion, zeilenIds: body.zeilenIds, callerRole: aufrufer.role,
+        });
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
     // Phase 7 - JARVIS TECH: Liste bisheriger Analysen (nur lesend).
     if (body.action === 'jarvis-tech-analysen') {
       if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
@@ -7362,4 +7788,11 @@ export const __test__ = {
   KI_BUEROKRAFT_TOOLS, callGoogleTool,
   // Service-/Techniker-/Personalverwaltung Phase 2 - JARVIS SmartDispatch
   runJarvisDispatchCheck, findeEinsatzKandidaten, wendeEinsatzFreigabeAn, JARVIS_DISPATCH_VORSCHLAEGE_ANZAHL,
+  // KI-Wartungsdisposition MVP Phase 1 - Screenshot-Import Partner-Wartungsaufträge
+  mergePartnerImportFeld, mergePartnerImportZeile, gruppierePartnerImportRohzeilen,
+  findePartnerAuftragsDublette, formatierePartnerImportAdresse, istGueltigesIsoDatum,
+  normalisierePartnerAuftragsnummer, baueServiceauftragAusPartnerImportZeile,
+  baueServiceauftragAktualisierungAusPartnerImportZeile, fuehrePartnerImportAnalyseAus,
+  fuehrePartnerImportUebernahmeAus, fuehrePartnerImportVerwerfAus, callClaudePartnerImportAnalyse,
+  PARTNER_QUELLEN, PARTNERIMPORT_FELDER,
 };

@@ -42,6 +42,7 @@ const routeLoaders = {
   'ki-aktivitaet': () => import('./views/ki-aktivitaet.js'),
   'ki-assistent': () => import('./views/ki-assistent.js'),
   jarvis: () => import('./views/jarvis.js'),
+  partnerimport: () => import('./views/partnerimport.js'),
   katalog: () => import('./views/katalog.js'),
   'katalog-vorschlaege': () => import('./views/katalog-vorschlaege.js'),
   lieferanten: () => import('./views/lieferanten.js'),

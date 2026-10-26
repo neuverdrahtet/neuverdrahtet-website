@@ -275,6 +275,16 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // KI-Wartungsdisposition MVP Phase 1 (Screenshot-Import Partner-
+    // Wartungsaufträge) - Entwurfs-Batches, NIEMALS clientseitig
+    // beschreibbar. Die Übernahme in echte Serviceaufträge läuft
+    // ausschließlich über die serverseitigen Aktionen
+    // partnerimport-uebernehmen/-verwerfen (Service-Account), siehe
+    // cloudflare-worker/worker.js fuehrePartnerImportUebernahmeAus.
+    match /jarvisPartnerImportEntwuerfe/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     // DGUV/VDE-Prüfprotokoll-Entwürfe (Phase 7) - bewusst NIEMALS
     // clientseitig beschreibbar, auch nicht von admin (write:false wie alle
     // anderen jarvis*-Collections): das Protokoll bleibt ausschließlich über

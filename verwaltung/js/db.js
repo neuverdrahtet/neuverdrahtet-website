@@ -2430,6 +2430,16 @@ export const BENEFIT_TYPEN = [
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
 
+// KI-Wartungsdisposition MVP Phase 1 (Screenshot-Import Partner-Wartungs-
+// aufträge) - geschlossene Liste bekannter Partner, MUSS exakt mit
+// PARTNER_QUELLEN in cloudflare-worker/worker.js übereinstimmen (die Prüfung
+// "unbekannte partnerId" läuft dort server-seitig, hier nur für die
+// Dropdown-Auswahl). Bewusst erweiterbar angelegt, aktuell nur die WR-Gruppe
+// freigegeben ("Entwicklungsfreigabe MVP Phase 1").
+export const PARTNER_QUELLEN = [
+  { id: 'wr-gruppe', titel: 'WR-Gruppe (Salesforce-Partnerportal)' },
+];
+
 // Startpunkt für die Checkliste eines Serviceauftrags (Phase 5 Wartungs-
 // checklisten) - bewusst kurz und generisch, vom Büro beim Zuweisen per
 // Textzeilen frei editierbar/erweiterbar (keine feste, unveränderliche
@@ -2467,6 +2477,7 @@ export const ROUTE_ROLLEN = {
   'ki-aktivitaet': ['admin'],
   'ki-assistent': ['admin', 'buero'],
   jarvis: ['admin'],
+  partnerimport: ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],
