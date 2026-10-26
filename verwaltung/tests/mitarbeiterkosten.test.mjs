@@ -53,6 +53,17 @@ pruefe('BK5: mehrere aktive Benefits summieren sich', () => {
   assert(berechneBenefitKostenImZeitraum(benefits, 'm1', '2026-03-01', '2026-03-31') === 50);
 });
 
+// Phase 16 Testaudit: BK2/BK3 deckten je nur ein offenes Ende ab (Beginn
+// mitten im Zeitraum, offen; bzw. vor dem Zeitraum beendet) - hier zusätzlich
+// der Fall, dass Beginn UND Ende beide MITTEN im Zeitraum liegen (Benefit
+// läuft kürzer als der ausgewertete Monat).
+pruefe('BK6: ein Benefit, der mitten im Zeitraum beginnt UND endet, wird nur für die tatsächlich aktiven Tage anteilig gerechnet', () => {
+  // 2026-03 hat 31 Tage; aktiv vom 10. bis 15. = 6 Tage.
+  const benefits = [{ mitarbeiterId: 'm1', beginnDatum: '2026-03-10', endeDatum: '2026-03-15', arbeitgeberKostenMonatlich: 31 }];
+  const k = berechneBenefitKostenImZeitraum(benefits, 'm1', '2026-03-01', '2026-03-31');
+  assert(Math.abs(k - 6) < 0.01, `erwartet ~6, war ${k}`);
+});
+
 // =============================================================================
 // berechneGrundverguetungImZeitraum
 // =============================================================================
@@ -60,6 +71,11 @@ pruefe('BK5: mehrere aktive Benefits summieren sich', () => {
 pruefe('G1: Festgehalt wird unabhängig von der Zeitraumlänge voll angesetzt', () => {
   const g = berechneGrundverguetungImZeitraum({ id: 'm1', gehaltMonatlich: 3000 }, [], '2026-03-01', '2026-03-31');
   assert(g === 3000);
+});
+
+pruefe('G5: ohne gehaltMonatlich UND ohne stundenlohn ist die Grundvergütung 0 (keine erfundene Annahme)', () => {
+  const g = berechneGrundverguetungImZeitraum({ id: 'm1' }, [{ mitarbeiterId: 'm1', datum: '2026-03-10', dauerMinuten: 480 }], '2026-03-01', '2026-03-31');
+  assert(g === 0, `erwartet 0, war ${g}`);
 });
 
 pruefe('G2: Stundenlohn × tatsächlich erfasste Ist-Stunden im Zeitraum', () => {
