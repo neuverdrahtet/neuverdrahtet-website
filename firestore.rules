@@ -51,7 +51,12 @@ service cloud.firestore {
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
-        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks'
+        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks',
+        // Phase 10 (Mitarbeiter & Benefits): genauso schützenswert wie
+        // "mitarbeiter" selbst (enthält Arbeitgeberkosten je Mitarbeiter) -
+        // bewusst KEIN dokumentgebundenes Lese-Carve-out für mitarbeiter/
+        // techniker, analog zur "mitarbeiter"-Collection selbst.
+        'mitarbeiterBenefits'
       ];
     }
     // Operative Daten: alle drei Rollen (spiegelt ROUTE_ROLLEN für
@@ -439,6 +444,19 @@ service cloud.firestore {
     // Falle (siehe Kommentar in verwaltung/js/views/reisekosten.js)
     // vergrößern.
     match /bonusreferenzwerte/{docId} {
+      allow read: if isAdminOrBuero();
+      allow write: if isAdmin();
+    }
+    // Service-/Techniker-/Personalverwaltung Phase 11 (steuerliche
+    // Benefit-Regeln) - genauso wie reisekostensaetze/bonusreferenzwerte
+    // eine versionierte, admin-only beschreibbare Tabelle ("globale
+    // Planungsregeln ausschließlich durch Administratoren"). Anders als
+    // reisekostensaetze bewusst NICHT für mitarbeiter/techniker lesbar: die
+    // Steuerregeln sind nur für die admin/büro-only Benefits-Verwaltung
+    // relevant (siehe ROUTE_ROLLEN.benefits) und enthalten keine für
+    // Mitarbeiter selbst nötige Information (anders als der eigene
+    // Verpflegungspauschalen-Anspruch).
+    match /benefitSteuerregeln/{docId} {
       allow read: if isAdminOrBuero();
       allow write: if isAdmin();
     }

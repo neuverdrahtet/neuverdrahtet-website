@@ -96,6 +96,8 @@ const STORES = {
   reisekostensaetze: 'id',
   reisekostenabrechnungen: 'id',
   bonusreferenzwerte: 'id',
+  mitarbeiterBenefits: 'id',
+  benefitSteuerregeln: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2411,6 +2413,23 @@ export const SERVICEAUFTRAG_STATUS = [
 ];
 export const SERVICEAUFTRAG_TECHNIKER_STATUS = ['in_bearbeitung', 'abgeschlossen'];
 
+// Service-/Techniker-/Personalverwaltung Phase 10 (Mitarbeiter &amp; Benefits) -
+// geschlossene Liste gängiger, real existierender Benefit-Arten (keine
+// erfundenen Kategorien). Die steuerliche Behandlung je Typ liegt NICHT hier
+// als Konstante, sondern admin-editierbar in der versionierten Collection
+// "benefitSteuerregeln" (siehe firestore.rules: nur admin darf schreiben) -
+// Spezifikationsauflage "keine erfundenen/dauerhaft unveränderlichen
+// Steuerregeln", siehe Kopfkommentar in verwaltung/js/mitarbeiterkosten.js.
+export const BENEFIT_TYPEN = [
+  { id: 'jobrad', titel: 'Jobrad (Fahrradüberlassung/-leasing)' },
+  { id: 'deutschlandticket', titel: 'Deutschlandticket / Jobticket-Zuschuss' },
+  { id: 'sachbezug', titel: 'Sachbezug (z.B. Gutschein-/Guthabenkarte)' },
+  { id: 'bav', titel: 'Betriebliche Altersvorsorge' },
+  { id: 'essenszuschuss', titel: 'Essenszuschuss' },
+  { id: 'internetTelefon', titel: 'Zuschuss Internet/Telefon' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+
 // Startpunkt für die Checkliste eines Serviceauftrags (Phase 5 Wartungs-
 // checklisten) - bewusst kurz und generisch, vom Büro beim Zuweisen per
 // Textzeilen frei editierbar/erweiterbar (keine feste, unveränderliche
@@ -2434,6 +2453,7 @@ export const ROUTE_ROLLEN = {
   serviceauftraege: ['admin', 'buero'],
   reisekosten: ['admin', 'buero', 'mitarbeiter'],
   performance: ['admin', 'buero'],
+  benefits: ['admin', 'buero'],
   service: ['admin', 'buero', 'mitarbeiter'],
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],

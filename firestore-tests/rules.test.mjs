@@ -432,6 +432,34 @@ await pruefe('R41: nur admin darf einen Bonus-Referenzwert anlegen/ändern, bür
   }));
 });
 
+// =============================================================================
+// Service-/Techniker-/Personalverwaltung Phase 10-13 (Mitarbeiter-Benefits,
+// Steuerregeln, Gesamtkosten): mitarbeiterBenefits ist admin/büro-Vollzugriff
+// wie "mitarbeiter" selbst, benefitSteuerregeln admin-only Schreibzugriff.
+// =============================================================================
+
+await pruefe('R42: mitarbeiterBenefits ist admin/büro-Vollzugriff, aber NICHT für mitarbeiter/techniker lesbar (genauso schützenswert wie mitarbeiter selbst)', async () => {
+  await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'mitarbeiterBenefits', 'b-1'), {
+    mitarbeiterId: 'ma-tech-1', benefitTyp: 'jobrad', arbeitgeberKostenMonatlich: 30, beginnDatum: '2026-01-01', endeDatum: '',
+  }));
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'mitarbeiterBenefits', 'b-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'mitarbeiterBenefits', 'b-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'mitarbeiterBenefits', 'b-1')));
+});
+
+await pruefe('R43: benefitSteuerregeln ist admin/büro lesbar, aber nur admin darf schreiben, mitarbeiter/techniker haben keinen Zugriff', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'benefitSteuerregeln', 's-1'), {
+      benefitTyp: 'sachbezug', regelBeschreibung: 'Sachbezugsfreigrenze 50 EUR/Monat', gueltigAb: '2022-01-01', gueltigBis: '', quelle: '§8 Abs. 2 Satz 11 EStG',
+    });
+  });
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'benefitSteuerregeln', 's-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'benefitSteuerregeln', 's-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'benefitSteuerregeln', 's-1')));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'benefitSteuerregeln', 's-1'), { regelBeschreibung: 'manipuliert' }));
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'benefitSteuerregeln', 's-1'), { regelBeschreibung: 'Sachbezugsfreigrenze 50 EUR/Monat (korrigiert)' }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);
