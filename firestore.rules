@@ -428,6 +428,20 @@ service cloud.firestore {
         && resource.data.status in ['entwurf', 'eingereicht']
         && request.resource.data.status in ['entwurf', 'eingereicht'];
     }
+    // Service-/Techniker-/Personalverwaltung Phase 8 (Performance- und
+    // Bonus-Simulation) - Referenzwerte sind eine Geschäftsentscheidung
+    // ("globale Planungsregeln ausschließlich durch Administratoren") und
+    // bewusst NICHT für mitarbeiter/techniker lesbar: Die Büro-Ansicht
+    // (verwaltung/js/views/performance.js) ist ohnehin admin/büro-only
+    // (siehe ROUTE_ROLLEN.performance), eine mitarbeiterId-gebundene
+    // Leseregel wie bei reisekostenabrechnungen ist hier also nicht nötig
+    // und würde nur unnötig die "ungefilterter Listener wird abgelehnt"-
+    // Falle (siehe Kommentar in verwaltung/js/views/reisekosten.js)
+    // vergrößern.
+    match /bonusreferenzwerte/{docId} {
+      allow read: if isAdminOrBuero();
+      allow write: if isAdmin();
+    }
 
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (

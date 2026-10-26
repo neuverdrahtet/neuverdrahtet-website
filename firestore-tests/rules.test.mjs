@@ -405,6 +405,33 @@ await pruefe('R39: ein Mitarbeiter kann nach erfolgter Genehmigung seine eigene 
   await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { anlass: 'nachträglich verändert' }));
 });
 
+// =============================================================================
+// Service-/Techniker-/Personalverwaltung Phase 8 (Performance- und
+// Bonus-Simulation): bonusreferenzwerte - admin/büro lesbar (die Ansicht ist
+// ohnehin admin/büro-only), nur admin darf schreiben, mitarbeiter/techniker
+// haben KEINEN Zugriff (keine Geschäftsentscheidung für Nicht-Büro-Rollen).
+// =============================================================================
+
+await pruefe('R40: bonusreferenzwerte ist nur für admin/büro lesbar, mitarbeiter/techniker haben keinen Zugriff', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'bonusreferenzwerte', 'r-1'), {
+      kennzahl: 'abgeschlosseneAuftraege', schwellenwert: 10, bonusBetrag: 100, gueltigAb: '2026-01-01', gueltigBis: '',
+    });
+  });
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'bonusreferenzwerte', 'r-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'bonusreferenzwerte', 'r-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'bonusreferenzwerte', 'r-1')));
+});
+
+await pruefe('R41: nur admin darf einen Bonus-Referenzwert anlegen/ändern, büro NICHT (globale Planungsregel)', async () => {
+  await assertFails(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'bonusreferenzwerte', 'r-2'), {
+    kennzahl: 'istStunden', schwellenwert: 150, bonusBetrag: 50, gueltigAb: '2026-01-01', gueltigBis: '',
+  }));
+  await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'bonusreferenzwerte', 'r-2'), {
+    kennzahl: 'istStunden', schwellenwert: 150, bonusBetrag: 50, gueltigAb: '2026-01-01', gueltigBis: '',
+  }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);

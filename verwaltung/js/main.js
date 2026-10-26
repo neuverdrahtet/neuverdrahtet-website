@@ -30,6 +30,7 @@ const routeLoaders = {
   auftraege: () => import('./views/auftraege.js'),
   serviceauftraege: () => import('./views/serviceauftraege.js'),
   reisekosten: () => import('./views/reisekosten.js'),
+  performance: () => import('./views/performance.js'),
   service: () => import('./views/service.js'),
   wartung: () => import('./views/wartung.js'),
   plantafel: () => import('./views/plantafel.js'),

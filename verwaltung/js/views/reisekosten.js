@@ -2,6 +2,7 @@ import { getAll, put } from '../db.js';
 import { uid, escapeHtml, toast, formatDate, formatCurrency } from '../utils.js';
 import { openModal } from '../ui.js';
 import { getSession } from '../auth.js';
+import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { REISEKOSTEN_STATUS, findeGueltigenSatz, berechneVerpflegungspauschale, berechneKilometergeld } from '../reisekosten.js';
 
 // Service-/Techniker-/Personalverwaltung Phase 9 - Reisekosten und
@@ -14,6 +15,24 @@ import { REISEKOSTEN_STATUS, findeGueltigenSatz, berechneVerpflegungspauschale, 
 // admin/büro sehen und prüfen ALLE Abrechnungen + pflegen die Satztabelle;
 // mitarbeiter sehen/bearbeiten hier nur die EIGENEN (siehe firestore.rules) -
 // Techniker nutzen dafür ihre eigene mobile Ansicht (verwaltung/techniker/).
+//
+// WICHTIG: firestore.rules gewähren der Rolle "mitarbeiter" für
+// reisekostenabrechnungen nur ein dokumentgebundenes Read (eigene
+// mitarbeiterId) - KEIN pauschales isAnyRole(). db.js' getAll() baut aber
+// immer einen ungefilterten onSnapshot()-Listener auf die GESAMTE Collection
+// auf; der wird für diese Rolle komplett abgelehnt (nicht etwa still
+// gefiltert - siehe genau dasselbe Muster in verwaltung/techniker/
+// techniker.js). Für "mitarbeiter" wird deshalb hier bewusst eine gezielte
+// where()-Abfrage statt getAll() verwendet (siehe fetchEigeneReisekosten()).
+async function fetchEigeneReisekosten(mitarbeiterId) {
+  if (FIREBASE_ENABLED) {
+    const { firestore } = await import('../firebase.js');
+    const { collection, query, where, getDocs } = await import('../vendor/firebase/firebase-firestore.js');
+    const snap = await getDocs(query(collection(firestore, 'reisekostenabrechnungen'), where('mitarbeiterId', '==', mitarbeiterId)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+  return (await getAll('reisekostenabrechnungen')).filter((a) => a.mitarbeiterId === mitarbeiterId);
+}
 
 const STATUS_LABEL = Object.fromEntries(REISEKOSTEN_STATUS.map((s) => [s.id, s.titel]));
 const STATUS_BADGE = { entwurf: '', eingereicht: 'badge-warn', genehmigt: 'badge-success', abgelehnt: 'badge-danger' };
@@ -22,9 +41,9 @@ export async function render(container) {
   const session = getSession() || {};
   const istBuero = session.role === 'admin' || session.role === 'buero';
   let [abrechnungen, mitarbeiter, saetze] = await Promise.all([
-    getAll('reisekostenabrechnungen'), getAll('mitarbeiter'), getAll('reisekostensaetze'),
+    istBuero ? getAll('reisekostenabrechnungen') : fetchEigeneReisekosten(session.mitarbeiterId),
+    getAll('mitarbeiter'), getAll('reisekostensaetze'),
   ]);
-  if (!istBuero) abrechnungen = abrechnungen.filter((a) => a.mitarbeiterId === session.mitarbeiterId);
   abrechnungen.sort((a, b) => (b.von || '').localeCompare(a.von || ''));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
   saetze.sort((a, b) => (b.gueltigAb || '').localeCompare(a.gueltigAb || ''));

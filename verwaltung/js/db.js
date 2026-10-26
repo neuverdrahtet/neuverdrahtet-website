@@ -95,6 +95,7 @@ const STORES = {
   serviceauftraege: 'id',
   reisekostensaetze: 'id',
   reisekostenabrechnungen: 'id',
+  bonusreferenzwerte: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2432,6 +2433,7 @@ export const ROUTE_ROLLEN = {
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
   reisekosten: ['admin', 'buero', 'mitarbeiter'],
+  performance: ['admin', 'buero'],
   service: ['admin', 'buero', 'mitarbeiter'],
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
