@@ -131,6 +131,7 @@ const KATEGORIEN = [
   { key: 'rechnungsentwuerfe', titel: 'Rechnungsentwürfe', typ: 'rechnung', leer: 'Keine offenen Rechnungsentwürfe.' },
   { key: 'mahnentwuerfe', titel: 'Mahnentwürfe', typ: 'mahnung', leer: 'Keine offenen Mahnentwürfe.' },
   { key: 'terminvorschlaege', titel: 'Wartungs- und Terminvorschläge', typ: 'termin', leer: 'Keine offenen Terminvorschläge.' },
+  { key: 'einsatzvorschlaege', titel: 'Techniker-Zuweisungsvorschläge (SmartDispatch)', typ: 'einsatz', leer: 'Keine offenen Techniker-Zuweisungsvorschläge.' },
   { key: 'offeneProjektaufgaben', titel: 'Offene Projektaufgaben', typ: 'projekt', leer: 'Keine auffälligen Projektaufgaben.' },
   { key: 'fehlgeschlageneAutomationen', titel: 'Fehlgeschlagene Automationen', typ: 'job', leer: 'Keine fehlgeschlagenen/unklaren Hintergrund-Jobs.' },
   { key: 'offeneFreigaben', titel: 'Offene Freigaben', typ: 'aktion', leer: 'Keine offenen Freigabe-Vorgänge.' },
@@ -143,6 +144,7 @@ function itemTitel(typ, item) {
     case 'rechnung': return `Projekt ${item.projektId} (${item.quelle === 'angebot' ? 'aus Angebot' : 'aus Zeiterfassung'})`;
     case 'mahnung': return `Rechnung ${item.rechnungId} - Mahnstufe ${item.stufe}`;
     case 'termin': return `${item.bezeichnung || item.anlageId} - fällig ${item.naechstePruefung || ''}`;
+    case 'einsatz': return `Serviceauftrag ${item.externeAuftragsnummer || item.auftragId} - Frist ${item.auftragsfrist || 'offen'}`;
     case 'projekt': return `${item.titel || item.id}`;
     case 'job': return `${item.typ || item.id} - ${item.status}`;
     case 'aktion': return `${item.typ} (${item.id})`;
@@ -162,6 +164,8 @@ function itemDetails(typ, item) {
       return `Offener Betrag: ${item.offenerBetragBrutto != null ? `${item.offenerBetragBrutto.toFixed(2)} €` : 'unbekannt'}${item.neueFrist ? ` · Frist: ${escapeHtml(item.neueFrist)}` : ''}${item.aktuellerMahntext ? `<br>Bisheriger Mahntext: ${escapeHtml(item.aktuellerMahntext)}` : '<br>Noch kein Mahntext hinterlegt.'} - nicht versendet.`;
     case 'termin':
       return (item.vorschlaege || []).map((v, i) => `${i}: ${formatDateTime(v.start)} - ${formatDateTime(v.end)}`).join('<br>') || escapeHtml((item.fehlendeInfos || []).join(' | '));
+    case 'einsatz':
+      return `Einsatzadresse: ${escapeHtml(item.einsatzadresse || 'unbekannt')}<br>${(item.vorschlaege || []).map((v) => `${escapeHtml(v.name)}: ${escapeHtml(v.begruendung)}`).join('<br>') || escapeHtml((item.fehlendeInfos || []).join(' | '))}`;
     case 'projekt':
       return escapeHtml(item.beschreibung || '');
     case 'job':
@@ -178,6 +182,7 @@ function entityIdVon(typ, item) {
   if (typ === 'rechnung') return item.projektId;
   if (typ === 'mahnung') return item.id;
   if (typ === 'termin') return item.id;
+  if (typ === 'einsatz') return item.id;
   return item.id;
 }
 
@@ -300,7 +305,7 @@ async function renderZentrale(container) {
             <div class="jv-item" style="border-top:1px solid var(--border,#333);padding:8px 0">
               <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px">
                 <strong>${escapeHtml(itemTitel(k.typ, item))}</strong>
-                ${['email', 'angebot', 'rechnung', 'mahnung', 'termin'].includes(k.typ) ? `
+                ${['email', 'angebot', 'rechnung', 'mahnung', 'termin', 'einsatz'].includes(k.typ) ? `
                   <span class="actions">
                     <button type="button" class="btn btn-sm jv-freigeben" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">✅ Freigeben</button>
                     <button type="button" class="btn btn-sm jv-ablehnen" data-typ="${k.typ}" data-idx="${i}" data-kat="${k.key}">❌ Ablehnen</button>
@@ -309,12 +314,13 @@ async function renderZentrale(container) {
                 ` : ''}
               </div>
               <div class="text-mute" style="font-size:12px;margin-top:4px">${itemDetails(k.typ, item)}</div>
-              ${k.typ === 'termin' ? `
+              ${['termin', 'einsatz'].includes(k.typ) ? `
                 <div class="field" style="margin-top:4px">
                   <label>Vorschlag auswählen (bei Freigeben)</label>
                   <select class="jv-slot-auswahl" data-kat="${k.key}" data-idx="${i}">
-                    ${(item.vorschlaege || []).map((v, vi) => `<option value="${vi}">${formatDateTime(v.start)}</option>`).join('')}
+                    ${(item.vorschlaege || []).map((v, vi) => `<option value="${vi}">${k.typ === 'termin' ? formatDateTime(v.start) : `${escapeHtml(v.name)} (${v.offeneAuftraegeAnzahl} offene Aufträge)`}</option>`).join('')}
                   </select>
+                  ${k.typ === 'einsatz' ? '<p class="hint" style="margin-top:4px">Freigabe wählt NUR den Techniker-Vorschlag aus - die Zuweisung selbst im Serviceauftrag bleibt ein manueller Schritt.</p>' : ''}
                 </div>
               ` : ''}
             </div>
@@ -331,7 +337,7 @@ async function renderZentrale(container) {
     if (!item) return;
     const entityId = entityIdVon(typ, item);
     const payload = { entscheidung, erwarteteVersion: item.version ?? 1 };
-    if (typ === 'termin' && entscheidung === 'freigeben') {
+    if (['termin', 'einsatz'].includes(typ) && entscheidung === 'freigeben') {
       const select = container.querySelector(`.jv-slot-auswahl[data-kat="${kat}"][data-idx="${idx}"]`);
       payload.ausgewaehlterSlotIndex = Number(select?.value || 0);
     }
@@ -1516,12 +1522,14 @@ async function renderMobile(container) {
 const JOB_TYP_LABEL = {
   'email-check': 'E-Mail-Check', 'rechnung-check': 'Rechnungs-Check', 'mahnung-check': 'Mahnungs-Check',
   'wartung-check': 'Wartungs-Check', 'projekt-check': 'Projekt-Check', 'control-check': 'CONTROL-Check',
+  'dispatch-check': 'SmartDispatch-Check',
 };
 const FEATURE_FLAG_LABEL = {
   JARVIS_EMAIL_AKTIV: 'Autonomer E-Mail-Check', JARVIS_ANGEBOT_AKTIV: 'Autonome Angebotsentwürfe',
   JARVIS_RECHNUNG_AKTIV: 'Autonome Rechnungsentwürfe', JARVIS_MAHNUNG_AKTIV: 'Autonome Mahnentwürfe',
   JARVIS_WARTUNG_AKTIV: 'Autonome Wartungsvorschläge', JARVIS_PROJEKT_AKTIV: 'Autonome Projekthinweise',
   JARVIS_CONTROL_AKTIV: 'Autonomer CONTROL-Check', JARVIS_TAGESCHECK_AKTIV: 'Autonomer täglicher Büro-Check',
+  JARVIS_DISPATCH_AKTIV: 'Autonome Techniker-Zuweisungsvorschläge (SmartDispatch)',
 };
 const JOB_STATUS_BADGE = {
   done: '<span class="badge badge-success">erfolgreich</span>',

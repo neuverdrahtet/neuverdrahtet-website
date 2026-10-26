@@ -129,14 +129,26 @@ export function berechneTerminEnde(start, dauerStunden) {
 }
 
 export async function render(container) {
-  let [auftraege, kunden, anlagen, mitarbeiter, settings, termine] = await Promise.all([
-    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(), getAll('termine'),
+  let [auftraege, kunden, anlagen, mitarbeiter, settings, termine, aufgaben] = await Promise.all([
+    getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(), getAll('termine'), getAll('aufgaben'),
   ]);
   auftraege.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const anlagenById = Object.fromEntries(anlagen.map((a) => [a.id, a]));
   const techniker = mitarbeiter.filter((m) => m.zugriffsrolle === 'techniker');
   const technikerById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+
+  // Büro-Dashboard (Phase 3): Techniker-Auslastung auf einen Blick + Hinweis
+  // auf wartende JARVIS-SmartDispatch-Vorschläge (Phase 2). Die eigentlichen
+  // Vorschlagsdaten (jarvisTechnikerVorschlaege) sind bewusst admin-only
+  // (wie alle jarvis*-Collections) - hier zählt daher die vom Dispatch-Check
+  // angelegte BEGLEITAUFGABE (quelle 'jarvis-dispatch'), die regulär über
+  // die bereits für büro lesbare "aufgaben"-Collection sichtbar ist.
+  const aktiveAuftraege = auftraege.filter((a) => !['abgeschlossen', 'abgebrochen'].includes(a.status));
+  const auslastungProTechniker = techniker.map((t) => ({
+    name: t.name, anzahl: aktiveAuftraege.filter((a) => (a.technikerIds || []).includes(t.id)).length,
+  })).sort((a, b) => b.anzahl - a.anzahl);
+  const offeneDispatchVorschlaege = aufgaben.filter((a) => a.quelle === 'jarvis-dispatch' && a.status === 'offen').length;
 
   container.innerHTML = `
     <div class="view-header">
@@ -151,7 +163,16 @@ export async function render(container) {
       <div class="kpi-card"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
       <div class="kpi-card kpi-danger"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
       <div class="kpi-card kpi-success"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
+      ${offeneDispatchVorschlaege > 0 ? `<div class="kpi-card kpi-accent"><div class="kpi-value">🤖 ${offeneDispatchVorschlaege}</div><div class="kpi-label">JARVIS-Zuweisungsvorschläge warten auf Freigabe (JARVIS-Zentrale)</div></div>` : ''}
     </div>
+    ${techniker.length > 0 ? `
+      <h3 style="margin-top:20px">Techniker-Auslastung</h3>
+      <table class="data-table" style="max-width:420px">
+        <thead><tr><th>Techniker</th><th>Offene/laufende Aufträge</th></tr></thead>
+        <tbody>${auslastungProTechniker.map((t) => `<tr><td>${escapeHtml(t.name)}</td><td>${t.anzahl}</td></tr>`).join('')}</tbody>
+      </table>
+    ` : ''}
+    <h3 style="margin-top:20px">Alle Serviceaufträge</h3>
     <div id="liste-host"></div>
   `;
 

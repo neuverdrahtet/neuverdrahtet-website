@@ -3253,6 +3253,10 @@ const JARVIS_AKTIONS_AUSFUEHRUNG = {
     serviceAccount, env, angebotId: payload.entityId, erwarteteVersion: payload.erwarteteVersion,
     entscheidung: 'bearbeiten', neuePositionen: payload.neuePositionen,
   }),
+  'einsatz.pruefen': ({ serviceAccount, payload }) => wendeEinsatzFreigabeAn({
+    serviceAccount, id: payload.entityId, erwarteteVersion: payload.erwarteteVersion,
+    entscheidung: payload.entscheidung, ausgewaehlterSlotIndex: payload.ausgewaehlterSlotIndex,
+  }),
 };
 
 async function fuehreJarvisAktionAus({ serviceAccount, env, aktionId, callerUid, callerRole }) {
@@ -4301,6 +4305,7 @@ const JARVIS_WARTUNG_SUCHFENSTER_TAGE = 60; // wie weit in die Zukunft nach frei
 const JARVIS_WARTUNG_DAUER_MINUTEN_STANDARD = 120; // Annahme, da "anlagen" keine Einsatzdauer je Objekt speichert - wird im Vorschlag ausdrücklich als Annahme gekennzeichnet (dauerIstAnnahme:true)
 const JARVIS_FAHRZEIT_PUFFER_MINUTEN = 30;
 const JARVIS_WARTUNG_VORSCHLAEGE_ANZAHL = 3;
+const JARVIS_DISPATCH_VORSCHLAEGE_ANZAHL = 3; // Service-/Techniker-/Personalverwaltung Phase 2 - SmartDispatch
 
 function faelligeAnlagen(anlagen, heute) {
   const grenze = new Date(`${heute}T00:00:00Z`);
@@ -4343,6 +4348,179 @@ function hatTerminkonflikt(slotStart, slotEnd, bestehendeTermine, pufferMinuten)
     const tEnd = new Date(t.ende || t.start).getTime();
     return startMs < tEnd && endMs > tStart;
   });
+}
+
+// =============================================================================
+// Service-/Techniker-/Personalverwaltung Phase 2 - JARVIS SmartDispatch.
+// NICHT zu verwechseln mit den "JARVIS Phase X"-Abschnitten in diesem File
+// (die zählen die ursprüngliche JARVIS-Rollout-Reihenfolge, nicht die Phasen
+// der neuen 18-Phasen-Spezifikation) - eigenes Nummerierungsschema, deshalb
+// hier ausdrücklich benannt statt "Phase 2" o.ä.
+//
+// Schlägt für einen offenen, noch NICHT zugewiesenen Serviceauftrag
+// (serviceauftraege.status==='offen', technikerIds leer) passende Techniker
+// vor. Bewusst KEINE Geo-/Entfernungsberechnung ("nächster Techniker") - es
+// gibt keine Koordinaten/PLZ-Abstandsdaten für Mitarbeiter oder Einsatz-
+// adressen in Werkora, eine Entfernung zu erfinden wäre eine unzulässige
+// Annahme (vgl. "Herstellervorgaben dürfen nicht erfunden werden" - derselbe
+// Grundsatz gilt für jede andere Datenquelle). Kandidaten werden stattdessen
+// nach zwei echten, vorhandenen Kriterien gefiltert/sortiert:
+// 1) kein Terminkonflikt im geplanten Zeitraum (inkl. ganztägiger Abwesenheit
+//    durch Urlaub/Krankheit),
+// 2) aufsteigend nach aktueller Auslastung (Anzahl eigener offener/noch nicht
+//    abgeschlossener Serviceaufträge) - gleicht die Last zwischen Technikern
+//    aus, ohne eine Distanz zu behaupten, die niemand gemessen hat.
+function findeEinsatzKandidaten({ auftrag, techniker, termine, serviceauftraege = [] }) {
+  if (!auftrag.auftragsfrist) return [];
+  const start = `${auftrag.auftragsfrist}T08:00`;
+  const dauerMinuten = Math.round((Number(auftrag.geplanteWartungsdauer) || 2) * 60);
+  const ende = new Date(new Date(start).getTime() + dauerMinuten * 60000).toISOString().slice(0, 16);
+  const tag = auftrag.auftragsfrist;
+
+  const freieKandidaten = techniker.filter((t) => {
+    const eigeneTermine = termine.filter((term) => (term.mitarbeiterIds || []).includes(t.id));
+    const ganztagsAbwesend = eigeneTermine.some((term) => {
+      if (term.typ !== 'urlaub' && term.typ !== 'krank') return false;
+      const termStart = (term.start || '').slice(0, 10);
+      const termEnde = (term.ende || term.start || '').slice(0, 10);
+      return termStart && termStart <= tag && tag <= termEnde;
+    });
+    if (ganztagsAbwesend) return false;
+    const sonstigeTermine = eigeneTermine.filter((term) => term.typ !== 'urlaub' && term.typ !== 'krank');
+    return !hatTerminkonflikt(start, ende, sonstigeTermine, JARVIS_FAHRZEIT_PUFFER_MINUTEN);
+  });
+
+  const auslastungProTechniker = Object.fromEntries(freieKandidaten.map((t) => [
+    t.id, serviceauftraege.filter((a) => (a.technikerIds || []).includes(t.id) && !['abgeschlossen', 'abgebrochen'].includes(a.status)).length,
+  ]));
+
+  return freieKandidaten
+    .slice()
+    .sort((a, b) => (auslastungProTechniker[a.id] || 0) - (auslastungProTechniker[b.id] || 0))
+    .slice(0, JARVIS_DISPATCH_VORSCHLAEGE_ANZAHL)
+    .map((t) => ({
+      technikerId: t.id,
+      name: t.name || t.id,
+      offeneAuftraegeAnzahl: auslastungProTechniker[t.id] || 0,
+      begruendung: `Kein Terminkonflikt im geplanten Zeitraum (${start} – ${ende}), aktuell ${auslastungProTechniker[t.id] || 0} offene(r) Serviceauftrag/Serviceaufträge zugewiesen.`,
+    }));
+}
+
+async function runJarvisDispatchCheck(env) {
+  if (env.JARVIS_DISPATCH_AKTIV !== 'true') return;
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `dispatch-check-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'dispatch-check' });
+  if (!job) return;
+
+  let geprueft = 0, vorschlaegeErstellt = 0, keinVorschlagMoeglich = 0, uebersprungen = 0, fehlerAnzahl = 0;
+  try {
+    const [serviceauftraege, termine, mitarbeiter] = await Promise.all([
+      firestoreListDocuments({ serviceAccount, collection: 'serviceauftraege' }),
+      firestoreListDocuments({ serviceAccount, collection: 'termine' }),
+      firestoreListDocuments({ serviceAccount, collection: 'mitarbeiter' }),
+    ]);
+    const techniker = mitarbeiter.filter((m) => m.zugriffsrolle === 'techniker');
+    const offeneAuftraege = serviceauftraege.filter((a) => a.status === 'offen' && (a.technikerIds || []).length === 0);
+
+    for (const auftrag of offeneAuftraege) {
+      try {
+        const beanspruchung = await beanspracheEinzelVorgang({
+          serviceAccount, collection: 'jarvisTechnikerVorschlaege', id: auftrag.id,
+          typ: 'technikerzuweisung', terminalStatus: ['vorschlag_erstellt', 'kein_techniker_verfuegbar'],
+        });
+        if (!beanspruchung.beansprucht) { uebersprungen++; continue; }
+        geprueft++;
+
+        const kandidaten = findeEinsatzKandidaten({ auftrag, techniker, termine, serviceauftraege });
+        const hatVorschlaege = kandidaten.length > 0;
+        const fehlendeInfos = hatVorschlaege ? [] : (techniker.length === 0
+          ? ['Keine Mitarbeiter mit Zugriffsrolle "Techniker" angelegt.']
+          : ['Alle Techniker haben im geplanten Zeitraum einen Terminkonflikt oder sind ganztägig abwesend (Urlaub/Krank).']);
+
+        // version (wie bei Terminvorschlägen): "kein_techniker_verfuegbar" ist
+        // NICHT terminal und kann an einem späteren Tag erneut geschrieben
+        // werden (z.B. sobald ein Techniker wieder frei wird) - bisherigen
+        // Stand lesen und hochzählen statt fix auf 1 zu setzen.
+        const vorherigerVorschlag = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTechnikerVorschlaege', id: auftrag.id });
+        await firestoreSetDoc({
+          serviceAccount, collection: 'jarvisTechnikerVorschlaege', id: auftrag.id,
+          data: {
+            auftragId: auftrag.id, kundeId: auftrag.kundeId || '', einsatzadresse: auftrag.einsatzadresse || '',
+            auftragsfrist: auftrag.auftragsfrist || '', externeAuftragsnummer: auftrag.externeAuftragsnummer || '',
+            vorschlaege: kandidaten, fehlendeInfos,
+            status: hatVorschlaege ? 'vorschlag_erstellt' : 'kein_techniker_verfuegbar',
+            erstelltAm: new Date().toISOString(),
+            version: (vorherigerVorschlag?.version || 0) + 1,
+            freigabeStatus: 'offen',
+          },
+        });
+
+        const aufgabeId = `jarvis-dispatch-aufgabe-${auftrag.id}`;
+        await firestoreSetDoc({
+          serviceAccount, collection: 'aufgaben', id: aufgabeId,
+          data: {
+            id: aufgabeId,
+            titel: hatVorschlaege
+              ? `JARVIS: Techniker-Vorschlag für Serviceauftrag "${auftrag.externeAuftragsnummer || auftrag.id}" bereit`
+              : `JARVIS: Kein Techniker-Vorschlag für Serviceauftrag "${auftrag.externeAuftragsnummer || auftrag.id}" möglich`,
+            beschreibung: hatVorschlaege
+              ? `${kandidaten.length} Techniker-Vorschlag/Vorschläge vorbereitet (sortiert nach Auslastung, ohne erkannten Terminkonflikt) - Zuweisung erfordert deine ausdrückliche Freigabe in der JARVIS-Zentrale, die eigentliche Zuweisung im Serviceauftrag bleibt danach ein manueller Schritt.`
+              : `${fehlendeInfos.join(' ')} Bitte manuell zuweisen.`,
+            status: 'offen', prioritaet: auftrag.auftragsfrist && auftrag.auftragsfrist < heute ? 'hoch' : 'normal',
+            kundeId: auftrag.kundeId || '', erstelltAm: new Date().toISOString(), quelle: 'jarvis-dispatch',
+          },
+        });
+
+        if (hatVorschlaege) vorschlaegeErstellt++; else keinVorschlagMoeglich++;
+      } catch (auftragErr) {
+        fehlerAnzahl++;
+        await protokolliereJarvisFehler({ serviceAccount, quelle: 'technikerzuweisung', fehler: auftragErr, kontext: { auftragId: auftrag.id } });
+      }
+    }
+
+    await firestoreMergeFelder({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      felder: {
+        status: 'done', abgeschlossenAm: new Date().toISOString(),
+        ergebnisZusammenfassung: `${geprueft} geprüft, ${vorschlaegeErstellt} Vorschlag/Vorschläge erstellt, ${keinVorschlagMoeglich} ohne Vorschlag, ${uebersprungen} übersprungen, ${fehlerAnzahl} Fehler.`,
+      },
+    });
+  } catch (err) {
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'dispatch-check', fehler: err, kontext: { jobId }, kritisch: true });
+  }
+}
+
+/**
+ * Freigabe/Ablehnung für Techniker-Zuweisungsvorschläge - exakt dasselbe
+ * Prinzip wie wendeTerminFreigabeAn: markiert NUR die Auswahl innerhalb von
+ * JARVIS (freigabeStatus + ausgewaehlterSlot auf dem Vorschlags-Dokument) -
+ * schreibt NIEMALS technikerIds auf den echten serviceauftraege-Datensatz.
+ * Die tatsächliche Zuweisung bleibt ein manueller Schritt in der
+ * Serviceauftrag-Ansicht (Vorgabe: "keine Berechtigung zum Anlegen von
+ * Hauptaufträgen" gilt sinngemäß auch hier - JARVIS weist nicht selbst zu).
+ */
+async function wendeEinsatzFreigabeAn({ serviceAccount, id, erwarteteVersion, entscheidung, ausgewaehlterSlotIndex }) {
+  if (!['freigeben', 'ablehnen'].includes(entscheidung)) { const err = new Error('Ungültige Entscheidung - erlaubt sind nur "freigeben" oder "ablehnen".'); err.status = 400; throw err; }
+  const aktuell = await firestoreGetDoc({ serviceAccount, collection: 'jarvisTechnikerVorschlaege', id });
+  if (!aktuell) { const err = new Error('Vorgang nicht gefunden.'); err.status = 404; throw err; }
+  if ((aktuell.version || 0) !== Number(erwarteteVersion)) {
+    const err = new Error(`Dieser Techniker-Vorschlag wurde seit deiner Prüfung aktualisiert (Version ${aktuell.version || 0} statt ${erwarteteVersion}) - bitte erneut prüfen.`);
+    err.status = 409;
+    throw err;
+  }
+  const { id: _ignoriert, ...rest } = aktuell;
+  if (entscheidung === 'ablehnen') {
+    await firestoreSetDoc({ serviceAccount, collection: 'jarvisTechnikerVorschlaege', id, data: { ...rest, freigabeStatus: 'abgelehnt', freigabeAm: new Date().toISOString() } });
+    return { id, freigabeStatus: 'abgelehnt' };
+  }
+  const slot = (aktuell.vorschlaege || [])[Number(ausgewaehlterSlotIndex)];
+  if (!slot) { const err = new Error('Ungültiger Techniker-Vorschlag-Index.'); err.status = 400; throw err; }
+  await firestoreSetDoc({ serviceAccount, collection: 'jarvisTechnikerVorschlaege', id, data: { ...rest, freigabeStatus: 'freigegeben', ausgewaehlterSlot: slot, freigabeAm: new Date().toISOString() } });
+  return { id, freigabeStatus: 'freigegeben', ausgewaehlterSlot: slot };
 }
 
 async function runJarvisWartungsCheck(env) {
@@ -4553,7 +4731,7 @@ async function runJarvisProjektCheck(env) {
 async function holeJarvisZentraleDaten({ serviceAccount, env }) {
   const [
     emailVerarbeitung, rechnungsEntwuerfe, mahnEntwuerfe, terminVorschlaege,
-    angebotsPruefungen, jobs, aktionen, aufgaben, kostenMonat,
+    angebotsPruefungen, jobs, aktionen, aufgaben, kostenMonat, technikerVorschlaege,
   ] = await Promise.all([
     firestoreListDocuments({ serviceAccount, collection: 'jarvisEmailVerarbeitung' }),
     firestoreListDocuments({ serviceAccount, collection: 'jarvisRechnungsEntwuerfe' }),
@@ -4564,6 +4742,7 @@ async function holeJarvisZentraleDaten({ serviceAccount, env }) {
     firestoreListDocuments({ serviceAccount, collection: 'jarvisAktionen' }),
     firestoreListDocuments({ serviceAccount, collection: 'aufgaben' }),
     firestoreGetDoc({ serviceAccount, collection: 'jarvisKosten', id: jarvisMonatsId() }),
+    firestoreListDocuments({ serviceAccount, collection: 'jarvisTechnikerVorschlaege' }),
   ]);
 
   // "offen" = noch nicht geprüft (freigabeStatus fehlt bei älteren, vor
@@ -4625,6 +4804,7 @@ async function holeJarvisZentraleDaten({ serviceAccount, env }) {
     rechnungsentwuerfe: nochOffen(rechnungsEntwuerfe).filter((e) => e.status === 'entwurf_erstellt'),
     mahnentwuerfe,
     terminvorschlaege: nochOffen(terminVorschlaege).filter((e) => e.status === 'vorschlag_erstellt'),
+    einsatzvorschlaege: nochOffen(technikerVorschlaege).filter((e) => e.status === 'vorschlag_erstellt'),
     offeneProjektaufgaben: aufgaben.filter((a) => a.quelle === 'jarvis-projekt' && a.status === 'offen'),
     fehlgeschlageneAutomationen: jobs.filter((j) => j.status === 'failed' || j.status === 'unklar'),
     offeneFreigaben: aktionen.filter((a) => a.status === 'pending'),
@@ -4912,11 +5092,11 @@ async function holeJarvisControlDaten({ serviceAccount, env }) {
 // Alle bekannten täglichen Hintergrund-Job-Typen (siehe jobId-Präfixe oben,
 // z.B. "email-check-2026-10-21") - für die Statusübersicht unten in EINER
 // Stelle gepflegt, damit ein neuer Job-Typ nicht vergessen wird.
-const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'wartung-check', 'projekt-check', 'control-check', 'tagescheck'];
+const JARVIS_JOB_TYPEN = ['email-check', 'rechnung-check', 'mahnung-check', 'wartung-check', 'projekt-check', 'control-check', 'tagescheck', 'dispatch-check'];
 
 // Alle bekannten Feature-Flags, die eine autonome JARVIS-Funktion freischalten
 // (Standard IMMER "aus", siehe jeweilige Kommentare an den env.*_AKTIV-Prüfungen).
-const JARVIS_FEATURE_FLAGS = ['JARVIS_EMAIL_AKTIV', 'JARVIS_ANGEBOT_AKTIV', 'JARVIS_RECHNUNG_AKTIV', 'JARVIS_MAHNUNG_AKTIV', 'JARVIS_WARTUNG_AKTIV', 'JARVIS_PROJEKT_AKTIV', 'JARVIS_CONTROL_AKTIV', 'JARVIS_TAGESCHECK_AKTIV'];
+const JARVIS_FEATURE_FLAGS = ['JARVIS_EMAIL_AKTIV', 'JARVIS_ANGEBOT_AKTIV', 'JARVIS_RECHNUNG_AKTIV', 'JARVIS_MAHNUNG_AKTIV', 'JARVIS_WARTUNG_AKTIV', 'JARVIS_PROJEKT_AKTIV', 'JARVIS_CONTROL_AKTIV', 'JARVIS_TAGESCHECK_AKTIV', 'JARVIS_DISPATCH_AKTIV'];
 
 /**
  * Phase 10 Punkt 5 (Pilotüberwachung) - zentrale, EHRLICHE Statusübersicht:
@@ -6191,6 +6371,7 @@ export default {
     ctx.waitUntil(runJarvisWartungsCheck(env)); // Phase 4 - Wartungstermin-Vorschläge
     ctx.waitUntil(runJarvisProjektCheck(env)); // Phase 4 - überfällige Projektaufgaben
     ctx.waitUntil(runJarvisControlCheck(env)); // Phase 6 - JARVIS CONTROL proaktive Überwachung (Flag JARVIS_CONTROL_AKTIV, Standard aus)
+    ctx.waitUntil(runJarvisDispatchCheck(env)); // Service-/Techniker-/Personalverwaltung Phase 2 - SmartDispatch (Flag JARVIS_DISPATCH_AKTIV, Standard aus)
   },
 
   async fetch(request, env) {
@@ -7179,4 +7360,6 @@ export const __test__ = {
   normalisiereAufgabenTitel, runTagescheck,
   // Phase 11.1 Punkt 4 - Google-Kalender-Trennung Verfügbarkeit/Vorschlag/Buchung
   KI_BUEROKRAFT_TOOLS, callGoogleTool,
+  // Service-/Techniker-/Personalverwaltung Phase 2 - JARVIS SmartDispatch
+  runJarvisDispatchCheck, findeEinsatzKandidaten, wendeEinsatzFreigabeAn, JARVIS_DISPATCH_VORSCHLAEGE_ANZAHL,
 };

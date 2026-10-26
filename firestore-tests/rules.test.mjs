@@ -335,6 +335,26 @@ await pruefe('R31: ein Techniker kann über diese erweiterten Felder TROTZDEM ni
   }));
 });
 
+// =============================================================================
+// Service-/Techniker-/Personalverwaltung Phase 2 (JARVIS SmartDispatch):
+// jarvisTechnikerVorschlaege wie alle übrigen jarvis*-Collections admin-only
+// lesbar, niemals clientseitig beschreibbar.
+// =============================================================================
+
+await pruefe('R32: jarvisTechnikerVorschlaege ist NUR für admin lesbar, nicht für büro/mitarbeiter/techniker', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'jarvisTechnikerVorschlaege', 'sa-1'), { auftragId: 'sa-1', status: 'vorschlag_erstellt' });
+  });
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'jarvisTechnikerVorschlaege', 'sa-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'jarvisTechnikerVorschlaege', 'sa-1')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'jarvisTechnikerVorschlaege', 'sa-1')));
+});
+
+await pruefe('R33: jarvisTechnikerVorschlaege ist NIEMALS clientseitig beschreibbar, auch nicht für admin', async () => {
+  const admin = testEnv.authenticatedContext('admin-1');
+  await assertFails(updateDoc(doc(admin.firestore(), 'jarvisTechnikerVorschlaege', 'sa-1'), { freigabeStatus: 'freigegeben' }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);

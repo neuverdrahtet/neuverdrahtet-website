@@ -252,6 +252,17 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Techniker-Zuweisungsvorschläge (Service-/Techniker-/Personalverwaltung
+    // Phase 2 - JARVIS SmartDispatch) - wie jarvisTerminVorschlaege NIEMALS
+    // clientseitig beschreibbar: die Freigabe (einsatz.pruefen) markiert nur
+    // intern, welcher Techniker-Vorschlag gewählt wurde, schreibt aber NIE
+    // technikerIds auf das echte serviceauftraege-Dokument - die eigentliche
+    // Zuweisung bleibt ein manueller Schritt in der Serviceauftrag-Ansicht
+    // (siehe worker.js wendeEinsatzFreigabeAn).
+    match /jarvisTechnikerVorschlaege/{docId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
     // JARVIS TECH (Phase 7) - Ergebnisse von Dokument-/Bild-/Text-Analysen.
     // Niemals clientseitig beschreibbar (auch die Verknüpfung mit einer
     // Anlage läuft über die serverseitige Aktion jarvis-tech-verknuepfen).
