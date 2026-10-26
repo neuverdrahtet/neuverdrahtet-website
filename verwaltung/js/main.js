@@ -28,6 +28,7 @@ const routeLoaders = {
   kanban: () => import('./views/kanban.js'),
   projekte: () => import('./views/projekte.js'),
   auftraege: () => import('./views/auftraege.js'),
+  serviceauftraege: () => import('./views/serviceauftraege.js'),
   service: () => import('./views/service.js'),
   wartung: () => import('./views/wartung.js'),
   plantafel: () => import('./views/plantafel.js'),

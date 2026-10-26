@@ -2399,6 +2399,7 @@ export const ROUTE_ROLLEN = {
   kanban: ['admin', 'buero'],
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
+  serviceauftraege: ['admin', 'buero'],
   service: ['admin', 'buero', 'mitarbeiter'],
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
