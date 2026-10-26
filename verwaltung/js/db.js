@@ -93,6 +93,8 @@ const STORES = {
   pruefnormenGrenzwerte: 'id',
   siriGeraeteTokens: 'id',
   serviceauftraege: 'id',
+  reisekostensaetze: 'id',
+  reisekostenabrechnungen: 'id',
 };
 
 export const KALK_KATEGORIEN = [
@@ -2324,6 +2326,22 @@ export const KONTEN_KLASSEN = [
   { id: 'ertrag', titel: 'Ertragskonto (Erlöse)' },
   { id: 'aufwand', titel: 'Aufwandskonto (Kosten)' },
 ];
+// Service-/Techniker-/Personalverwaltung Phase 9 (Reisekosten/Verpflegungs-
+// pauschalen): EIN Startsatz, gültig "bis auf Weiteres" ab dem Datum, seit
+// dem diese Beträge gesetzlich unverändert gelten. Bewusst NICHT als fixe
+// Code-Konstante verwendet (Spezifikationsauflage "keine dauerhaft
+// unveränderlichen Konstanten") - liegt stattdessen als normaler,
+// admin-editierbarer Datensatz in der versionierten Collection
+// "reisekostensaetze" (siehe firestore.rules: nur admin darf schreiben).
+// Ändert sich der gesetzliche Satz künftig, legt ein Admin einen NEUEN
+// Satz mit eigenem gueltigAb an und setzt hier gueltigBis - der alte Satz
+// bleibt für zurückliegende Reisen unverändert anwendbar.
+export const DEFAULT_REISEKOSTENSATZ = {
+  id: 'satz-2020', gueltigAb: '2020-01-01', gueltigBis: '',
+  verpflegungGanztag: 28, verpflegungAnUndAbreise: 14, kilometerpauschale: 0.30,
+  quelle: 'Verpflegungspauschalen: §9 Abs. 4a EStG (unverändert seit 01.01.2020). Kilometerpauschale: R 9.5 Abs. 1 LStR (Pkw). Rechtliche Prüfung durch Lohnbüro/Steuerberater vor Verwendung in einer echten Gehaltsabrechnung erforderlich.',
+};
+
 export const DEFAULT_KONTEN = [
   { id: 'konto-1000', nummer: '1000', name: 'Kasse', klasse: 'aktiv' },
   { id: 'konto-1200', nummer: '1200', name: 'Bank', klasse: 'aktiv' },
@@ -2413,6 +2431,7 @@ export const ROUTE_ROLLEN = {
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
+  reisekosten: ['admin', 'buero', 'mitarbeiter'],
   service: ['admin', 'buero', 'mitarbeiter'],
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
@@ -2544,11 +2563,11 @@ export async function ensureSeeded() {
   // meist schon laufenden Listener statt einen neuen zu starten.
   const [
     settingsRows, spalten, kategorien, terminStatus, vorlagen, textbausteine,
-    aufgabenStatus, konten, kundenStatus, lieferanten,
+    aufgabenStatus, konten, kundenStatus, lieferanten, reisekostensaetze,
   ] = await Promise.all([
     getAll('einstellungen'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('terminStatus'),
     getAll('vorlagen'), getAll('textbausteine'), getAll('aufgabenStatus'),
-    getAll('konten'), getAll('kundenStatus'), getAll('lieferanten'),
+    getAll('konten'), getAll('kundenStatus'), getAll('lieferanten'), getAll('reisekostensaetze'),
   ]);
   ensureSeededRechnungenKundenMigration();
 
@@ -2629,6 +2648,14 @@ export async function ensureSeeded() {
       idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
       farbe: '#2b7fd6',
     });
+  }
+  // Reisekosten-Pauschalen (Phase 9): nur anlegen, falls noch KEIN Satz
+  // existiert (anders als DEFAULT_KONTEN/DEFAULT_KUNDEN_STATUS oben reicht
+  // hier kein reines "fehlende ID nachtragen" - ein Admin könnte den
+  // Anfangssatz bereits bewusst bearbeitet/durch einen neuen Gültigkeits-
+  // zeitraum ersetzt haben, das darf dieser Seed nicht rückgängig machen).
+  if (reisekostensaetze.length === 0) {
+    await put('reisekostensaetze', DEFAULT_REISEKOSTENSATZ);
   }
 }
 

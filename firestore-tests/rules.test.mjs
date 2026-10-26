@@ -355,6 +355,56 @@ await pruefe('R33: jarvisTechnikerVorschlaege ist NIEMALS clientseitig beschreib
   await assertFails(updateDoc(doc(admin.firestore(), 'jarvisTechnikerVorschlaege', 'sa-1'), { freigabeStatus: 'freigegeben' }));
 });
 
+// =============================================================================
+// Service-/Techniker-/Personalverwaltung Phase 9 (Reisekosten und
+// Verpflegungspauschalen): reisekostensaetze (admin-only Schreibzugriff,
+// breit lesbar) + reisekostenabrechnungen (eigene Entwürfe, nie Selbst-
+// genehmigung).
+// =============================================================================
+
+await pruefe('R34: reisekostensaetze ist für alle internen Rollen inkl. Techniker lesbar, aber nur admin darf schreiben', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'reisekostensaetze', 'satz-2020'), { gueltigAb: '2020-01-01', gueltigBis: '', verpflegungGanztag: 28 });
+  });
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'reisekostensaetze', 'satz-2020')));
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'reisekostensaetze', 'satz-2020')));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'reisekostensaetze', 'satz-2020'), { verpflegungGanztag: 99 }));
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'reisekostensaetze', 'satz-2020'), { verpflegungGanztag: 29 }));
+});
+
+await pruefe('R35: ein Techniker kann eine EIGENE Reisekostenabrechnung als Entwurf anlegen und bearbeiten', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(setDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), {
+    mitarbeiterId: 'ma-tech-1', status: 'entwurf', von: '2026-03-10T08:00', bis: '2026-03-10T18:00', anlass: 'Kundentermin',
+  }));
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { anlass: 'Kundentermin (korrigiert)' }));
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { status: 'eingereicht' }));
+});
+
+await pruefe('R36: ein Techniker kann KEINE fremde Reisekostenabrechnung anlegen/lesen/bearbeiten', async () => {
+  const tech2 = testEnv.authenticatedContext('techniker-2');
+  await assertFails(getDoc(doc(tech2.firestore(), 'reisekostenabrechnungen', 'rk-1')));
+  await assertFails(setDoc(doc(tech2.firestore(), 'reisekostenabrechnungen', 'rk-fremd'), { mitarbeiterId: 'ma-tech-1', status: 'entwurf' }));
+  await assertFails(updateDoc(doc(tech2.firestore(), 'reisekostenabrechnungen', 'rk-1'), { anlass: 'Manipuliert' }));
+});
+
+await pruefe('R37: ein Techniker kann die EIGENE Reisekostenabrechnung NICHT selbst genehmigen/ablehnen/prüfen', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { status: 'genehmigt' }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { status: 'abgelehnt' }));
+});
+
+await pruefe('R38: admin/büro können jede Reisekostenabrechnung lesen und genehmigen/ablehnen', async () => {
+  const buero = testEnv.authenticatedContext('buero-1');
+  await assertSucceeds(getDoc(doc(buero.firestore(), 'reisekostenabrechnungen', 'rk-1')));
+  await assertSucceeds(updateDoc(doc(buero.firestore(), 'reisekostenabrechnungen', 'rk-1'), { status: 'genehmigt', geprueftVonUid: 'buero-1' }));
+});
+
+await pruefe('R39: ein Mitarbeiter kann nach erfolgter Genehmigung seine eigene Abrechnung NICHT mehr nachträglich ändern', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(updateDoc(doc(tech1.firestore(), 'reisekostenabrechnungen', 'rk-1'), { anlass: 'nachträglich verändert' }));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);

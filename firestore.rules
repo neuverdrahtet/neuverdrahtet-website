@@ -397,6 +397,38 @@ service cloud.firestore {
       allow read: if isTechniker() && myMitarbeiterId() in resource.data.technikerIds;
     }
 
+    // Service-/Techniker-/Personalverwaltung Phase 9 (Reisekosten und
+    // Verpflegungspauschalen) - reine Simulation/Orientierungshilfe, siehe
+    // Kopfkommentar in verwaltung/js/reisekosten.js: keine automatische
+    // Auszahlung, keine Lohnabrechnung. Die gesetzlichen Pauschsätze sind
+    // KEINE Geschäftsgeheimnisse (öffentliches Steuerrecht) - lesbar für
+    // alle internen Rollen inkl. Techniker (sie sehen so ihren eigenen
+    // Pauschalanspruch), aber NUR admin darf einen neuen Satz anlegen
+    // ("globale Planungsregeln ausschließlich durch Administratoren").
+    match /reisekostensaetze/{docId} {
+      allow read: if isAnyRole() || isTechniker();
+      allow write: if isAdmin();
+    }
+    // Reisekostenabrechnungen enthalten personenbezogene Finanzdaten -
+    // deshalb wie "mitarbeiter" grundsätzlich admin+büro, PLUS eine enge
+    // Zusatzregel für die eigene Abrechnung (mitarbeiter ODER techniker):
+    // anlegen/bearbeiten nur im Entwurf, einreichen möglich, aber niemals
+    // selbst genehmigen/ablehnen/prüfen - das bleibt admin/büro vorbehalten
+    // (verhindert Selbstbegünstigung, siehe Spezifikationsauflage "keine
+    // unzulässige Mehrfachbegünstigung" sinngemäß auch hier).
+    match /reisekostenabrechnungen/{docId} {
+      allow read, write: if isAdminOrBuero();
+      allow read: if hasRole(['mitarbeiter', 'techniker']) && myMitarbeiterId() == resource.data.mitarbeiterId;
+      allow create: if hasRole(['mitarbeiter', 'techniker'])
+        && myMitarbeiterId() == request.resource.data.mitarbeiterId
+        && request.resource.data.status == 'entwurf';
+      allow update: if hasRole(['mitarbeiter', 'techniker'])
+        && myMitarbeiterId() == resource.data.mitarbeiterId
+        && request.resource.data.mitarbeiterId == resource.data.mitarbeiterId
+        && resource.data.status in ['entwurf', 'eingereicht']
+        && request.resource.data.status in ['entwurf', 'eingereicht'];
+    }
+
     match /{collectionId}/{docId} {
       allow read, write: if isSignedIn() && (
         (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||

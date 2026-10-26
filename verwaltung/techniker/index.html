@@ -20,6 +20,7 @@
   .checklisten-zeile { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
   .checklisten-zeile:last-child { border-bottom: none; }
   .checklisten-zeile input[type="checkbox"] { margin-top: 3px; width: 20px; height: 20px; }
+  .portal-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -46,6 +47,10 @@
       <p class="text-mute" style="margin:2px 0 0;font-size:12.5px">neuverdrahtet</p>
     </div>
     <button type="button" class="btn btn-sm" id="btn-logout">Abmelden</button>
+  </div>
+  <div class="portal-tabs" style="display:flex;gap:6px;margin-bottom:12px">
+    <button type="button" class="btn btn-sm active" id="tab-auftraege">Meine Serviceaufträge</button>
+    <button type="button" class="btn btn-sm" id="tab-reisekosten">Meine Reisekosten</button>
   </div>
   <div id="techniker-content"></div>
 </div>

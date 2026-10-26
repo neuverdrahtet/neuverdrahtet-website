@@ -1,7 +1,11 @@
 import { firebaseConfig } from '../js/firebase-config.js';
 import { put, getAll } from '../js/db.js';
-import { escapeHtml, formatDate, todayISO, toast } from '../js/utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, todayISO, toast } from '../js/utils.js';
 import { openModal } from '../js/ui.js';
+import { REISEKOSTEN_STATUS, berechneVerpflegungspauschale, berechneKilometergeld } from '../js/reisekosten.js';
+
+const REISEKOSTEN_STATUS_LABEL = Object.fromEntries(REISEKOSTEN_STATUS.map((s) => [s.id, s.titel]));
+const REISEKOSTEN_STATUS_BADGE = { entwurf: '', eingereicht: 'badge-warn', genehmigt: 'badge-success', abgelehnt: 'badge-danger' };
 
 // Techniker-Ansicht: bewusst eine eigenständige, schlanke Seite (nicht Teil
 // der verwaltung-SPA/main.js), genau wie das Kundenportal (verwaltung/portal/)
@@ -207,6 +211,19 @@ async function fetchEigeneServiceauftraege() {
   return (await getAll('serviceauftraege')).filter((a) => (a.technikerIds || []).includes(session.mitarbeiterId));
 }
 
+// Dasselbe Prinzip wie fetchEigeneServiceauftraege: gezielte where()-Abfrage
+// statt ungefiltertem getAll(), da firestore.rules für reisekostenabrechnungen
+// den Lesezugriff auf die eigene mitarbeiterId beschränkt.
+async function fetchEigeneReisekosten() {
+  if (FIREBASE_ENABLED) {
+    const { firestore } = await import('../js/firebase.js');
+    const { collection, query, where, getDocs } = await import('../js/vendor/firebase/firebase-firestore.js');
+    const snap = await getDocs(query(collection(firestore, 'reisekostenabrechnungen'), where('mitarbeiterId', '==', session.mitarbeiterId)));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+  return (await getAll('reisekostenabrechnungen')).filter((a) => a.mitarbeiterId === session.mitarbeiterId);
+}
+
 function istUeberfaellig(auftrag, heute = todayISO()) {
   if (!auftrag.auftragsfrist) return false;
   if (auftrag.status === 'abgeschlossen' || auftrag.status === 'abgebrochen') return false;
@@ -230,7 +247,17 @@ async function showApp() {
     window.location.reload();
   });
 
+  document.getElementById('tab-auftraege').addEventListener('click', () => wechsleTab('auftraege'));
+  document.getElementById('tab-reisekosten').addEventListener('click', () => wechsleTab('reisekosten'));
+
   await renderListe();
+}
+
+async function wechsleTab(tab) {
+  document.getElementById('tab-auftraege').classList.toggle('active', tab === 'auftraege');
+  document.getElementById('tab-reisekosten').classList.toggle('active', tab === 'reisekosten');
+  if (tab === 'auftraege') await renderListe();
+  else await renderReisekosten();
 }
 
 async function renderListe() {
@@ -330,6 +357,104 @@ function openDetail(auftrag) {
   body.querySelector('#btn-abschliessen')?.addEventListener('click', () => {
     if (confirm('Diesen Serviceauftrag wirklich als abgeschlossen melden?')) speichern(true);
   });
+}
+
+// =============================================================================
+// Meine Reisekosten (Phase 9) - WICHTIG: reine Simulation/Orientierungshilfe,
+// siehe Kopfkommentar in verwaltung/js/reisekosten.js. Kein Versand, keine
+// Auszahlung - "Einreichen" setzt nur den Prüfstatus, das Büro entscheidet.
+// =============================================================================
+
+async function renderReisekosten() {
+  const host = document.getElementById('techniker-content');
+  host.innerHTML = '<p class="text-mute">Lädt …</p>';
+  const [abrechnungen, saetze] = await Promise.all([fetchEigeneReisekosten(), getAll('reisekostensaetze')]);
+  abrechnungen.sort((a, b) => (b.von || '').localeCompare(a.von || ''));
+
+  const neuBtn = '<button type="button" class="btn btn-primary btn-sm" id="btn-rk-neu" style="margin-bottom:10px">+ Neue Reisekostenabrechnung</button>';
+  if (abrechnungen.length === 0) {
+    host.innerHTML = `${neuBtn}${emptyState('Noch keine Reisekostenabrechnungen erfasst.')}`;
+  } else {
+    host.innerHTML = neuBtn + abrechnungen.map((a) => {
+      const v = berechneVerpflegungspauschale(a.von, a.bis, saetze);
+      const km = berechneKilometergeld(a.kilometer, a.von, saetze);
+      return `
+        <div class="sa-card" data-id="${a.id}">
+          <h3>${escapeHtml(a.anlass || 'Reisekostenabrechnung')} <span class="badge ${REISEKOSTEN_STATUS_BADGE[a.status] || ''}">${REISEKOSTEN_STATUS_LABEL[a.status] || a.status}</span></h3>
+          <div class="sa-meta">${formatDate((a.von || '').slice(0, 10))}${(a.bis || '').slice(0, 10) !== (a.von || '').slice(0, 10) ? ' – ' + formatDate((a.bis || '').slice(0, 10)) : ''} · ${formatCurrency(v.gesamtBetrag + km)}</div>
+        </div>
+      `;
+    }).join('');
+  }
+  document.getElementById('btn-rk-neu').addEventListener('click', () => openReisekostenForm(abrechnungen, saetze));
+  host.querySelectorAll('.sa-card[data-id]').forEach((card) => {
+    card.addEventListener('click', () => openReisekostenForm(abrechnungen, saetze, abrechnungen.find((a) => a.id === card.dataset.id)));
+  });
+}
+
+function openReisekostenForm(abrechnungen, saetze, vorhanden) {
+  const isEdit = !!vorhanden;
+  const darfBearbeiten = !isEdit || ['entwurf', 'eingereicht'].includes(vorhanden.status);
+  const data = vorhanden || { id: uid(), mitarbeiterId: session.mitarbeiterId, anlass: '', von: '', bis: '', kilometer: '', status: 'entwurf' };
+
+  const { body, close } = openModal({
+    title: isEdit ? (data.anlass || 'Reisekostenabrechnung') : 'Neue Reisekostenabrechnung',
+    fullscreen: true,
+    bodyHtml: `
+      <form id="rk-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Anlass *</label><input name="anlass" required value="${escapeHtml(data.anlass || '')}" ${darfBearbeiten ? '' : 'disabled'}></div>
+          <div class="field"><label>Von *</label><input type="datetime-local" name="von" required value="${escapeHtml(data.von || '')}" ${darfBearbeiten ? '' : 'disabled'}></div>
+          <div class="field"><label>Bis *</label><input type="datetime-local" name="bis" required value="${escapeHtml(data.bis || '')}" ${darfBearbeiten ? '' : 'disabled'}></div>
+          <div class="field col-span-2"><label>Gefahrene Kilometer (eigener Pkw, optional)</label><input type="number" step="1" min="0" name="kilometer" value="${escapeHtml(String(data.kilometer ?? ''))}" ${darfBearbeiten ? '' : 'disabled'}></div>
+        </div>
+        <div id="rk-vorschau" class="card" style="margin-top:10px"></div>
+        <p class="hint" style="margin-top:8px">⚠️ Orientierungswert nach §9 Abs. 4a EStG - keine Auszahlung, das Büro prüft und entscheidet.</p>
+        ${isEdit && data.ablehnungsgrund ? `<p class="hint">Ablehnungsgrund: ${escapeHtml(data.ablehnungsgrund)}</p>` : ''}
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="rk-cancel">Schließen</button>
+          ${darfBearbeiten ? `
+            <button type="submit" class="btn btn-primary">Als Entwurf speichern</button>
+            ${data.status === 'entwurf' ? '<button type="button" class="btn btn-primary" id="rk-einreichen">Einreichen</button>' : ''}
+          ` : ''}
+        </div>
+      </form>
+    `,
+  });
+
+  function aktualisiereVorschau() {
+    const fd = new FormData(body.querySelector('#rk-form'));
+    const v = berechneVerpflegungspauschale(fd.get('von'), fd.get('bis'), saetze);
+    const km = berechneKilometergeld(fd.get('kilometer'), fd.get('von'), saetze);
+    body.querySelector('#rk-vorschau').innerHTML = `<strong>Berechnete Verpflegungspauschale + Kilometergeld: ${formatCurrency(v.gesamtBetrag + km)}</strong>`;
+  }
+  body.querySelectorAll('input[name="von"], input[name="bis"], input[name="kilometer"]').forEach((inp) => inp.addEventListener('input', aktualisiereVorschau));
+  aktualisiereVorschau();
+  body.querySelector('#rk-cancel').addEventListener('click', close);
+
+  async function speichern(status) {
+    const fd = new FormData(body.querySelector('#rk-form'));
+    const updated = {
+      ...data, status,
+      anlass: (fd.get('anlass') || '').toString().trim(),
+      von: (fd.get('von') || '').toString(), bis: (fd.get('bis') || '').toString(),
+      kilometer: fd.get('kilometer') ? Number(fd.get('kilometer')) : '',
+      erstelltAm: data.erstelltAm || new Date().toISOString(),
+    };
+    if (!updated.anlass || !updated.von || !updated.bis) { toast('Bitte Anlass, Von und Bis ausfüllen', 'error'); return; }
+    await put('reisekostenabrechnungen', updated);
+    const idx = abrechnungen.findIndex((a) => a.id === updated.id);
+    if (idx === -1) abrechnungen.unshift(updated); else abrechnungen[idx] = updated;
+    toast(status === 'eingereicht' ? 'Eingereicht' : 'Als Entwurf gespeichert', 'success');
+    close();
+    renderReisekosten();
+  }
+
+  if (darfBearbeiten) {
+    body.querySelector('#rk-form').addEventListener('submit', (e) => { e.preventDefault(); speichern('entwurf'); });
+    body.querySelector('#rk-einreichen')?.addEventListener('click', () => speichern('eingereicht'));
+  }
 }
 
 main();
