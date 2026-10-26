@@ -2391,6 +2391,18 @@ export const SERVICEAUFTRAG_STATUS = [
 ];
 export const SERVICEAUFTRAG_TECHNIKER_STATUS = ['in_bearbeitung', 'abgeschlossen'];
 
+// Startpunkt für die Checkliste eines Serviceauftrags (Phase 5 Wartungs-
+// checklisten) - bewusst kurz und generisch, vom Büro beim Zuweisen per
+// Textzeilen frei editierbar/erweiterbar (keine feste, unveränderliche
+// Vorgabe, da Herstellervorgaben je Anlage stark variieren).
+export const STANDARD_WARTUNGSCHECKLISTE = [
+  'Sichtprüfung der Anlage durchgeführt',
+  'Filter/Verschleißteile geprüft bzw. gewechselt',
+  'Funktionsprüfung durchgeführt',
+  'Fehlerspeicher/Software-Stand geprüft',
+  'Kunde eingewiesen / Übergabe erfolgt',
+];
+
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
   tagesuebersicht: ['admin', 'buero', 'mitarbeiter'],

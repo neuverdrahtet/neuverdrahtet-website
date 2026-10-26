@@ -275,9 +275,18 @@ await pruefe('R26: ein Techniker kann KEINEN neuen Serviceauftrag anlegen (kein 
 });
 
 await pruefe('R27: admin/büro haben vollen Zugriff auf serviceauftraege (lesen, anlegen, beliebig ändern, löschen)', async () => {
+  // Bewusst NICHT "sa-1" umschreiben - das ist die gemeinsame Fixture für
+  // R21/R22/R28-R31 (dort muss techniker-1 weiterhin zugewiesen bleiben);
+  // ein eigenes Dokument für den "beliebig ändern"-Nachweis statt die
+  // anderen Tests durch eine dauerhafte Mutation zu verfälschen.
   const buero = testEnv.authenticatedContext('buero-1');
-  await assertSucceeds(getDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-1')));
-  await assertSucceeds(updateDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-1'), { technikerIds: ['ma-tech-2'] }));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'serviceauftraege', 'sa-buero-test'), {
+      externeAuftragsnummer: 'SE-004', technikerIds: ['ma-tech-1'], status: 'zugewiesen',
+    });
+  });
+  await assertSucceeds(getDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-buero-test')));
+  await assertSucceeds(updateDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-buero-test'), { technikerIds: ['ma-tech-2'] }));
   await assertSucceeds(setDoc(doc(buero.firestore(), 'serviceauftraege', 'sa-2'), {
     externeAuftragsnummer: 'SE-003', technikerIds: [], status: 'offen',
   }));
@@ -297,6 +306,33 @@ await pruefe('R29: ein Techniker darf einstellungen/mitarbeiterOeffentlich trotz
   });
   await assertSucceeds(getDoc(doc(tech1.firestore(), 'einstellungen', 'global')));
   await assertFails(setDoc(doc(tech1.firestore(), 'einstellungen', 'global'), { firma: 'manipuliert' }));
+});
+
+// =============================================================================
+// Phase 4 (mobile Technikeroberfläche): erweiterte Felddokumentation auf
+// serviceauftraege (checklistenPunkte/maengel/zusatzarbeitVorschlag/
+// berichtsentwurf) - weiterhin niemals Kundenstammdaten/Zuweisung.
+// =============================================================================
+
+await pruefe('R30: ein Techniker kann Checkliste, Mängel, Zusatzarbeit-Vorschlag und Berichtsentwurf des eigenen Auftrags zusammen mit dem Status speichern', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung',
+    checklistenPunkte: [{ titel: 'Sichtprüfung durchgeführt', erledigt: true, notiz: '' }],
+    maengel: 'Dichtung an der Außeneinheit porös.',
+    zusatzarbeitVorschlag: 'Austausch der Dichtung empfohlen, ca. 1 Std. Zusatzaufwand.',
+    berichtsentwurf: 'Jahreswartung durchgeführt, Anlage funktionstüchtig.',
+  }));
+});
+
+await pruefe('R31: ein Techniker kann über diese erweiterten Felder TROTZDEM nicht die Technikerzuweisung oder Kundendaten ändern', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung', checklistenPunkte: [], technikerIds: ['ma-tech-1', 'ma-tech-2'],
+  }));
+  await assertFails(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung', maengel: 'x', kundenname: 'Manipuliert',
+  }));
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

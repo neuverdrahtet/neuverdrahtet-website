@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Techniker-Ansicht – neuverdrahtet</title>
+<link rel="icon" href="../icons/icon-192.png">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  /* Bewusst eine eigenständige, schlanke Seite (nicht die verwaltung-SPA,
+     siehe Kommentar in techniker.js) - wie verwaltung/portal/ für Kunden. */
+  body { background: var(--bg); min-height: 100vh; }
+  .techniker-shell { max-width: 640px; margin: 0 auto; padding: 20px 14px 60px; }
+  .techniker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; gap: 12px; flex-wrap: wrap; }
+  .techniker-header h1 { font-size: 18px; margin: 0; }
+  .sa-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; background: var(--card); cursor: pointer; }
+  .sa-card h3 { margin: 0 0 4px; font-size: 15px; }
+  .sa-card .sa-meta { font-size: 12.5px; color: var(--text-mute); }
+  .checklisten-zeile { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+  .checklisten-zeile:last-child { border-bottom: none; }
+  .checklisten-zeile input[type="checkbox"] { margin-top: 3px; width: 20px; height: 20px; }
+</style>
+</head>
+<body>
+
+<div id="lock-screen" class="lock-screen" hidden>
+  <div class="lock-box">
+    <form id="auth-form">
+      <h1>Techniker-Login</h1>
+      <h2 id="auth-title">Anmelden</h2>
+      <input type="email" id="auth-email" autocomplete="username" placeholder="E-Mail-Adresse" required>
+      <input type="password" id="auth-password" autocomplete="current-password" placeholder="Passwort" required minlength="6">
+      <button type="submit" id="auth-submit">Anmelden</button>
+      <p id="auth-error" class="lock-error" hidden></p>
+      <p id="auth-hint" class="lock-hint">Bitte mit deiner E-Mail und deinem Passwort anmelden.</p>
+      <a href="#" id="auth-mode-toggle" class="lock-toggle">Registrieren</a>
+    </form>
+  </div>
+</div>
+
+<div id="techniker-app" class="techniker-shell" hidden>
+  <div class="techniker-header">
+    <div>
+      <h1 id="techniker-name">Meine Serviceaufträge</h1>
+      <p class="text-mute" style="margin:2px 0 0;font-size:12.5px">neuverdrahtet</p>
+    </div>
+    <button type="button" class="btn btn-sm" id="btn-logout">Abmelden</button>
+  </div>
+  <div id="techniker-content"></div>
+</div>
+
+<div id="toast-host" class="toast-host"></div>
+
+<script type="module" src="techniker.js"></script>
+</body>
+</html>

@@ -6,10 +6,20 @@ import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteEmployee, revokeInvite, revokeUserAccess, getEmployeeAuthStatus } from '../employeeAuth.js';
 import { openWhatsApp } from '../whatsapp.js';
 
-/** Fertiger Einladungstext mit Link + Registrierungs-/Installationshinweis - erspart es, das bei jeder Einladung von Hand zu formulieren. */
-function buildEinladungstext(name, email) {
-  const appUrl = new URL('./', window.location.href).href;
-  return `Hallo${name ? ' ' + name : ''}, du hast jetzt Zugang zu unserer Werkora-Software:\n\n${appUrl}\n\nBitte dort auf "Als eingeladener Mitarbeiter registrieren" klicken und mit deiner E-Mail (${email}) ein Passwort festlegen.\n\nTipp: Danach die Seite zum Home-Bildschirm hinzufügen (Teilen-Symbol → "Zum Home-Bildschirm" bzw. Browser-Menü → "App installieren"), dann startet Werkora wie eine normale App.`;
+/**
+ * Fertiger Einladungstext mit Link + Registrierungs-/Installationshinweis -
+ * erspart es, das bei jeder Einladung von Hand zu formulieren. Techniker
+ * bekommen bewusst einen ANDEREN Link: sie nutzen nie die Haupt-App
+ * (verwaltung-SPA), sondern die eigenständige, schlanke Ansicht unter
+ * ./techniker/ (siehe Kommentar dort und in firestore.rules - wie das
+ * Kundenportal unter ./portal/ für Kunden).
+ */
+function buildEinladungstext(name, email, istTechniker) {
+  const appUrl = new URL(istTechniker ? './techniker/' : './', window.location.href).href;
+  const registrierHinweis = istTechniker
+    ? `Bitte dort mit deiner E-Mail (${email}) ein Passwort festlegen (Button "Registrieren").`
+    : `Bitte dort auf "Als eingeladener Mitarbeiter registrieren" klicken und mit deiner E-Mail (${email}) ein Passwort festlegen.`;
+  return `Hallo${name ? ' ' + name : ''}, du hast jetzt Zugang zu unserer Werkora-Software:\n\n${appUrl}\n\n${registrierHinweis}\n\nTipp: Danach die Seite zum Home-Bildschirm hinzufügen (Teilen-Symbol → "Zum Home-Bildschirm" bzw. Browser-Menü → "App installieren"), dann startet Werkora wie eine normale App.`;
 }
 
 const STATUS_TYPEN = ['krank', 'urlaub', 'schulung', 'baustelle'];
@@ -588,7 +598,7 @@ export async function render(container) {
           draw();
         });
       } else if (status.status === 'invited') {
-        const text = buildEinladungstext(data.name, status.email);
+        const text = buildEinladungstext(data.name, status.email, body.querySelector('select[name="zugriffsrolle"]').value === 'techniker');
         host.innerHTML = `
           <p class="hint">📧 Eingeladen mit <strong>${escapeHtml(status.email)}</strong> – wartet auf Registrierung durch den Mitarbeiter.</p>
           <textarea id="einladung-text" readonly style="min-height:120px;font-size:12px">${escapeHtml(text)}</textarea>

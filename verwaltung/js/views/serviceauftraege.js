@@ -1,4 +1,4 @@
-import { getAll, put, getSettings, SERVICEAUFTRAG_STATUS } from '../db.js';
+import { getAll, put, getSettings, SERVICEAUFTRAG_STATUS, STANDARD_WARTUNGSCHECKLISTE } from '../db.js';
 import { uid, escapeHtml, toast, formatDate, formatCurrency, todayISO } from '../utils.js';
 import { openModal } from '../ui.js';
 import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../dokumente.js';
@@ -12,7 +12,8 @@ import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../d
 //
 // Diese Ansicht ist bewusst nur für admin/büro (siehe ROUTE_ROLLEN/
 // firestore.rules match /serviceauftraege/{docId}) - die mobile
-// Techniker-Oberfläche mit eigener, engerer Rechtevergabe folgt in Phase 4.
+// Techniker-Oberfläche (eigenes Mini-App verwaltung/techniker/, Phase 4)
+// liest/schreibt dieselbe Collection mit eigenen, engeren Rechten.
 
 const STATUS_LABEL = Object.fromEntries(SERVICEAUFTRAG_STATUS.map((s) => [s.id, s.titel]));
 const STATUS_BADGE = {
@@ -45,6 +46,27 @@ export function istUeberfaellig(auftrag, heute = todayISO()) {
   return auftrag.auftragsfrist < heute;
 }
 
+// Baut die Checkliste aus den vom Büro eingegebenen Textzeilen (eine je
+// Position, optional mit einer vom technikerCheckbox-Textformat ("[x] "/
+// "[ ] ") erzeugten Markierung, die beim erneuten Einlesen ignoriert wird).
+// Eine Zeile, deren Titel unverändert einem vorherigen Punkt entspricht,
+// behält dessen erledigt-/Notiz-Stand (z.B. vom Techniker bereits
+// abgehakt) - nur eine inhaltlich geänderte oder neue Zeile startet
+// wieder bei "offen". So verliert das Büro keine Technikerfortschritte,
+// solange es die Zeilen nicht selbst umformuliert.
+export function baueChecklistenPunkte(zeilenText, vorherigePunkte) {
+  const vorherigeByTitel = Object.fromEntries((vorherigePunkte || []).map((p) => [p.titel, p]));
+  return (zeilenText || '')
+    .split('\n')
+    .map((zeile) => zeile.replace(/^\[[xX ]?\]\s*/, '').trim())
+    .filter(Boolean)
+    .map((titel) => (vorherigeByTitel[titel] ? { ...vorherigeByTitel[titel] } : { titel, erledigt: false, notiz: '' }));
+}
+
+function checklistenPunkteAlsText(punkte) {
+  return (punkte || []).map((p) => `${p.erledigt ? '[x]' : '[ ]'} ${p.titel}`).join('\n');
+}
+
 export async function render(container) {
   let [auftraege, kunden, anlagen, mitarbeiter, settings] = await Promise.all([
     getAll('serviceauftraege'), getAll('kunden'), getAll('anlagen'), getAll('mitarbeiter'), getSettings(),
@@ -62,7 +84,7 @@ export async function render(container) {
         <button class="btn btn-primary" id="btn-new">+ Serviceauftrag</button>
       </div>
     </div>
-    <p class="hint">Externe Herstellerwartungsaufträge (z.B. Wärmepumpen-Service). Die mobile Techniker-Ansicht folgt in einer späteren Phase - hier wird zugewiesen, geplant und der Status gepflegt.</p>
+    <p class="hint">Externe Herstellerwartungsaufträge (z.B. Wärmepumpen-Service). Zuweisen, planen und Checkliste vorbereiten hier - die Techniker arbeiten eigene zugewiesene Aufträge über ihre mobile Ansicht (/verwaltung/techniker/) ab.</p>
     <div class="kpi-grid">
       <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => a.status === 'offen').length}</div><div class="kpi-label">Offen (nicht zugewiesen)</div></div>
       <div class="kpi-card"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
@@ -121,6 +143,7 @@ export async function render(container) {
       anlagenId: '', herstellerUndAnlagentyp: '', anlagenmodell: '', seriennummer: '', wartungsart: '',
       auftragsfrist: '', geplanteWartungsdauer: '', geplanterNettoumsatz: '', hinweise: '',
       technikerIds: [], status: 'offen', technikerNotizen: '',
+      checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '',
     };
     const { body, close } = openModal({
       title: isEdit ? `Serviceauftrag ${data.externeAuftragsnummer || ''}` : 'Neuer Serviceauftrag',
@@ -156,11 +179,21 @@ export async function render(container) {
 
             <div class="field col-span-2"><label>Techniker-Zuweisung</label>${technikerCheckboxen(data.technikerIds)}</div>
             <div class="field col-span-2"><label>Hinweise</label><textarea name="hinweise">${escapeHtml(data.hinweise || '')}</textarea></div>
+
+            <div class="field col-span-2">
+              <label>Checkliste (eine Position je Zeile, von der mobilen Techniker-Ansicht abgehakt)</label>
+              <textarea name="checklistenPunkteText" rows="5" placeholder="z.B.&#10;Sichtprüfung der Anlage durchgeführt&#10;Filter/Verschleißteile geprüft">${escapeHtml(checklistenPunkteAlsText(data.checklistenPunkte))}</textarea>
+              <button type="button" class="btn btn-sm" id="sa-standard-checkliste" style="margin-top:6px">Standard-Checkliste einfügen</button>
+            </div>
+
             ${isEdit && data.technikerNotizen ? `<div class="field col-span-2"><label>Notizen des Technikers (nur lesend)</label><p class="hint">${escapeHtml(data.technikerNotizen)}</p></div>` : ''}
+            ${isEdit && data.maengel ? `<div class="field col-span-2"><label>⚠️ Vom Techniker gemeldete Mängel (nur lesend)</label><p class="hint">${escapeHtml(data.maengel)}</p></div>` : ''}
+            ${isEdit && data.zusatzarbeitVorschlag ? `<div class="field col-span-2"><label>💡 Zusatzarbeit-Vorschlag des Technikers (nur lesend)</label><p class="hint">${escapeHtml(data.zusatzarbeitVorschlag)}</p></div>` : ''}
+            ${isEdit && data.berichtsentwurf ? `<div class="field col-span-2"><label>📝 Berichtsentwurf des Technikers (nur lesend - als Grundlage für den Bericht unten verwenden)</label><p class="hint">${escapeHtml(data.berichtsentwurf)}</p></div>` : ''}
           </div>
           ${isEdit ? `
             <h3 style="margin-top:24px">Wartungsdokumentation</h3>
-            <p class="hint">Wartungsprotokoll (Checkliste, Ja/Nein-Abschnitte, Unterschrift) aus Vorlage erzeugen, Fotos und Stundenzettel anhängen. Die mobile Techniker-Erfassung folgt in einer späteren Phase - bis dahin pflegt das Büro diesen Bereich.</p>
+            <p class="hint">Wartungsprotokoll (Checkliste, Ja/Nein-Abschnitte, Unterschrift) aus Vorlage erzeugen, Fotos und Stundenzettel anhängen. Technikerrückmeldungen (oben: Mängel/Zusatzarbeit/Berichtsentwurf) hier als Grundlage verwenden - der eigentliche Versand bleibt bewusst Büro-Sache.</p>
             <div id="dok-host"></div>
           ` : ''}
           <div class="modal-actions">
@@ -175,6 +208,9 @@ export async function render(container) {
     body.querySelector('select[name="kundeId"]').addEventListener('change', (e) => {
       const sel = body.querySelector('select[name="anlagenId"]');
       sel.innerHTML = anlagenOptionen(e.target.value, '');
+    });
+    body.querySelector('#sa-standard-checkliste').addEventListener('click', () => {
+      body.querySelector('textarea[name="checklistenPunkteText"]').value = STANDARD_WARTUNGSCHECKLISTE.join('\n');
     });
     if (isEdit) {
       const technikerNamen = (data.technikerIds || []).map((id) => technikerById[id]?.name).filter(Boolean).join(', ');
@@ -216,6 +252,7 @@ export async function render(container) {
         status: (fd.get('status') || 'offen').toString(),
         technikerIds: fd.getAll('technikerIds').map((v) => v.toString()),
         hinweise: (fd.get('hinweise') || '').toString().trim(),
+        checklistenPunkte: baueChecklistenPunkte((fd.get('checklistenPunkteText') || '').toString(), data.checklistenPunkte),
         erstelltAm: data.erstelltAm || new Date().toISOString(),
         aktualisiertAm: new Date().toISOString(),
       };

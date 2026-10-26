@@ -253,6 +253,14 @@ async function boot() {
   // überhaupt Einstellungen (Theme, Logo, ...) gelesen werden dürfen. Der
   // Login-Screen selbst braucht dafür keine Einstellungen.
   session = await initLock();
+  // Techniker haben in dieser SPA keine einzige zugängliche Route (siehe
+  // ROUTE_ROLLEN) - sie bekommen stattdessen ihre eigene, schlanke Ansicht
+  // (verwaltung/techniker/, wie das Kundenportal). Ohne diese Weiterleitung
+  // würde nach dem Login nur "Kein Zugriff für deine Rolle" erscheinen.
+  if (session.role === 'techniker') {
+    window.location.replace('./techniker/');
+    return;
+  }
   try {
     // ensureSeeded() legt u.a. fehlende Vorlagen/Textbausteine/Kanban-Spalten
     // an – das dürfen laut Security Rules nur admin/buero. Meldet sich zuerst

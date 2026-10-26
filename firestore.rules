@@ -361,6 +361,18 @@ service cloud.firestore {
     // damit ein Techniker einen Auftrag nicht zurück auf "offen"/"abgebrochen"
     // setzen oder sich selbst neu zuweisen kann - beides bleibt eine
     // Büro-/Dispatch-Entscheidung (Phase 2/3).
+    // Phase 4 (mobile Technikeroberfläche) erweitert die techniker-seitig
+    // änderbaren Felder um die eigentliche Felddokumentation: checklistenPunkte
+    // (Haken auf der vom Büro vorbelegten Checkliste), maengel/
+    // zusatzarbeitVorschlag (freier Text, löst NICHTS automatisch aus - das
+    // Büro sieht und entscheidet in der eigenen Ansicht), berichtsentwurf
+    // (Rohtext für den späteren Wartungsbericht). Bewusst KEIN Zugriff auf
+    // "dokumente"/"fotos" in dieser Phase - der eigentliche, versandfähige
+    // Bericht entsteht weiterhin ausschließlich über die admin/büro-Ansicht
+    // (siehe Phase 5/6 Kommentar in dokumente.js/serviceauftraege.js): erst
+    // dort liegt die Freigabe vor Kundenversand, die die Spezifikation
+    // fordert - ein Techniker kann hier also nichts an einen Kunden senden,
+    // nur Rohmaterial für das Büro hinterlassen.
     match /serviceauftraege/{docId} {
       allow read, create, delete: if isAdminOrBuero();
       allow update: if isAdminOrBuero()
@@ -368,7 +380,8 @@ service cloud.firestore {
           isTechniker()
           && myMitarbeiterId() in resource.data.technikerIds
           && request.resource.data.status in ['in_bearbeitung', 'abgeschlossen']
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'technikerNotizen', 'aktualisiertAm'])
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['status', 'technikerNotizen', 'aktualisiertAm', 'checklistenPunkte', 'maengel', 'zusatzarbeitVorschlag', 'berichtsentwurf'])
         );
       allow read: if isTechniker() && myMitarbeiterId() in resource.data.technikerIds;
     }

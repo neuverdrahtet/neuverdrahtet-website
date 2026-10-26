@@ -15,7 +15,7 @@
 // statischen - ein statischer "import" wird vor jedem anderen Code im
 // Modul ausgeführt (auch vor dieser Zeile), der Shim wäre dann zu spät.
 globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
-const { normalisiereAuftragsnummer, findeDublette, istUeberfaellig } = await import('../js/views/serviceauftraege.js');
+const { normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte } = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
 function pruefe(name, fn) {
@@ -84,6 +84,45 @@ pruefe('F4: ein ABGEBROCHENER Auftrag ist auch mit überschrittener Frist nicht 
 
 pruefe('F5: eine Frist in der Zukunft ist nicht überfällig', () => {
   assert(istUeberfaellig({ status: 'offen', auftragsfrist: '2026-12-31' }, '2026-06-01') === false);
+});
+
+// =============================================================================
+// baueChecklistenPunkte (Phase 4: Checkliste des Büros -> Textzeilen -> Punkte,
+// unter Erhalt des Technikerfortschritts bei unveränderten Zeilen)
+// =============================================================================
+
+pruefe('C1: aus einfachen Textzeilen entstehen neue, offene Checklistenpunkte', () => {
+  const punkte = baueChecklistenPunkte('Sichtprüfung\nFilter geprüft', []);
+  assert(punkte.length === 2);
+  assert(punkte[0].titel === 'Sichtprüfung' && punkte[0].erledigt === false);
+  assert(punkte[1].titel === 'Filter geprüft' && punkte[1].erledigt === false);
+});
+
+pruefe('C2: eine unveränderte Zeile behält den erledigt-Status (Technikerfortschritt geht nicht verloren)', () => {
+  const vorherige = [{ titel: 'Sichtprüfung', erledigt: true, notiz: 'i.O.' }];
+  const punkte = baueChecklistenPunkte('Sichtprüfung', vorherige);
+  assert(punkte.length === 1);
+  assert(punkte[0].erledigt === true, 'erledigt muss erhalten bleiben');
+  assert(punkte[0].notiz === 'i.O.', 'Notiz muss erhalten bleiben');
+});
+
+pruefe('C3: eine inhaltlich geänderte Zeile (neuer Titel) startet wieder bei "offen"', () => {
+  const vorherige = [{ titel: 'Sichtprüfung', erledigt: true, notiz: 'i.O.' }];
+  const punkte = baueChecklistenPunkte('Sichtprüfung erweitert', vorherige);
+  assert(punkte[0].titel === 'Sichtprüfung erweitert');
+  assert(punkte[0].erledigt === false, 'eine neue/geänderte Zeile ist nicht automatisch erledigt');
+});
+
+pruefe('C4: leere Zeilen werden ignoriert', () => {
+  const punkte = baueChecklistenPunkte('Sichtprüfung\n\n   \nFilter geprüft', []);
+  assert(punkte.length === 2);
+});
+
+pruefe('C5: eine führende "[x] "/"[ ] "-Markierung (aus der Anzeige) wird beim erneuten Einlesen ignoriert, nicht Teil des Titels', () => {
+  const vorherige = [{ titel: 'Sichtprüfung', erledigt: true, notiz: '' }];
+  const punkte = baueChecklistenPunkte('[x] Sichtprüfung\n[ ] Filter geprüft', vorherige);
+  assert(punkte[0].titel === 'Sichtprüfung' && punkte[0].erledigt === true, 'Titel ohne Markierung muss wieder auf den vorherigen Punkt matchen');
+  assert(punkte[1].titel === 'Filter geprüft' && punkte[1].erledigt === false);
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
