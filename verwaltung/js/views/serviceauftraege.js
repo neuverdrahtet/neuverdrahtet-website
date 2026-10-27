@@ -2,6 +2,7 @@ import { getAll, put, remove, getSettings, SERVICEAUFTRAG_STATUS, STANDARD_WARTU
 import { uid, escapeHtml, toast, formatDate, formatCurrency, todayISO } from '../utils.js';
 import { openModal } from '../ui.js';
 import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../dokumente.js';
+import { createBulkSelect } from '../bulkselect.js';
 
 // Service-Auftragsverwaltung (Phase 1 der Service-/Techniker-/
 // Personalverwaltung, siehe Architektur-/Sicherheitsbericht Phase 0) -
@@ -301,6 +302,12 @@ export async function render(container) {
     'kpi-gekuerzt': { label: 'nur mit evtl. gekürzter Auftragsnummer', pruefe: (a) => wirktAuftragsnummerAbgeschnitten(a.externeAuftragsnummer) },
   };
   let aktiverKpiFilter = null;
+  // Mehrfachauswahl+Löschen über das App-weit gemeinsame bulkselect.js-Modul
+  // (gleiche Leiste/Checkboxen wie in kunden.js/aufgaben.js/projekte.js usw.)
+  // statt einer eigenen Implementierung - "serviceauftraege" steht NICHT in
+  // db.js TRASH_STORES, bulk.wire() löscht hier also endgültig (kein
+  // Papierkorb) und sagt das im Bestätigungsdialog auch so.
+  const bulk = createBulkSelect('serviceauftraege', { label: 'Serviceaufträge' });
 
   function markActiveKpi() {
     container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
@@ -314,22 +321,26 @@ export async function render(container) {
     const filterHinweis = filterDef
       ? `<p class="hint">Gefiltert: ${filterDef.label} (${sichtbareAuftraege.length} von ${auftraege.length}). <button type="button" class="btn btn-sm" id="btn-filter-reset">Filter zurücksetzen</button></p>`
       : '';
+
     if (sichtbareAuftraege.length === 0) {
       host.innerHTML = filterDef
-        ? `${filterHinweis}<div class="empty-state">Keine Serviceaufträge für diesen Filter.</div>`
-        : '<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>';
+        ? `${bulk.barHtml()}${filterHinweis}<div class="empty-state">Keine Serviceaufträge für diesen Filter.</div>`
+        : `${bulk.barHtml()}<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>`;
       host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { aktiverKpiFilter = null; markActiveKpi(); renderListe(); });
+      bulk.wire(host, { onChange: renderListe, onDeleted: (ids) => { auftraege = auftraege.filter((a) => !ids.includes(a.id)); renderListe(); } });
       return;
     }
     host.innerHTML = `
+      ${bulk.barHtml()}
       ${filterHinweis}
       <table class="data-table">
-        <thead><tr><th>Auftragsnummer</th><th>Kunde / Auftraggeber</th><th>Anlage</th><th>Techniker</th><th>Frist</th><th>Status</th><th>Datencheck</th><th></th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th>Auftragsnummer</th><th>Kunde / Auftraggeber</th><th>Anlage</th><th>Techniker</th><th>Frist</th><th>Status</th><th>Datencheck</th><th></th></tr></thead>
         <tbody>
           ${sichtbareAuftraege.map((a) => {
             const fehlend = fehlendeServiceauftragFelder(a);
             return `
             <tr data-id="${a.id}">
+              ${bulk.rowCell(a.id)}
               <td>${escapeHtml(a.externeAuftragsnummer || '–')}${wirktAuftragsnummerAbgeschnitten(a.externeAuftragsnummer) ? ' <span class="badge badge-warn" title="Wirkt im Portal gekürzt - bitte in der aufgeklappten Detailansicht des Partnerportals prüfen">⚠️ evtl. gekürzt</span>' : ''}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || a.kundenname || '–')}${a.serviceempfaenger ? `<div class="text-mute" style="font-size:12px">Service bei: ${escapeHtml(a.serviceempfaenger)}</div>` : ''}${a.auftraggeber ? `<div class="text-mute" style="font-size:12px">${escapeHtml(a.auftraggeber)}</div>` : ''}</td>
               <td>${escapeHtml(anlagenById[a.anlagenId]?.bezeichnung || a.herstellerUndAnlagentyp || '–')}</td>
@@ -345,6 +356,7 @@ export async function render(container) {
       </table>
     `;
     host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { aktiverKpiFilter = null; markActiveKpi(); renderListe(); });
+    bulk.wire(host, { onChange: renderListe, onDeleted: (ids) => { auftraege = auftraege.filter((a) => !ids.includes(a.id)); renderListe(); } });
     host.querySelectorAll('tbody tr[data-id]').forEach((row) => {
       row.addEventListener('click', () => openForm(auftraege.find((a) => a.id === row.dataset.id)));
     });
