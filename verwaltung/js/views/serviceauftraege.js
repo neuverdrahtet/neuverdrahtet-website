@@ -255,7 +255,7 @@ export async function render(container) {
     <div class="kpi-grid">
       <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => a.status === 'offen').length}</div><div class="kpi-label">Offen (nicht zugewiesen)</div></div>
       <div class="kpi-card"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
-      <div class="kpi-card kpi-danger"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
+      <div class="kpi-card kpi-clickable kpi-danger" id="kpi-ueberfaellig"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
       <div class="kpi-card kpi-success"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
       <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => fehlendeServiceauftragFelder(a).length > 0).length}</div><div class="kpi-label">Mit fehlenden Daten</div></div>
       <div class="kpi-card kpi-danger"><div class="kpi-value">${findeServiceauftragDubletten(auftraege).length}</div><div class="kpi-label">Dublettengruppen</div></div>
@@ -272,14 +272,32 @@ export async function render(container) {
     <div id="liste-host"></div>
   `;
 
+  let nurUeberfaellig = false;
+
+  function markActiveKpi() {
+    container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    if (nurUeberfaellig) container.querySelector('#kpi-ueberfaellig')?.classList.add('kpi-active');
+  }
+
   function renderListe() {
     const host = container.querySelector('#liste-host');
-    if (auftraege.length === 0) { host.innerHTML = '<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>'; return; }
+    const sichtbareAuftraege = nurUeberfaellig ? auftraege.filter((a) => istUeberfaellig(a)) : auftraege;
+    const filterHinweis = nurUeberfaellig
+      ? `<p class="hint">Gefiltert: nur überfällige Aufträge (${sichtbareAuftraege.length} von ${auftraege.length}). <button type="button" class="btn btn-sm" id="btn-filter-reset">Filter zurücksetzen</button></p>`
+      : '';
+    if (sichtbareAuftraege.length === 0) {
+      host.innerHTML = nurUeberfaellig
+        ? `${filterHinweis}<div class="empty-state">Keine überfälligen Serviceaufträge.</div>`
+        : '<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>';
+      host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { nurUeberfaellig = false; markActiveKpi(); renderListe(); });
+      return;
+    }
     host.innerHTML = `
+      ${filterHinweis}
       <table class="data-table">
         <thead><tr><th>Auftragsnummer</th><th>Kunde / Auftraggeber</th><th>Anlage</th><th>Techniker</th><th>Frist</th><th>Status</th><th>Datencheck</th><th></th></tr></thead>
         <tbody>
-          ${auftraege.map((a) => {
+          ${sichtbareAuftraege.map((a) => {
             const fehlend = fehlendeServiceauftragFelder(a);
             return `
             <tr data-id="${a.id}">
@@ -297,6 +315,7 @@ export async function render(container) {
         </tbody>
       </table>
     `;
+    host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { nurUeberfaellig = false; markActiveKpi(); renderListe(); });
     host.querySelectorAll('tbody tr[data-id]').forEach((row) => {
       row.addEventListener('click', () => openForm(auftraege.find((a) => a.id === row.dataset.id)));
     });
@@ -628,5 +647,10 @@ export async function render(container) {
 
   container.querySelector('#btn-dubletten').addEventListener('click', openDublettenModal);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  container.querySelector('#kpi-ueberfaellig').addEventListener('click', () => {
+    nurUeberfaellig = !nurUeberfaellig;
+    markActiveKpi();
+    renderListe();
+  });
   renderListe();
 }
