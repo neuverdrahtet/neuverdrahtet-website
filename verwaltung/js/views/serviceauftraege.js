@@ -40,6 +40,20 @@ export function findeDublette(auftraege, externeAuftragsnummer, eigeneId) {
   return auftraege.find((a) => a.id !== eigeneId && normalisiereAuftragsnummer(a.externeAuftragsnummer) === norm) || null;
 }
 
+// Erkennt eine Auftragsnummer, die SICHTBAR ABGESCHNITTEN wirkt (endet auf
+// "..." oder das einzelne Ellipsis-Zeichen "…") - KEIN Anzeigefehler
+// dieser App (siehe renderListe: escapeHtml(a.externeAuftragsnummer) ohne
+// jede Kürzung), sondern ein Hinweis darauf, dass das Partnerportal
+// (z.B. WR-Gruppe) die Nummer selbst in einer zu schmalen Spalte gekürzt
+// angezeigt hat und der Screenshot genau das wörtlich zeigte - die
+// Bildauswertung erfindet bewusst keine fehlenden Ziffern (siehe
+// PARTNERIMPORT_SYSTEM_PROMPT in worker.js), übernimmt die gekürzte Zeichen-
+// kette also unverändert. Rein heuristisch (Textmuster), kein Beweis -
+// dient nur dazu, verdächtige Fälle im Büro auffindbar zu machen.
+export function wirktAuftragsnummerAbgeschnitten(auftragsnummer) {
+  return /(\.{3}|…)$/.test((auftragsnummer || '').toString().trim());
+}
+
 export function istUeberfaellig(auftrag, heute = todayISO()) {
   if (!auftrag.auftragsfrist) return false;
   if (auftrag.status === 'abgeschlossen' || auftrag.status === 'abgebrochen') return false;
@@ -253,12 +267,13 @@ export async function render(container) {
     </div>
     <p class="hint">Externe Herstellerwartungsaufträge (z.B. Wärmepumpen-Service). Zuweisen, planen und Checkliste vorbereiten hier - die Techniker arbeiten eigene zugewiesene Aufträge über ihre mobile Ansicht (/verwaltung/techniker/) ab.</p>
     <div class="kpi-grid">
-      <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => a.status === 'offen').length}</div><div class="kpi-label">Offen (nicht zugewiesen)</div></div>
-      <div class="kpi-card"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
+      <div class="kpi-card kpi-clickable kpi-warn" id="kpi-offen"><div class="kpi-value">${auftraege.filter((a) => a.status === 'offen').length}</div><div class="kpi-label">Offen (nicht zugewiesen)</div></div>
+      <div class="kpi-card kpi-clickable" id="kpi-zugewiesen"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
       <div class="kpi-card kpi-clickable kpi-danger" id="kpi-ueberfaellig"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
-      <div class="kpi-card kpi-success"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
-      <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => fehlendeServiceauftragFelder(a).length > 0).length}</div><div class="kpi-label">Mit fehlenden Daten</div></div>
-      <div class="kpi-card kpi-danger"><div class="kpi-value">${findeServiceauftragDubletten(auftraege).length}</div><div class="kpi-label">Dublettengruppen</div></div>
+      <div class="kpi-card kpi-clickable kpi-success" id="kpi-abgeschlossen"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
+      <div class="kpi-card kpi-clickable kpi-warn" id="kpi-fehlende-daten"><div class="kpi-value">${auftraege.filter((a) => fehlendeServiceauftragFelder(a).length > 0).length}</div><div class="kpi-label">Mit fehlenden Daten</div></div>
+      <div class="kpi-card kpi-clickable kpi-warn" id="kpi-gekuerzt"><div class="kpi-value">${auftraege.filter((a) => wirktAuftragsnummerAbgeschnitten(a.externeAuftragsnummer)).length}</div><div class="kpi-label">Auftragsnummer evtl. gekürzt</div></div>
+      <div class="kpi-card kpi-clickable kpi-danger" id="kpi-dubletten"><div class="kpi-value">${findeServiceauftragDubletten(auftraege).length}</div><div class="kpi-label">Dublettengruppen</div></div>
       ${offeneDispatchVorschlaege > 0 ? `<div class="kpi-card kpi-accent"><div class="kpi-value">🤖 ${offeneDispatchVorschlaege}</div><div class="kpi-label">JARVIS-Zuweisungsvorschläge warten auf Freigabe (JARVIS-Zentrale)</div></div>` : ''}
     </div>
     ${techniker.length > 0 ? `
@@ -272,24 +287,38 @@ export async function render(container) {
     <div id="liste-host"></div>
   `;
 
-  let nurUeberfaellig = false;
+  // KPI-Karten, die beim Klick die Liste unten auf genau diese Kennzahl
+  // filtern (gleiches Muster wie ki-aktivitaet.js: kpi-clickable/kpi-active,
+  // erneuter Klick auf die aktive Karte hebt den Filter wieder auf). Die
+  // Dubletten-Karte ist bewusst NICHT hier drin - sie öffnet stattdessen das
+  // Zusammenführen-Modal (siehe openDublettenModal), filtert nicht die Liste.
+  const KPI_FILTER = {
+    'kpi-offen': { label: 'nur offene (nicht zugewiesene)', pruefe: (a) => a.status === 'offen' },
+    'kpi-zugewiesen': { label: 'nur zugewiesene / in Bearbeitung', pruefe: (a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung' },
+    'kpi-ueberfaellig': { label: 'nur überfällige', pruefe: (a) => istUeberfaellig(a) },
+    'kpi-abgeschlossen': { label: 'nur abgeschlossene', pruefe: (a) => a.status === 'abgeschlossen' },
+    'kpi-fehlende-daten': { label: 'nur mit fehlenden Daten', pruefe: (a) => fehlendeServiceauftragFelder(a).length > 0 },
+    'kpi-gekuerzt': { label: 'nur mit evtl. gekürzter Auftragsnummer', pruefe: (a) => wirktAuftragsnummerAbgeschnitten(a.externeAuftragsnummer) },
+  };
+  let aktiverKpiFilter = null;
 
   function markActiveKpi() {
     container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
-    if (nurUeberfaellig) container.querySelector('#kpi-ueberfaellig')?.classList.add('kpi-active');
+    if (aktiverKpiFilter) container.querySelector(`#${aktiverKpiFilter}`)?.classList.add('kpi-active');
   }
 
   function renderListe() {
     const host = container.querySelector('#liste-host');
-    const sichtbareAuftraege = nurUeberfaellig ? auftraege.filter((a) => istUeberfaellig(a)) : auftraege;
-    const filterHinweis = nurUeberfaellig
-      ? `<p class="hint">Gefiltert: nur überfällige Aufträge (${sichtbareAuftraege.length} von ${auftraege.length}). <button type="button" class="btn btn-sm" id="btn-filter-reset">Filter zurücksetzen</button></p>`
+    const filterDef = aktiverKpiFilter ? KPI_FILTER[aktiverKpiFilter] : null;
+    const sichtbareAuftraege = filterDef ? auftraege.filter(filterDef.pruefe) : auftraege;
+    const filterHinweis = filterDef
+      ? `<p class="hint">Gefiltert: ${filterDef.label} (${sichtbareAuftraege.length} von ${auftraege.length}). <button type="button" class="btn btn-sm" id="btn-filter-reset">Filter zurücksetzen</button></p>`
       : '';
     if (sichtbareAuftraege.length === 0) {
-      host.innerHTML = nurUeberfaellig
-        ? `${filterHinweis}<div class="empty-state">Keine überfälligen Serviceaufträge.</div>`
+      host.innerHTML = filterDef
+        ? `${filterHinweis}<div class="empty-state">Keine Serviceaufträge für diesen Filter.</div>`
         : '<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>';
-      host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { nurUeberfaellig = false; markActiveKpi(); renderListe(); });
+      host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { aktiverKpiFilter = null; markActiveKpi(); renderListe(); });
       return;
     }
     host.innerHTML = `
@@ -301,7 +330,7 @@ export async function render(container) {
             const fehlend = fehlendeServiceauftragFelder(a);
             return `
             <tr data-id="${a.id}">
-              <td>${escapeHtml(a.externeAuftragsnummer || '–')}</td>
+              <td>${escapeHtml(a.externeAuftragsnummer || '–')}${wirktAuftragsnummerAbgeschnitten(a.externeAuftragsnummer) ? ' <span class="badge badge-warn" title="Wirkt im Portal gekürzt - bitte in der aufgeklappten Detailansicht des Partnerportals prüfen">⚠️ evtl. gekürzt</span>' : ''}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || a.kundenname || '–')}${a.serviceempfaenger ? `<div class="text-mute" style="font-size:12px">Service bei: ${escapeHtml(a.serviceempfaenger)}</div>` : ''}${a.auftraggeber ? `<div class="text-mute" style="font-size:12px">${escapeHtml(a.auftraggeber)}</div>` : ''}</td>
               <td>${escapeHtml(anlagenById[a.anlagenId]?.bezeichnung || a.herstellerUndAnlagentyp || '–')}</td>
               <td>${(a.technikerIds || []).map((id) => escapeHtml(technikerById[id]?.name || '?')).join(', ') || '–'}</td>
@@ -315,7 +344,7 @@ export async function render(container) {
         </tbody>
       </table>
     `;
-    host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { nurUeberfaellig = false; markActiveKpi(); renderListe(); });
+    host.querySelector('#btn-filter-reset')?.addEventListener('click', () => { aktiverKpiFilter = null; markActiveKpi(); renderListe(); });
     host.querySelectorAll('tbody tr[data-id]').forEach((row) => {
       row.addEventListener('click', () => openForm(auftraege.find((a) => a.id === row.dataset.id)));
     });
@@ -647,10 +676,13 @@ export async function render(container) {
 
   container.querySelector('#btn-dubletten').addEventListener('click', openDublettenModal);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
-  container.querySelector('#kpi-ueberfaellig').addEventListener('click', () => {
-    nurUeberfaellig = !nurUeberfaellig;
-    markActiveKpi();
-    renderListe();
+  container.querySelector('#kpi-dubletten').addEventListener('click', openDublettenModal);
+  Object.keys(KPI_FILTER).forEach((kpiId) => {
+    container.querySelector(`#${kpiId}`).addEventListener('click', () => {
+      aktiverKpiFilter = aktiverKpiFilter === kpiId ? null : kpiId;
+      markActiveKpi();
+      renderListe();
+    });
   });
   renderListe();
 }

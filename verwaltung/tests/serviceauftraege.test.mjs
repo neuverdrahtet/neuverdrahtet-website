@@ -19,6 +19,7 @@ const {
   normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte,
   terminUeberlappt, findeTerminKonflikte, brauchtBestaetigungVorVerschieben, berechneTerminEnde,
   fehlendeServiceauftragFelder, findeServiceauftragDubletten, waehlePrimaerenAuftrag, mergeServiceauftraege,
+  wirktAuftragsnummerAbgeschnitten,
 } = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
@@ -291,6 +292,35 @@ pruefe('I2: mergeServiceauftraege berührt NIE technikerIds/status/checklistenPu
 pruefe('I3: gleiche Werte (Groß-/Kleinschreibung, Leerzeichen) gelten NICHT als Widerspruch', () => {
   const { konflikte } = mergeServiceauftraege({ id: 'a1', wartungsart: ' Jahreswartung ' }, { id: 'a2', wartungsart: 'jahreswartung' });
   assert(konflikte.length === 0);
+});
+
+// =============================================================================
+// wirktAuftragsnummerAbgeschnitten (Erkennung einer im Partnerportal selbst
+// gekürzt angezeigten Auftragsnummer, z.B. "STE-00033670..." - KEIN
+// CSS-/Anzeigefehler dieser App, siehe Kommentar in serviceauftraege.js)
+// =============================================================================
+
+pruefe('J1: eine mit "..." endende Auftragsnummer wirkt gekürzt', () => {
+  assert(wirktAuftragsnummerAbgeschnitten('STE-00033670...') === true);
+});
+
+pruefe('J2: eine mit dem Ellipsis-Zeichen "…" endende Auftragsnummer wirkt gekürzt', () => {
+  assert(wirktAuftragsnummerAbgeschnitten('STE-00033670…') === true);
+});
+
+pruefe('J3: eine normale, vollständige Auftragsnummer wirkt NICHT gekürzt', () => {
+  assert(wirktAuftragsnummerAbgeschnitten('STE-00033670') === false);
+  assert(wirktAuftragsnummerAbgeschnitten('SE-2026-001') === false);
+});
+
+pruefe('J4: ein einzelner Punkt am Ende (z.B. Abkürzung) gilt NICHT als gekürzt - erst drei Punkte oder das Ellipsis-Zeichen', () => {
+  assert(wirktAuftragsnummerAbgeschnitten('STE-00033670.') === false);
+});
+
+pruefe('J5: leer/undefined/null wirkt nie gekürzt', () => {
+  assert(wirktAuftragsnummerAbgeschnitten('') === false);
+  assert(wirktAuftragsnummerAbgeschnitten(undefined) === false);
+  assert(wirktAuftragsnummerAbgeschnitten(null) === false);
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
