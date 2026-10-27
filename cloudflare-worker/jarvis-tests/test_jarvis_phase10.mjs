@@ -149,6 +149,20 @@ await pruefe('A3: pruefeWerkzeugGrundsicherheit lässt alle tatsächlich vorhand
   }
 });
 
+await pruefe('A3b: pruefeWerkzeugGrundsicherheit lässt searchInvoices durch, obwohl der Name dem Verbotsmuster entspricht (Regression - war faelschlich blockiert)', () => {
+  assert(W.JARVIS_VERBOTENE_WERKZEUG_MUSTER.test('searchInvoices'), 'Testvoraussetzung: "searchInvoices" enthält den Musterbestandteil "invoice"');
+  W.pruefeWerkzeugGrundsicherheit('searchInvoices'); // darf NICHT werfen - ist ein registriertes GET-Werkzeug
+});
+
+await pruefe('A3c: ein UNBEKANNTER Werkzeugname, der dem Verbotsmuster entspricht, wird weiterhin abgelehnt (Schutz vor erfundenen Werkzeugnamen bleibt erhalten)', () => {
+  try {
+    W.pruefeWerkzeugGrundsicherheit('getInvoicePdf');
+    throw new Error('FEHLSCHLAG: "getInvoicePdf" hätte abgelehnt werden müssen');
+  } catch (err) {
+    assert(err.status === 403, `erwartet 403, war ${err.status}`);
+  }
+});
+
 await pruefe('A4: pruefeWerkzeugGrundsicherheit lässt alle tatsächlich erlaubten schreibenden Werkzeuge durch', () => {
   for (const name of W.JARVIS_ERLAUBTE_SCHREIBWERKZEUGE) {
     W.pruefeWerkzeugGrundsicherheit(name); // darf NICHT werfen

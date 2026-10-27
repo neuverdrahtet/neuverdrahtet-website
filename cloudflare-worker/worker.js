@@ -2558,12 +2558,21 @@ const JARVIS_MAX_SCHREIBAUFRUFE_PRO_CHAT = 5;
  * Prüfung (pruefeWerkzeugBerechtigung, nur für JARVIS) zum Zug kommt.
  */
 function pruefeWerkzeugGrundsicherheit(toolName) {
-  if (JARVIS_VERBOTENE_WERKZEUG_MUSTER.test(toolName)) {
+  const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
+  // Das verbotene Aktionsmuster blockt per Namensbestandteil (z.B. "invoice",
+  // "rechnung", "send") auch unbekannte/erfundene Werkzeugnamen als
+  // Sicherheitsnetz, falls das Modell einen nicht existierenden Werkzeugnamen
+  // aufruft - deshalb bewusst NICHT an "istSchreibend" gekoppelt. Eine
+  // Ausnahme gibt es nur für ein TATSÄCHLICH REGISTRIERTES, rein lesendes
+  // (GET-)Werkzeug wie searchInvoices, das sonst durch den Namensbestandteil
+  // "invoice" fälschlich mitblockiert würde, obwohl es nur abfragt, nichts
+  // verändert oder versendet.
+  const istBekanntesLesewerkzeug = !!tool && tool.method === 'GET';
+  if (!istBekanntesLesewerkzeug && JARVIS_VERBOTENE_WERKZEUG_MUSTER.test(toolName)) {
     const err = new Error(`Werkzeug "${toolName}" entspricht einem grundsätzlich verbotenen Aktionsmuster (z.B. Versand/Löschung/Rechnungsstellung) und darf nie aufgerufen werden.`);
     err.status = 403;
     throw err;
   }
-  const tool = KI_BUEROKRAFT_TOOLS.find((t) => t.name === toolName);
   const istSchreibend = tool && tool.method && tool.method !== 'GET';
   if (istSchreibend && !JARVIS_ERLAUBTE_SCHREIBWERKZEUGE.includes(toolName)) {
     const err = new Error(`Werkzeug "${toolName}" ist schreibend, aber NICHT auf der serverseitigen Positivliste erlaubter Schreibwerkzeuge - Aufruf abgelehnt, unabhängig vom Systemprompt.`);
