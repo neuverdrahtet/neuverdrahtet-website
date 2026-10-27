@@ -18,6 +18,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem
 const {
   normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte,
   terminUeberlappt, findeTerminKonflikte, brauchtBestaetigungVorVerschieben, berechneTerminEnde,
+  fehlendeServiceauftragFelder,
 } = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
@@ -188,6 +189,46 @@ pruefe('E1: berechneTerminEnde addiert die Dauer in Stunden korrekt (inkl. halbe
 
 pruefe('E2: berechneTerminEnde rechnet korrekt über Mitternacht hinaus', () => {
   assert(berechneTerminEnde('2026-11-03T23:00', 2) === '2026-11-04T01:00');
+});
+
+// =============================================================================
+// fehlendeServiceauftragFelder (Datenvollständigkeits-Check für bereits
+// angelegte Serviceaufträge - unabhängig von der reinen Entwurfsprüfung
+// vor der Partner-Import-Übernahme)
+// =============================================================================
+
+pruefe('G1: ein vollständig ausgefüllter Auftrag liefert keine fehlenden Felder', () => {
+  const auftrag = {
+    kundeId: 'k-1', kundenname: '', serviceempfaenger: 'Herr Krause', einsatzadresse: 'Musterweg 1, 45141 Essen',
+    telefonnummer: '0201123', wartungsart: 'Jahreswartung', auftragsfrist: '2026-12-01',
+  };
+  assert(fehlendeServiceauftragFelder(auftrag).length === 0);
+});
+
+pruefe('G2: kundeId ODER kundenname reicht - beide leer wird als fehlender Kunde gemeldet', () => {
+  const basis = { serviceempfaenger: 'x', einsatzadresse: 'x', telefonnummer: 'x', wartungsart: 'x', auftragsfrist: '2026-12-01' };
+  assert(fehlendeServiceauftragFelder({ ...basis, kundeId: '', kundenname: 'TLS Eco Plus Service' }).length === 0, 'kundenname allein reicht');
+  assert(fehlendeServiceauftragFelder({ ...basis, kundeId: 'k-1', kundenname: '' }).length === 0, 'kundeId allein reicht');
+  assert(fehlendeServiceauftragFelder({ ...basis, kundeId: '', kundenname: '' }).includes('Kunde'), 'ohne beides muss "Kunde" als fehlend gemeldet werden');
+});
+
+pruefe('G3: jedes leere Pflichtfeld wird einzeln benannt, mehrere gleichzeitig fehlende Felder werden alle gemeldet', () => {
+  const fehlend = fehlendeServiceauftragFelder({ kundeId: 'k-1', serviceempfaenger: '', einsatzadresse: '', telefonnummer: 'x', wartungsart: 'x', auftragsfrist: '' });
+  assert(fehlend.includes('Serviceempfänger') && fehlend.includes('Einsatzadresse') && fehlend.includes('Auftragsfrist'), `erwartet Serviceempfänger/Einsatzadresse/Auftragsfrist, war ${JSON.stringify(fehlend)}`);
+  assert(fehlend.length === 3, `es dürfen nur die tatsächlich leeren Felder gemeldet werden, war ${JSON.stringify(fehlend)}`);
+});
+
+pruefe('G4: ein Feld mit nur Leerzeichen zählt als leer, nicht als ausgefüllt', () => {
+  const fehlend = fehlendeServiceauftragFelder({ kundeId: 'k-1', serviceempfaenger: '   ', einsatzadresse: 'x', telefonnummer: 'x', wartungsart: 'x', auftragsfrist: '2026-12-01' });
+  assert(fehlend.includes('Serviceempfänger'), 'reine Leerzeichen dürfen nicht als Wert gelten');
+});
+
+pruefe('G5: anlagenId/Anlagendetails sind KEIN Pflichtfeld (bewusst keine automatische Anlagenzuordnung in dieser Phase)', () => {
+  const auftrag = {
+    kundeId: 'k-1', serviceempfaenger: 'x', einsatzadresse: 'x', telefonnummer: 'x', wartungsart: 'x', auftragsfrist: '2026-12-01',
+    anlagenId: '', herstellerUndAnlagentyp: '',
+  };
+  assert(fehlendeServiceauftragFelder(auftrag).length === 0, 'eine fehlende Anlagenzuordnung darf hier nicht als Datenfehler gemeldet werden');
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

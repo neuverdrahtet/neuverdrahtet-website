@@ -46,6 +46,32 @@ export function istUeberfaellig(auftrag, heute = todayISO()) {
   return auftrag.auftragsfrist < heute;
 }
 
+function istAusgefuellt(wert) {
+  return !!(wert ?? '').toString().trim();
+}
+
+// Datenvollständigkeits-Check für einen BEREITS ANGELEGTEN Serviceauftrag -
+// unabhängig davon, ob er manuell erfasst oder aus einem Partner-Import
+// übernommen wurde (anders als die reine Entwurfsprüfung in
+// partnerimport.js, die nur VOR der Übernahme läuft). Soll im laufenden
+// Betrieb auffallen lassen, wo noch Angaben fehlen, nicht nur direkt nach
+// dem Import. "anlagenId"/Anlagendetails sind bewusst NICHT Teil dieser
+// Liste - siehe Kopfkommentar zum Partner-Import in worker.js: keine
+// automatische Anlagenzuordnung in dieser Phase, ein fehlender Wert dort
+// ist also kein Datenfehler, den das Büro hier beheben müsste.
+export const SERVICEAUFTRAG_PFLICHTFELDER = [
+  { feld: 'kunde', label: 'Kunde', pruefe: (a) => istAusgefuellt(a.kundeId) || istAusgefuellt(a.kundenname) },
+  { feld: 'serviceempfaenger', label: 'Serviceempfänger', pruefe: (a) => istAusgefuellt(a.serviceempfaenger) },
+  { feld: 'einsatzadresse', label: 'Einsatzadresse', pruefe: (a) => istAusgefuellt(a.einsatzadresse) },
+  { feld: 'telefonnummer', label: 'Telefonnummer', pruefe: (a) => istAusgefuellt(a.telefonnummer) },
+  { feld: 'wartungsart', label: 'Wartungsart', pruefe: (a) => istAusgefuellt(a.wartungsart) },
+  { feld: 'auftragsfrist', label: 'Auftragsfrist', pruefe: (a) => istAusgefuellt(a.auftragsfrist) },
+];
+
+export function fehlendeServiceauftragFelder(auftrag) {
+  return SERVICEAUFTRAG_PFLICHTFELDER.filter((f) => !f.pruefe(auftrag || {})).map((f) => f.label);
+}
+
 // Baut die Checkliste aus den vom Büro eingegebenen Textzeilen (eine je
 // Position, optional mit einer vom technikerCheckbox-Textformat ("[x] "/
 // "[ ] ") erzeugten Markierung, die beim erneuten Einlesen ignoriert wird).
@@ -163,6 +189,7 @@ export async function render(container) {
       <div class="kpi-card"><div class="kpi-value">${auftraege.filter((a) => a.status === 'zugewiesen' || a.status === 'in_bearbeitung').length}</div><div class="kpi-label">Zugewiesen / in Bearbeitung</div></div>
       <div class="kpi-card kpi-danger"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
       <div class="kpi-card kpi-success"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
+      <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => fehlendeServiceauftragFelder(a).length > 0).length}</div><div class="kpi-label">Mit fehlenden Daten</div></div>
       ${offeneDispatchVorschlaege > 0 ? `<div class="kpi-card kpi-accent"><div class="kpi-value">🤖 ${offeneDispatchVorschlaege}</div><div class="kpi-label">JARVIS-Zuweisungsvorschläge warten auf Freigabe (JARVIS-Zentrale)</div></div>` : ''}
     </div>
     ${techniker.length > 0 ? `
@@ -181,9 +208,11 @@ export async function render(container) {
     if (auftraege.length === 0) { host.innerHTML = '<div class="empty-state">Noch keine Serviceaufträge erfasst.</div>'; return; }
     host.innerHTML = `
       <table class="data-table">
-        <thead><tr><th>Auftragsnummer</th><th>Kunde / Auftraggeber</th><th>Anlage</th><th>Techniker</th><th>Frist</th><th>Status</th><th></th></tr></thead>
+        <thead><tr><th>Auftragsnummer</th><th>Kunde / Auftraggeber</th><th>Anlage</th><th>Techniker</th><th>Frist</th><th>Status</th><th>Datencheck</th><th></th></tr></thead>
         <tbody>
-          ${auftraege.map((a) => `
+          ${auftraege.map((a) => {
+            const fehlend = fehlendeServiceauftragFelder(a);
+            return `
             <tr data-id="${a.id}">
               <td>${escapeHtml(a.externeAuftragsnummer || '–')}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || a.kundenname || '–')}${a.serviceempfaenger ? `<div class="text-mute" style="font-size:12px">Service bei: ${escapeHtml(a.serviceempfaenger)}</div>` : ''}${a.auftraggeber ? `<div class="text-mute" style="font-size:12px">${escapeHtml(a.auftraggeber)}</div>` : ''}</td>
@@ -191,9 +220,11 @@ export async function render(container) {
               <td>${(a.technikerIds || []).map((id) => escapeHtml(technikerById[id]?.name || '?')).join(', ') || '–'}</td>
               <td>${a.auftragsfrist ? formatDate(a.auftragsfrist) : '–'}${istUeberfaellig(a) ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td>
               <td><span class="badge ${STATUS_BADGE[a.status] || ''}">${STATUS_LABEL[a.status] || a.status}</span></td>
+              <td>${fehlend.length === 0 ? '<span class="badge badge-success">vollständig</span>' : `<span class="badge badge-warn">unvollständig</span><div class="text-mute" style="font-size:12px">Fehlt: ${escapeHtml(fehlend.join(', '))}</div>`}</td>
               <td><button type="button" class="btn btn-sm btn-edit" data-id="${a.id}" onclick="event.stopPropagation()">Bearbeiten</button></td>
             </tr>
-          `).join('')}
+          `;
+          }).join('')}
         </tbody>
       </table>
     `;
