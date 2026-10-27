@@ -9,6 +9,23 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 MODEL_ID = "claude-opus-4-8"
 
+# JARVIS-Automatisierungsschalter (siehe JARVIS_FEATURE_FLAGS in worker.js) -
+# jeder Schalter schreibt AUSSCHLIESSLICH interne Vorschlaege/Entwuerfe/
+# Aufgaben, versendet/bucht nie selbststaendig etwas extern. Am 27.10.2026
+# von Danny bewusst alle 9 aktiviert, nachdem jeder einzelne Schalter erklaert
+# wurde - hier eingetragen, damit ein kuenftiger Deploy sie nicht wieder aus
+# Versehen zuruecksetzt (Cloudflare sonst-Warnung "Update your Wrangler
+# configuration with these changes to keep deployments in sync").
+JARVIS_EMAIL_AKTIV = "true"
+JARVIS_ANGEBOT_AKTIV = "true"
+JARVIS_RECHNUNG_AKTIV = "true"
+JARVIS_MAHNUNG_AKTIV = "true"
+JARVIS_WARTUNG_AKTIV = "true"
+JARVIS_PROJEKT_AKTIV = "true"
+JARVIS_CONTROL_AKTIV = "true"
+JARVIS_TAGESCHECK_AKTIV = "true"
+JARVIS_DISPATCH_AKTIV = "true"
+
 # Cloudflare Service Bindings zu den beiden anderen, separat deployten
 # Worker-zu-Worker-Anbindungen (Google-Büro + KI-Bürokraft, siehe
 # callGoogleBuero()/callKiBuerokraftRest() in worker.js) - ein Aufruf über ein
