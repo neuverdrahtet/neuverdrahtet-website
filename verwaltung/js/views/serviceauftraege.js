@@ -72,6 +72,73 @@ export function fehlendeServiceauftragFelder(auftrag) {
   return SERVICEAUFTRAG_PFLICHTFELDER.filter((f) => !f.pruefe(auftrag || {})).map((f) => f.label);
 }
 
+// Findet DUBLETTEN unter BEREITS ANGELEGTEN Serviceaufträgen (gleiche
+// externe Auftragsnummer, unabhängig vom Partner - dieselbe Normalisierung
+// wie findeDublette oben) - z.B. wenn derselbe Auftrag versehentlich sowohl
+// manuell erfasst als auch per Partner-Import übernommen wurde, oder ein
+// Import zweimal lief, bevor die Dublettenprüfung des Imports griff.
+// Liefert nur ECHTE Gruppen (Länge > 1), eine leere Auftragsnummer bildet
+// NIE eine Gruppe (sonst würden alle Aufträge ohne Nummer fälschlich als
+// eine riesige Dublettengruppe erscheinen).
+export function findeServiceauftragDubletten(auftraege) {
+  const gruppenByNummer = new Map();
+  for (const a of (auftraege || [])) {
+    const norm = normalisiereAuftragsnummer(a.externeAuftragsnummer);
+    if (!norm) continue;
+    if (!gruppenByNummer.has(norm)) gruppenByNummer.set(norm, []);
+    gruppenByNummer.get(norm).push(a);
+  }
+  return [...gruppenByNummer.values()].filter((gruppe) => gruppe.length > 1);
+}
+
+// Der VOLLSTÄNDIGSTE Auftrag einer Dublettengruppe (wenigste fehlende
+// Pflichtfelder, siehe fehlendeServiceauftragFelder) bleibt beim
+// Zusammenführen bestehen - bei Gleichstand der ZUERST erstellte. So geht
+// bei einer Zusammenführung möglichst wenig manuell nachgetragene
+// Information verloren.
+export function waehlePrimaerenAuftrag(gruppe) {
+  return [...gruppe].sort((a, b) => {
+    const fehlendA = fehlendeServiceauftragFelder(a).length;
+    const fehlendB = fehlendeServiceauftragFelder(b).length;
+    if (fehlendA !== fehlendB) return fehlendA - fehlendB;
+    return (a.erstelltAm || '').localeCompare(b.erstelltAm || '');
+  })[0];
+}
+
+// Freitext-/Referenzfelder, die beim Zusammenführen zweier Dubletten
+// übernommen werden können. Bewusst NICHT enthalten: id/status/
+// technikerIds/checklistenPunkte/maengel/zusatzarbeitVorschlag/
+// berichtsentwurf/terminId/erstelltAm/herkunftPartnerImport* - der
+// laufende Arbeitsstand (Zuweisung, Checkliste, Technikerdokumentation,
+// Termin) des primären Auftrags darf eine Zusammenführung NIE verändern,
+// exakt dieselbe Regel wie beim Partner-Re-Import (siehe worker.js
+// baueServiceauftragAktualisierungAusPartnerImportZeile).
+export const SERVICEAUFTRAG_MERGE_FELDER = [
+  'kundeId', 'kundenname', 'serviceempfaenger', 'anlagenId', 'einsatzadresse', 'telefonnummer',
+  'wartungsart', 'wartungsdauerPartnerText', 'auftragsfrist', 'herstellerUndAnlagentyp',
+  'anlagenmodell', 'seriennummer', 'partnerSachbearbeiter', 'partnerStatusText', 'hinweise',
+];
+
+// Reine Merge-Funktion für GENAU EIN Paar - wie mergePartnerImportFeld in
+// worker.js: ein bereits befülltes Feld des primären Auftrags wird NIE
+// stillschweigend durch einen abweichenden Wert der Dublette ersetzt,
+// sondern als Konflikt zurückgemeldet (zur manuellen Prüfung) - nur ein
+// beim primären Auftrag LEERES Feld wird aus der Dublette übernommen.
+export function mergeServiceauftraege(primaer, sekundaer) {
+  const merged = { ...primaer };
+  const konflikte = [];
+  for (const feld of SERVICEAUFTRAG_MERGE_FELDER) {
+    const a = (primaer[feld] ?? '').toString().trim();
+    const b = (sekundaer[feld] ?? '').toString().trim();
+    if (!b) continue;
+    if (!a) { merged[feld] = sekundaer[feld]; continue; }
+    if (a.toLowerCase() !== b.toLowerCase()) {
+      konflikte.push({ feld, primaerWert: primaer[feld], sekundaerWert: sekundaer[feld] });
+    }
+  }
+  return { merged, konflikte };
+}
+
 // Baut die Checkliste aus den vom Büro eingegebenen Textzeilen (eine je
 // Position, optional mit einer vom technikerCheckbox-Textformat ("[x] "/
 // "[ ] ") erzeugten Markierung, die beim erneuten Einlesen ignoriert wird).
@@ -180,6 +247,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>Serviceaufträge</h1>
       <div class="actions">
+        <button class="btn" id="btn-dubletten">Dubletten prüfen</button>
         <button class="btn btn-primary" id="btn-new">+ Serviceauftrag</button>
       </div>
     </div>
@@ -190,6 +258,7 @@ export async function render(container) {
       <div class="kpi-card kpi-danger"><div class="kpi-value">${auftraege.filter((a) => istUeberfaellig(a)).length}</div><div class="kpi-label">Frist überschritten</div></div>
       <div class="kpi-card kpi-success"><div class="kpi-value">${auftraege.filter((a) => a.status === 'abgeschlossen').length}</div><div class="kpi-label">Abgeschlossen</div></div>
       <div class="kpi-card kpi-warn"><div class="kpi-value">${auftraege.filter((a) => fehlendeServiceauftragFelder(a).length > 0).length}</div><div class="kpi-label">Mit fehlenden Daten</div></div>
+      <div class="kpi-card kpi-danger"><div class="kpi-value">${findeServiceauftragDubletten(auftraege).length}</div><div class="kpi-label">Dublettengruppen</div></div>
       ${offeneDispatchVorschlaege > 0 ? `<div class="kpi-card kpi-accent"><div class="kpi-value">🤖 ${offeneDispatchVorschlaege}</div><div class="kpi-label">JARVIS-Zuweisungsvorschläge warten auf Freigabe (JARVIS-Zentrale)</div></div>` : ''}
     </div>
     ${techniker.length > 0 ? `
@@ -484,6 +553,80 @@ export async function render(container) {
     });
   }
 
+  // Dubletten-Zusammenführung: bereits angelegte Serviceaufträge mit
+  // gleicher externer Auftragsnummer (siehe findeServiceauftragDubletten)
+  // zu EINEM zusammenführen, statt sie als getrennte Datensätze stehen zu
+  // lassen - z.B. wenn derselbe Auftrag versehentlich doppelt erfasst oder
+  // importiert wurde. Nicht-destruktiv wie der Partner-Re-Import: ein
+  // bereits befülltes Feld des bleibenden Auftrags wird NIE überschrieben,
+  // ein Widerspruch wird gemeldet statt automatisch aufgelöst. Löschen der
+  // Dublette(n) passiert erst nach expliziter Bestätigung.
+  function openDublettenModal() {
+    const { body, close } = openModal({ title: 'Mögliche Dubletten', wide: true, bodyHtml: '<div id="dubletten-host"></div>' });
+
+    function zeichneDubletten() {
+      const gruppen = findeServiceauftragDubletten(auftraege);
+      const host = body.querySelector('#dubletten-host');
+      if (gruppen.length === 0) { host.innerHTML = '<p class="hint">Keine Dubletten (mehr) vorhanden.</p>'; return; }
+      host.innerHTML = gruppen.map((gruppe, gi) => {
+        const primaer = waehlePrimaerenAuftrag(gruppe);
+        return `
+          <div class="card" style="margin-bottom:16px;padding:12px;border:1px solid var(--border);border-radius:8px">
+            <p style="margin:0 0 8px"><strong>${escapeHtml(primaer.externeAuftragsnummer || '–')}</strong> - ${gruppe.length} Einträge mit derselben Auftragsnummer</p>
+            <table class="data-table" style="margin-bottom:8px">
+              <thead><tr><th></th><th>Status</th><th>Kunde</th><th>Serviceempfänger</th><th>Adresse</th><th>Erstellt</th></tr></thead>
+              <tbody>
+                ${gruppe.map((a) => `
+                  <tr>
+                    <td>${a.id === primaer.id ? '<span class="badge badge-accent">bleibt</span>' : '<span class="badge">wird entfernt</span>'}</td>
+                    <td>${escapeHtml(STATUS_LABEL[a.status] || a.status || '–')}</td>
+                    <td>${escapeHtml(a.kundenname || '–')}</td>
+                    <td>${escapeHtml(a.serviceempfaenger || '–')}</td>
+                    <td>${escapeHtml(a.einsatzadresse || '–')}</td>
+                    <td>${a.erstelltAm ? formatDate(a.erstelltAm.slice(0, 10)) : '–'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-primary" data-merge-gruppe="${gi}">Zusammenführen (${gruppe.length - 1} Dublette(n) entfernen)</button>
+          </div>
+        `;
+      }).join('');
+      host.querySelectorAll('[data-merge-gruppe]').forEach((btn) => {
+        btn.addEventListener('click', () => fuehreZusammenfuehrungAus(gruppen[Number(btn.dataset.mergeGruppe)]));
+      });
+    }
+
+    async function fuehreZusammenfuehrungAus(gruppe) {
+      const primaerStart = waehlePrimaerenAuftrag(gruppe);
+      const sekundaere = gruppe.filter((a) => a.id !== primaerStart.id);
+      if (!confirm(`${sekundaere.length} Dublette(n) von Auftrag "${primaerStart.externeAuftragsnummer}" werden gelöscht, ihre Daten (soweit beim bleibenden Auftrag noch leer) übernommen. Bereits vorhandene Angaben werden NIE überschrieben. Fortfahren?`)) return;
+      let merged = primaerStart;
+      const alleKonflikte = [];
+      for (const sek of sekundaere) {
+        const { merged: neu, konflikte } = mergeServiceauftraege(merged, sek);
+        merged = neu;
+        alleKonflikte.push(...konflikte);
+      }
+      merged = { ...merged, aktualisiertAm: new Date().toISOString() };
+      await put('serviceauftraege', merged);
+      for (const sek of sekundaere) await remove('serviceauftraege', sek.id);
+      auftraege = auftraege.filter((a) => !sekundaere.some((s) => s.id === a.id));
+      const idx = auftraege.findIndex((a) => a.id === merged.id);
+      if (idx !== -1) auftraege[idx] = merged;
+      if (alleKonflikte.length > 0) {
+        toast(`Zusammengeführt - ${alleKonflikte.length} widersprüchliche Angabe(n) NICHT übernommen (bereits vorhandener Wert bleibt), bitte bei "${merged.externeAuftragsnummer}" manuell prüfen: ${[...new Set(alleKonflikte.map((k) => k.feld))].join(', ')}`, 'danger');
+      } else {
+        toast('Dublette(n) erfolgreich zusammengeführt', 'success');
+      }
+      renderListe();
+      zeichneDubletten();
+    }
+
+    zeichneDubletten();
+  }
+
+  container.querySelector('#btn-dubletten').addEventListener('click', openDublettenModal);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   renderListe();
 }

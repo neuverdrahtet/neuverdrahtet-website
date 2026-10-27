@@ -18,7 +18,7 @@ globalThis.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem
 const {
   normalisiereAuftragsnummer, findeDublette, istUeberfaellig, baueChecklistenPunkte,
   terminUeberlappt, findeTerminKonflikte, brauchtBestaetigungVorVerschieben, berechneTerminEnde,
-  fehlendeServiceauftragFelder,
+  fehlendeServiceauftragFelder, findeServiceauftragDubletten, waehlePrimaerenAuftrag, mergeServiceauftraege,
 } = await import('../js/views/serviceauftraege.js');
 
 let bestanden = 0, fehlgeschlagen = 0;
@@ -229,6 +229,68 @@ pruefe('G5: anlagenId/Anlagendetails sind KEIN Pflichtfeld (bewusst keine automa
     anlagenId: '', herstellerUndAnlagentyp: '',
   };
   assert(fehlendeServiceauftragFelder(auftrag).length === 0, 'eine fehlende Anlagenzuordnung darf hier nicht als Datenfehler gemeldet werden');
+});
+
+// =============================================================================
+// findeServiceauftragDubletten / waehlePrimaerenAuftrag / mergeServiceauftraege
+// (Zusammenführung bereits angelegter Dubletten, z.B. versehentlich doppelt
+// erfasst oder doppelt importiert - unabhängig von der Dublettenwarnung
+// beim Speichern im Formular, die nur VOR dem Anlegen greift)
+// =============================================================================
+
+pruefe('H1: findeServiceauftragDubletten gruppiert gleiche (normalisierte) Auftragsnummern', () => {
+  const liste = [
+    { id: 'a1', externeAuftragsnummer: 'SE-900' },
+    { id: 'a2', externeAuftragsnummer: '  se-900 ' },
+    { id: 'a3', externeAuftragsnummer: 'SE-901' },
+  ];
+  const gruppen = findeServiceauftragDubletten(liste);
+  assert(gruppen.length === 1, `erwartet genau 1 Dublettengruppe, war ${gruppen.length}`);
+  assert(gruppen[0].length === 2 && gruppen[0].some((a) => a.id === 'a1') && gruppen[0].some((a) => a.id === 'a2'));
+});
+
+pruefe('H2: findeServiceauftragDubletten bildet NIE eine Gruppe aus leeren Auftragsnummern', () => {
+  const liste = [{ id: 'a1', externeAuftragsnummer: '' }, { id: 'a2', externeAuftragsnummer: '' }, { id: 'a3', externeAuftragsnummer: null }];
+  assert(findeServiceauftragDubletten(liste).length === 0, 'leere Auftragsnummern dürfen nicht fälschlich als Dublettengruppe gelten');
+});
+
+pruefe('H3: waehlePrimaerenAuftrag wählt den VOLLSTÄNDIGSTEN Auftrag (wenigste fehlende Pflichtfelder)', () => {
+  const vollstaendig = { id: 'a1', kundeId: 'k-1', serviceempfaenger: 'x', einsatzadresse: 'x', telefonnummer: 'x', wartungsart: 'x', auftragsfrist: '2026-12-01', erstelltAm: '2026-10-02' };
+  const unvollstaendig = { id: 'a2', kundeId: '', serviceempfaenger: '', einsatzadresse: '', telefonnummer: '', wartungsart: '', auftragsfrist: '', erstelltAm: '2026-10-01' };
+  assert(waehlePrimaerenAuftrag([unvollstaendig, vollstaendig]).id === 'a1', 'der vollständigere Auftrag muss gewinnen, auch wenn er später erstellt wurde');
+});
+
+pruefe('H4: waehlePrimaerenAuftrag nimmt bei Gleichstand den ZUERST erstellten', () => {
+  const frueher = { id: 'a1', erstelltAm: '2026-10-01' };
+  const spaeter = { id: 'a2', erstelltAm: '2026-10-02' };
+  assert(waehlePrimaerenAuftrag([spaeter, frueher]).id === 'a1');
+});
+
+pruefe('I1: mergeServiceauftraege füllt NUR leere Felder des primären Auftrags, überschreibt NIE einen bereits vorhandenen Wert', () => {
+  const primaer = { id: 'a1', kundenname: 'TLS Eco Plus Service', serviceempfaenger: '', einsatzadresse: 'Alte Adresse' };
+  const sekundaer = { id: 'a2', kundenname: 'Anderer Name', serviceempfaenger: 'Herr Weber', einsatzadresse: 'Neue Adresse' };
+  const { merged, konflikte } = mergeServiceauftraege(primaer, sekundaer);
+  assert(merged.serviceempfaenger === 'Herr Weber', 'ein leeres Feld darf aus der Dublette übernommen werden');
+  assert(merged.kundenname === 'TLS Eco Plus Service', 'ein bereits befülltes Feld darf NICHT überschrieben werden');
+  assert(merged.einsatzadresse === 'Alte Adresse', 'ein bereits befülltes Feld darf NICHT überschrieben werden');
+  const konfliktKundenname = konflikte.find((k) => k.feld === 'kundenname');
+  const konfliktAdresse = konflikte.find((k) => k.feld === 'einsatzadresse');
+  assert(konfliktKundenname && konfliktKundenname.primaerWert === 'TLS Eco Plus Service' && konfliktKundenname.sekundaerWert === 'Anderer Name', 'ein Widerspruch muss gemeldet werden');
+  assert(konfliktAdresse && konfliktAdresse.primaerWert === 'Alte Adresse' && konfliktAdresse.sekundaerWert === 'Neue Adresse');
+});
+
+pruefe('I2: mergeServiceauftraege berührt NIE technikerIds/status/checklistenPunkte/id/erstelltAm', () => {
+  const primaer = { id: 'a1', status: 'zugewiesen', technikerIds: ['ma-1'], checklistenPunkte: [{ titel: 'x', erledigt: true }], erstelltAm: '2026-10-01' };
+  const sekundaer = { id: 'a2', status: 'offen', technikerIds: ['ma-9'], checklistenPunkte: [], erstelltAm: '2026-10-05' };
+  const { merged } = mergeServiceauftraege(primaer, sekundaer);
+  assert(merged.id === 'a1' && merged.status === 'zugewiesen' && merged.erstelltAm === '2026-10-01');
+  assert(merged.technikerIds.length === 1 && merged.technikerIds[0] === 'ma-1', 'eine bestehende Technikerzuweisung darf durch eine Zusammenführung nie verändert werden');
+  assert(merged.checklistenPunkte[0].erledigt === true, 'der laufende Checklistenfortschritt darf nicht verändert werden');
+});
+
+pruefe('I3: gleiche Werte (Groß-/Kleinschreibung, Leerzeichen) gelten NICHT als Widerspruch', () => {
+  const { konflikte } = mergeServiceauftraege({ id: 'a1', wartungsart: ' Jahreswartung ' }, { id: 'a2', wartungsart: 'jahreswartung' });
+  assert(konflikte.length === 0);
 });
 
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
