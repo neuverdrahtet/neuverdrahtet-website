@@ -52,7 +52,7 @@ export async function render(container) {
         ${istAdmin ? '<button class="btn btn-sm" id="btn-steuerregeln">Steuerregeln verwalten</button>' : ''}
       </div>
     </div>
-    <div class="card" style="background:#fff6e0;border-color:#f0d78c;margin-bottom:10px">
+    <div class="card card-hinweis" style="margin-bottom:10px">
       <p class="mb-0">⚠️ <strong>Reine Orientierungshilfe, keine Lohnbuchhaltung.</strong> Die Gesamtkosten-Übersicht enthält Grundvergütung, tatsächliche Benefit-Arbeitgeberkosten und genehmigte Reisekosten – <strong>ohne</strong> gesetzliche Lohnnebenkosten (Arbeitgeberanteile Sozialversicherung), da sich deren Sätze jährlich ändern und hier nicht pauschaliert werden. Die Steuerregeln-Tabelle ist eine reine Nachschlagehilfe und fließt nicht automatisch in eine Berechnung ein. Vor Verwendung in einer echten Kalkulation oder Gehaltsabrechnung ist eine Prüfung durch Lohnbüro/Steuerberater erforderlich – keine automatische Auszahlung, keine rechtliche Bindung.</p>
     </div>
     <div id="steuerregeln-host"></div>

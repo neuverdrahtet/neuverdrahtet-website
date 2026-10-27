@@ -891,7 +891,7 @@ export async function render(container) {
               <div id="beleg-preview">${data.beleg ? '<a href="#" class="btn btn-sm" id="beleg-view-link">📎 Beleg ansehen</a>' : ''}</div>
             </div>
             ${istOffeneKreditorenRechnung ? `
-              <div class="card col-span-2" style="background:#fff6e0;border-color:#f0d78c">
+              <div class="card col-span-2 card-hinweis">
                 <p class="mb-0">⚠️ Diese Ausgabe ist als offene Lieferantenrechnung erfasst${data.faelligAm ? ` - fällig am ${escapeHtml(data.faelligAm)}` : ''}. Sie wird erst als Betriebsausgabe verbucht, wenn sie als bezahlt markiert wird.</p>
               </div>
               <div class="field"><label>Bezahlt am</label><input type="date" id="ausgabe-bezahlt-am" value="${todayISO()}"></div>

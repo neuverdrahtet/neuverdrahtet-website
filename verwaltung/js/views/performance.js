@@ -47,7 +47,7 @@ export async function render(container) {
         ${istAdmin ? '<button class="btn btn-sm" id="btn-referenzwerte">Referenzwerte verwalten</button>' : ''}
       </div>
     </div>
-    <div class="card" style="background:#fff6e0;border-color:#f0d78c;margin-bottom:10px">
+    <div class="card card-hinweis" style="margin-bottom:10px">
       <p class="mb-0">⚠️ <strong>Reine Simulation, keine Bewertung und keine Auszahlung.</strong> Die Kennzahlen stammen aus bereits vorhandenen Serviceauftrags- und Zeiterfassungsdaten. Ein simulierter Bonusbetrag erscheint nur, wenn ein Referenzwert unten hinterlegt wurde – ohne Referenzwert wird <strong>kein</strong> Schwellenwert angenommen. Referenzwerte sind eine interne Arbeitsgrundlage ohne rechtliche Bindung und ohne Auszahlungswirkung; eine Umsetzung in echte Vergütung erfordert eine Freigabe durch Geschäftsführung und ggf. Lohnbüro/Steuerberater.</p>
     </div>
     <div class="flex-row" style="gap:10px;margin-bottom:10px">

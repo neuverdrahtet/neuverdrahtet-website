@@ -148,7 +148,7 @@ export async function render(container) {
               </select>
             </div>
           </div>
-          <div class="card" style="background:#fff6e0;border-color:#f0d78c">
+          <div class="card card-hinweis">
             <p class="mb-0">⚠️ <strong>Kein Ersatz für professionelle Buchhaltung/Steuerberatung.</strong> Diese Übersicht ist eine vereinfachte Zusammenstellung nach Zufluss/Abfluss (bezahlte Rechnungen, erfasste Ausgaben) auf Basis deiner Eingaben. USt.-Voranmeldung, ELSTER-Übermittlung und die endgültige Kontenzuordnung übernimmt weiterhin dein Steuerberater / deine Steuerberaterin.</p>
           </div>
           <div id="content-host"></div>
@@ -179,7 +179,7 @@ export async function render(container) {
               <label class="mb-0">Bilanz-Stichtag <input type="date" id="bilanz-stichtag" value="${todayISO()}"></label>
             </div>
           </div>
-          <div class="card" style="background:#fff6e0;border-color:#f0d78c">
+          <div class="card card-hinweis">
             <p class="mb-0">⚠️ Vereinfachte Darstellung ohne Eröffnungsbilanz-/Vorjahres-Eigenkapital-Fortschreibung - der Jahresüberschuss wird als rechnerische Restgröße gezeigt. Ersetzt keine Steuerberatung; die endgültige Bilanzierung bleibt Aufgabe deines Steuerberaters.</p>
           </div>
           <div id="bilanz-host"></div>
@@ -1296,7 +1296,7 @@ export async function render(container) {
             </div>
             <div class="field col-span-2"><label>Notizen</label><input name="notizen" value="${escapeHtml(data.notizen || '')}"></div>
             ${isEdit && data.status === 'ausgeschieden' ? `
-              <div class="card col-span-2" style="background:#fff6e0;border-color:#f0d78c">
+              <div class="card col-span-2 card-hinweis">
                 <p class="mb-0">⚠️ Diese Anlage ist ausgeschieden am ${escapeHtml(formatDate(data.ausgeschiedenAm))}. Der Restbuchwert wurde vollständig abgeschrieben.</p>
               </div>
             ` : isEdit ? `

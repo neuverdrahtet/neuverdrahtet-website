@@ -81,7 +81,7 @@ export async function render(container) {
         <button class="btn btn-sm" id="pi-neu-btn">↺ Neuer Import starten</button>
       </div>
     </div>
-    <div class="card" style="background:#fff6e0;border-color:#f0d78c;margin-bottom:10px">
+    <div class="card card-hinweis" style="margin-bottom:10px">
       <p class="mb-0">⚠️ <strong>KI-Wartungsdisposition, MVP Phase 1 - reine Entwurfsverarbeitung.</strong> Screenshots werden NICHT gespeichert, nur die daraus erkannten Textdaten. Es wird NICHTS automatisch übernommen, kein Kunde kontaktiert, kein Termin gebucht, keine Daten an Salesforce zurückgemeldet. Jede Zeile unten muss explizit ausgewählt und per "Übernehmen" bestätigt werden, bevor ein echter Serviceauftrag entsteht. Ein erneuter Import überschreibt NIE ein bereits befülltes Feld eines bestehenden Auftrags - Abweichungen werden nur gemeldet.</p>
     </div>
     <div class="form-grid" style="margin-bottom:10px">

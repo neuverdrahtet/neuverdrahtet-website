@@ -205,7 +205,7 @@ export async function render(container) {
       title: 'Lohnvorbereitung',
       wide: true,
       bodyHtml: `
-        <div class="card" style="background:#fff6e0;border-color:#f0d78c;margin-bottom:10px">
+        <div class="card card-hinweis" style="margin-bottom:10px">
           <p class="mb-0">⚠️ <strong>Keine echte Lohnabrechnung.</strong> Es werden keine Steuer-/Sozialversicherungsbeträge berechnet und keine Meldungen an Finanzamt/Krankenkassen übermittelt. Diese Übersicht stellt nur die vorhandenen Stammdaten und die Ist-Stunden/Abwesenheiten des Monats für die Übergabe an Steuerberater, Lohnbüro oder einen externen Abrechnungsdienst zusammen.</p>
         </div>
         <div class="flex-row" style="gap:10px;margin-bottom:10px">

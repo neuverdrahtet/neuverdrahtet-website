@@ -483,6 +483,17 @@ select option {
 }
 .card h2 { font-size: 15px; margin: 0 0 12px; }
 
+/* Gelbe Hinweis-/Warnbox (z.B. "Reine Simulation", "keine Lohnabrechnung").
+   Fester, dunkler Textton statt var(--text): der helle Gelbton bleibt in
+   allen Themes (auch Dark Mode) gleich hell, var(--text) wäre dort aber
+   selbst hell und auf dem hellen Gelb praktisch unlesbar. */
+.card-hinweis {
+  background: #fff6e0;
+  border-color: #f0d78c;
+  color: #4a3b06;
+}
+.card-hinweis strong { color: #332801; }
+
 /* Auswertungen: horizontale Balkenlisten (Top-Kunden, Auslastung) */
 .auswertung-liste { display: flex; flex-direction: column; gap: 10px; }
 .auswertung-row { display: grid; grid-template-columns: 140px 1fr auto; align-items: center; gap: 10px; }
