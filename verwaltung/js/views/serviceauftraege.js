@@ -191,12 +191,15 @@ export async function render(container) {
               <td>${(a.technikerIds || []).map((id) => escapeHtml(technikerById[id]?.name || '?')).join(', ') || '–'}</td>
               <td>${a.auftragsfrist ? formatDate(a.auftragsfrist) : '–'}${istUeberfaellig(a) ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td>
               <td><span class="badge ${STATUS_BADGE[a.status] || ''}">${STATUS_LABEL[a.status] || a.status}</span></td>
-              <td><button type="button" class="btn btn-sm btn-edit" data-id="${a.id}">Bearbeiten</button></td>
+              <td><button type="button" class="btn btn-sm btn-edit" data-id="${a.id}" onclick="event.stopPropagation()">Bearbeiten</button></td>
             </tr>
           `).join('')}
         </tbody>
       </table>
     `;
+    host.querySelectorAll('tbody tr[data-id]').forEach((row) => {
+      row.addEventListener('click', () => openForm(auftraege.find((a) => a.id === row.dataset.id)));
+    });
     host.querySelectorAll('.btn-edit').forEach((btn) => {
       btn.addEventListener('click', () => openForm(auftraege.find((a) => a.id === btn.dataset.id)));
     });
