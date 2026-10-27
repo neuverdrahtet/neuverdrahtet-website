@@ -1628,9 +1628,8 @@ const KI_BUEROKRAFT_TOOLS = [
   },
 ];
 
-async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input }) {
+async function callKiBuerokraft({ kiBuerokraftBinding, kiBuerokraftUrl, kiBuerokraftApiKey, tool, input }) {
   const path = tool.path(input || {});
-  const url = `${kiBuerokraftUrl.replace(/\/$/, '')}${path}`;
   const options = {
     method: tool.method,
     headers: { Authorization: `Bearer ${kiBuerokraftApiKey}` },
@@ -1639,7 +1638,13 @@ async function callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, inp
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(tool.body ? tool.body(input || {}) : (input || {}));
   }
-  const res = await fetch(url, options);
+  // Dieselbe Dienstbindung wie callKiBuerokraftRest (siehe dort) - vermeidet
+  // Error 1042 und läuft intern bei Cloudflare statt über die öffentliche
+  // *.workers.dev-Adresse. Wird bevorzugt, wenn vorhanden; die URL bleibt
+  // nur Fallback für Umgebungen ohne Binding.
+  const res = kiBuerokraftBinding
+    ? await kiBuerokraftBinding.fetch(`https://ki-buerokraft.internal${path}`, options)
+    : await fetch(`${kiBuerokraftUrl.replace(/\/$/, '')}${path}`, options);
   const data = await res.json().catch(() => ({}));
   return { status: res.status, data };
 }
@@ -1785,7 +1790,7 @@ const ASSISTENT_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_sear
 // der bestehende Aufrufer (Action "assistent-chat", ki-assistent.js) bleibt
 // dadurch unverändert, JARVIS übergibt hier zusätzlich die Rollenprüfung pro
 // Werkzeugaufruf sowie einen Kosten-Erfassungs-Callback.
-async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUrl, kiBuerokraftApiKey, googleConfig, callerRole = null, pruefeWerkzeug = null, aufKosten = null }) {
+async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftBinding = null, kiBuerokraftUrl, kiBuerokraftApiKey, googleConfig, callerRole = null, pruefeWerkzeug = null, aufKosten = null }) {
   let conversation = messages;
   // Sammelt jeden Tool-Aufruf mit Rohantwort - hilft bei der Fehlersuche, weil
   // das Modell einen Tool-Fehler sonst nur in eigenen (oft zu vagen) Worten
@@ -1891,15 +1896,15 @@ async function callClaudeAssistentChat({ apiKey, model, messages, kiBuerokraftUr
         }
         continue;
       }
-      if (!kiBuerokraftUrl || !kiBuerokraftApiKey) {
-        const meldung = 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).';
+      if ((!kiBuerokraftBinding && !kiBuerokraftUrl) || !kiBuerokraftApiKey) {
+        const meldung = 'Die KI-Bürokraft-API ist auf diesem Worker nicht eingerichtet (Dienstbindung KI_BUEROKRAFT bzw. KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlen).';
         toolResults.push({ type: 'tool_result', tool_use_id: toolUse.id, content: meldung, is_error: true });
         debugLog.push({ tool: toolUse.name, input: toolUse.input, error: meldung });
         continue;
       }
       try {
         const path = tool.path(toolUse.input || {});
-        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
+        const { status, data: ergebnis } = await callKiBuerokraft({ kiBuerokraftBinding, kiBuerokraftUrl, kiBuerokraftApiKey, tool, input: toolUse.input || {} });
         toolResults.push({
           type: 'tool_result', tool_use_id: toolUse.id,
           content: JSON.stringify(ergebnis).slice(0, 8000),
@@ -6520,6 +6525,7 @@ async function runTagescheck(env) {
       apiKey: env.ANTHROPIC_API_KEY,
       model: env.MODEL_ID || 'claude-opus-4-8',
       messages: [{ role: 'user', content: buildTagescheckPrompt(heute, { googleVerfuegbar: !!googleConfig }) }],
+      kiBuerokraftBinding: env.KI_BUEROKRAFT,
       kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
       kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
       googleConfig,
@@ -7123,6 +7129,7 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
+          kiBuerokraftBinding: env.KI_BUEROKRAFT,
           kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
           kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
           googleConfig: buildGoogleConfig(env),
@@ -7682,6 +7689,7 @@ export default {
           apiKey: env.ANTHROPIC_API_KEY,
           model: env.MODEL_ID || 'claude-opus-4-8',
           messages: body.messages.map((m) => ({ role: m.role, content: m.content })),
+          kiBuerokraftBinding: env.KI_BUEROKRAFT,
           kiBuerokraftUrl: env.KI_BUEROKRAFT_URL,
           kiBuerokraftApiKey: env.KI_BUEROKRAFT_API_KEY,
           googleConfig: buildGoogleConfig(env),
