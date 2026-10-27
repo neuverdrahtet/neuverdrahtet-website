@@ -186,7 +186,7 @@ export async function render(container) {
           ${auftraege.map((a) => `
             <tr data-id="${a.id}">
               <td>${escapeHtml(a.externeAuftragsnummer || '–')}</td>
-              <td>${escapeHtml(kundenById[a.kundeId]?.firma || a.kundenname || '–')}${a.auftraggeber ? `<div class="text-mute" style="font-size:12px">${escapeHtml(a.auftraggeber)}</div>` : ''}</td>
+              <td>${escapeHtml(kundenById[a.kundeId]?.firma || a.kundenname || '–')}${a.serviceempfaenger ? `<div class="text-mute" style="font-size:12px">Service bei: ${escapeHtml(a.serviceempfaenger)}</div>` : ''}${a.auftraggeber ? `<div class="text-mute" style="font-size:12px">${escapeHtml(a.auftraggeber)}</div>` : ''}</td>
               <td>${escapeHtml(anlagenById[a.anlagenId]?.bezeichnung || a.herstellerUndAnlagentyp || '–')}</td>
               <td>${(a.technikerIds || []).map((id) => escapeHtml(technikerById[id]?.name || '?')).join(', ') || '–'}</td>
               <td>${a.auftragsfrist ? formatDate(a.auftragsfrist) : '–'}${istUeberfaellig(a) ? ' <span class="badge badge-danger">überfällig</span>' : ''}</td>
@@ -316,7 +316,7 @@ export async function render(container) {
   function openForm(auftrag) {
     const isEdit = !!auftrag;
     const data = auftrag || {
-      id: uid(), externeAuftragsnummer: '', auftraggeber: '', kundeId: '', kundenname: '', telefonnummer: '', einsatzadresse: '',
+      id: uid(), externeAuftragsnummer: '', auftraggeber: '', kundeId: '', kundenname: '', serviceempfaenger: '', telefonnummer: '', einsatzadresse: '',
       anlagenId: '', herstellerUndAnlagentyp: '', anlagenmodell: '', seriennummer: '', wartungsart: '',
       auftragsfrist: '', geplanteWartungsdauer: '', geplanterNettoumsatz: '', hinweise: '',
       technikerIds: [], status: 'offen', technikerNotizen: '',
@@ -344,6 +344,7 @@ export async function render(container) {
             </div>
 
             <div class="field"><label>Kundenname (frei, z.B. aus Herstellerportal)</label><input name="kundenname" value="${escapeHtml(data.kundenname || '')}"></div>
+            <div class="field"><label>Serviceempfänger (wo die Leistung vor Ort ausgeführt wird, falls abweichend vom Kunden)</label><input name="serviceempfaenger" value="${escapeHtml(data.serviceempfaenger || '')}"></div>
             <div class="field"><label>Telefonnummer</label><input name="telefonnummer" value="${escapeHtml(data.telefonnummer || '')}"></div>
             <div class="field col-span-2"><label>Einsatzadresse</label><input name="einsatzadresse" value="${escapeHtml(data.einsatzadresse || '')}"></div>
 
@@ -426,6 +427,7 @@ export async function render(container) {
         kundeId: (fd.get('kundeId') || '').toString(),
         anlagenId: (fd.get('anlagenId') || '').toString(),
         kundenname: (fd.get('kundenname') || '').toString().trim(),
+        serviceempfaenger: (fd.get('serviceempfaenger') || '').toString().trim(),
         telefonnummer: (fd.get('telefonnummer') || '').toString().trim(),
         einsatzadresse: (fd.get('einsatzadresse') || '').toString().trim(),
         herstellerUndAnlagentyp: (fd.get('herstellerUndAnlagentyp') || '').toString().trim(),

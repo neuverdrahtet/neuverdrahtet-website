@@ -55,6 +55,7 @@ function renderZeile(zeile) {
       <td>${escapeHtml(zeile.wartungsdauerText || '–')}</td>
       <td>${adresse}</td>
       <td>${escapeHtml(zeile.telefonnummer || '–')}</td>
+      <td>${escapeHtml(zeile.serviceempfaenger || '–')}</td>
       <td>${escapeHtml(zeile.sachbearbeiter || '–')}</td>
       <td>${zeilenStatusBadge(zeile)}</td>
       <td>
@@ -117,7 +118,7 @@ export async function render(container) {
       </div>
       <table class="data-table">
         <thead><tr>
-          <th></th><th>Auftragsnummer</th><th>Partner-Status</th><th>Fälligkeit</th><th>Wartungsdauer</th><th>Adresse</th><th>Telefon</th><th>Sachbearbeiter</th><th>Status</th><th>Hinweise</th>
+          <th></th><th>Auftragsnummer</th><th>Partner-Status</th><th>Fälligkeit</th><th>Wartungsdauer</th><th>Adresse</th><th>Telefon</th><th>Serviceempfänger</th><th>Sachbearbeiter</th><th>Status</th><th>Hinweise</th>
         </tr></thead>
         <tbody>${batch.zeilen.map(renderZeile).join('')}</tbody>
       </table>

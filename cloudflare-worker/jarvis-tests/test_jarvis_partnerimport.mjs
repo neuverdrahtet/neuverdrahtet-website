@@ -159,16 +159,16 @@ pruefe('A4: mergePartnerImportFeld erkennt GLEICHE Werte (Groß-/Kleinschreibung
 pruefe('A5: mergePartnerImportZeile führt zwei Screenshots zur selben Auftragsnummer zusammen (Listenübersicht + aufgeklappte Details)', () => {
   const zeile1 = W.mergePartnerImportZeile(null, {
     auftragsnummer: 'SE-100', partnerStatus: 'offen', faelligkeitsdatum: '2026-11-05', wartungsdauerText: '2 Std.',
-    plz: null, stadt: null, strasse: null, telefonnummer: '0201123456', sachbearbeiter: 'Frau Müller', auftragsart: 'Jahreswartung',
+    plz: null, stadt: null, strasse: null, telefonnummer: '0201123456', serviceempfaenger: 'Familie Hoffmann', sachbearbeiter: 'Frau Müller', auftragsart: 'Jahreswartung',
     unsicherheitshinweis: 'Keine besonderen Unsicherheiten.',
   }, 0);
   const zeile2 = W.mergePartnerImportZeile(zeile1, {
     auftragsnummer: 'SE-100', partnerStatus: null, faelligkeitsdatum: null, wartungsdauerText: null,
-    plz: '45141', stadt: 'Essen', strasse: 'Musterweg 12', telefonnummer: null, sachbearbeiter: null, auftragsart: null,
+    plz: '45141', stadt: 'Essen', strasse: 'Musterweg 12', telefonnummer: null, serviceempfaenger: null, sachbearbeiter: null, auftragsart: null,
     unsicherheitshinweis: 'Keine besonderen Unsicherheiten.',
   }, 1);
   assert(zeile2.plz === '45141' && zeile2.stadt === 'Essen' && zeile2.strasse === 'Musterweg 12', 'Adressdaten aus der aufgeklappten Detailansicht müssen übernommen werden');
-  assert(zeile2.partnerStatus === 'offen' && zeile2.wartungsdauerText === '2 Std.', 'bereits bekannte Felder aus Screenshot 1 dürfen nicht verloren gehen');
+  assert(zeile2.partnerStatus === 'offen' && zeile2.wartungsdauerText === '2 Std.' && zeile2.serviceempfaenger === 'Familie Hoffmann', 'bereits bekannte Felder aus Screenshot 1 dürfen nicht verloren gehen');
   assert(zeile2.quelleScreenshotIndices.length === 2 && zeile2.quelleScreenshotIndices.includes(0) && zeile2.quelleScreenshotIndices.includes(1));
   assert(zeile2.fehlendeFelder.length === 0, `erwartet keine fehlenden Felder mehr, war ${JSON.stringify(zeile2.fehlendeFelder)}`);
 });
@@ -225,29 +225,44 @@ pruefe('A10: istGueltigesIsoDatum akzeptiert nur JJJJ-MM-TT', () => {
 //    - der Kern der "kein unkontrolliertes Überschreiben"-Vorgabe (Punkt 12).
 // =============================================================================
 
-pruefe('B1: ein neuer Serviceauftrag aus einer Importzeile hat status "offen" und KEINE Technikerzuweisung/Kundenzuordnung', () => {
-  const zeile = { zeilenId: 'z1', auftragsnummer: 'SE-400', partnerStatus: 'offen', faelligkeitsdatum: '2026-11-10', wartungsdauerText: '2 Std.', plz: '45141', stadt: 'Essen', strasse: 'Musterweg 1', telefonnummer: '0201123', sachbearbeiter: 'Herr Schmidt', auftragsart: 'Jahreswartung' };
-  const auftrag = W.baueServiceauftragAusPartnerImportZeile(zeile, 'wr-gruppe', 'batch-1');
+pruefe('B1: ein neuer Serviceauftrag aus einer Importzeile hat status "offen", feste Kundenzuordnung aus PARTNER_KUNDENNAME und KEINE Technikerzuweisung/Anlagenzuordnung', () => {
+  const zeile = { zeilenId: 'z1', auftragsnummer: 'SE-400', partnerStatus: 'offen', faelligkeitsdatum: '2026-11-10', wartungsdauerText: '2 Std.', plz: '45141', stadt: 'Essen', strasse: 'Musterweg 1', telefonnummer: '0201123', serviceempfaenger: 'Familie Meier', sachbearbeiter: 'Herr Schmidt', auftragsart: 'Jahreswartung' };
+  const auftrag = W.baueServiceauftragAusPartnerImportZeile(zeile, 'wr-gruppe', 'batch-1', []);
   assert(auftrag.status === 'offen' && auftrag.technikerIds.length === 0);
-  assert(auftrag.kundeId === '' && auftrag.kundenname === '', 'in dieser Phase keine automatische Kundenzuordnung');
+  assert(auftrag.kundenname === 'TLS Eco Plus Service', 'die feste Kundenzuordnung aus PARTNER_KUNDENNAME muss gesetzt werden');
+  assert(auftrag.kundeId === '', 'ohne passenden Werkora-Kunden in der übergebenen Liste bleibt kundeId leer');
+  assert(auftrag.anlagenId === '', 'weiterhin keine automatische Anlagenzuordnung in dieser Phase');
+  assert(auftrag.serviceempfaenger === 'Familie Meier', 'der wörtlich erfasste Serviceempfänger muss übernommen werden');
   assert(auftrag.externeAuftragsnummer === 'SE-400' && auftrag.partnerId === 'wr-gruppe');
   assert(auftrag.einsatzadresse === 'Musterweg 1, 45141 Essen');
 });
 
-pruefe('B2: baueServiceauftragAktualisierungAusPartnerImportZeile füllt NUR leere Felder, überschreibt NIE einen bereits vorhandenen Wert', () => {
-  const zeile = { auftragsnummer: 'SE-401', partnerStatus: null, faelligkeitsdatum: null, wartungsdauerText: null, plz: '45141', stadt: 'Essen', strasse: 'Neue Straße 9', telefonnummer: '0201999', sachbearbeiter: null, auftragsart: null };
-  const bestehenderAuftrag = { id: 'sa-401', einsatzadresse: 'Alte Adresse 1, 45000 Essen', telefonnummer: '' };
-  const { aktualisierteFelder, abweichungen } = W.baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag);
+pruefe('B1b: baueServiceauftragAusPartnerImportZeile verknüpft kundeId bei EXAKTEM Namenstreffer (Groß-/Kleinschreibung und Leerzeichen egal) in den übergebenen Kunden', () => {
+  const zeile = { zeilenId: 'z1b', auftragsnummer: 'SE-400b', serviceempfaenger: null };
+  const kunden = [{ id: 'k-tls', firma: '  tls eco plus service  ' }, { id: 'k-anderer', firma: 'Ein anderer Kunde' }];
+  const auftrag = W.baueServiceauftragAusPartnerImportZeile(zeile, 'wr-gruppe', 'batch-1', kunden);
+  assert(auftrag.kundeId === 'k-tls', 'Groß-/Kleinschreibung und Leerzeichen dürfen den Treffer nicht verhindern');
+  assert(auftrag.kundenname === 'TLS Eco Plus Service');
+});
+
+pruefe('B2: baueServiceauftragAktualisierungAusPartnerImportZeile füllt NUR leere Felder, überschreibt NIE einen bereits vorhandenen Wert (auch nicht kundenname)', () => {
+  const zeile = { auftragsnummer: 'SE-401', partnerStatus: null, faelligkeitsdatum: null, wartungsdauerText: null, plz: '45141', stadt: 'Essen', strasse: 'Neue Straße 9', telefonnummer: '0201999', serviceempfaenger: 'Herr Weber', sachbearbeiter: null, auftragsart: null };
+  const bestehenderAuftrag = { id: 'sa-401', einsatzadresse: 'Alte Adresse 1, 45000 Essen', telefonnummer: '', kundenname: 'Ein anderer, bereits manuell gesetzter Kunde' };
+  const { aktualisierteFelder, abweichungen } = W.baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag, 'wr-gruppe', []);
   assert(aktualisierteFelder.telefonnummer === '0201999', 'ein leeres Feld darf befüllt werden');
+  assert(aktualisierteFelder.serviceempfaenger === 'Herr Weber', 'serviceempfaenger darf bei leerem Bestand befüllt werden');
   assert(aktualisierteFelder.einsatzadresse === undefined, 'ein bereits befülltes Feld darf NICHT automatisch überschrieben werden');
-  const abweichung = abweichungen.find((a) => a.feld === 'einsatzadresse');
-  assert(abweichung && abweichung.bestehenderWert === 'Alte Adresse 1, 45000 Essen' && abweichung.neuerWert === 'Neue Straße 9, 45141 Essen', 'die Abweichung muss zur manuellen Prüfung gemeldet werden');
+  assert(aktualisierteFelder.kundenname === undefined, 'ein bereits abweichend befüllter Kundenname darf NICHT automatisch überschrieben werden');
+  const abweichungEinsatzadresse = abweichungen.find((a) => a.feld === 'einsatzadresse');
+  assert(abweichungEinsatzadresse && abweichungEinsatzadresse.bestehenderWert === 'Alte Adresse 1, 45000 Essen' && abweichungEinsatzadresse.neuerWert === 'Neue Straße 9, 45141 Essen', 'die Abweichung muss zur manuellen Prüfung gemeldet werden');
+  const abweichungKunde = abweichungen.find((a) => a.feld === 'kundenname');
+  assert(abweichungKunde && abweichungKunde.bestehenderWert === 'Ein anderer, bereits manuell gesetzter Kunde' && abweichungKunde.neuerWert === 'TLS Eco Plus Service', 'eine abweichende feste Kundenzuordnung muss gemeldet, nicht stillschweigend überschrieben werden');
 });
 
 pruefe('B3: baueServiceauftragAktualisierungAusPartnerImportZeile berührt NIE technikerIds/status/checklistenPunkte', () => {
-  const zeile = { auftragsnummer: 'SE-402', partnerStatus: 'erledigt', faelligkeitsdatum: null, wartungsdauerText: null, plz: null, stadt: null, strasse: null, telefonnummer: null, sachbearbeiter: null, auftragsart: null };
+  const zeile = { auftragsnummer: 'SE-402', partnerStatus: 'erledigt', faelligkeitsdatum: null, wartungsdauerText: null, plz: null, stadt: null, strasse: null, telefonnummer: null, serviceempfaenger: null, sachbearbeiter: null, auftragsart: null };
   const bestehenderAuftrag = { id: 'sa-402', status: 'in_bearbeitung', technikerIds: ['ma-1'], checklistenPunkte: [{ titel: 'x', erledigt: true }] };
-  const { aktualisierteFelder } = W.baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag);
+  const { aktualisierteFelder } = W.baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag, 'wr-gruppe', []);
   assert(aktualisierteFelder.status === undefined && aktualisierteFelder.technikerIds === undefined && aktualisierteFelder.checklistenPunkte === undefined, 'ein erneuter Partner-Import darf die laufende Technikerarbeit niemals berühren');
 });
 
@@ -294,10 +309,11 @@ await pruefe('C3: zwei aufeinanderfolgende Screenshot-Analysen im selben Batch f
 //    gegen echte serviceauftraege, nicht-destruktiver Merge, Versionssicherung.
 // =============================================================================
 
-await pruefe('D1: Übernahme einer neuen Auftragsnummer legt einen neuen Serviceauftrag an', async () => {
+await pruefe('D1: Übernahme einer neuen Auftragsnummer legt einen neuen Serviceauftrag an (mit fester Kundenzuordnung, aber ohne Werkora-Kundentreffer)', async () => {
   setzeCollection('serviceauftraege', []);
+  setzeCollection('kunden', []);
   global.__anthropicMock = anthropicZeilenAntwort([
-    { auftragsnummer: 'SE-600', partnerStatus: 'offen', faelligkeitsdatum: '2026-11-20', wartungsdauerText: '2 Std.', plz: '45141', stadt: 'Essen', strasse: 'Musterweg 5', telefonnummer: '0201600', sachbearbeiter: 'Herr Fischer', auftragsart: 'Jahreswartung', unsicherheitshinweis: 'Keine besonderen Unsicherheiten.' },
+    { auftragsnummer: 'SE-600', partnerStatus: 'offen', faelligkeitsdatum: '2026-11-20', wartungsdauerText: '2 Std.', plz: '45141', stadt: 'Essen', strasse: 'Musterweg 5', telefonnummer: '0201600', serviceempfaenger: 'Frau Albrecht', sachbearbeiter: 'Herr Fischer', auftragsart: 'Jahreswartung', unsicherheitshinweis: 'Keine besonderen Unsicherheiten.' },
   ]);
   const batch = await W.fuehrePartnerImportAnalyseAus({ serviceAccount, env: envBasis(), batchId: 'batch-d1', partnerId: 'wr-gruppe', bildDataUrl: DUMMY_PNG, screenshotIndex: 0, callerUid: 'uid-1', callerRole: 'admin' });
   const zeileId = batch.zeilen[0].zeilenId;
@@ -307,6 +323,25 @@ await pruefe('D1: Übernahme einer neuen Auftragsnummer legt einen neuen Service
   const serviceauftragId = neuerBatch.zeilen[0].uebernommenAlsServiceauftragId;
   const auftrag = liesDoc('serviceauftraege', serviceauftragId);
   assert(auftrag && auftrag.externeAuftragsnummer === 'SE-600' && auftrag.status === 'offen');
+  assert(auftrag.kundenname === 'TLS Eco Plus Service', 'WR-Gruppe-Aufträge müssen fest dem Wartungsvertrag TLS Eco Plus Service zugeordnet werden');
+  assert(auftrag.kundeId === '', 'ohne angelegten Werkora-Kunden bleibt kundeId leer, bis das Büro ihn einmalig anlegt');
+  assert(auftrag.serviceempfaenger === 'Frau Albrecht');
+});
+
+await pruefe('D1b: Übernahme verknüpft kundeId automatisch, wenn der Kunde "TLS Eco Plus Service" bereits in Werkora angelegt ist', async () => {
+  setzeCollection('serviceauftraege', []);
+  setzeCollection('kunden', [{ id: 'k-tls', firma: 'TLS Eco Plus Service' }]);
+  global.__anthropicMock = anthropicZeilenAntwort([
+    { auftragsnummer: 'SE-600b', partnerStatus: 'offen', faelligkeitsdatum: null, wartungsdauerText: null, plz: null, stadt: null, strasse: null, telefonnummer: null, serviceempfaenger: 'Herr Krause', sachbearbeiter: null, auftragsart: null, unsicherheitshinweis: 'x' },
+  ]);
+  const batch = await W.fuehrePartnerImportAnalyseAus({ serviceAccount, env: envBasis(), batchId: 'batch-d1b', partnerId: 'wr-gruppe', bildDataUrl: DUMMY_PNG, screenshotIndex: 0, callerUid: 'uid-1', callerRole: 'admin' });
+  const zeileId = batch.zeilen[0].zeilenId;
+  await W.fuehrePartnerImportUebernahmeAus({ serviceAccount, batchId: 'batch-d1b', erwarteteVersion: batch.version, zeilenIds: [zeileId], callerRole: 'admin' });
+  const neuerBatch = liesDoc('jarvisPartnerImportEntwuerfe', 'batch-d1b');
+  const auftrag = liesDoc('serviceauftraege', neuerBatch.zeilen[0].uebernommenAlsServiceauftragId);
+  assert(auftrag.kundeId === 'k-tls', 'bei exaktem Namenstreffer muss kundeId automatisch verknüpft werden');
+  assert(auftrag.serviceempfaenger === 'Herr Krause');
+  setzeCollection('kunden', []); // nicht nachfolgende Tests beeinflussen
 });
 
 await pruefe('D2: Übernahme einer bereits vorhandenen Auftragsnummer (gleicher Partner) aktualisiert statt zu duplizieren, und überschreibt KEIN bereits befülltes Feld', async () => {

@@ -4561,12 +4561,17 @@ async function wendeEinsatzFreigabeAn({ serviceAccount, id, erwarteteVersion, en
 // - Admin-only wie JARVIS insgesamt (pruefeJarvisRolle) - keine Erweiterung
 //   auf büro in dieser Phase, konsistent mit jarvis-tech-* und allen
 //   anderen jarvis*-Aktionen.
-// - KEINE Kunden-/Anlagen-Zuordnung in dieser Phase (nicht Teil der
-//   Freigabe MVP Phase 1) - kundeId/kundenname bleiben nach dem Import
-//   leer und werden vom Büro manuell in der bestehenden Serviceauftrags-
-//   Ansicht nachgetragen. KEIN automatischer Kundenkontakt, KEINE
-//   Terminbuchung, KEIN Salesforce-Schreibzugriff - diese Pipeline endet
-//   mit einem ganz normalen, offenen Serviceauftrag wie jeder andere.
+// - KEINE Anlagen-Zuordnung in dieser Phase (nicht Teil der Freigabe MVP
+//   Phase 1) - anlagenId bleibt nach dem Import leer und wird vom Büro
+//   manuell in der bestehenden Serviceauftrags-Ansicht nachgetragen.
+//   kundenname wird dagegen bewusst fest aus PARTNER_KUNDENNAME gesetzt
+//   (siehe dort - fixe 1:1-Zuordnung pro Partnerquelle, keine Ratequalität)
+//   und kundeId nur bei einem EXAKTEN Namenstreffer in den bestehenden
+//   Werkora-Kunden verknüpft (siehe findeKundeNachExaktemNamen) - ohne
+//   Treffer bleibt kundeId leer, bis das Büro den Kunden einmalig anlegt.
+//   KEIN automatischer Kundenkontakt, KEINE Terminbuchung, KEIN
+//   Salesforce-Schreibzugriff - diese Pipeline endet mit einem ganz
+//   normalen, offenen Serviceauftrag wie jeder andere.
 // =============================================================================
 
 // Geschlossene Liste bekannter Partner (Vorgabe: "eindeutige Kombination aus
@@ -4574,10 +4579,34 @@ async function wendeEinsatzFreigabeAn({ serviceAccount, id, erwarteteVersion, en
 // aktuell nur die WR-Gruppe freigegeben.
 const PARTNER_QUELLEN = { 'wr-gruppe': 'WR-Gruppe (Salesforce-Partnerportal)' };
 
+// Die WR-Gruppe ist Vermittler/Dienstleister im Portal, nicht der eigentliche
+// Vertragskunde - laut Danny (27.10.2026) läuft die Kundenbeziehung für ALLE
+// WR-Gruppe-Aufträge über den Wartungsvertrag "TLS Eco Plus Service". Das ist
+// eine FESTE 1:1-Zuordnung pro Partnerquelle, keine Vermutung über einen
+// variablen, erst zu erratenden Kunden - deshalb unabhängig vom
+// Screenshot-Inhalt hier fest hinterlegt (anders als die weiterhin
+// ausgeschlossene automatische Zuordnung zu irgendeinem Kunden/einer Anlage).
+const PARTNER_KUNDENNAME = { 'wr-gruppe': 'TLS Eco Plus Service' };
+
+// Exakte (groß-/kleinschreibungs- und whitespace-tolerante) Suche nach einem
+// bestehenden Werkora-Kunden anhand des Firmennamens - bewusst KEINE Fuzzy-
+// /Teilstring-Suche, damit aus der festen PARTNER_KUNDENNAME-Zuordnung nicht
+// doch wieder eine Ratequalität bei der kundeId-Verknüpfung wird. Liefert
+// null (kundeId bleibt leer), solange "TLS Eco Plus Service" noch nicht als
+// Kunde in Werkora angelegt ist - der Name wird trotzdem gesetzt.
+function findeKundeNachExaktemNamen(name, kunden) {
+  const gesucht = (name || '').toString().trim().toLowerCase();
+  if (!gesucht) return null;
+  return (kunden || []).find((k) => (k.firma || '').toString().trim().toLowerCase() === gesucht) || null;
+}
+
 // Felder, die aus einem Screenshot extrahiert und über mehrere Screenshots
 // hinweg zusammengeführt werden (OHNE die Auftragsnummer selbst, die als
 // Gruppierungsschlüssel dient, siehe gruppierePartnerImportRohzeilen).
-const PARTNERIMPORT_FELDER = ['partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'sachbearbeiter', 'auftragsart'];
+// "serviceempfaenger" ist NICHT der Vertragskunde (siehe PARTNER_KUNDENNAME),
+// sondern wörtlich der auf dem Screenshot sichtbare Name der Person/Stelle,
+// bei der die Leistung vor Ort ausgeführt wird.
+const PARTNERIMPORT_FELDER = ['partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'serviceempfaenger', 'sachbearbeiter', 'auftragsart'];
 
 function normalisierePartnerAuftragsnummer(nummer) {
   return (nummer || '').toString().trim().toLowerCase();
@@ -4664,13 +4693,17 @@ function formatierePartnerImportAdresse(strasse, plz, stadt) {
   return [strasse, ort].filter(Boolean).join(', ');
 }
 
-// Baut einen NEUEN Serviceauftrag aus einer Entwurfszeile - bewusst OHNE
-// kundeId/kundenname/anlagenId (Vorgabe: keine Kunden-/Anlagenzuordnung in
-// dieser Phase) und OHNE technikerIds (bleibt "offen", wie jeder andere neu
-// angelegte Auftrag - SmartDispatch/die Serviceauftragsverwaltung übernehmen
-// ab hier unverändert, siehe Kopfkommentar).
-function baueServiceauftragAusPartnerImportZeile(zeile, partnerId, batchId) {
+// Baut einen NEUEN Serviceauftrag aus einer Entwurfszeile - kundenname fest
+// aus PARTNER_KUNDENNAME, kundeId nur bei exaktem Namenstreffer in "kunden"
+// (siehe findeKundeNachExaktemNamen), anlagenId bewusst weiterhin leer (keine
+// Anlagenzuordnung in dieser Phase). OHNE technikerIds (bleibt "offen", wie
+// jeder andere neu angelegte Auftrag - SmartDispatch/die
+// Serviceauftragsverwaltung übernehmen ab hier unverändert, siehe
+// Kopfkommentar).
+function baueServiceauftragAusPartnerImportZeile(zeile, partnerId, batchId, kunden) {
   const jetzt = new Date().toISOString();
+  const kundenname = PARTNER_KUNDENNAME[partnerId] || '';
+  const kunde = kundenname ? findeKundeNachExaktemNamen(kundenname, kunden) : null;
   return {
     id: crypto.randomUUID(),
     externeAuftragsnummer: zeile.auftragsnummer, partnerId,
@@ -4680,7 +4713,8 @@ function baueServiceauftragAusPartnerImportZeile(zeile, partnerId, batchId) {
     auftragsfrist: istGueltigesIsoDatum(zeile.faelligkeitsdatum) ? zeile.faelligkeitsdatum : '',
     einsatzadresse: formatierePartnerImportAdresse(zeile.strasse, zeile.plz, zeile.stadt),
     telefonnummer: zeile.telefonnummer || '',
-    kundeId: '', kundenname: '', anlagenId: '',
+    serviceempfaenger: zeile.serviceempfaenger || '',
+    kundeId: kunde?.id || '', kundenname, anlagenId: '',
     technikerIds: [], status: 'offen', technikerNotizen: '',
     checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '', terminId: '',
     herkunftPartnerImportBatchId: batchId, herkunftPartnerImportZeilenId: zeile.zeilenId,
@@ -4696,13 +4730,17 @@ function baueServiceauftragAusPartnerImportZeile(zeile, partnerId, batchId) {
 // technikerIds/status/checklistenPunkte/maengel/... werden HIER NIE berührt -
 // die laufende Techniker-Dokumentation eines bereits zugewiesenen Auftrags
 // darf ein erneuter Partner-Import niemals verändern.
-function baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag) {
+function baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, bestehenderAuftrag, partnerId, kunden) {
+  const kundenname = PARTNER_KUNDENNAME[partnerId] || '';
+  const kunde = kundenname ? findeKundeNachExaktemNamen(kundenname, kunden) : null;
   const kandidatenFelder = {
     partnerSachbearbeiter: zeile.sachbearbeiter || '', partnerStatusText: zeile.partnerStatus || '',
     wartungsart: zeile.auftragsart || '', wartungsdauerPartnerText: zeile.wartungsdauerText || '',
     auftragsfrist: istGueltigesIsoDatum(zeile.faelligkeitsdatum) ? zeile.faelligkeitsdatum : '',
     einsatzadresse: formatierePartnerImportAdresse(zeile.strasse, zeile.plz, zeile.stadt),
     telefonnummer: zeile.telefonnummer || '',
+    serviceempfaenger: zeile.serviceempfaenger || '',
+    kundenname, kundeId: kunde?.id || '',
   };
   const aktualisierteFelder = {};
   const abweichungen = [];
@@ -4728,11 +4766,12 @@ const PARTNERIMPORT_ZEILE_SCHEMA = {
     stadt: { type: ['string', 'null'] },
     strasse: { type: ['string', 'null'] },
     telefonnummer: { type: ['string', 'null'] },
+    serviceempfaenger: { type: ['string', 'null'] },
     sachbearbeiter: { type: ['string', 'null'] },
     auftragsart: { type: ['string', 'null'] },
     unsicherheitshinweis: { type: 'string' },
   },
-  required: ['auftragsnummer', 'partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'sachbearbeiter', 'auftragsart', 'unsicherheitshinweis'],
+  required: ['auftragsnummer', 'partnerStatus', 'faelligkeitsdatum', 'wartungsdauerText', 'plz', 'stadt', 'strasse', 'telefonnummer', 'serviceempfaenger', 'sachbearbeiter', 'auftragsart', 'unsicherheitshinweis'],
   additionalProperties: false,
 };
 
@@ -4760,9 +4799,10 @@ ZWINGENDE Regeln:
 - "wartungsdauerText": übernimm den auf dem Screenshot sichtbaren Text wörtlich (z.B. "2 Std.", "90 Min") - rechne NICHTS um, interpretiere NICHTS.
 - "strasse"/"plz"/"stadt" sind oft nur sichtbar, wenn ein einzelner Auftrag im Portal AUFGEKLAPPT wurde (Detailansicht) - ein Screenshot der reinen Listenübersicht enthält diese Felder häufig nicht; setze sie dann null, erfinde keine Adresse.
 - "auftragsnummer" ist das wichtigste Feld - ist sie auf einer Zeile nicht lesbar, überspringe diese Zeile komplett statt sie mit auftragsnummer:null zurückzugeben (ohne Auftragsnummer ist eine Zeile später nicht zuordenbar).
+- "serviceempfaenger": der Name der Person/Stelle, bei der die Leistung vor Ort ausgeführt wird (z.B. Name auf der Auftragszeile/in der Detailansicht) - übernimm ihn WÖRTLICH, wenn er sichtbar ist. Das ist NICHT der Vertragskunde/Rechnungsempfänger (der wird von Werkora selbst gesetzt, nicht aus dem Screenshot) - es geht nur um den sichtbaren Namen vor Ort.
 - "unsicherheitshinweis" ist PFLICHT je Zeile und muss ehrlich benennen, was unklar/nicht sicher lesbar war. Ist nichts unklar, schreibe "Keine besonderen Unsicherheiten."
 - "lesbar": false auf oberster Ebene, wenn das Bild gar keine auswertbare Auftragsübersicht zeigt (z.B. falsches Motiv, zu unscharf) - dann "zeilen" als leeres Array zurückgeben.
-- Erfasse NUR, was tatsächlich auf dem Screenshot sichtbar ist - keine Rückschlüsse auf nicht gezeigte Informationen (z.B. keine Vermutungen über Kundennamen, keine Zuordnung zu bereits bekannten Werkora-Kunden).`;
+- Erfasse NUR, was tatsächlich auf dem Screenshot sichtbar ist - keine Rückschlüsse auf nicht gezeigte Informationen (z.B. keine Vermutungen über Namen, die nicht auf dem Screenshot stehen, keine Zuordnung zu bereits bekannten Werkora-Kunden).`;
 
 async function callClaudePartnerImportAnalyse({ apiKey, model, bildDataUrl }) {
   const match = /^data:(image\/(?:png|jpe?g|webp));base64,(.+)$/.exec(bildDataUrl || '');
@@ -4846,6 +4886,7 @@ async function fuehrePartnerImportUebernahmeAus({ serviceAccount, batchId, erwar
   if (!Array.isArray(zeilenIds) || zeilenIds.length === 0) { const err = new Error('Keine Zeilen zur Übernahme ausgewählt.'); err.status = 400; throw err; }
 
   const bestehendeServiceauftraege = await firestoreListDocuments({ serviceAccount, collection: 'serviceauftraege' });
+  const kunden = await firestoreListDocuments({ serviceAccount, collection: 'kunden' });
   let neu = 0, aktualisiert = 0, uebersprungen = 0;
   const abweichungenGesamt = [];
 
@@ -4853,12 +4894,12 @@ async function fuehrePartnerImportUebernahmeAus({ serviceAccount, batchId, erwar
     if (!zeilenIds.includes(zeile.zeilenId) || zeile.uebernahmeStatus !== 'offen') return zeile;
     const dublette = findePartnerAuftragsDublette(bestehendeServiceauftraege, batch.partnerId, zeile.auftragsnummer);
     if (!dublette) {
-      const neuerAuftrag = baueServiceauftragAusPartnerImportZeile(zeile, batch.partnerId, batchId);
+      const neuerAuftrag = baueServiceauftragAusPartnerImportZeile(zeile, batch.partnerId, batchId, kunden);
       await firestoreSetDoc({ serviceAccount, collection: 'serviceauftraege', id: neuerAuftrag.id, data: neuerAuftrag });
       neu++;
       return { ...zeile, uebernahmeStatus: 'uebernommen', uebernommenAlsServiceauftragId: neuerAuftrag.id, uebernommenAm: new Date().toISOString() };
     }
-    const { aktualisierteFelder, abweichungen } = baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, dublette);
+    const { aktualisierteFelder, abweichungen } = baueServiceauftragAktualisierungAusPartnerImportZeile(zeile, dublette, batch.partnerId, kunden);
     if (Object.keys(aktualisierteFelder).length > 0) {
       await firestoreMergeFelder({ serviceAccount, collection: 'serviceauftraege', id: dublette.id, felder: { ...aktualisierteFelder, aktualisiertAm: new Date().toISOString() } });
       aktualisiert++;
