@@ -551,6 +551,21 @@ select option {
   color: #4a3b06;
 }
 .card-hinweis strong { color: #332801; }
+/* Bug gefunden 28.10.2026: im Jarvis-Theme überschreibt die generische
+   Regel ":root[data-theme='jarvis'] .card" (siehe oben) NUR den
+   Hintergrund auf dunkles Glas, lässt aber die feste dunkle Textfarbe
+   oben unverändert - Ergebnis war dunkler Text auf dunklem Hintergrund,
+   praktisch unlesbar (Danny-Screenshot). Gleiche Spezifität wie die
+   .card-Regel oben (":root[data-theme] .class"), gewinnt also nur durch
+   die spätere Position im Stylesheet - muss nach jener Regel stehen. */
+:root[data-theme="jarvis"] .card-hinweis {
+  background: #fff6e0;
+  border-color: #f0d78c;
+  color: #4a3b06;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+:root[data-theme="jarvis"] .card-hinweis strong { color: #332801; }
 
 /* Auswertungen: horizontale Balkenlisten (Top-Kunden, Auslastung) */
 .auswertung-liste { display: flex; flex-direction: column; gap: 10px; }

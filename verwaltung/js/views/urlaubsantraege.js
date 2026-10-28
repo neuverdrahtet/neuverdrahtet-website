@@ -36,22 +36,22 @@ export async function render(container) {
       <h2 style="margin-top:28px">Alle Anträge</h2>
       <p class="hint">Genehmigen legt automatisch einen passenden Termin an (Plantafel), Ablehnen legt nichts an.</p>
       <div class="kpi-grid">
-        <div class="kpi-card kpi-warn">
+        <button type="button" class="kpi-card kpi-clickable kpi-warn" style="text-align:left" id="kpi-ua-offen">
           <div class="kpi-value">${antraege.filter((a) => a.status === 'offen').length}</div>
           <div class="kpi-label">Offen · wartet auf Entscheidung</div>
-        </div>
-        <div class="kpi-card kpi-success">
+        </button>
+        <button type="button" class="kpi-card kpi-clickable kpi-success" style="text-align:left" id="kpi-ua-genehmigt">
           <div class="kpi-value">${antraege.filter((a) => a.status === 'genehmigt').length}</div>
           <div class="kpi-label">Genehmigt</div>
-        </div>
-        <div class="kpi-card kpi-danger">
+        </button>
+        <button type="button" class="kpi-card kpi-clickable kpi-danger" style="text-align:left" id="kpi-ua-abgelehnt">
           <div class="kpi-value">${antraege.filter((a) => a.status === 'abgelehnt').length}</div>
           <div class="kpi-label">Abgelehnt</div>
-        </div>
-        <div class="kpi-card">
+        </button>
+        <button type="button" class="kpi-card kpi-clickable" style="text-align:left" id="kpi-ua-alle">
           <div class="kpi-value">${antraege.length}</div>
           <div class="kpi-label">Gesamt</div>
-        </div>
+        </button>
       </div>
       <div id="alle-host"></div>
     ` : ''}
@@ -59,6 +59,16 @@ export async function render(container) {
 
   function terminBadge(a) {
     return `<span class="badge ${STATUS_BADGE[a.status]}">${STATUS_LABEL[a.status]}</span>`;
+  }
+
+  // KPI-Kacheln filtern "Alle Anträge" darunter (gleiches Klick-Muster wie
+  // in Serviceaufträge: kpi-clickable/kpi-active, erneuter Klick auf die
+  // aktive Kachel hebt den Filter wieder auf).
+  let statusFilter = null;
+  function markActiveKpi() {
+    container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
+    const aktiveId = statusFilter ? `kpi-ua-${statusFilter}` : 'kpi-ua-alle';
+    container.querySelector(`#${aktiveId}`)?.classList.add('kpi-active');
   }
 
   function renderMeine() {
@@ -86,12 +96,22 @@ export async function render(container) {
   function renderAlle() {
     const host = container.querySelector('#alle-host');
     if (!host) return;
+    const sichtbar = statusFilter ? antraege.filter((a) => a.status === statusFilter) : antraege;
+    const filterHinweis = statusFilter
+      ? `<p class="hint">Gefiltert: ${escapeHtml(STATUS_LABEL[statusFilter])} (${sichtbar.length} von ${antraege.length}). <button type="button" class="btn btn-sm" id="btn-ua-filter-reset">Filter zurücksetzen</button></p>`
+      : '';
     if (antraege.length === 0) { host.innerHTML = '<div class="empty-state">Noch keine Anträge.</div>'; return; }
+    if (sichtbar.length === 0) {
+      host.innerHTML = `${filterHinweis}<div class="empty-state">Keine Anträge für diesen Filter.</div>`;
+      host.querySelector('#btn-ua-filter-reset')?.addEventListener('click', () => { statusFilter = null; markActiveKpi(); renderAlle(); });
+      return;
+    }
     host.innerHTML = `
+      ${filterHinweis}
       <table class="data-table">
         <thead><tr><th>Mitarbeiter</th><th>Typ</th><th>Zeitraum</th><th>Kommentar</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          ${antraege.map((a) => `
+          ${sichtbar.map((a) => `
             <tr data-id="${a.id}">
               <td>${escapeHtml(mitarbeiterById[a.mitarbeiterId]?.name || 'Unbekannt')}</td>
               <td>${TYP_LABEL[a.typ]}</td>
@@ -109,6 +129,7 @@ export async function render(container) {
         </tbody>
       </table>
     `;
+    host.querySelector('#btn-ua-filter-reset')?.addEventListener('click', () => { statusFilter = null; markActiveKpi(); renderAlle(); });
     host.querySelectorAll('.btn-genehmigen').forEach((btn) => {
       btn.addEventListener('click', () => genehmigen(btn.dataset.id));
     });
@@ -215,6 +236,14 @@ export async function render(container) {
     });
   }
 
+  [['kpi-ua-offen', 'offen'], ['kpi-ua-genehmigt', 'genehmigt'], ['kpi-ua-abgelehnt', 'abgelehnt'], ['kpi-ua-alle', null]].forEach(([id, wert]) => {
+    container.querySelector(`#${id}`)?.addEventListener('click', () => {
+      statusFilter = statusFilter === wert ? null : wert;
+      markActiveKpi();
+      renderAlle();
+    });
+  });
+  markActiveKpi();
   renderMeine();
   renderAlle();
 }
