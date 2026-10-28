@@ -3,7 +3,7 @@ import {
   analysiereJarvisTech, verknuepfeJarvisTechAnalyse, holeJarvisTechAnalysen, erstelleJarvisPruefprotokoll, aktualisiereJarvisPruefprotokoll, holeJarvisPruefprotokolle,
   dokumentiereDurchsichtPruefprotokoll, verifiziereJarvisHerstellerBefund,
   erstelleJarvisPruefnorm, setzeJarvisPruefnormAusserKraft, holeJarvisPruefnormen,
-  holeJarvisStatus,
+  holeJarvisStatus, starteTagescheckJetzt,
 } from '../ai.js';
 import { escapeHtml, toast, formatDateTime, compressImage } from '../utils.js';
 import { isVoiceRecordingSupported, getSpeechRecognitionCtor } from '../voicenote.js';
@@ -1522,7 +1522,12 @@ async function renderMobile(container) {
 const JOB_TYP_LABEL = {
   'email-check': 'E-Mail-Check', 'rechnung-check': 'Rechnungs-Check', 'mahnung-check': 'Mahnungs-Check',
   'wartung-check': 'Wartungs-Check', 'projekt-check': 'Projekt-Check', 'control-check': 'CONTROL-Check',
-  'dispatch-check': 'SmartDispatch-Check',
+  'dispatch-check': 'SmartDispatch-Check', tagescheck: 'Täglicher Büro-Check (Tagescheck)',
+};
+const TAGESCHECK_ERGEBNIS_LABEL = {
+  erledigt: 'Tagescheck erfolgreich durchgelaufen.',
+  deaktiviert: 'JARVIS_TAGESCHECK_AKTIV ist nicht aktiviert.',
+  nicht_eingerichtet: 'Serverseitig nicht eingerichtet',
 };
 const FEATURE_FLAG_LABEL = {
   JARVIS_EMAIL_AKTIV: 'Autonomer E-Mail-Check', JARVIS_ANGEBOT_AKTIV: 'Autonome Angebotsentwürfe',
@@ -1571,7 +1576,11 @@ async function renderStatus(container) {
         ${statusZeile('Google-Konto verbunden (Gmail/Kalender)', s.dienste.googleKontoVerbunden)}
         ${statusZeile('Rate-Limiter konfiguriert (sonst sperren sich /kunde-upload und /siri-abfrage selbst)', s.dienste.rateLimiterKonfiguriert)}
 
-        <h3 style="font-size:13px;margin-top:14px">Letzte Cron-Läufe</h3>
+        <div class="flex-row" style="justify-content:space-between;align-items:center;margin-top:14px">
+          <h3 style="font-size:13px;margin:0">Letzte Cron-Läufe</h3>
+          <button type="button" class="btn btn-sm" id="jv-tagescheck-jetzt">▶️ Tagescheck jetzt starten</button>
+        </div>
+        <p class="hint" style="margin-top:4px">Läuft sonst nur automatisch nachts um 5 Uhr - nützlich, um einen Fix sofort zu bestätigen, statt bis morgen zu warten. Läuft er heute schon erfolgreich, meldet ein erneuter Klick nur "bereits erledigt".</p>
         <table class="data-table" style="width:100%">
           <thead><tr><th>Job</th><th>Letzter Versuch</th><th>Zeitpunkt</th><th>Letzter ERFOLG</th></tr></thead>
           <tbody>
@@ -1607,6 +1616,29 @@ async function renderStatus(container) {
   }
 
   container.querySelector('#jv-status-reload').addEventListener('click', laden);
+  container.querySelector('#jv-status-inhalt').addEventListener('click', async (e) => {
+    const btn = e.target.closest('#jv-tagescheck-jetzt');
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Läuft …';
+    try {
+      const ergebnis = await starteTagescheckJetzt();
+      if (ergebnis.status === 'erledigt') {
+        toast('Tagescheck erfolgreich durchgelaufen - neue Aufgabe/Entwürfe in Werkora prüfen.', 'success');
+      } else if (ergebnis.status === 'uebersprungen') {
+        const grund = { done: 'ist für heute bereits erledigt', running: 'läuft gerade (anderer Aufruf) - kurz warten', unklar: 'ist als "unklar" markiert (Absturz-Verdacht) - manuell prüfen, kein automatischer Neustart' }[ergebnis.jobStatus] || `Status: ${ergebnis.jobStatus}`;
+        toast(`Tagescheck übersprungen: ${grund}.`, ergebnis.jobStatus === 'unklar' ? 'danger' : 'success');
+      } else if (ergebnis.status === 'fehlgeschlagen') {
+        toast(`Tagescheck fehlgeschlagen: ${ergebnis.fehler}`, 'danger');
+      } else {
+        toast(`Tagescheck nicht gestartet: ${ergebnis.hinweis || TAGESCHECK_ERGEBNIS_LABEL[ergebnis.status] || ergebnis.status}`, 'danger');
+      }
+    } catch (err) {
+      toast(err.message || 'Tagescheck konnte nicht gestartet werden.', 'danger');
+    } finally {
+      await laden();
+    }
+  });
   await laden();
 }
 

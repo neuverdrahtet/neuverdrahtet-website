@@ -409,6 +409,18 @@ export async function holeJarvisStatus() {
   return status;
 }
 
+/**
+ * Manueller "Jetzt starten"-Knopf für den Tagescheck (28.10.2026) - ruft
+ * dieselbe Funktion wie der tägliche 5-Uhr-Cron auf, nur synchron, damit das
+ * tatsächliche Ergebnis zurückkommt. Liefert { status: 'erledigt' |
+ * 'uebersprungen' | 'fehlgeschlagen' | 'deaktiviert' | 'nicht_eingerichtet',
+ * ... }, siehe runTagescheck() in worker.js.
+ */
+export async function starteTagescheckJetzt() {
+  const { ergebnis } = await callJarvisBackend('jarvis-tagescheck-jetzt');
+  return ergebnis;
+}
+
 /** JARVIS-Wochenbericht (Phase 6, erste Version - noch nicht automatisch per Cron erzeugt). */
 export async function holeJarvisWochenbericht() {
   const { bericht } = await callJarvisBackend('jarvis-wochenbericht');

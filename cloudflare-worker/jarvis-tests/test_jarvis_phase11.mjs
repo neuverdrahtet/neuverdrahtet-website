@@ -165,16 +165,18 @@ const jobId = `tagescheck-${heute}`;
 await pruefe('M0a: OHNE JARVIS_TAGESCHECK_AKTIV läuft der Tagescheck NICHT, auch wenn alle übrigen Secrets gesetzt sind (Standard: aus, Direktstart ohne Staging)', async () => {
   const { JARVIS_TAGESCHECK_AKTIV, ...ohneFlag } = BASIS_ENV;
   claudeAufrufe = 0;
-  await W.runTagescheck(ohneFlag);
+  const ergebnis = await W.runTagescheck(ohneFlag);
   assert(claudeAufrufe === 0, `ohne gesetzten Schalter darf KEIN Claude-Aufruf erfolgen, war ${claudeAufrufe}`);
   assert(!firestoreDb.get(`jarvisJobs/${jobId}`), 'ohne gesetzten Schalter darf nicht einmal ein Job-Dokument angelegt werden');
+  assert(ergebnis.status === 'deaktiviert', `Rückgabe muss status "deaktiviert" melden (für den manuellen "Jetzt starten"-Knopf), war ${JSON.stringify(ergebnis)}`);
 });
 
 await pruefe('M0b: JARVIS_TAGESCHECK_AKTIV="false" (oder ein anderer Wert als "true") blockiert den Lauf genauso wie ein fehlender Wert', async () => {
   claudeAufrufe = 0;
-  await W.runTagescheck({ ...BASIS_ENV, JARVIS_TAGESCHECK_AKTIV: 'false' });
+  const ergebnis = await W.runTagescheck({ ...BASIS_ENV, JARVIS_TAGESCHECK_AKTIV: 'false' });
   assert(claudeAufrufe === 0, `bei "false" darf KEIN Claude-Aufruf erfolgen, war ${claudeAufrufe}`);
   assert(!firestoreDb.get(`jarvisJobs/${jobId}`), 'bei "false" darf kein Job-Dokument angelegt werden');
+  assert(ergebnis.status === 'deaktiviert', `Rückgabe muss status "deaktiviert" melden, war ${JSON.stringify(ergebnis)}`);
 });
 
 await pruefe('M0c (Regression, Bug gefunden 28.10.2026): ein Service Binding KI_BUEROKRAFT reicht OHNE gesetztes KI_BUEROKRAFT_URL aus - der Tagescheck darf sich nicht mehr stillschweigend überspringen, nur weil die URL-Variable fehlt (Binding ist der normale, von Danny eingerichtete Transportweg)', async () => {
@@ -191,18 +193,20 @@ await pruefe('M0c (Regression, Bug gefunden 28.10.2026): ein Service Binding KI_
 await pruefe('M1: ein bereits erledigter Tagescheck-Job für heute lässt den Lauf überspringen (KEIN Claude-Aufruf)', async () => {
   setDoc('jarvisJobs', jobId, { typ: 'tagescheck', status: 'done', abgeschlossenAm: new Date().toISOString() });
   claudeAufrufe = 0;
-  await W.runTagescheck(BASIS_ENV);
+  const ergebnis = await W.runTagescheck(BASIS_ENV);
   assert(claudeAufrufe === 0, `bei bereits erledigtem Job darf KEIN Claude-Aufruf erfolgen, war ${claudeAufrufe}`);
+  assert(ergebnis.status === 'uebersprungen' && ergebnis.jobStatus === 'done', `Rückgabe muss "uebersprungen"/jobStatus "done" melden (für den manuellen Knopf), war ${JSON.stringify(ergebnis)}`);
   firestoreDb.delete(`jarvisJobs/${jobId}`);
 });
 
 await pruefe('M2: ohne vorhandenen Job läuft der Check regulär durch, claimt den Job atomar und markiert ihn am Ende als "done"', async () => {
   claudeAufrufe = 0;
-  await W.runTagescheck(BASIS_ENV);
+  const ergebnis = await W.runTagescheck(BASIS_ENV);
   assert(claudeAufrufe >= 1, `ohne vorhandenen Job muss der Lauf stattfinden, Claude-Aufrufe: ${claudeAufrufe}`);
   const job = firestoreDb.get(`jarvisJobs/${jobId}`);
   assert(job, 'Job-Dokument muss nach dem Lauf existieren');
   assert(job.fields.status.stringValue === 'done', `Job muss "done" sein, war ${job.fields.status.stringValue}`);
+  assert(ergebnis.status === 'erledigt', `Rückgabe muss "erledigt" melden (für den manuellen Knopf), war ${JSON.stringify(ergebnis)}`);
   firestoreDb.delete(`jarvisJobs/${jobId}`);
 });
 
@@ -218,10 +222,11 @@ await pruefe('M3 (Kernfall "zwei gleichzeitig gestartete Läufe"): von zwei PARA
 await pruefe('M4 (Kernfall "Absturz zwischen Claim und Abschluss"): ein Job, der noch "running" ist und erst vor Kurzem gestartet wurde, lässt einen zweiten Lauf NICHT zu (vermutlich noch aktiv) - kein zweiter Claude-Aufruf, kein automatischer Zweitversuch', async () => {
   setDoc('jarvisJobs', jobId, { typ: 'tagescheck', status: 'running', gestartetAm: new Date().toISOString(), versuch: 1 });
   claudeAufrufe = 0;
-  await W.runTagescheck(BASIS_ENV);
+  const ergebnis = await W.runTagescheck(BASIS_ENV);
   assert(claudeAufrufe === 0, `ein gerade erst gestarteter, noch laufender Job darf keinen zweiten Claude-Aufruf auslösen, war ${claudeAufrufe}`);
   const job = firestoreDb.get(`jarvisJobs/${jobId}`);
   assert(job.fields.status.stringValue === 'running', 'Status muss unverändert "running" bleiben, solange er nicht als veraltet (stale) erkannt wird');
+  assert(ergebnis.status === 'uebersprungen' && ergebnis.jobStatus === 'running', `Rückgabe muss "uebersprungen"/jobStatus "running" melden, war ${JSON.stringify(ergebnis)}`);
   firestoreDb.delete(`jarvisJobs/${jobId}`);
 });
 
@@ -229,10 +234,11 @@ await pruefe('M5 (Absturz, Fortsetzung): ist derselbe "running"-Job länger als 
   const laengstVergangen = new Date(Date.now() - (W.JARVIS_JOB_STALE_MINUTEN + 5) * 60000).toISOString();
   setDoc('jarvisJobs', jobId, { typ: 'tagescheck', status: 'running', gestartetAm: laengstVergangen, versuch: 1 });
   claudeAufrufe = 0;
-  await W.runTagescheck(BASIS_ENV);
+  const ergebnis = await W.runTagescheck(BASIS_ENV);
   assert(claudeAufrufe === 0, `ein als veraltet erkannter Job darf NICHT automatisch erneut ausgeführt werden, Claude-Aufrufe: ${claudeAufrufe}`);
   const job = firestoreDb.get(`jarvisJobs/${jobId}`);
   assert(job.fields.status.stringValue === 'unklar', `Job muss als "unklar" markiert werden, war ${job.fields.status.stringValue}`);
+  assert(ergebnis.status === 'uebersprungen' && ergebnis.jobStatus === 'unklar', `Rückgabe muss "uebersprungen"/jobStatus "unklar" melden, war ${JSON.stringify(ergebnis)}`);
   firestoreDb.delete(`jarvisJobs/${jobId}`);
 });
 
@@ -243,13 +249,15 @@ await pruefe('M6 (Fehlerbehandlung): schlägt der Claude-Aufruf fehl, wird der J
     if (u.href === 'https://api.anthropic.com/v1/messages') throw new Error('Simulierter Netzwerkfehler');
     return ORIG(url, init);
   };
+  let ergebnis;
   try {
-    await W.runTagescheck(BASIS_ENV);
+    ergebnis = await W.runTagescheck(BASIS_ENV);
   } finally {
     global.fetch = ORIG;
   }
   const job = firestoreDb.get(`jarvisJobs/${jobId}`);
   assert(job.fields.status.stringValue === 'failed', `Job muss "failed" sein, war ${job.fields.status.stringValue}`);
+  assert(ergebnis.status === 'fehlgeschlagen' && ergebnis.fehler, `Rückgabe muss "fehlgeschlagen" mit Fehlertext melden (für den manuellen Knopf), war ${JSON.stringify(ergebnis)}`);
   firestoreDb.delete(`jarvisJobs/${jobId}`);
 });
 

@@ -6527,7 +6527,11 @@ async function runTagescheck(env) {
   // Kopfkommentar). Ermöglicht einen stufenweisen Produktivstart, bei dem
   // die bereits gesetzten Secrets (ANTHROPIC_API_KEY usw.) allein NICHT
   // ausreichen, um diesen autonomen Lauf scharf zu schalten.
-  if (env.JARVIS_TAGESCHECK_AKTIV !== 'true') return;
+  // Rückgabewert (seit 28.10.2026, für die manuelle "Jetzt starten"-Aktion
+  // unten im Fetch-Handler): der Cron-Aufruf in scheduled() ignoriert ihn
+  // einfach weiter (ctx.waitUntil wertet keinen Rückgabewert aus) - rein
+  // additiv, ändert am bisherigen Cron-Verhalten nichts.
+  if (env.JARVIS_TAGESCHECK_AKTIV !== 'true') return { status: 'deaktiviert' };
   // Bug (gefunden 28.10.2026): verlangte bisher zwingend KI_BUEROKRAFT_URL,
   // obwohl das Service Binding KI_BUEROKRAFT laut Kopfkommentar/wrangler.toml
   // ("KI_BUEROKRAFT_URL nur als Fallback") GENAUSO ausreicht und überall
@@ -6536,8 +6540,9 @@ async function runTagescheck(env) {
   // Tagescheck dadurch jeden Tag stillschweigend übersprungen (nur ein
   // console.log, keine im Status-Tab sichtbare Fehlermeldung).
   if (!env.ANTHROPIC_API_KEY || (!env.KI_BUEROKRAFT && !env.KI_BUEROKRAFT_URL) || !env.KI_BUEROKRAFT_API_KEY) {
-    console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY fehlt, oder weder Service Binding KI_BUEROKRAFT noch KI_BUEROKRAFT_URL vorhanden, oder KI_BUEROKRAFT_API_KEY fehlt.');
-    return;
+    const hinweis = 'ANTHROPIC_API_KEY fehlt, oder weder Service Binding KI_BUEROKRAFT noch KI_BUEROKRAFT_URL vorhanden, oder KI_BUEROKRAFT_API_KEY fehlt.';
+    console.log(`Täglicher Büro-Check übersprungen: ${hinweis}`);
+    return { status: 'nicht_eingerichtet', hinweis };
   }
   // Phase 11.1 Sicherheitskorrektur: FIREBASE_SERVICE_ACCOUNT_JSON ist jetzt
   // eine ZWINGENDE Voraussetzung (vorher nur für den Push "nice to have") -
@@ -6545,8 +6550,9 @@ async function runTagescheck(env) {
   // und ein ungeschützter Lauf ist riskanter als ein ausbleibender Lauf
   // (fail-closed, dasselbe Prinzip wie das Rate-Limiting in Phase 10).
   if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    console.log('Täglicher Büro-Check übersprungen: FIREBASE_SERVICE_ACCOUNT_JSON fehlt (zwingend für den atomaren Lauf-Claim, siehe Phase 11.1).');
-    return;
+    const hinweis = 'FIREBASE_SERVICE_ACCOUNT_JSON fehlt (zwingend für den atomaren Lauf-Claim, siehe Phase 11.1).';
+    console.log(`Täglicher Büro-Check übersprungen: ${hinweis}`);
+    return { status: 'nicht_eingerichtet', hinweis };
   }
   const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
   const heute = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Berlin' }); // sv-SE liefert zuverlässig das Format YYYY-MM-DD
@@ -6573,13 +6579,14 @@ async function runTagescheck(env) {
   const jobId = `tagescheck-${heute}`;
   const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'tagescheck' });
   if (!job) {
+    const vorhandenerJob = await firestoreGetDoc({ serviceAccount, collection: 'jarvisJobs', id: jobId });
     console.log(`Täglicher Büro-Check übersprungen: Job ${jobId} ist bereits erledigt, läuft gerade oder wurde als unklar markiert.`);
-    return;
+    return { status: 'uebersprungen', jobStatus: vorhandenerJob?.status || 'unbekannt' };
   }
 
-  let ergebnis;
+  let antwort;
   try {
-    ergebnis = await callClaudeAssistentChat({
+    antwort = await callClaudeAssistentChat({
       apiKey: env.ANTHROPIC_API_KEY,
       model: env.MODEL_ID || 'claude-opus-4-8',
       messages: [{ role: 'user', content: buildTagescheckPrompt(heute, { googleVerfuegbar: !!googleConfig }) }],
@@ -6592,7 +6599,7 @@ async function runTagescheck(env) {
   } catch (err) {
     console.log('Täglicher Büro-Check fehlgeschlagen:', err.message);
     await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
-    return;
+    return { status: 'fehlgeschlagen', fehler: err.message };
   }
 
   await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'done', abgeschlossenAm: new Date().toISOString() } });
@@ -6600,17 +6607,19 @@ async function runTagescheck(env) {
   try {
     const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });
     const tokens = tokenDocs.filter((t) => ['admin', 'buero'].includes(t.role)).map((t) => t.id);
-    if (tokens.length === 0) return;
-    await sendFcmMessages({
-      serviceAccount,
-      tokens,
-      title: 'Täglicher Büro-Check',
-      body: (ergebnis.reply || 'Der tägliche Check ist fertig - Details in der neuen Aufgabe.').slice(0, 500),
-      url: './index.html#/aufgaben',
-    });
+    if (tokens.length > 0) {
+      await sendFcmMessages({
+        serviceAccount,
+        tokens,
+        title: 'Täglicher Büro-Check',
+        body: (antwort.reply || 'Der tägliche Check ist fertig - Details in der neuen Aufgabe.').slice(0, 500),
+        url: './index.html#/aufgaben',
+      });
+    }
   } catch (err) {
     console.log('Push nach täglichem Büro-Check fehlgeschlagen:', err.message);
   }
+  return { status: 'erledigt' };
 }
 
 // Wie viele Katalog-Einträge je wöchentlichem Lauf geprüft werden - absichtlich
@@ -7352,6 +7361,35 @@ export default {
         pruefeJarvisRolle(aufrufer.role);
         const status = await holeJarvisStatusUebersicht({ serviceAccount, env });
         return new Response(JSON.stringify({ ok: true, status }), {
+          status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ error: err.message || 'Unbekannter Fehler' }), {
+          status: err.status || 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Manueller "Jetzt starten"-Knopf für den Tagescheck (28.10.2026) - ruft
+    // GENAU dieselbe Funktion wie der tägliche Cron auf (runTagescheck), nur
+    // synchron statt per ctx.waitUntil, damit die Antwort das tatsächliche
+    // Ergebnis zeigt. Admin-only wie jede andere JARVIS-Aktion. Kein
+    // zusätzliches Rate-Limiting nötig: der atomare Lauf-Claim in
+    // runTagescheck (ein Job pro Kalendertag) verhindert von selbst, dass
+    // ein wiederholter Klick am selben Tag den Check mehrfach tatsächlich
+    // ausführt - ein zweiter Klick meldet nur noch "uebersprungen".
+    if (body.action === 'jarvis-tagescheck-jetzt') {
+      if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+        return new Response(JSON.stringify({ error: 'JARVIS ist serverseitig nicht eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }), {
+          status: 500, headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+      }
+      try {
+        const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+        const aufrufer = await holeJarvisAufruferKontext({ serviceAccount, idToken: body.idToken });
+        pruefeJarvisRolle(aufrufer.role);
+        const ergebnis = await runTagescheck(env);
+        return new Response(JSON.stringify({ ok: true, ergebnis }), {
           status: 200, headers: { ...headers, 'Content-Type': 'application/json' },
         });
       } catch (err) {
