@@ -1,5 +1,5 @@
-import { getAllDeleted, restoreDeleted, hardRemove } from '../db.js';
-import { escapeHtml, formatDateTime, toast } from '../utils.js';
+import { getAllDeleted, restoreDeleted, hardRemove, istEndgueltigLoeschbar, fruehesterEndgueltigLoeschZeitpunkt } from '../db.js';
+import { escapeHtml, formatDate, formatDateTime, toast } from '../utils.js';
 import { confirmDelete } from '../ui.js';
 
 // Reihenfolge bestimmt auch die Anzeigereihenfolge. "title" liefert eine
@@ -28,7 +28,7 @@ export async function render(container) {
     <div class="view-header">
       <h1>🗑️ Papierkorb</h1>
     </div>
-    <p class="text-mute">Gelöschte Einträge bleiben hier 30 Tage lang wiederherstellbar und werden danach automatisch endgültig entfernt.</p>
+    <p class="text-mute">Gelöschte Einträge bleiben hier wiederherstellbar. Nach Ablauf der jeweiligen Aufbewahrungsfrist werden sie automatisch endgültig entfernt - bei Rechnungen, Gutschriften, Ausgaben und Mahnungen sind das gesetzlich 10 Jahre (GoBD), bei allen anderen Einträgen 30 Tage.</p>
     <div id="pk-list"></div>
   `;
   const host = container.querySelector('#pk-list');
@@ -46,6 +46,8 @@ export async function render(container) {
         <tbody>
           ${eintraege.map((e) => {
             const meta = LABELS[e.storeName] || { label: e.storeName, icon: '📦', title: () => e.id };
+            const loeschbar = istEndgueltigLoeschbar(e.storeName, e);
+            const grenze = fruehesterEndgueltigLoeschZeitpunkt(e.storeName, e);
             return `
               <tr>
                 <td>${meta.icon} ${escapeHtml(meta.label)}</td>
@@ -53,7 +55,9 @@ export async function render(container) {
                 <td>${formatDateTime(e._geloeschtAm)}</td>
                 <td class="text-right">
                   <button type="button" class="btn btn-sm" data-restore data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">↩️ Wiederherstellen</button>
-                  <button type="button" class="btn btn-sm btn-danger" data-purge data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">🗑 Endgültig löschen</button>
+                  ${loeschbar
+                    ? `<button type="button" class="btn btn-sm btn-danger" data-purge data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">🗑 Endgültig löschen</button>`
+                    : `<button type="button" class="btn btn-sm" disabled title="Gesetzliche Aufbewahrungspflicht (GoBD) - löschbar erst ab ${escapeHtml(formatDate(grenze))}">🔒 Aufbewahrungspflicht bis ${escapeHtml(formatDate(grenze))}</button>`}
                 </td>
               </tr>
             `;
@@ -71,8 +75,12 @@ export async function render(container) {
     host.querySelectorAll('[data-purge]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirmDelete('Endgültig löschen? Das kann nicht rückgängig gemacht werden.')) return;
-        await hardRemove(btn.dataset.store, btn.dataset.id);
-        toast('Endgültig gelöscht', 'success');
+        try {
+          await hardRemove(btn.dataset.store, btn.dataset.id);
+          toast('Endgültig gelöscht', 'success');
+        } catch (err) {
+          toast(err.message || 'Löschen fehlgeschlagen', 'danger');
+        }
         reload();
       });
     });

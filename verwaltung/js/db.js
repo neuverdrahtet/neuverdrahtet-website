@@ -353,7 +353,67 @@ export function isTrashStore(storeName) {
   return TRASH_STORES.includes(storeName);
 }
 
-const TRASH_TAGE = 30;
+// Gesetzliche Mindestaufbewahrungsfristen (GoBD, §147 Abs. 3 AO / §257
+// Abs. 4 HGB) je Collection - P0-Sicherheitskorrektur 28.10.2026 (siehe
+// Master-Audit, Bericht 03, Risiko #1): bis hierhin wurde JEDER
+// Papierkorb-Eintrag nach pauschal 30 Tagen endgültig gelöscht, auch
+// Rechnungen/Gutschriften/Ausgaben/Mahnungen - das widerspricht der
+// gesetzlichen 10-Jahres-Aufbewahrungspflicht für Buchungsbelege.
+//
+// Rechnungen/Gutschriften/Ausgaben sind "Buchungsbelege" im Sinne von §147
+// Abs. 3 AO / §257 Abs. 4 HGB: 10 Jahre ab Schluss des Kalenderjahres der
+// letzten Eintragung. Hier vereinfachend ab dem tatsächlichen
+// Löschzeitpunkt (_geloeschtAm) gerechnet statt ab Beleg-/Buchungsdatum -
+// das liegt praktisch immer SPÄTER als das Belegdatum, die Frist ist
+// dadurch nie zu kurz (im Zweifel etwas länger als gesetzlich nötig, nie
+// kürzer).
+const TAGE_PRO_JAHR = 365.25;
+const TRASH_TAGE_BUCHUNGSBELEG = Math.ceil(10 * TAGE_PRO_JAHR); // ~3653 Tage
+
+// Mahnungen sind Geschäftsbriefe im Zusammenhang mit einer Rechnung. §147
+// Abs. 3 AO nennt für Handels-/Geschäftsbriefe eigentlich nur 6 Jahre - ob
+// das hier greift oder eine Mahnung als Teil des Buchungsvorgangs sogar
+// die volle 10-Jahres-Frist der zugehörigen Rechnung braucht, ist NICHT
+// abschließend rechtssicher geklärt (Klärungsbedarf: mit Steuerberater
+// abstimmen). Bis zur Klärung bewusst die längere, sicherere Frist.
+const TRASH_TAGE_GESCHAEFTSBRIEF_UNGEKLAERT = TRASH_TAGE_BUCHUNGSBELEG;
+
+// Alle übrigen Papierkorb-Stores (Kunden, Projekte, Aufgaben, Mitarbeiter,
+// Geräte, Flotten, Katalog, Angebote, Zeiterfassung, Vorlagen, Lieferanten,
+// Subunternehmer) sind keine eigenständigen Buchungsbelege - für sie bleibt
+// die bisherige, DSGVO-freundlich kurze Frist unverändert. Zeiterfassung
+// kann im Einzelfall einer konkreten Rechnung zugrunde liegen (Stunden-
+// nachweis) - ob das sie zu einem eigenen GoBD-Beleg macht, ist ebenfalls
+// nicht abschließend geklärt; da das Master-Audit sie nicht als Risiko
+// markiert hat, bleibt sie hier bewusst unverändert, bis das mit dem
+// Steuerberater geklärt ist.
+const TRASH_TAGE_STANDARD = 30;
+
+const TRASH_TAGE_BY_STORE = {
+  rechnungen: TRASH_TAGE_BUCHUNGSBELEG,
+  gutschriften: TRASH_TAGE_BUCHUNGSBELEG,
+  ausgaben: TRASH_TAGE_BUCHUNGSBELEG,
+  mahnungen: TRASH_TAGE_GESCHAEFTSBRIEF_UNGEKLAERT,
+};
+
+export function trashTageFuer(storeName) {
+  return TRASH_TAGE_BY_STORE[storeName] ?? TRASH_TAGE_STANDARD;
+}
+
+// Frühester Zeitpunkt, ab dem ein im Papierkorb liegender Datensatz
+// tatsächlich endgültig gelöscht werden darf (weder automatisch per
+// purgeOldTrash() noch manuell über die Papierkorb-Ansicht). Gibt null
+// zurück, wenn der Datensatz (noch) nicht als gelöscht markiert ist.
+export function fruehesterEndgueltigLoeschZeitpunkt(storeName, row) {
+  if (!row?._geloeschtAm) return null;
+  const tage = trashTageFuer(storeName);
+  return new Date(new Date(row._geloeschtAm).getTime() + tage * 24 * 60 * 60 * 1000);
+}
+
+export function istEndgueltigLoeschbar(storeName, row) {
+  const grenze = fruehesterEndgueltigLoeschZeitpunkt(storeName, row);
+  return !grenze || grenze.getTime() <= Date.now();
+}
 
 export async function getAll(storeName, { includeDeleted = false } = {}) {
   const rows = FIREBASE_ENABLED ? await getAllFs(storeName) : await getAllIdb(storeName);
@@ -372,7 +432,8 @@ export async function put(storeName, value) {
 // Für Papierkorb-fähige Stores markiert remove() den Datensatz nur als
 // gelöscht (Update statt Delete) - er verschwindet aus getAll(), bleibt aber
 // per get()/getAllDeleted() erreichbar, bis er wiederhergestellt oder nach
-// TRASH_TAGE endgültig entfernt wird (siehe purgeOldTrash / hardRemove).
+// Ablauf der jeweiligen Aufbewahrungsfrist (siehe trashTageFuer oben)
+// endgültig entfernt wird (siehe purgeOldTrash / hardRemove).
 export async function remove(storeName, key) {
   if (isTrashStore(storeName)) {
     const existing = await get(storeName, key);
@@ -413,9 +474,21 @@ async function cleanupBlobs(storeName, record) {
   }
 }
 
+// P0-Sicherheitskorrektur 28.10.2026: prüft bei JEDEM Aufruf (egal ob über
+// purgeOldTrash(), die Papierkorb-Ansicht oder einen künftigen, heute noch
+// unbekannten Aufrufer) erneut die Aufbewahrungsfrist - bewusst hier und
+// nicht nur an den aktuellen Aufrufstellen, damit kein zukünftiger
+// Code-Pfad die Prüfung versehentlich umgehen kann (siehe Master-Audit,
+// Bericht 03, Risiko #1, Akzeptanzkriterium).
 export async function hardRemove(storeName, key) {
+  const brauchtVorabRecord = isTrashStore(storeName) || storeName === 'ausgaben' || storeName === 'zeiterfassung';
+  const existing = brauchtVorabRecord ? await get(storeName, key) : null;
+  if (isTrashStore(storeName) && existing && !istEndgueltigLoeschbar(storeName, existing)) {
+    const grenze = fruehesterEndgueltigLoeschZeitpunkt(storeName, existing);
+    throw new Error(`Aufbewahrungspflicht (GoBD): dieser Datensatz darf erst ab ${grenze.toLocaleDateString('de-DE')} endgültig gelöscht werden.`);
+  }
   if (storeName === 'ausgaben' || storeName === 'zeiterfassung') {
-    await cleanupBlobs(storeName, await get(storeName, key));
+    await cleanupBlobs(storeName, existing);
   }
   return FIREBASE_ENABLED ? removeFs(storeName, key) : removeIdb(storeName, key);
 }
@@ -438,18 +511,18 @@ export async function getAllDeleted() {
   return result;
 }
 
-// Räumt beim App-Start endgültig auf: Datensätze, die schon länger als
-// TRASH_TAGE im Papierkorb liegen, werden wirklich gelöscht. Läuft still im
-// Hintergrund mit (wie trySyncPendingUploads) - ein einzelner Fehlschlag darf
-// den Start nicht blockieren.
+// Räumt beim App-Start endgültig auf: Datensätze, deren Aufbewahrungsfrist
+// (siehe trashTageFuer/istEndgueltigLoeschbar oben - je Store unterschiedlich
+// lang, nicht mehr pauschal 30 Tage) abgelaufen ist, werden wirklich
+// gelöscht. Läuft still im Hintergrund mit (wie trySyncPendingUploads) - ein
+// einzelner Fehlschlag darf den Start nicht blockieren.
 export async function purgeOldTrash() {
-  const grenze = Date.now() - TRASH_TAGE * 24 * 60 * 60 * 1000;
   for (const storeName of TRASH_STORES) {
     const rows = await getAll(storeName, { includeDeleted: true });
     for (const row of rows) {
-      if (row._geloescht && row._geloeschtAm && new Date(row._geloeschtAm).getTime() < grenze) {
-        await hardRemove(storeName, row.id);
-      }
+      if (!row._geloescht || !row._geloeschtAm) continue;
+      if (!istEndgueltigLoeschbar(storeName, row)) continue; // noch innerhalb der Aufbewahrungsfrist
+      await hardRemove(storeName, row.id);
     }
   }
 }
