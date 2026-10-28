@@ -148,7 +148,14 @@ export async function render(container) {
       titel: `${TYP_LABEL[antrag.typ]}: ${mitarbeiterName}`,
       typ: antrag.typ === 'urlaub' ? 'urlaub' : 'krank',
       start: `${antrag.von}T00:00`,
-      ende: antrag.bis,
+      // Bug gefunden 28.10.2026: "ende" stand bisher als reines Datum ohne
+      // Uhrzeit ("YYYY-MM-DD"), während terminUeberlappt()/findeTerminKonflikte()
+      // (serviceauftraege.js) start/ende konsequent als "YYYY-MM-DDTHH:MM"
+      // per String-Vergleich behandeln. Ein reines Datum ist als String immer
+      // "kleiner" als jeder Zeitstempel desselben Tages, wodurch ein Konflikt
+      // am LETZTEN Urlaubs-/Krankheitstag nie erkannt wurde (z.B. Serviceauftrag
+      // am letzten Urlaubstag ab 09:00 Uhr für denselben Techniker).
+      ende: `${antrag.bis}T23:59`,
       mitarbeiterIds: [antrag.mitarbeiterId],
       beschreibung: antrag.kommentar || '',
     });

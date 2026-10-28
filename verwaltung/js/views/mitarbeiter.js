@@ -378,7 +378,10 @@ export async function render(container) {
       const info = TERMIN_TYPEN.find((tt) => tt.id === typ);
       const neu = {
         id: uid(), titel: notiz || info?.titel || typ, typ,
-        start: `${von}T00:00`, ende: bis < von ? von : bis,
+        // Gleicher Bug wie in urlaubsantraege.js genehmigen() (28.10.2026):
+        // "ende" braucht eine Uhrzeit, sonst erkennt terminUeberlappt() am
+        // letzten Abwesenheitstag keinen Konflikt mehr (String-Vergleich).
+        start: `${von}T00:00`, ende: `${bis < von ? von : bis}T23:59`,
         mitarbeiterIds: [mitarbeiterId], geraeteIds: [], flottenIds: [],
         kundeId: '', projektId: '', ort: '', notizen: '', farbe: '',
       };
