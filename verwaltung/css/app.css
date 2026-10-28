@@ -1,3 +1,12 @@
+/* WICHTIG (28.10.2026): diese Datei wird ohne Cache-Busting eingebunden
+   (<link href="css/app.css?v=...">, siehe index.html/techniker/portal) -
+   Browser können sie sonst lange cachen, sodass eine Änderung hier erst
+   nach einem Hard-Refresh sichtbar wird (genau das ist Danny bei der
+   .card-hinweis-Lesbarkeitskorrektur unten passiert). Bei jeder
+   inhaltlichen Änderung an dieser Datei die "?v=..."-Version in ALLEN DREI
+   HTML-Dateien (verwaltung/index.html, verwaltung/techniker/index.html,
+   verwaltung/portal/index.html) mit hochzählen. */
+
 /* Hell (ToolTime-Vorbild) ist der Standard - Dunkel ist der Opt-in über den
    Theme-Umschalter (siehe :root[data-theme="dark"] unten). */
 :root {
