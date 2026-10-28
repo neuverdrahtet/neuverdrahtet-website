@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, onSnapshot,
+  collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, onSnapshot, runTransaction,
 } from './vendor/firebase/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
 import { deleteBlobFromStorage } from './blobstore.js';
@@ -2832,4 +2832,54 @@ export async function setSettings(obj) {
   for (const [key, value] of Object.entries(obj)) {
     await put('einstellungen', { key, value });
   }
+}
+
+// Dieselbe reine Zähler-Logik wie nextDailyNummer() in verwaltung/js/utils.js
+// - hier bewusst noch einmal lokal implementiert statt von dort importiert:
+// utils.js importiert bereits GEWERKE aus db.js, ein Rückimport hier würde
+// einen Zirkelbezug zwischen beiden Modulen erzeugen (zusätzlich riskant,
+// weil db.js bereits ein Top-Level-"await import" hat).
+function naechsteTagesnummer(prefix, state = {}) {
+  const now = new Date();
+  const yyyy = String(now.getFullYear());
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const heute = `${yyyy}-${mm}-${dd}`;
+  const zaehler = state.datum === heute ? (Number(state.zaehler) || 0) + 1 : 1;
+  const nummer = `${prefix || ''}${yyyy}${dd}${mm}${String(zaehler).padStart(2, '0')}`;
+  return { nummer, datum: heute, zaehler };
+}
+
+// P0-Sicherheitskorrektur 28.10.2026 (Master-Audit Bericht 03, Risiko #6):
+// die bisherige Rechnungsnummer-Vergabe (getSettings -> nextDailyNummer ->
+// setSettings, verteilt in rechnungen.js) liest/erhöht/schreibt den Zähler
+// ohne jede Sperre - speichern zwei Personen (zwei Browser-Tabs, zwei
+// Mitarbeiter) fast gleichzeitig eine neue Rechnung, können beide dieselbe
+// Nummer erhalten. GoBD verlangt aber eindeutige, lückenlose Nummern.
+//
+// Diese Funktion macht die Vergabe atomar über eine echte Firestore-
+// Transaction auf dem einstellungen/global-Dokument: Firestore serialisiert
+// konkurrierende Transactions auf demselben Dokument automatisch
+// (optimistische Nebenläufigkeitskontrolle mit Retry bei Konflikt) - zwei
+// gleichzeitige Aufrufe können dadurch nie dieselbe Nummer bekommen, egal
+// wie knapp sie zeitlich zusammenfallen.
+//
+// Im IndexedDB-Modus (kein FIREBASE_ENABLED, echter Einzelnutzer-Betrieb
+// ohne Mehrbenutzer-Wettlauf) bleibt die bisherige, einfachere
+// Lesen-Erhöhen-Schreiben-Logik ausreichend - eine Firestore-Transaction
+// gibt es dort ohnehin nicht.
+export async function vergibRechnungsnummerAtomisch(prefix) {
+  if (!FIREBASE_ENABLED) {
+    const settings = await getSettings();
+    const next = naechsteTagesnummer(prefix, { datum: settings.rechnungNummerDatum, zaehler: settings.rechnungNummerZaehler });
+    await setSettings({ rechnungNummerDatum: next.datum, rechnungNummerZaehler: next.zaehler });
+    return next.nummer;
+  }
+  return runTransaction(firestore, async (tx) => {
+    const snap = await tx.get(EINSTELLUNGEN_DOC());
+    const data = snap.exists() ? snap.data() : {};
+    const next = naechsteTagesnummer(prefix, { datum: data.rechnungNummerDatum, zaehler: data.rechnungNummerZaehler });
+    tx.set(EINSTELLUNGEN_DOC(), { rechnungNummerDatum: next.datum, rechnungNummerZaehler: next.zaehler }, { merge: true });
+    return next.nummer;
+  });
 }
