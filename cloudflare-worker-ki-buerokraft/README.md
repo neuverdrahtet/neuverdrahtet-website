@@ -176,7 +176,16 @@ GET   /time-entries?project_id=&employee_id=&date_from=&date_to=&count=&offset=&
        freiwilligen Arbeitsberichte oben. count=true liefert nur { count, sum_minutes } ohne die Einzeleinträge.)
 
 GET   /reminders?invoice_id=       (nur direkt per Worker-API)
-POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? } - nur direkt per Worker-API)
+POST  /reminders                   ({ invoice_id, level, new_due_date?, fee?, text? } - nur direkt per Worker-API.
+                                     Seit der P0-Sicherheitskorrektur (Oktober 2026) KEINE Sofortanlage mehr: legt
+                                     nur eine Freigabe-Anfrage an und antwortet mit 202 { approval_required: true,
+                                     approval_id, summary, expires_at } - die Mahnung entsteht erst nach
+                                     POST /approvals/{id}/approve, siehe Abschnitt "Freigabe-Engine" unten)
+
+GET   /approvals                   (offene Freigabe-Anfragen für finanzwirksame KI-Aktionen, siehe unten;
+                                     nur direkt per Worker-API)
+POST  /approvals/{id}/approve      ({ reason? } optional - führt die zugehörige Aktion jetzt tatsächlich aus)
+POST  /approvals/{id}/reject       ({ reason? } optional - lehnt ab, führt nichts aus)
 
 GET   /expenses?customer_id=&project_id=&category=&supplier=&date_from=&date_to=&status=
       &incomplete=&offset=&limit=
@@ -358,17 +367,50 @@ genau wie in Werkora selbst.
 Verfügbare Tools (per `tools/list` abrufbar): Kunden/Leads/Projekte/
 Aufgaben/Termine/Angebote/Rechnungen/Ausgaben/Zeiterfassung/Artikel/
 Mitarbeiter/Postfach/Mahnungen durchsuchen + einzeln abrufen, Dashboard-Kennzahlen abrufen,
-`werkora_create_mahnung` (legt die nächste fällige Mahnstufe zu einer
-überfälligen Rechnung an - gleiche Logik/Fristen/Texte wie der Button in
-Werkora selbst; legt nur den Datensatz an, verschickt nichts),
-neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben/Rechnungen anlegen,
+neue Kunden/Leads/Aufgaben/Termine/Angebote/Ausgaben anlegen,
 bestehende Kunden/Aufgaben/Termine/Entwurfs-Angebote/Ausgaben/
 Entwurfs-Rechnungen ändern (`werkora_update_customer`,
 `werkora_update_task`, `werkora_update_appointment`,
 `werkora_update_quote`, `werkora_update_expense`,
-`werkora_update_invoice`), sowie `werkora_mark_invoice_paid` und
-`werkora_cancel_invoice` (Storno, optional mit automatischer
-Ersatzrechnung).
+`werkora_update_invoice`).
+
+**Freigabe-Engine für finanzwirksame Aktionen (seit der P0-Sicherheits-
+korrektur, Oktober 2026):** `werkora_create_invoice`, `werkora_mark_invoice_paid`,
+`werkora_cancel_invoice` und `werkora_create_mahnung` führen die eigentliche
+Aktion NICHT mehr sofort aus. Da dieser Worker nur einen einzigen geteilten
+`API_KEY` ohne Benutzerrollen kennt, hätte jeder, der den Schlüssel kennt
+(z.B. in einem kompromittierten Custom-GPT/Claude-Connector), sonst direkt
+Rechnungen anlegen, als bezahlt markieren oder stornieren können. Jeder
+dieser vier Aufrufe legt stattdessen nur eine Freigabe-Anfrage in der neuen
+Firestore-Collection `mcpFinanzFreigaben` an und antwortet mit
+`{ approval_required: true, approval_id, action, summary, message,
+expires_at }`. Erst ein zweiter, separater Aufruf führt die Aktion
+tatsächlich aus:
+
+- `werkora_list_pending_approvals` - listet alle offenen Freigabe-Anfragen.
+- `werkora_approve_action({ "approval_id": "..." })` - führt die Aktion jetzt aus.
+- `werkora_reject_action({ "approval_id": "...", "reason": "..." })` - lehnt ab, führt nichts aus.
+
+Freigabe-Anfragen laufen nach 24 Stunden automatisch ab (dann erneut
+anfordern); eine bereits bearbeitete (freigegeben/abgelehnt/abgelaufen)
+`approval_id` lässt sich nicht erneut bearbeiten (Schutz vor doppelter
+Ausführung). Dieselbe Freigabe-Pflicht gilt auch für `POST /reminders`
+(REST) - siehe oben. Diese Freigabe-Anfragen sind absichtlich NICHT in
+der bestehenden Werkora-Oberfläche "KI-Freigaben" sichtbar (dort bedeutet
+"Freigeben" nur "gesehen", Danny müsste die Aktion danach noch selbst in
+Werkora ausführen - für diese vier Aktionen soll die KI sie nach Freigabe
+aber tatsächlich selbst ausführen). Freigabe/Ablehnung läuft aktuell nur
+über die MCP-Tools bzw. `GET/POST /approvals` direkt - noch keine eigene
+Werkora-UI dafür (sinnvoller Folgeschritt, siehe Entwicklungsroadmap).
+
+Bekannte, bewusst nicht behobene Einschränkung: da der `API_KEY` keine
+Benutzeridentität trägt, kann der Worker nicht unterscheiden, WER eine
+Freigabe anfordert und WER sie erteilt - jeder mit dem Schlüssel kann
+sowohl anfordern als auch freigeben. Das bewaffnet die Freigabe-Engine
+vor allem gegen versehentliche/fehlerhafte KI-Aktionen und gibt Danny
+eine Prüf-/Protokollstelle, schützt aber nicht gegen einen Angreifer, der
+bereits den vollen `API_KEY` besitzt - ein echtes Rollenmodell für diesen
+Worker wäre ein eigener, größerer Umbau.
 
 **Einrichtung in Claude.ai:**
 

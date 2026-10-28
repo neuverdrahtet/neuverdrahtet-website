@@ -579,6 +579,313 @@ async function blocked(ctx, action, message, entityType, entityId) {
   return errorResponse('APPROVAL_REQUIRED', message, 403);
 }
 
+// =============================================================================
+// Freigabe-Engine für KI-Finanzaktionen (P0-Sicherheitskorrektur 28.10.2026,
+// Master-Audit Bericht 03 Risiko #3 + Bericht 05): werkora_create_invoice,
+// werkora_mark_invoice_paid, werkora_cancel_invoice, werkora_create_mahnung
+// und die REST-Route POST /reminders führten die eigentliche Aktion bisher
+// SOFORT beim einzelnen Aufruf aus - die einzige "Kontrolle" war die laufende
+// Konversation in Claude.ai selbst (eine Modell-Anweisung, keine serverseitige
+// Schranke). Diese Aktionen legen jetzt stattdessen einen Vorschlag an;
+// erst ein zweiter, separater Aufruf (werkora_approve_action bzw.
+// POST /approvals/{id}/approve) führt die Aktion wirklich aus.
+//
+// Bewusst eine EIGENE Collection, NICHT "ki_freigaben" (siehe blocked() oben):
+// "ki_freigaben" bedeutet in Werkora "Danny bekommt das angezeigt und
+// markiert es als gesehen - die eigentliche Aktion führt er SELBST manuell
+// in Werkora aus" (z.B. eine Rechnung tatsächlich per Klick versenden). Für
+// die hier abgesicherten Aktionen gilt das NICHT - die KI kann sie nach
+// Freigabe korrekt selbst ausführen. Eine gemeinsame Collection mit
+// identischem "Freigeben tut nichts von selbst"-Verhalten wäre hier
+// irreführend; deshalb eine eigene, tatsächlich ausführende Engine.
+const FINANZ_FREIGABE_COLLECTION = 'mcpFinanzFreigaben';
+const FINANZ_FREIGABE_ABLAUF_STUNDEN = 24;
+const FINANZ_FREIGABE_STATUS = { OFFEN: 'offen', FREIGEGEBEN: 'freigegeben', ABGELEHNT: 'abgelehnt', AUSGEFUEHRT: 'ausgefuehrt', FEHLGESCHLAGEN: 'fehlgeschlagen', ABGELAUFEN: 'abgelaufen' };
+
+async function erstelleFinanzFreigabe(ctx, { aktion, args, zusammenfassung }) {
+  const id = crypto.randomUUID();
+  const jetzt = new Date();
+  const ablauf = new Date(jetzt.getTime() + FINANZ_FREIGABE_ABLAUF_STUNDEN * 60 * 60 * 1000);
+  const data = {
+    id, aktion, args: args || {}, zusammenfassung: zusammenfassung || '',
+    status: FINANZ_FREIGABE_STATUS.OFFEN,
+    angefordertAm: jetzt.toISOString(), ablaufAm: ablauf.toISOString(),
+    bearbeitetAm: '', ausgefuehrtAm: '', fehler: '',
+  };
+  await firestoreCreate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id, data });
+  await logAction(ctx, { action: `mcp.finanzfreigabe.angefordert.${aktion}`, entityType: FINANZ_FREIGABE_COLLECTION, entityId: id, newValue: { aktion, args }, status: 'success', approvalRequired: true });
+  return data;
+}
+
+function finanzFreigabeAntwort(freigabe) {
+  return mcpToolSuccess({
+    approval_required: true,
+    approval_id: freigabe.id,
+    action: freigabe.aktion,
+    summary: freigabe.zusammenfassung,
+    message: `Diese Aktion erfordert eine separate Freigabe, bevor sie ausgeführt wird. Mit werkora_approve_action({"approval_id":"${freigabe.id}"}) freigeben und ausführen, oder mit werkora_reject_action ablehnen. Läuft automatisch ab am ${freigabe.ablaufAm}, danach erneut anfordern.`,
+    expires_at: freigabe.ablaufAm,
+  });
+}
+
+/**
+ * Führt die zu einer Freigabe gehörende Aktion tatsächlich aus - EIN
+ * zentraler Dispatch, den sowohl werkora_approve_action als auch
+ * POST /approvals/{id}/approve aufrufen, damit es nur eine einzige Stelle
+ * gibt, an der diese Aktionen wirklich ausgeführt werden (siehe
+ * fuehreCreateInvoiceAus/fuehreMarkInvoicePaidAus/fuehreCancelInvoiceAus/
+ * fuehreCreateMahnungAus/fuehreCreateMahnungRestAus weiter unten - dieselben
+ * Funktionen, die vorher direkt aus dem jeweiligen Tool-Call-Zweig gerufen
+ * wurden).
+ */
+async function fuehreFinanzAktionAus(ctx, aktion, args) {
+  switch (aktion) {
+    case 'werkora_create_invoice': return fuehreCreateInvoiceAus(ctx, args);
+    case 'werkora_mark_invoice_paid': return fuehreMarkInvoicePaidAus(ctx, args);
+    case 'werkora_cancel_invoice': return fuehreCancelInvoiceAus(ctx, args);
+    case 'werkora_create_mahnung': return fuehreCreateMahnungAus(ctx, args);
+    case 'reminders.create': return fuehreCreateMahnungRestAus(ctx, args);
+    default: throw new Error(`Unbekannte freigabepflichtige Aktion: ${aktion}`);
+  }
+}
+
+/**
+ * Gemeinsame Kernlogik für werkora_approve_action UND POST /approvals/{id}/approve.
+ * Schutz vor doppelter Ausführung: der Status wird VOR der eigentlichen
+ * Ausführung auf "freigegeben" gesetzt (claim-then-execute, dasselbe Muster
+ * wie der atomare Tages-Job-Claim im Hauptworker) - ein zweiter,
+ * überlappender Freigabe-Versuch für dieselbe ID sieht dadurch nicht mehr
+ * "offen" und wird abgelehnt, auch wenn die eigentliche Ausführung noch
+ * läuft. Keine echte Firestore-Transaction (dieser Worker nutzt die
+ * einfache REST-API ohne :commit-Preconditions, siehe firestoreUpdate
+ * oben) - für den realistischen Fall (ein Mensch bestätigt eine Freigabe,
+ * kein Hochfrequenz-Wettlauf) ausreichend; bei echtem Bedarf für mehr
+ * Strenge wäre eine :commit-Precondition-Transaction ein eigener, größerer
+ * Umbau dieses Workers.
+ */
+async function bearbeiteFinanzFreigabe(ctx, approvalId, { freigeben, kommentar }) {
+  const freigabe = await firestoreGet({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId });
+  if (!freigabe) return { ok: false, code: 'APPROVAL_NOT_FOUND', message: 'Keine Freigabe-Anfrage mit dieser approval_id gefunden.' };
+  if (freigabe.status !== FINANZ_FREIGABE_STATUS.OFFEN) {
+    return { ok: false, code: 'APPROVAL_NOT_PENDING', message: `Diese Freigabe-Anfrage hat bereits den Status "${freigabe.status}" und kann nicht erneut bearbeitet werden.` };
+  }
+  if (new Date(freigabe.ablaufAm).getTime() < Date.now()) {
+    await firestoreUpdate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId, data: { status: FINANZ_FREIGABE_STATUS.ABGELAUFEN, bearbeitetAm: new Date().toISOString() } });
+    return { ok: false, code: 'APPROVAL_EXPIRED', message: `Diese Freigabe-Anfrage ist am ${freigabe.ablaufAm} abgelaufen - bitte die ursprüngliche Aktion erneut anfordern.` };
+  }
+  if (!freigeben) {
+    await firestoreUpdate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId, data: { status: FINANZ_FREIGABE_STATUS.ABGELEHNT, bearbeitetAm: new Date().toISOString(), fehler: kommentar || '' } });
+    await logAction(ctx, { action: `mcp.finanzfreigabe.abgelehnt`, entityType: FINANZ_FREIGABE_COLLECTION, entityId: approvalId, status: 'success' });
+    return { ok: true, result: mcpToolSuccess({ approval_id: approvalId, status: 'abgelehnt' }) };
+  }
+  // Claim VOR der Ausführung (siehe Funktionskommentar oben).
+  await firestoreUpdate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId, data: { status: FINANZ_FREIGABE_STATUS.FREIGEGEBEN, bearbeitetAm: new Date().toISOString() } });
+  try {
+    const ausgefuehrtesErgebnis = await fuehreFinanzAktionAus(ctx, freigabe.aktion, freigabe.args);
+    await firestoreUpdate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId, data: { status: FINANZ_FREIGABE_STATUS.AUSGEFUEHRT, ausgefuehrtAm: new Date().toISOString() } });
+    await logAction(ctx, { action: `mcp.finanzfreigabe.ausgefuehrt.${freigabe.aktion}`, entityType: FINANZ_FREIGABE_COLLECTION, entityId: approvalId, status: 'success' });
+    return { ok: true, result: ausgefuehrtesErgebnis };
+  } catch (err) {
+    await firestoreUpdate({ accessToken: ctx.accessToken, projectId: ctx.projectId, collection: FINANZ_FREIGABE_COLLECTION, id: approvalId, data: { status: FINANZ_FREIGABE_STATUS.FEHLGESCHLAGEN, fehler: String(err.message || err) } });
+    await logAction(ctx, { action: `mcp.finanzfreigabe.fehlgeschlagen.${freigabe.aktion}`, entityType: FINANZ_FREIGABE_COLLECTION, entityId: approvalId, status: 'error' });
+    return { ok: false, code: 'EXECUTION_FAILED', message: `Freigabe wurde erteilt, die Ausführung ist aber fehlgeschlagen: ${err.message || err}` };
+  }
+}
+
+// --- Tatsächliche Ausführungslogik der freigabepflichtigen Finanzaktionen -
+// unverändert gegenüber der vorherigen, direkt ausführenden Version, nur
+// hierhin verschoben und erst ab jetzt ausschließlich über
+// bearbeiteFinanzFreigabe() (nach Freigabe) erreichbar statt direkt aus dem
+// jeweiligen Tool-Call. Jede Funktion validiert den AKTUELLEN Zustand selbst
+// (massgeblich, nicht die leichte Vorab-Prüfung beim Anfordern der
+// Freigabe) - der Zustand kann sich waehrend der Wartezeit auf eine
+// Freigabe geändert haben (z.B. Rechnung inzwischen anders bezahlt/storniert). ---
+
+async function fuehreCreateMahnungAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  if (!args.invoice_id) throw new Error('Feld "invoice_id" ist erforderlich.');
+  const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+  if (!rechnung) throw new Error('Rechnung nicht gefunden.');
+  const heute = todayISO();
+  if (!RECHNUNG_OFFEN_STATUS.includes(rechnung.status) || !rechnung.faelligAm || rechnung.faelligAm >= heute) {
+    throw new Error('Diese Rechnung ist nicht überfällig - keine Mahnung nötig.');
+  }
+  const [bisherigeMahnungen, settingsDoc] = await Promise.all([
+    firestoreList({ accessToken, projectId, collection: 'mahnungen' }),
+    firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' }),
+  ]);
+  const mahnungenFuerRechnung = bisherigeMahnungen
+    .filter((m) => m.rechnungId === args.invoice_id)
+    .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
+  const letzte = mahnungenFuerRechnung[mahnungenFuerRechnung.length - 1];
+  const wartetBis = letzte ? letzte.neueFrist : rechnung.faelligAm;
+  const bereit = !wartetBis || wartetBis < heute;
+  if (!bereit) throw new Error(`Zahlungsfrist der letzten Mahnung läuft noch bis ${wartetBis} - noch keine neue Mahnstufe fällig.`);
+  const stufe = Math.min(mahnungenFuerRechnung.length + 1, 3);
+  const frist = Number(settingsDoc?.mahnfristTage) || 10;
+  const gebuehr = settingsDoc?.mahnGebuehr?.[stufe] ?? 0;
+  const neueMahnung = {
+    id: crypto.randomUUID(), rechnungId: args.invoice_id, stufe, datum: heute,
+    neueFrist: addDaysISO(heute, frist), gebuehr,
+    text: (MAHNUNG_STUFE_TEXT[stufe] || (() => ''))(frist),
+    createdAt: new Date().toISOString(),
+  };
+  const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id: neueMahnung.id, data: neueMahnung });
+  await logAction(ctx, { action: 'mcp.mahnungen.create', entityType: 'mahnungen', entityId: created.id, newValue: created, status: 'success' });
+  await fireWebhook(ctx, 'reminder.created', { ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
+  return mcpToolSuccess({ ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
+}
+
+// Gleiche Mahnstufen-Logik, aber mit den ROHEN REST-Feldern aus
+// POST /reminders (level/fee/text direkt vom Aufrufer statt automatisch
+// berechnet) - bewusst eine eigene, einfachere Funktion statt
+// fuehreCreateMahnungAus wiederzuverwenden, weil beide Wege schon vorher
+// unterschiedliche Eingaben hatten (siehe Kopf-Kommentar der REST-Route).
+async function fuehreCreateMahnungRestAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+  if (!rechnung) throw new Error('invoice_id verweist auf keine vorhandene Rechnung.');
+  const id = crypto.randomUUID();
+  const data = { id, rechnungId: args.invoice_id, stufe: args.level, datum: todayISO(), neueFrist: args.new_due_date || '', gebuehr: args.fee || 0, text: args.text || '', createdAt: new Date().toISOString() };
+  const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id, data });
+  await logAction(ctx, { action: 'reminders.create', entityType: 'mahnungen', entityId: id, newValue: data, status: 'success' });
+  // Einheitliche MCP-Tool-Ergebnisform zurückgeben (nicht okResponse()), weil
+  // fuehreFinanzAktionAus()/bearbeiteFinanzFreigabe() diese Funktion wie alle
+  // anderen Aktionen über denselben Dispatch aufruft und .content[0].text
+  // erwartet (siehe POST /approvals/{id}/approve weiter unten).
+  return mcpToolSuccess(reminderToApi(created));
+}
+
+async function fuehreCreateInvoiceAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  let kundeId, projektId, betreff, positionen;
+  if (args.quote_id) {
+    const angebot = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: args.quote_id });
+    if (!angebot) throw new Error('quote_id verweist auf kein vorhandenes Angebot.');
+    kundeId = args.customer_id || angebot.kundeId;
+    projektId = args.project_id !== undefined ? args.project_id : (angebot.projektId || '');
+    betreff = args.title !== undefined ? args.title : (angebot.betreff || '');
+    positionen = Array.isArray(args.items) && args.items.length
+      ? args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }))
+      : (angebot.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
+  } else {
+    if (!args.customer_id) throw new Error('Entweder "quote_id" oder "customer_id" + "items" ist erforderlich.');
+    const kunde = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
+    if (!kunde) throw new Error('customer_id verweist auf keinen vorhandenen Kunden.');
+    if (!Array.isArray(args.items) || !args.items.length) throw new Error('Feld "items" ist erforderlich, wenn keine quote_id angegeben ist.');
+    kundeId = args.customer_id;
+    projektId = args.project_id || '';
+    betreff = args.title || '';
+    positionen = args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }));
+  }
+  const totals = calcTotals(positionen);
+  const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+  const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
+  await Promise.all([
+    setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
+    setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
+  ]);
+  const id = crypto.randomUUID();
+  const data = {
+    id, nummer, kundeId, projektId, angebotId: args.quote_id || null, auftragsbestaetigungId: null,
+    datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
+    status: 'offen', betreff, notizen: 'Von der KI-Bürokraft als Entwurf angelegt.', positionen, bezahltAm: '',
+    createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
+    steuerart: settingsDoc.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
+    verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: 'ueberweisung',
+    unterschriftKunde: '', unterschriftMitarbeiter: '',
+    netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
+  };
+  const created = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id, data });
+  await logAction(ctx, { action: 'mcp.invoices.create', entityType: 'rechnungen', entityId: id, newValue: data, status: 'success' });
+  return mcpToolSuccess(invoiceToApi(created));
+}
+
+async function fuehreMarkInvoicePaidAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  if (!args.invoice_id) throw new Error('Feld "invoice_id" ist erforderlich.');
+  const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+  if (!existing) throw new Error('Rechnung wurde nicht gefunden.');
+  if (existing.status === 'storniert') throw new Error('Eine stornierte Rechnung kann nicht als bezahlt markiert werden.');
+  const changes = { bezahltAm: args.paid_at || todayISO() };
+  if (args.payment_method) changes.zahlungsart = args.payment_method;
+  const TOLERANZ = 0.01;
+  const teilbetrag = typeof args.partial_amount === 'number' ? args.partial_amount : null;
+  if (teilbetrag != null && teilbetrag > 0 && teilbetrag < (existing.brutto || 0) - TOLERANZ) {
+    changes.status = 'teilbezahlt';
+    changes.teilzahlungBetrag = Math.round(teilbetrag * 100) / 100;
+  } else {
+    changes.status = 'bezahlt';
+  }
+  if (changes.status === 'bezahlt' && (existing.skontoProzent || 0) > 0) changes.skontoGenutzt = args.skonto_deducted === true;
+  const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
+  const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+  await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: updated, settingsDoc });
+  await logAction(ctx, { action: 'mcp.invoices.mark_paid', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: changes, status: 'success' });
+  return mcpToolSuccess(invoiceToApi(updated));
+}
+
+async function fuehreCancelInvoiceAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  if (!args.invoice_id) throw new Error('Feld "invoice_id" ist erforderlich.');
+  if (!args.reason) throw new Error('Feld "reason" ist erforderlich.');
+  const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+  if (!existing) throw new Error('Rechnung wurde nicht gefunden.');
+  if (existing.status === 'storniert') throw new Error('Diese Rechnung ist bereits storniert.');
+  if (!existing.versendet) throw new Error('Diese Rechnung wurde noch nicht versendet - für einen Entwurf einfach werkora_update_invoice nutzen statt zu stornieren.');
+  const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
+  const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
+  await Promise.all([
+    setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
+    setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
+  ]);
+  const stornoPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID(), menge: -(Number(p.menge) || 0) }));
+  const stornoTotals = calcTotals(stornoPositionen);
+  const stornoId = crypto.randomUUID();
+  const storno = {
+    id: stornoId, nummer: stornoNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: null, auftragsbestaetigungId: null,
+    datum: todayISO(), leistungsdatum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${existing.nummer}`,
+    notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
+    versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: existing.nummer, storniertDurchNummer: '',
+    netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
+    steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
+    verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
+    unterschriftKunde: '', unterschriftMitarbeiter: '',
+    stornoGrund: 'sonstiges', stornoGrundText: args.reason,
+  };
+  const createdStorno = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: stornoId, data: storno });
+  await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: createdStorno, settingsDoc });
+  const stornierteOriginal = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: { status: 'storniert', storniertDurchNummer: stornoNummer } });
+  await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: stornierteOriginal, settingsDoc });
+  await logAction(ctx, { action: 'mcp.invoices.cancel', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: { status: 'storniert', storniertDurchNummer: stornoNummer }, status: 'success' });
+
+  let replacement = null;
+  if (args.create_replacement) {
+    const { nummer: repNummer, datum: rDatum, zaehler: rZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: nDatum, zaehler: nZaehler });
+    await Promise.all([
+      setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: rDatum }),
+      setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: rZaehler }),
+    ]);
+    const repPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
+    const repTotals = calcTotals(repPositionen);
+    const repId = crypto.randomUUID();
+    const repData = {
+      id: repId, nummer: repNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: existing.angebotId || null, auftragsbestaetigungId: existing.auftragsbestaetigungId || null,
+      datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
+      status: 'offen', betreff: existing.betreff || '', notizen: `Ersatzrechnung für stornierte Rechnung ${existing.nummer} - Positionen zur Korrektur übernommen, bitte prüfen.`,
+      positionen: repPositionen, bezahltAm: '', createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
+      steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
+      verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
+      unterschriftKunde: '', unterschriftMitarbeiter: '',
+      netto: repTotals.netto, steuer: repTotals.steuer, brutto: repTotals.brutto,
+    };
+    const createdRep = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: repId, data: repData });
+    await logAction(ctx, { action: 'mcp.invoices.create_replacement', entityType: 'rechnungen', entityId: repId, newValue: repData, status: 'success' });
+    replacement = invoiceToApi(createdRep);
+  }
+  return mcpToolSuccess({ cancelled: invoiceToApi(stornierteOriginal), storno: invoiceToApi(createdStorno), replacement });
+}
+
 /**
  * Sendet (best effort, ohne den Aufrufer zu blockieren) ein Webhook-Event an
  * die in den Einstellungen hinterlegte URL (Vorgabe Abschnitt 32). Format:
@@ -1646,6 +1953,32 @@ const MCP_TOOLS = [
       required: ['invoice_id', 'reason'],
     },
   },
+  {
+    name: 'werkora_list_pending_approvals',
+    description: 'Zeigt alle noch offenen Freigabe-Anfragen (siehe werkora_create_invoice/werkora_mark_invoice_paid/werkora_cancel_invoice/werkora_create_mahnung - diese legen bewusst keine Rechnung/Mahnung mehr sofort an, sondern erst eine Freigabe-Anfrage, die hier sichtbar ist).',
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'werkora_approve_action',
+    description: 'Gibt eine mit approval_id bezeichnete, noch offene Freigabe-Anfrage frei und führt die ursprünglich angefragte Aktion (Rechnung anlegen/als bezahlt markieren/stornieren, Mahnung anlegen) jetzt tatsächlich aus. Vor dem Freigeben unbedingt beim Nutzer nachfragen, ob die in der Freigabe-Anfrage genannte Zusammenfassung korrekt ist.',
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: { approval_id: { type: 'string' } },
+      required: ['approval_id'],
+    },
+  },
+  {
+    name: 'werkora_reject_action',
+    description: 'Lehnt eine mit approval_id bezeichnete, noch offene Freigabe-Anfrage ab - die ursprünglich angefragte Aktion wird NICHT ausgeführt.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: { approval_id: { type: 'string' }, reason: { type: 'string' } },
+      required: ['approval_id'],
+    },
+  },
 ];
 
 /**
@@ -1962,37 +2295,23 @@ async function callWerkoraMcpTool(name, args, ctx) {
       })));
     }
     case 'werkora_create_mahnung': {
+      // P0-Sicherheitskorrektur 28.10.2026: führt nicht mehr sofort aus,
+      // sondern legt nur noch einen Freigabe-Vorschlag an (siehe
+      // fuehreCreateMahnungAus weiter unten für die tatsächliche Logik,
+      // die jetzt erst nach werkora_approve_action läuft). Eine leichte
+      // Existenzprüfung hier, damit keine Freigabe-Anfrage für eine
+      // offensichtlich falsche invoice_id entsteht - die eigentliche,
+      // massgebliche Prüfung (Status/Fälligkeit/Mahnstufe) passiert
+      // trotzdem erst in fuehreCreateMahnungAus, da sich der Zustand bis
+      // zur Freigabe ändern kann.
       if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
-      const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
-      if (!rechnung) return mcpToolError('Rechnung nicht gefunden.');
-      const heute = todayISO();
-      if (!RECHNUNG_OFFEN_STATUS.includes(rechnung.status) || !rechnung.faelligAm || rechnung.faelligAm >= heute) {
-        return mcpToolError('Diese Rechnung ist nicht überfällig - keine Mahnung nötig.');
-      }
-      const [bisherigeMahnungen, settingsDoc] = await Promise.all([
-        firestoreList({ accessToken, projectId, collection: 'mahnungen' }),
-        firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' }),
-      ]);
-      const mahnungenFuerRechnung = bisherigeMahnungen
-        .filter((m) => m.rechnungId === args.invoice_id)
-        .sort((a, b) => (a.datum || '').localeCompare(b.datum || ''));
-      const letzte = mahnungenFuerRechnung[mahnungenFuerRechnung.length - 1];
-      const wartetBis = letzte ? letzte.neueFrist : rechnung.faelligAm;
-      const bereit = !wartetBis || wartetBis < heute;
-      if (!bereit) return mcpToolError(`Zahlungsfrist der letzten Mahnung läuft noch bis ${wartetBis} - noch keine neue Mahnstufe fällig.`);
-      const stufe = Math.min(mahnungenFuerRechnung.length + 1, 3);
-      const frist = Number(settingsDoc?.mahnfristTage) || 10;
-      const gebuehr = settingsDoc?.mahnGebuehr?.[stufe] ?? 0;
-      const neueMahnung = {
-        id: crypto.randomUUID(), rechnungId: args.invoice_id, stufe, datum: heute,
-        neueFrist: addDaysISO(heute, frist), gebuehr,
-        text: (MAHNUNG_STUFE_TEXT[stufe] || (() => ''))(frist),
-        createdAt: new Date().toISOString(),
-      };
-      const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id: neueMahnung.id, data: neueMahnung });
-      await logAction(ctx, { action: 'mcp.mahnungen.create', entityType: 'mahnungen', entityId: created.id, newValue: created, status: 'success' });
-      await fireWebhook(ctx, 'reminder.created', { ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
-      return mcpToolSuccess({ ...reminderToApi(created), invoice_number: rechnung.nummer || '' });
+      const rechnungVorab = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
+      if (!rechnungVorab) return mcpToolError('Rechnung nicht gefunden.');
+      const freigabe = await erstelleFinanzFreigabe(ctx, {
+        aktion: 'werkora_create_mahnung', args,
+        zusammenfassung: `Neue Mahnung für Rechnung ${rechnungVorab.nummer || args.invoice_id} anlegen.`,
+      });
+      return finanzFreigabeAntwort(freigabe);
     }
     case 'werkora_get_dashboard': {
       const [kunden, aufgaben, termine, angebote, rechnungen] = await Promise.all([
@@ -2101,47 +2420,24 @@ async function callWerkoraMcpTool(name, args, ctx) {
       return mcpToolSuccess(expenseToApi(updated));
     }
     case 'werkora_create_invoice': {
-      let kundeId, projektId, betreff, positionen;
+      // P0-Sicherheitskorrektur 28.10.2026: siehe fuehreCreateInvoiceAus
+      // weiter oben für die tatsächliche Anlage, die jetzt erst nach
+      // werkora_approve_action läuft. Leichte Vorab-Prüfung hier nur für
+      // eine aussagekräftige Zusammenfassung in der Freigabe-Anfrage.
+      if (!args.quote_id && !args.customer_id) return mcpToolError('Entweder "quote_id" oder "customer_id" + "items" ist erforderlich.');
+      let zusammenfassung = 'Neue Rechnung als Entwurf anlegen';
       if (args.quote_id) {
         const angebot = await firestoreGet({ accessToken, projectId, collection: 'angebote', id: args.quote_id });
         if (!angebot) return mcpToolError('quote_id verweist auf kein vorhandenes Angebot.');
-        kundeId = args.customer_id || angebot.kundeId;
-        projektId = args.project_id !== undefined ? args.project_id : (angebot.projektId || '');
-        betreff = args.title !== undefined ? args.title : (angebot.betreff || '');
-        positionen = Array.isArray(args.items) && args.items.length
-          ? args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }))
-          : (angebot.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
+        zusammenfassung += ` aus Angebot ${angebot.nummer || args.quote_id}.`;
       } else {
-        if (!args.customer_id) return mcpToolError('Entweder "quote_id" oder "customer_id" + "items" ist erforderlich.');
         const kunde = await firestoreGet({ accessToken, projectId, collection: 'kunden', id: args.customer_id });
         if (!kunde) return mcpToolError('customer_id verweist auf keinen vorhandenen Kunden.');
         if (!Array.isArray(args.items) || !args.items.length) return mcpToolError('Feld "items" ist erforderlich, wenn keine quote_id angegeben ist.');
-        kundeId = args.customer_id;
-        projektId = args.project_id || '';
-        betreff = args.title || '';
-        positionen = args.items.map((it) => ({ id: crypto.randomUUID(), katalogId: it.article_id || '', bezeichnung: it.title || '', beschreibung: it.description || '', einheit: it.unit || 'Stk.', menge: Number(it.quantity) || 0, einzelpreis: Number(it.unit_price_net) || 0, steuersatz: it.vat_rate ?? 19 }));
+        zusammenfassung += ` für ${kunde.firma || args.customer_id}.`;
       }
-      const totals = calcTotals(positionen);
-      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
-      const { nummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
-      await Promise.all([
-        setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
-        setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
-      ]);
-      const id = crypto.randomUUID();
-      const data = {
-        id, nummer, kundeId, projektId, angebotId: args.quote_id || null, auftragsbestaetigungId: null,
-        datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
-        status: 'offen', betreff, notizen: 'Von der KI-Bürokraft als Entwurf angelegt.', positionen, bezahltAm: '',
-        createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
-        steuerart: settingsDoc.kleinunternehmer ? 'kleinunternehmer' : 'regel', rechnungstyp: 'rechnung',
-        verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: 'ueberweisung',
-        unterschriftKunde: '', unterschriftMitarbeiter: '',
-        netto: totals.netto, steuer: totals.steuer, brutto: totals.brutto,
-      };
-      const created = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id, data });
-      await logAction(ctx, { action: 'mcp.invoices.create', entityType: 'rechnungen', entityId: id, newValue: data, status: 'success' });
-      return mcpToolSuccess(invoiceToApi(created));
+      const freigabe = await erstelleFinanzFreigabe(ctx, { aktion: 'werkora_create_invoice', args, zusammenfassung });
+      return finanzFreigabeAntwort(freigabe);
     }
     case 'werkora_update_invoice': {
       if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
@@ -2163,96 +2459,51 @@ async function callWerkoraMcpTool(name, args, ctx) {
       return mcpToolSuccess(invoiceToApi(updated));
     }
     case 'werkora_mark_invoice_paid': {
+      // P0-Sicherheitskorrektur 28.10.2026: siehe fuehreMarkInvoicePaidAus
+      // weiter oben für die tatsächliche Ausführung (erst nach
+      // werkora_approve_action, erzeugt dann auch die Buchungssätze).
       if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
       const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
       if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
       if (existing.status === 'storniert') return mcpToolError('Eine stornierte Rechnung kann nicht als bezahlt markiert werden.');
-      const changes = { bezahltAm: args.paid_at || todayISO() };
-      if (args.payment_method) changes.zahlungsart = args.payment_method;
-      // Teilzahlung: TOLERANZ wie beim bestehenden Zahlungsabgleich
-      // (bankabgleich.js/zahlungsabgleich.js) - ein Betrag, der (abgesehen
-      // von Rundung) dem vollen Rechnungsbetrag entspricht, zählt als voll
-      // bezahlt statt als technisch "teilbezahlt" liegen zu bleiben.
-      const TOLERANZ = 0.01;
-      const teilbetrag = typeof args.partial_amount === 'number' ? args.partial_amount : null;
-      if (teilbetrag != null && teilbetrag > 0 && teilbetrag < (existing.brutto || 0) - TOLERANZ) {
-        changes.status = 'teilbezahlt';
-        changes.teilzahlungBetrag = Math.round(teilbetrag * 100) / 100;
-      } else {
-        changes.status = 'bezahlt';
-      }
-      // Ohne diese Angabe würde syncBuchungFuerRechnung() unten immer den
-      // vollen statt des ggf. per Skonto reduzierten Betrags verbuchen (siehe
-      // journal.js) - dieselbe Abfrage wie im Werkora-Bearbeiten-Formular/der
-      // Tabellen-Inline-Statusänderung, nur hier explizit als Tool-Parameter.
-      // Nur relevant, wenn die Rechnung dadurch VOLL bezahlt wird - eine
-      // Teilzahlung wird unabhängig vom Skonto-Status anteilig verbucht
-      // (siehe erzeugeBuchungenFuerRechnung oben).
-      if (changes.status === 'bezahlt' && (existing.skontoProzent || 0) > 0) changes.skontoGenutzt = args.skonto_deducted === true;
-      const updated = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: changes });
-      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
-      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: updated, settingsDoc });
-      await logAction(ctx, { action: 'mcp.invoices.mark_paid', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: changes, status: 'success' });
-      return mcpToolSuccess(invoiceToApi(updated));
+      const freigabe = await erstelleFinanzFreigabe(ctx, {
+        aktion: 'werkora_mark_invoice_paid', args,
+        zusammenfassung: `Rechnung ${existing.nummer || args.invoice_id} als ${typeof args.partial_amount === 'number' ? 'teilweise' : 'vollständig'} bezahlt markieren und Buchungssätze erzeugen.`,
+      });
+      return finanzFreigabeAntwort(freigabe);
     }
     case 'werkora_cancel_invoice': {
+      // P0-Sicherheitskorrektur 28.10.2026: siehe fuehreCancelInvoiceAus
+      // weiter oben für die tatsächliche Stornierung (erst nach
+      // werkora_approve_action).
       if (!args.invoice_id) return mcpToolError('Feld "invoice_id" ist erforderlich.');
       if (!args.reason) return mcpToolError('Feld "reason" ist erforderlich.');
       const existing = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id });
       if (!existing) return mcpToolError('Rechnung wurde nicht gefunden.');
       if (existing.status === 'storniert') return mcpToolError('Diese Rechnung ist bereits storniert.');
       if (!existing.versendet) return mcpToolError('Diese Rechnung wurde noch nicht versendet - für einen Entwurf einfach werkora_update_invoice nutzen statt zu stornieren.');
-      const settingsDoc = (await firestoreGet({ accessToken, projectId, collection: 'einstellungen', id: 'global' })) || {};
-      const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: settingsDoc.rechnungNummerDatum, zaehler: settingsDoc.rechnungNummerZaehler });
-      await Promise.all([
-        setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: nDatum }),
-        setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: nZaehler }),
-      ]);
-      const stornoPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID(), menge: -(Number(p.menge) || 0) }));
-      const stornoTotals = calcTotals(stornoPositionen);
-      const stornoId = crypto.randomUUID();
-      const storno = {
-        id: stornoId, nummer: stornoNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: null, auftragsbestaetigungId: null,
-        datum: todayISO(), leistungsdatum: todayISO(), faelligAm: todayISO(), status: 'storniert', betreff: `Stornorechnung zu ${existing.nummer}`,
-        notizen: '', positionen: stornoPositionen, bezahltAm: '', createdAt: new Date().toISOString(),
-        versendet: true, versendetAm: new Date().toISOString(), stornoVonNummer: existing.nummer, storniertDurchNummer: '',
-        netto: stornoTotals.netto, steuer: stornoTotals.steuer, brutto: stornoTotals.brutto,
-        steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
-        verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
-        unterschriftKunde: '', unterschriftMitarbeiter: '',
-        stornoGrund: 'sonstiges', stornoGrundText: args.reason,
-      };
-      const createdStorno = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: stornoId, data: storno });
-      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: createdStorno, settingsDoc });
-      const stornierteOriginal = await firestoreUpdate({ accessToken, projectId, collection: 'rechnungen', id: args.invoice_id, data: { status: 'storniert', storniertDurchNummer: stornoNummer } });
-      await syncBuchungFuerRechnung({ accessToken, projectId, rechnung: stornierteOriginal, settingsDoc });
-      await logAction(ctx, { action: 'mcp.invoices.cancel', entityType: 'rechnungen', entityId: args.invoice_id, oldValue: existing, newValue: { status: 'storniert', storniertDurchNummer: stornoNummer }, status: 'success' });
-
-      let replacement = null;
-      if (args.create_replacement) {
-        const { nummer: repNummer, datum: rDatum, zaehler: rZaehler } = nextDailyNummer(settingsDoc.rechnungPrefix || 'RE-', { datum: nDatum, zaehler: nZaehler });
-        await Promise.all([
-          setSettingValue({ accessToken, projectId, key: 'rechnungNummerDatum', value: rDatum }),
-          setSettingValue({ accessToken, projectId, key: 'rechnungNummerZaehler', value: rZaehler }),
-        ]);
-        const repPositionen = (existing.positionen || []).map((p) => ({ ...p, id: crypto.randomUUID() }));
-        const repTotals = calcTotals(repPositionen);
-        const repId = crypto.randomUUID();
-        const repData = {
-          id: repId, nummer: repNummer, kundeId: existing.kundeId, projektId: existing.projektId, angebotId: existing.angebotId || null, auftragsbestaetigungId: existing.auftragsbestaetigungId || null,
-          datum: todayISO(), leistungsdatum: todayISO(), faelligAm: addDaysISO(todayISO(), Number(settingsDoc.zahlungszielTage) || 14),
-          status: 'offen', betreff: existing.betreff || '', notizen: `Ersatzrechnung für stornierte Rechnung ${existing.nummer} - Positionen zur Korrektur übernommen, bitte prüfen.`,
-          positionen: repPositionen, bezahltAm: '', createdAt: new Date().toISOString(), versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
-          steuerart: existing.steuerart || 'regel', rechnungstyp: existing.rechnungstyp || 'rechnung',
-          verrechneteAbschlaege: [], verrechnetIn: '', skontoProzent: 0, skontoTage: 0, zahlungsart: existing.zahlungsart || 'ueberweisung',
-          unterschriftKunde: '', unterschriftMitarbeiter: '',
-          netto: repTotals.netto, steuer: repTotals.steuer, brutto: repTotals.brutto,
-        };
-        const createdRep = await firestoreCreate({ accessToken, projectId, collection: 'rechnungen', id: repId, data: repData });
-        await logAction(ctx, { action: 'mcp.invoices.create_replacement', entityType: 'rechnungen', entityId: repId, newValue: repData, status: 'success' });
-        replacement = invoiceToApi(createdRep);
-      }
-      return mcpToolSuccess({ cancelled: invoiceToApi(stornierteOriginal), storno: invoiceToApi(createdStorno), replacement });
+      const freigabe = await erstelleFinanzFreigabe(ctx, {
+        aktion: 'werkora_cancel_invoice', args,
+        zusammenfassung: `Rechnung ${existing.nummer || args.invoice_id} stornieren (Grund: ${args.reason})${args.create_replacement ? ' und Ersatzrechnung anlegen' : ''}.`,
+      });
+      return finanzFreigabeAntwort(freigabe);
+    }
+    case 'werkora_list_pending_approvals': {
+      let freigaben = await firestoreList({ accessToken, projectId, collection: FINANZ_FREIGABE_COLLECTION });
+      freigaben = freigaben.filter((f) => f.status === FINANZ_FREIGABE_STATUS.OFFEN).sort((a, b) => (a.angefordertAm || '').localeCompare(b.angefordertAm || ''));
+      return mcpToolSuccess(freigaben.map((f) => ({ approval_id: f.id, action: f.aktion, summary: f.zusammenfassung, requested_at: f.angefordertAm, expires_at: f.ablaufAm })));
+    }
+    case 'werkora_approve_action': {
+      if (!args.approval_id) return mcpToolError('Feld "approval_id" ist erforderlich.');
+      const ergebnis = await bearbeiteFinanzFreigabe(ctx, args.approval_id, { freigeben: true });
+      if (!ergebnis.ok) return mcpToolError(ergebnis.message);
+      return ergebnis.result;
+    }
+    case 'werkora_reject_action': {
+      if (!args.approval_id) return mcpToolError('Feld "approval_id" ist erforderlich.');
+      const ergebnis = await bearbeiteFinanzFreigabe(ctx, args.approval_id, { freigeben: false, kommentar: args.reason });
+      if (!ergebnis.ok) return mcpToolError(ergebnis.message);
+      return ergebnis.result;
     }
     default:
       return mcpToolError(`Unbekanntes Tool: "${name}".`);
@@ -3109,15 +3360,39 @@ export default {
           return okResponse(mahnungen.map(reminderToApi));
         }
         if (request.method === 'POST' && !teile[1]) {
+          // P0-Sicherheitskorrektur 28.10.2026: legt nicht mehr sofort eine
+          // Mahnung an, sondern nur noch eine Freigabe-Anfrage (siehe
+          // fuehreCreateMahnungRestAus für die tatsächliche Ausführung,
+          // erst nach POST /approvals/{id}/approve).
           let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
           if (!body.invoice_id || !body.level) return errorResponse('VALIDATION_ERROR', 'Felder "invoice_id" und "level" sind erforderlich.', 400);
           const rechnung = await firestoreGet({ accessToken, projectId, collection: 'rechnungen', id: body.invoice_id });
           if (!rechnung) return errorResponse('INVOICE_NOT_FOUND', 'invoice_id verweist auf keine vorhandene Rechnung.', 404);
-          const id = crypto.randomUUID();
-          const data = { id, rechnungId: body.invoice_id, stufe: body.level, datum: todayISO(), neueFrist: body.new_due_date || '', gebuehr: body.fee || 0, text: body.text || '', createdAt: new Date().toISOString() };
-          const created = await firestoreCreate({ accessToken, projectId, collection: 'mahnungen', id, data });
-          await logAction(ctx, { action: 'reminders.create', entityType: 'mahnungen', entityId: id, newValue: data, status: 'success' });
-          return okResponse(reminderToApi(created), 201);
+          const freigabe = await erstelleFinanzFreigabe(ctx, {
+            aktion: 'reminders.create', args: body,
+            zusammenfassung: `Mahnstufe ${body.level} für Rechnung ${rechnung.nummer || body.invoice_id} anlegen.`,
+          });
+          return okResponse({ approval_required: true, approval_id: freigabe.id, summary: freigabe.zusammenfassung, expires_at: freigabe.ablaufAm }, 202);
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
+      }
+
+      // --- Freigabe-Warteschlange für die finanzwirksamen KI-Aktionen oben
+      // (P0-Sicherheitskorrektur 28.10.2026) - das REST-Pendant zu
+      // werkora_list_pending_approvals/werkora_approve_action/
+      // werkora_reject_action. ---
+      if (teile[0] === 'approvals') {
+        if (request.method === 'GET' && !teile[1]) {
+          let freigaben = await firestoreList({ accessToken, projectId, collection: FINANZ_FREIGABE_COLLECTION });
+          freigaben = freigaben.filter((f) => f.status === FINANZ_FREIGABE_STATUS.OFFEN).sort((a, b) => (a.angefordertAm || '').localeCompare(b.angefordertAm || ''));
+          return okResponse(freigaben.map((f) => ({ approval_id: f.id, action: f.aktion, summary: f.zusammenfassung, requested_at: f.angefordertAm, expires_at: f.ablaufAm })));
+        }
+        if (request.method === 'POST' && teile[1] && (teile[2] === 'approve' || teile[2] === 'reject')) {
+          let body = {}; try { body = await request.json(); } catch { /* Body optional (z.B. ohne reason) */ }
+          const ergebnis = await bearbeiteFinanzFreigabe(ctx, teile[1], { freigeben: teile[2] === 'approve', kommentar: body.reason });
+          if (!ergebnis.ok) return errorResponse(ergebnis.code, ergebnis.message, ergebnis.code === 'APPROVAL_NOT_FOUND' ? 404 : 409);
+          const inhalt = JSON.parse(ergebnis.result.content[0].text);
+          return okResponse(inhalt);
         }
         return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }

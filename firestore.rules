@@ -275,6 +275,19 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if false;
     }
+    // Freigabe-Warteschlange der KI-Bürokraft-API (cloudflare-worker-ki-
+    // buerokraft, P0-Sicherheitskorrektur 28.10.2026) für
+    // werkora_create_invoice/werkora_mark_invoice_paid/
+    // werkora_cancel_invoice/werkora_create_mahnung - admin+büro dürfen
+    // lesen (dieselbe Berechtigung wie für rechnungen/mahnungen selbst),
+    // aber NIE direkt schreiben: ein roher Firestore-Write würde nur das
+    // Status-Feld setzen, ohne die eigentliche Aktion auszuführen - die
+    // Freigabe läuft ausschließlich über den Worker (Admin-SDK, umgeht
+    // diese Regel ohnehin), siehe dessen bearbeiteFinanzFreigabe().
+    match /mcpFinanzFreigaben/{docId} {
+      allow read: if isAdminOrBuero();
+      allow write: if false;
+    }
     // Rechnungsentwürfe (Phase 3) - bewusst NICHT die echte Collection
     // "rechnungen" (die ist GoBD-gesperrt, siehe cloudflare-worker-ki-
     // buerokraft Kopfkommentar) - nur ein admin-lesbarer, worker-seitig
