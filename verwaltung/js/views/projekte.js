@@ -370,6 +370,7 @@ export async function render(container, opts = {}) {
       title: 'Projekt-Status verwalten',
       store: 'kanbanSpalten',
       items: spalten,
+      zeigeGeschlossen: true,
       canDelete: (it) => !projekte.some((p) => p.status === it.id),
       onChange: () => render(container, opts),
     });

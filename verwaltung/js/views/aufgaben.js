@@ -162,6 +162,7 @@ export async function render(container) {
       title: 'Aufgaben-Status verwalten',
       store: 'aufgabenStatus',
       items: aufgabenStatus,
+      zeigeGeschlossen: true,
       canDelete: (it) => !aufgaben.some((a) => a.status === it.id),
       onChange: () => render(container),
     });

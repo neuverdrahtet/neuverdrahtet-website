@@ -6,8 +6,15 @@ import { openModal, confirmDelete } from './ui.js';
  * Generic "Status verwalten" modal: add/rename/recolor/reorder/delete entries
  * of a flat status list (kanbanSpalten, terminStatus, ...). Persists each
  * change immediately to `store` and calls onChange() when the modal closes.
+ *
+ * zeigeGeschlossen: zeigt eine "Zählt als abgeschlossen"-Checkbox pro Zeile.
+ * Bug gefunden 28.10.2026: dashboard.js/projekte.js lesen bei kanbanSpalten
+ * das Feld "geschlossen", um "Aktive Projekte" zu berechnen - ohne dieses
+ * UI-Feld konnte es nie gesetzt werden (neue/umbenannte Spalten blieben für
+ * immer "aktiv"), wodurch das Dashboard dauerhaft zu viele Projekte als
+ * aktiv zählte statt mit der Pipeline übereinzustimmen.
  */
-export function openStatusManager({ title = 'Status verwalten', store, items, colorable = true, canDelete = () => true, onChange }) {
+export function openStatusManager({ title = 'Status verwalten', store, items, colorable = true, zeigeGeschlossen = false, canDelete = () => true, onChange }) {
   let list = [...items].sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
 
   const { body, close } = openModal({
@@ -25,6 +32,12 @@ export function openStatusManager({ title = 'Status verwalten', store, items, co
       <div class="status-row" data-id="${it.id}">
         ${colorable ? `<input type="color" class="s-farbe" value="${it.farbe || '#2b7fd6'}">` : ''}
         <input type="text" class="s-titel" value="${escapeHtml(it.titel)}">
+        ${zeigeGeschlossen ? `
+          <label class="flex-row" style="gap:4px;font-size:12.5px;white-space:nowrap;cursor:pointer">
+            <input type="checkbox" class="s-geschlossen" ${it.geschlossen ? 'checked' : ''}>
+            Abgeschlossen
+          </label>
+        ` : ''}
         <button type="button" class="btn btn-sm btn-ghost s-up" title="Nach oben">↑</button>
         <button type="button" class="btn btn-sm btn-ghost s-down" title="Nach unten">↓</button>
         <button type="button" class="btn btn-sm btn-ghost s-del" title="Löschen">✕</button>
@@ -56,6 +69,13 @@ export function openStatusManager({ title = 'Status verwalten', store, items, co
         it.titel = val;
         await put(store, it);
       });
+      const geschlossenInput = row.querySelector('.s-geschlossen');
+      if (geschlossenInput) {
+        geschlossenInput.addEventListener('change', async () => {
+          it.geschlossen = geschlossenInput.checked;
+          await put(store, it);
+        });
+      }
       row.querySelector('.s-up').addEventListener('click', async () => {
         if (i === 0) return;
         [list[i - 1], list[i]] = [list[i], list[i - 1]];
