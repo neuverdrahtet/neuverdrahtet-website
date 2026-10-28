@@ -48,6 +48,11 @@ export async function render(container) {
             const meta = LABELS[e.storeName] || { label: e.storeName, icon: '📦', title: () => e.id };
             const loeschbar = istEndgueltigLoeschbar(e.storeName, e);
             const grenze = fruehesterEndgueltigLoeschZeitpunkt(e.storeName, e);
+            // Eine versendete Rechnung wird NIE löschbar (nur Storno +
+            // Ersatzrechnung, siehe db.js istEndgueltigLoeschbar/
+            // firestore.rules) - das braucht einen eigenen Hinweistext statt
+            // eines (hier irreführenden) künftigen Löschdatums.
+            const niemalsLoeschbar = e.storeName === 'rechnungen' && e.versendet === true;
             return `
               <tr>
                 <td>${meta.icon} ${escapeHtml(meta.label)}</td>
@@ -57,7 +62,9 @@ export async function render(container) {
                   <button type="button" class="btn btn-sm" data-restore data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">↩️ Wiederherstellen</button>
                   ${loeschbar
                     ? `<button type="button" class="btn btn-sm btn-danger" data-purge data-store="${escapeHtml(e.storeName)}" data-id="${escapeHtml(e.id)}">🗑 Endgültig löschen</button>`
-                    : `<button type="button" class="btn btn-sm" disabled title="Gesetzliche Aufbewahrungspflicht (GoBD) - löschbar erst ab ${escapeHtml(formatDate(grenze))}">🔒 Aufbewahrungspflicht bis ${escapeHtml(formatDate(grenze))}</button>`}
+                    : niemalsLoeschbar
+                      ? `<button type="button" class="btn btn-sm" disabled title="Versendete Rechnungen sind GoBD-gesperrt und lassen sich nie endgültig löschen - nur Storno + Ersatzrechnung">🔒 GoBD-gesperrt</button>`
+                      : `<button type="button" class="btn btn-sm" disabled title="Gesetzliche Aufbewahrungspflicht (GoBD) - löschbar erst ab ${escapeHtml(formatDate(grenze))}">🔒 Aufbewahrungspflicht bis ${escapeHtml(formatDate(grenze))}</button>`}
                 </td>
               </tr>
             `;

@@ -411,6 +411,11 @@ export function fruehesterEndgueltigLoeschZeitpunkt(storeName, row) {
 }
 
 export function istEndgueltigLoeschbar(storeName, row) {
+  // Eine versendete (GoBD-gesperrte) Rechnung lässt sich gar nicht mehr
+  // hart löschen - weder jetzt noch nach Ablauf der Aufbewahrungsfrist
+  // (siehe firestore.rules, die denselben Fall serverseitig sperrt; nur
+  // Storno + Ersatzrechnung ist der vorgesehene Korrekturweg).
+  if (storeName === 'rechnungen' && row?.versendet === true) return false;
   const grenze = fruehesterEndgueltigLoeschZeitpunkt(storeName, row);
   return !grenze || grenze.getTime() <= Date.now();
 }
@@ -522,7 +527,12 @@ export async function purgeOldTrash() {
     for (const row of rows) {
       if (!row._geloescht || !row._geloeschtAm) continue;
       if (!istEndgueltigLoeschbar(storeName, row)) continue; // noch innerhalb der Aufbewahrungsfrist
-      await hardRemove(storeName, row.id);
+      // Eine einzelne, von firestore.rules verweigerte Löschung (z.B. eine
+      // versendete Rechnung - siehe firestore.rules, die den Hard-Delete
+      // für versendete Rechnungen zusätzlich serverseitig sperrt) darf die
+      // Bereinigung der übrigen, unabhängigen Papierkorb-Einträge nicht
+      // abbrechen.
+      await hardRemove(storeName, row.id).catch(() => { /* nächster Versuch beim nächsten Start */ });
     }
   }
 }

@@ -77,5 +77,15 @@ pruefe('A10: eine Rechnung genau an der 10-Jahres-Grenze ist noch nicht löschba
   assert(istEndgueltigLoeschbar('rechnungen', { _geloescht: true, _geloeschtAm: knappDrueber }) === true, 'einen Tag nach Ablauf');
 });
 
+pruefe('A11: eine VERSENDETE Rechnung ist auch nach Ablauf der 10-Jahres-Frist nie löschbar (nur Storno)', () => {
+  const laengstAbgelaufen = new Date(Date.now() - (ZEHN_JAHRE_TAGE + 365) * 24 * 60 * 60 * 1000).toISOString();
+  assert(istEndgueltigLoeschbar('rechnungen', { _geloescht: true, _geloeschtAm: laengstAbgelaufen, versendet: true }) === false, 'versendet + Frist abgelaufen -> trotzdem nicht löschbar');
+});
+
+pruefe('A12: eine NICHT versendete Rechnung (Entwurf) folgt weiterhin der normalen 10-Jahres-Frist', () => {
+  const laengstAbgelaufen = new Date(Date.now() - (ZEHN_JAHRE_TAGE + 365) * 24 * 60 * 60 * 1000).toISOString();
+  assert(istEndgueltigLoeschbar('rechnungen', { _geloescht: true, _geloeschtAm: laengstAbgelaufen, versendet: false }) === true);
+});
+
 console.log(`--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 if (fehlgeschlagen > 0) process.exit(1);

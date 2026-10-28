@@ -515,6 +515,71 @@ await pruefe('R47: jarvisPartnerImportEntwuerfe ist NIEMALS clientseitig beschre
   await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'jarvisPartnerImportEntwuerfe', 'batch-1'), { partnerId: 'manipuliert' }));
 });
 
+// =============================================================================
+// P0-Sicherheitskorrektur 28.10.2026 (Master-Audit Bericht 03, Risiko #2):
+// eine versendete (GoBD-gesperrte) Rechnung darf sich serverseitig nicht
+// mehr inhaltlich ändern oder hart löschen lassen - vorher schützte nur
+// eine Oberflächen-Variable (rechnungen.js "locked"), ein direkter
+// Firestore-Zugriff mit admin/büro-Rolle konnte das umgehen.
+// =============================================================================
+
+const RECHNUNG_ENTWURF = {
+  nummer: 'R-2026-0001', datum: '2026-01-10', kundeId: 'kunde-1', projektId: '', positionen: [{ menge: 1, einzelpreis: 100 }],
+  netto: 100, steuer: 19, brutto: 119, steuerart: 'regel', betreff: 'Test', versendet: false,
+};
+const RECHNUNG_VERSENDET = { ...RECHNUNG_ENTWURF, nummer: 'R-2026-0002', versendet: true };
+
+await testEnv.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'rechnungen', 'r-entwurf'), RECHNUNG_ENTWURF);
+  await setDoc(doc(ctx.firestore(), 'rechnungen', 'r-versendet'), RECHNUNG_VERSENDET);
+});
+
+await pruefe('R48: büro kann eine neue Rechnung anlegen, mitarbeiter nicht', async () => {
+  await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-neu'), RECHNUNG_ENTWURF));
+  await assertFails(setDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'rechnungen', 'r-neu-2'), RECHNUNG_ENTWURF));
+});
+
+await pruefe('R49: ein NICHT versendeter Rechnungsentwurf lässt sich inhaltlich frei bearbeiten (admin/büro)', async () => {
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-entwurf'), { netto: 200, steuer: 38, brutto: 238 }));
+});
+
+await pruefe('R50: eine VERSENDETE Rechnung darf ihren Inhalt (Betrag) NICHT mehr ändern, auch nicht für admin', async () => {
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { netto: 999, steuer: 190, brutto: 1189 }));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-versendet'), { positionen: [{ menge: 99, einzelpreis: 1 }] }));
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { kundeId: 'kunde-2' }));
+});
+
+await pruefe('R51: eine VERSENDETE Rechnung darf weiterhin Status/Zahlungs-/Verknüpfungsfelder ändern (Storno, Zahlungseingang)', async () => {
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'bezahlt', bezahltAm: '2026-02-01', skontoGenutzt: false, zahlungsart: 'ueberweisung' }));
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'storniert', storniertDurchNummer: 'R-2026-0099', verrechneteGutschriften: [], gutschriftVerrechnetAm: '' }));
+});
+
+await pruefe('R52: eine VERSENDETE Rechnung lässt sich nie hart löschen, auch nicht als admin oder im Papierkorb', async () => {
+  await assertFails(deleteDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet')));
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'rechnungen', 'r-versendet'), { ...RECHNUNG_VERSENDET, _geloescht: true, _geloeschtAm: '2000-01-01T00:00:00.000Z' });
+  });
+  await assertFails(deleteDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet')));
+});
+
+await pruefe('R53: ein NICHT versendeter, bereits im Papierkorb liegender Rechnungsentwurf lässt sich endgültig löschen', async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'rechnungen', 'r-entwurf-geloescht'), { ...RECHNUNG_ENTWURF, _geloescht: true, _geloeschtAm: '2000-01-01T00:00:00.000Z' });
+  });
+  await assertSucceeds(deleteDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-entwurf-geloescht')));
+});
+
+await pruefe('R54: ein NICHT versendeter Entwurf, der NOCH NICHT im Papierkorb liegt, lässt sich nicht direkt hart löschen (muss erst weich gelöscht werden)', async () => {
+  await assertFails(deleteDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-entwurf')));
+});
+
+await pruefe('R55: ein Kunde sieht nur seine eigenen Rechnungen, mitarbeiter/techniker sehen gar keine', async () => {
+  await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('kunde-1').firestore(), 'rechnungen', 'r-entwurf')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('kunde-2').firestore(), 'rechnungen', 'r-entwurf')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'rechnungen', 'r-entwurf')));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext('techniker-1').firestore(), 'rechnungen', 'r-entwurf')));
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);
 await testEnv.cleanup();
 process.exit(fehlgeschlagen > 0 ? 1 : 0);
