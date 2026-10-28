@@ -16,6 +16,11 @@
 # secret). Ohne dieses Secret läuft dieser Workflow bei jedem betroffenen
 # Push fehl, bis es gesetzt ist - alle anderen Workflows/Worker sind davon
 # nicht betroffen.
+#
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03): deployt erst,
+# wenn der wiederverwendbare "test"-Job (.github/workflows/tests.yml, führt
+# "npm run test:all" inkl. der 56 Firestore-Regel-Tests aus) ohne Fehler
+# durchlief - vorher konnten fehlerhafte Security Rules ungetestet live gehen.
 name: Deploy Firebase Security Rules
 
 on:
@@ -30,7 +35,11 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

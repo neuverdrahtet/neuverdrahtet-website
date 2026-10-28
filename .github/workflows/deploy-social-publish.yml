@@ -5,6 +5,11 @@
 # weiterhin separat per "wrangler secret put" bzw. im Cloudflare-Dashboard
 # gepflegt (siehe README.md im jeweiligen Worker-Ordner), stehen also nie im
 # Git-Repo und nie in diesem Workflow.
+#
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03): deployt erst,
+# wenn der wiederverwendbare "test"-Job (.github/workflows/tests.yml, führt
+# "npm run test:all" aus) ohne Fehler durchlief - vorher lief ein Push auf main
+# ungetestet direkt in die Produktion.
 name: Deploy neuverdrahtet-social-publish
 
 on:
@@ -16,7 +21,11 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    uses: ./.github/workflows/tests.yml
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

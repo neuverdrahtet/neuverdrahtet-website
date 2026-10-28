@@ -1,0 +1,44 @@
+# P0-Sicherheitskorrektur (Master-Audit Bericht 03, Risiko: "Deployments laufen
+# ohne jede Testausführung") - wiederverwendbarer Workflow (workflow_call), der
+# die GESAMTE vorhandene, echte Testsuite ausführt: Node-Unit-Tests
+# (verwaltung/tests/, cloudflare-worker/jarvis-tests/,
+# cloudflare-worker-ki-buerokraft/tests/ - siehe scripts/run-all-tests.mjs),
+# Firestore-Security-Rules-Tests (gegen den Firebase-Emulator) und den
+# Rechnungsnummer-Parallelitätstest (ebenfalls gegen den Emulator) - also
+# exakt "npm run test:all" aus package.json.
+#
+# Wird von JEDEM der zehn Worker-Deploy-Workflows sowie vom
+# Firebase-Regeln-Deploy-Workflow per "uses: ./.github/workflows/tests.yml"
+# als eigener "test"-Job eingebunden, den der jeweilige "deploy"-Job per
+# "needs: test" voraussetzt - GitHub Actions startet den deploy-Job dadurch
+# erst gar nicht, wenn hier auch nur ein einziger Test fehlschlägt. Bewusst
+# EINE gemeinsame Testsuite für alle Worker statt pro Worker gefiltert: ein
+# fehlschlagender Test irgendwo im Repo soll grundsätzlich JEDES
+# Deployment stoppen, nicht nur das des zufällig geänderten Worker-Ordners
+# (einfacher und sicherer als eine Pfad-zu-Test-Zuordnung zu pflegen).
+name: Tests (wiederverwendbar für alle Deploy-Workflows)
+
+on:
+  workflow_call: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Der Firestore-Emulator (für "npm run test:rules" und
+      # "npm run test:rechnungsnummer-concurrency") braucht eine JRE.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - run: npm ci
+      # browser-smoke.test.mjs (Teil von "npm run test:unit") startet einen
+      # echten, headless Chromium per Playwright - der Actions-Runner bringt
+      # das anders als die lokale Entwicklungsumgebung nicht vorinstalliert
+      # mit.
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:all
