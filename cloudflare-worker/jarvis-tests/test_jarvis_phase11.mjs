@@ -177,6 +177,17 @@ await pruefe('M0b: JARVIS_TAGESCHECK_AKTIV="false" (oder ein anderer Wert als "t
   assert(!firestoreDb.get(`jarvisJobs/${jobId}`), 'bei "false" darf kein Job-Dokument angelegt werden');
 });
 
+await pruefe('M0c (Regression, Bug gefunden 28.10.2026): ein Service Binding KI_BUEROKRAFT reicht OHNE gesetztes KI_BUEROKRAFT_URL aus - der Tagescheck darf sich nicht mehr stillschweigend überspringen, nur weil die URL-Variable fehlt (Binding ist der normale, von Danny eingerichtete Transportweg)', async () => {
+  const { KI_BUEROKRAFT_URL, ...ohneUrl } = BASIS_ENV;
+  const envMitBinding = { ...ohneUrl, KI_BUEROKRAFT: { fetch: async () => { throw new Error('Binding darf in diesem Test nicht tatsächlich aufgerufen werden (kein Tool-Use in der Mock-Antwort)'); } } };
+  claudeAufrufe = 0;
+  await W.runTagescheck(envMitBinding);
+  assert(claudeAufrufe >= 1, `mit gesetztem Binding (aber ohne KI_BUEROKRAFT_URL) muss der Lauf stattfinden, Claude-Aufrufe: ${claudeAufrufe}`);
+  const job = firestoreDb.get(`jarvisJobs/${jobId}`);
+  assert(job && job.fields.status.stringValue === 'done', 'Job muss auch über das Binding regulär als "done" abgeschlossen werden');
+  firestoreDb.delete(`jarvisJobs/${jobId}`);
+});
+
 await pruefe('M1: ein bereits erledigter Tagescheck-Job für heute lässt den Lauf überspringen (KEIN Claude-Aufruf)', async () => {
   setDoc('jarvisJobs', jobId, { typ: 'tagescheck', status: 'done', abgeschlossenAm: new Date().toISOString() });
   claudeAufrufe = 0;

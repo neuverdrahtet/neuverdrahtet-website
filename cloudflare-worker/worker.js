@@ -6528,8 +6528,15 @@ async function runTagescheck(env) {
   // die bereits gesetzten Secrets (ANTHROPIC_API_KEY usw.) allein NICHT
   // ausreichen, um diesen autonomen Lauf scharf zu schalten.
   if (env.JARVIS_TAGESCHECK_AKTIV !== 'true') return;
-  if (!env.ANTHROPIC_API_KEY || !env.KI_BUEROKRAFT_URL || !env.KI_BUEROKRAFT_API_KEY) {
-    console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY/KI_BUEROKRAFT_URL/KI_BUEROKRAFT_API_KEY fehlt.');
+  // Bug (gefunden 28.10.2026): verlangte bisher zwingend KI_BUEROKRAFT_URL,
+  // obwohl das Service Binding KI_BUEROKRAFT laut Kopfkommentar/wrangler.toml
+  // ("KI_BUEROKRAFT_URL nur als Fallback") GENAUSO ausreicht und überall
+  // sonst (callKiBuerokraftRest, holeJarvisStatusUebersicht) auch so
+  // behandelt wird - mit gesetztem Binding, aber ohne URL, hat sich der
+  // Tagescheck dadurch jeden Tag stillschweigend übersprungen (nur ein
+  // console.log, keine im Status-Tab sichtbare Fehlermeldung).
+  if (!env.ANTHROPIC_API_KEY || (!env.KI_BUEROKRAFT && !env.KI_BUEROKRAFT_URL) || !env.KI_BUEROKRAFT_API_KEY) {
+    console.log('Täglicher Büro-Check übersprungen: ANTHROPIC_API_KEY fehlt, oder weder Service Binding KI_BUEROKRAFT noch KI_BUEROKRAFT_URL vorhanden, oder KI_BUEROKRAFT_API_KEY fehlt.');
     return;
   }
   // Phase 11.1 Sicherheitskorrektur: FIREBASE_SERVICE_ACCOUNT_JSON ist jetzt
