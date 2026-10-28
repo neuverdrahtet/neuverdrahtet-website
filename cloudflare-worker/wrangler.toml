@@ -49,14 +49,23 @@ service = "neuverdrahtet-ki-buerokraft"
 # Begrenzt die öffentlichen, unauthentifizierten Routen /kunde-upload und
 # /siri-abfrage (siehe worker.js pruefeRateLimit/handleKundenUpload) auf
 # 10 Anfragen pro IP und Minute - alle übrigen Routen prüfen weiterhin
-# APP_SECRET und sind davon nicht betroffen. Wird von Cloudflare beim ersten
-# Deploy automatisch angelegt, keine manuelle Einrichtung im Dashboard nötig.
+# APP_SECRET und sind davon nicht betroffen.
 # WICHTIG (Phase 10 Sicherheitskorrektur): fehlt dieses Binding zur Laufzeit,
 # sperren beide Routen sich jetzt bewusst selbst (fail-closed) statt
 # ungebremst durchzulassen - dieses Binding ist daher eine ZWINGENDE
 # Voraussetzung, nicht nur eine Komfort-Verbesserung.
-[[ratelimits]]
+# Bug gefunden 28.10.2026: das bis hierhin verwendete Top-Level-Feld
+# "[[ratelimits]]" wird vom in der GitHub-Actions-Pipeline tatsächlich
+# installierten wrangler 3.90.0 NICHT erkannt ("Unexpected fields found in
+# top-level field: 'ratelimits'", siehe Deploy-Log) - die Zeilen wurden bei
+# JEDEM bisherigen Deploy stillschweigend ignoriert, das Binding ist nie
+# entstanden (Status-Tab zeigte "Rate-Limiter konfiguriert: nein"), und
+# /kunde-upload sowie /siri-abfrage (Siri-Kurzbefehle!) haben sich seitdem
+# fail-closed selbst gesperrt. Die ältere, breiter unterstützte Syntax über
+# "[[unsafe.bindings]]" mit type="ratelimit" versteht auch wrangler 3.90.0.
+[[unsafe.bindings]]
 name = "RATE_LIMITER"
+type = "ratelimit"
 namespace_id = "1005"
 simple = { limit = 10, period = 60 }
 
@@ -109,9 +118,11 @@ service = "neuverdrahtet-ki-buerokraft-staging"
 
 # Eigener, vom Produktions-RATE_LIMITER komplett unabhängiger Staging-Limiter
 # (Phase 10 Sicherheitskorrektur: Pflicht, sonst sperrt sich die Staging-
-# Route selbst fail-closed, siehe pruefeRateLimit in worker.js).
-[[env.staging.ratelimits]]
+# Route selbst fail-closed, siehe pruefeRateLimit in worker.js). Gleicher
+# Syntax-Fix wie oben beim Produktions-Binding (28.10.2026).
+[[env.staging.unsafe.bindings]]
 name = "RATE_LIMITER"
+type = "ratelimit"
 namespace_id = "1006"
 simple = { limit = 10, period = 60 }
 
