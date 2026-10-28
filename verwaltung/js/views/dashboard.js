@@ -123,9 +123,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // blockieren, verzögert das jeden App-Start unnötig, nur für die kleine
   // "Niedriger Bestand"-Karte. Stattdessen lädt sie asynchron nach und
   // ergänzt ihre Karte erst, wenn sie fertig ist.
-  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, mitarbeiter, settings, angebote, marken, emails] = await Promise.all([
+  const [rechnungen, projekte, termine, kunden, spalten, mahnungen, ausgaben, aufgaben, aufgabenStatus, mitarbeiter, settings, angebote, marken, emails] = await Promise.all([
     getAll('rechnungen'), getAll('projekte'), getAll('termine'), getAll('kunden'), getAll('kanbanSpalten'),
-    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('mitarbeiter'), getSettings(), getAll('angebote'), getAll('marken'), getAll('emails'),
+    getAll('mahnungen'), getAll('ausgaben'), getAll('aufgaben'), getAll('aufgabenStatus'), getAll('mitarbeiter'), getSettings(), getAll('angebote'), getAll('marken'), getAll('emails'),
   ]);
   const today = todayISO();
   const spaltenById = Object.fromEntries(spalten.map((s) => [s.id, s]));
@@ -261,8 +261,17 @@ export async function render(container, _route, { autoSync = true } = {}) {
   }).sort((a, b) => (a.start || '').localeCompare(b.start || ''));
 
   // --- Aufgaben widget ---
+  // Bug gefunden 28.10.2026: hier stand fest verdrahtet "status !== 'erledigt'",
+  // obwohl aufgaben.js selbst konsequent das konfigurierbare geschlossen-Flag
+  // nutzt (siehe statusById[a.status]?.geschlossen dort) - ein über "Aufgaben-
+  // Status verwalten" angelegter zusätzlicher "fertig"-Status wäre hier nie
+  // als abgeschlossen erkannt worden und hätte die Aufgabe dauerhaft im
+  // Dashboard-Widget hängen lassen, obwohl die Aufgaben-Seite sie korrekt
+  // ausblendet.
+  const aufgabenStatusById = Object.fromEntries(aufgabenStatus.map((s) => [s.id, s]));
+  const offenAufgabenStatus = aufgabenStatus.find((s) => !s.geschlossen) || aufgabenStatus[0];
   let currentMa = getCurrentMitarbeiterId();
-  const meineAufgaben = aufgaben.filter((a) => a.status !== 'erledigt' && (!currentMa || a.zugewiesenAn === currentMa)).slice(0, 6);
+  const meineAufgaben = aufgaben.filter((a) => !aufgabenStatusById[a.status]?.geschlossen && (!currentMa || a.zugewiesenAn === currentMa)).slice(0, 6);
 
   // --- Plantafel-Vorschau (aktuelle Woche) ---
   const weekStartDate = startOfWeek(new Date());
@@ -630,7 +639,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     if (!titel) return;
     await put('aufgaben', {
       id: uid(), titel, beschreibung: '', zugewiesenAn: currentMa || '', erstelltVon: currentMa || '',
-      faelligAm: '', prioritaet: 'normal', status: 'offen', projektId: '', kundeId: '', createdAt: new Date().toISOString(), erledigtAm: '',
+      faelligAm: '', prioritaet: 'normal', status: offenAufgabenStatus?.id || 'offen', projektId: '', kundeId: '', createdAt: new Date().toISOString(), erledigtAm: '',
     });
     toast('Aufgabe angelegt', 'success');
     render(container, null, { autoSync: false });
