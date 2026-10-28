@@ -81,6 +81,7 @@ export async function render(container) {
     </div>
     <div class="tabs" id="jv-tabs">
       <button type="button" class="tab-item" data-tab="zentrale">📋 Zentrale</button>
+      <button type="button" class="tab-item" data-tab="dashboard">🖥️ Dashboard</button>
       <button type="button" class="tab-item" data-tab="tech">🔧 TECH</button>
       <button type="button" class="tab-item" data-tab="mobile">📱 Mobile</button>
       <button type="button" class="tab-item" data-tab="status">📊 Status</button>
@@ -102,6 +103,8 @@ export async function render(container) {
     markiereAktivenTab();
     if (tab === 'chat') {
       await renderChat(inhaltEl, uid);
+    } else if (tab === 'dashboard') {
+      await renderDashboard(inhaltEl, zeigeTab);
     } else if (tab === 'tech') {
       await renderTech(inhaltEl);
     } else if (tab === 'mobile') {
@@ -1640,6 +1643,177 @@ async function renderStatus(container) {
     }
   });
   await laden();
+}
+
+// =============================================================================
+// JARVIS-Dashboard (28.10.2026) - Übersichtsseite angelehnt an die von Danny
+// gezeigte Sci-Fi-Dashboard-Vorlage, aber bewusst NUR mit echten, bereits
+// vorhandenen Daten (holeJarvisStatus/holeJarvisZentrale - keine neue
+// Backend-Aktion nötig) und im bestehenden Werkora-Glas-Look (siehe
+// .jv-dashboard-glow in app.css, derselbe Stil wie die normale
+// Dashboard-Startseite). Elemente aus der Vorlage, die es bei uns nicht
+// gibt oder die unserem Freigabe-Prinzip widersprechen würden, wurden
+// bewusst NICHT nachgebaut: GitHub/Slack/WhatsApp/Notion (keine echten
+// Integrationen), mehrere LLM-Anbieter (wir nutzen ausschließlich Claude/
+// Anthropic), ein "Emergency Stop"-Schalter (die JARVIS_*_AKTIV-Schalter
+// sind Cloudflare-Umgebungsvariablen, zur Laufzeit vom Worker selbst nicht
+// änderbar - ein Knopf dafür wäre nicht echt funktionsfähig), und ein
+// "Auto-Approve"-Schalter (widerspräche dem Kernprinzip "Freigabe ≠
+// Automatische Ausführung", das durch dieses ganze Projekt zieht).
+// =============================================================================
+
+function gesundheitEinschaetzung(status) {
+  const diensteWerte = Object.values(status.dienste);
+  const diensteOk = diensteWerte.filter(Boolean).length;
+  const cronProbleme = status.cronLaeufe.filter((j) => ['failed', 'unklar'].includes(j.letzterVersuchStatus)).length;
+  const wert = Math.max(0, Math.min(100, Math.round((diensteOk / diensteWerte.length) * 100) - cronProbleme * 10 - (status.unklareAktionen > 0 ? 10 : 0)));
+  const farbe = wert >= 80 ? 'var(--success)' : wert >= 50 ? 'var(--warn)' : 'var(--danger)';
+  const label = wert >= 80 ? 'Gut' : wert >= 50 ? 'Beobachten' : 'Kritisch';
+  return { wert, farbe, label, diensteOk, diensteGesamt: diensteWerte.length, cronProbleme };
+}
+
+async function renderDashboard(container, zeigeTab) {
+  container.innerHTML = '<p class="text-mute">Lade Dashboard …</p>';
+  let status, daten;
+  try {
+    [status, daten] = await Promise.all([holeJarvisStatus(), holeJarvisZentrale()]);
+  } catch (err) {
+    container.innerHTML = `<p class="hint">Konnte Dashboard nicht laden: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+
+  const g = gesundheitEinschaetzung(status);
+  const AKTIONS_TYPEN = ['email', 'angebot', 'rechnung', 'mahnung', 'termin', 'einsatz'];
+  const brauchtDich = [];
+  for (const k of KATEGORIEN) {
+    if (!AKTIONS_TYPEN.includes(k.typ)) continue;
+    for (const item of (daten[k.key] || [])) brauchtDich.push({ typ: k.typ, titel: k.titel, item });
+  }
+  const aktivFlags = Object.values(status.featureFlags).filter(Boolean).length;
+  const gesamtFlags = Object.values(status.featureFlags).length;
+
+  container.innerHTML = `
+    <div class="jv-dashboard-glow">
+      <div class="card jv-dashboard-hero">
+        <div class="dash-score-gauge" style="--score-color:${g.farbe};width:100px;height:100px">
+          <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="34" fill="none" stroke="${g.farbe}" stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="${(g.wert / 100 * 213.6).toFixed(1)} 213.6" transform="rotate(-90 40 40)"/></svg>
+          <span>${g.wert}</span>
+        </div>
+        <div>
+          <div class="text-mute" style="font-size:11px;letter-spacing:.04em;text-transform:uppercase">JARVIS-Gesundheit</div>
+          <h2 style="margin:2px 0 2px">${escapeHtml(g.label)}</h2>
+          <p class="text-mute" style="margin:0;font-size:12.5px">${g.diensteOk}/${g.diensteGesamt} Dienste konfiguriert${g.cronProbleme > 0 ? ` · ${g.cronProbleme} Cron-Lauf(e) mit Problem` : ''}${status.unklareAktionen > 0 ? ' · unklare Aktionen offen' : ''}</p>
+        </div>
+        <div class="jv-dashboard-hero-facts">
+          <div><span class="text-mute" style="font-size:11px">Letzte Synchronisierung</span><strong>${status.letzteErfolgreicheSynchronisierungAm ? formatDateTime(status.letzteErfolgreicheSynchronisierungAm) : 'noch keine'}</strong></div>
+          <div><span class="text-mute" style="font-size:11px">KI-Kosten (${escapeHtml(status.kiKosten.monat)})</span><strong>${formatUsd(status.kiKosten.geschaetzteKostenUsd)}${status.kiKosten.limitUsd ? ` / ${formatUsd(status.kiKosten.limitUsd)}` : ''}</strong></div>
+          <div><span class="text-mute" style="font-size:11px">Automationen aktiv</span><strong>${aktivFlags} von ${gesamtFlags}</strong></div>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <button type="button" class="kpi-card kpi-clickable ${brauchtDich.length > 0 ? 'kpi-warn' : 'kpi-success'}" style="text-align:left" data-tab="zentrale">
+          <div class="kpi-value">${brauchtDich.length}</div><div class="kpi-label">Braucht deine Entscheidung</div>
+        </button>
+        <button type="button" class="kpi-card kpi-clickable ${daten.fehlgeschlageneAutomationen.length > 0 ? 'kpi-danger' : 'kpi-success'}" style="text-align:left" data-tab="zentrale">
+          <div class="kpi-value">${daten.fehlgeschlageneAutomationen.length}</div><div class="kpi-label">Fehlgeschlagene Automationen</div>
+        </button>
+        <button type="button" class="kpi-card kpi-clickable ${status.unklareAktionen > 0 ? 'kpi-danger' : 'kpi-success'}" style="text-align:left" data-tab="status">
+          <div class="kpi-value">${status.unklareAktionen}</div><div class="kpi-label">Unklar (Absturz-Verdacht)</div>
+        </button>
+        <button type="button" class="kpi-card kpi-clickable" style="text-align:left" data-tab="status">
+          <div class="kpi-value">${status.apiVerbindungsfehler.length}</div><div class="kpi-label">Verbindungsfehler (zuletzt)</div>
+        </button>
+      </div>
+
+      <div class="dash-layout">
+        <div class="dash-main">
+          <div class="card">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+              <h2 style="margin:0">Braucht dich jetzt</h2>
+              ${brauchtDich.length > 0 ? `<span class="badge badge-warn">${brauchtDich.length}</span>` : ''}
+            </div>
+            ${brauchtDich.length === 0 ? '<p class="text-mute">Nichts wartet gerade auf eine Entscheidung.</p>' : `
+              <ul class="cal-event-list">
+                ${brauchtDich.slice(0, 5).map(({ typ, titel, item }) => `
+                  <li class="dash-row-link" data-tab="zentrale">
+                    <div><strong>${escapeHtml(itemTitel(typ, item))}</strong><div class="text-mute" style="font-size:12px">${escapeHtml(titel)}</div></div>
+                  </li>
+                `).join('')}
+              </ul>
+              ${brauchtDich.length > 5 ? `<p class="hint">+${brauchtDich.length - 5} weitere</p>` : ''}
+            `}
+            <p class="hint"><a href="#" data-tab="zentrale">Zur JARVIS-Zentrale →</a></p>
+          </div>
+
+          <div class="card">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+              <h2 style="margin:0">Letzte Cron-Läufe</h2>
+            </div>
+            <ul class="cal-event-list">
+              ${status.cronLaeufe.map((j) => `
+                <li>
+                  <span>${escapeHtml(JOB_TYP_LABEL[j.typ] || j.typ)}</span>
+                  <span>${JOB_STATUS_BADGE[j.letzterVersuchStatus] || escapeHtml(j.letzterVersuchStatus)}</span>
+                </li>
+              `).join('')}
+            </ul>
+            <p class="hint"><a href="#" data-tab="status">Details &amp; Tagescheck jetzt starten →</a></p>
+          </div>
+        </div>
+
+        <div class="dash-side">
+          <div class="card">
+            <h2>Verbundene Dienste</h2>
+            ${statusZeile('Anthropic (Claude)', status.dienste.anthropicKonfiguriert)}
+            ${statusZeile('Firebase', status.dienste.firebaseKonfiguriert)}
+            ${statusZeile('Google-Büro (Gmail/Kalender)', status.dienste.googleBueroBindingVorhanden)}
+            ${statusZeile('KI-Bürokraft (Werkora-Anbindung)', status.dienste.kiBuerokraftBindingVorhanden)}
+            ${statusZeile('Google-Konto verbunden', status.dienste.googleKontoVerbunden)}
+            ${statusZeile('Rate-Limiter', status.dienste.rateLimiterKonfiguriert)}
+          </div>
+
+          <div class="card">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
+              <h2 style="margin:0">Automationen</h2>
+              <span class="text-mute">${aktivFlags}/${gesamtFlags} aktiv</span>
+            </div>
+            ${Object.entries(status.featureFlags).map(([flag, aktiv]) => statusZeile(FEATURE_FLAG_LABEL[flag] || flag, aktiv)).join('')}
+          </div>
+
+          <div class="card">
+            <h2>Schnellzugriff</h2>
+            <div class="dash-quicklinks">
+              <a class="btn" href="#" data-tab="chat">💬 Chat öffnen</a>
+              <a class="btn" href="#" data-tab="zentrale">📋 Zentrale öffnen</a>
+              <a class="btn" href="#" data-tab="mobile">📱 Siri &amp; Mobile</a>
+            </div>
+          </div>
+
+          ${status.apiVerbindungsfehler.length > 0 ? `
+            <div class="card">
+              <h2>Letzte Verbindungsfehler</h2>
+              <ul class="cal-event-list">
+                ${status.apiVerbindungsfehler.slice(0, 3).map((e) => `
+                  <li><div><strong>${escapeHtml(e.quelle)}</strong><div class="text-mute" style="font-size:12px">${formatDateTime(e.zeitstempel)} - ${escapeHtml(e.fehler)}</div></div></li>
+                `).join('')}
+              </ul>
+              <p class="hint"><a href="#" data-tab="status">Alle ansehen →</a></p>
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  container.querySelectorAll('[data-tab]').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      zeigeTab(el.dataset.tab);
+    });
+  });
 }
 
 // =============================================================================

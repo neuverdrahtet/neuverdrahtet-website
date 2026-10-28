@@ -146,6 +146,64 @@
   box-shadow: var(--shadow);
 }
 
+/* JARVIS-Dashboard-Tab (28.10.2026) - derselbe Glas-/Glow-Look wie die
+   Dashboard-Startseite oben, aber als eigene Klasse statt an die Route
+   gebunden: nur dieser EINE Tab innerhalb von JARVIS (siehe jarvis.js
+   renderDashboard) bekommt ihn, die übrigen JARVIS-Tabs (Zentrale/TECH/
+   Mobile/Status/Chat) bleiben im normal gewählten Theme (Hell/Dunkel/
+   Jarvis). Layout-Klassen (.dash-layout/.dash-score-gauge/...) sind
+   bereits generisch (siehe oben, nicht an die Route gebunden) und werden
+   hier einfach mitbenutzt.*/
+.jv-dashboard-glow {
+  --bg: #171b36;
+  --card: rgba(255, 255, 255, 0.07);
+  --card-2: rgba(255, 255, 255, 0.04);
+  --border: rgba(255, 255, 255, 0.14);
+  --text: #f3f4fb;
+  --text-mute: #b7bbd9;
+  --accent: #8b7bf7;
+  --accent-2: #6d5ce8;
+  --accent-rgb: 139, 123, 247;
+  --danger: #ff6b8a;
+  --danger-bg: rgba(255, 107, 138, 0.18);
+  --success: #3ddc97;
+  --success-bg: rgba(61, 220, 151, 0.18);
+  --warn: #ffb648;
+  --warn-bg: rgba(255, 182, 72, 0.18);
+  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 16px;
+  background:
+    radial-gradient(ellipse 1300px 850px at 8% -5%, rgba(99, 102, 241, 0.35), transparent 62%),
+    radial-gradient(ellipse 1100px 750px at 100% 105%, rgba(236, 72, 153, 0.2), transparent 62%),
+    linear-gradient(160deg, #161a30 0%, #201a3a 55%, #171d38 100%);
+}
+.jv-dashboard-glow .card,
+.jv-dashboard-glow .kpi-card {
+  background: var(--card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.jv-dashboard-glow .badge { color: #fff; }
+.jv-dashboard-hero {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+.jv-dashboard-hero-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  flex: 1;
+  min-width: 220px;
+}
+.jv-dashboard-hero-facts > div { display: flex; flex-direction: column; gap: 2px; }
+.jv-dashboard-hero-facts strong { font-size: 16px; }
+
 * { box-sizing: border-box; }
 
 html, body {
