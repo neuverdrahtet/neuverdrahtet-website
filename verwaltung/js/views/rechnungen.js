@@ -130,8 +130,9 @@ export async function render(container, route) {
     const projekt = projekte.find((p) => p.id === r.projektId);
     const istBar = r.zahlungsart === 'bar';
     const totals = calcTotals(r.positionen);
+    const markeSettings = resolveMarkeSettings(settings, markenById[projekt?.markeId]);
     return {
-      settings: resolveMarkeSettings(settings, markenById[projekt?.markeId]), art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: r.nummer, datum: r.datum,
+      settings: markeSettings, art: istAbschlag ? 'Abschlagsrechnung' : 'Rechnung', nummer: r.nummer, datum: r.datum,
       leistungsdatum: r.leistungsdatum || r.datum,
       refLabel: 'Zahlbar bis', refValue: formatDate(r.faelligAm),
       kunde, betreff: r.betreff, projekt: projekt?.titel || '',
@@ -147,6 +148,19 @@ export async function render(container, route) {
           : '') +
         `\n\nBitte überweisen Sie den Rechnungsbetrag bis zum ${formatDate(r.faelligAm)} auf unser unten genanntes Konto.`,
       abschlaege: !istAbschlag && r.verrechneteAbschlaege?.length ? r.verrechneteAbschlaege : undefined,
+      // GiroCode (QR-Code zum Bezahlen per Banking-App, siehe girocode.js):
+      // für jede nicht stornierte Rechnung/Abschlagsrechnung, Betrag = der
+      // auf dem PDF tatsächlich als "Gesamt"/"Noch zu zahlen" ausgewiesene
+      // Betrag (also nach Abzug bereits verrechneter Abschlagsrechnungen) -
+      // baueGirocodePayload() in docpdf.js liefert ohnehin null (kein
+      // QR-Code), falls IBAN/Empfänger/Betrag fehlen oder ungültig sind.
+      girocode: r.status === 'storniert' ? null : {
+        empfaenger: markeSettings.firmenname, iban: markeSettings.iban, bic: markeSettings.bic,
+        betrag: r.verrechneteAbschlaege?.length
+          ? totals.brutto - r.verrechneteAbschlaege.reduce((s, a) => s + (a.betrag || 0), 0)
+          : totals.brutto,
+        verwendungszweck: `${istAbschlag ? 'Abschlagsrechnung' : 'Rechnung'} ${r.nummer} - ${kunde?.firma || ''}`,
+      },
       faelligAm: r.faelligAm, steuerart: r.steuerart || 'regel',
       zeigeUnterschriftsfeld: istBar,
       unterschriftKunde: r.unterschriftKunde || null,

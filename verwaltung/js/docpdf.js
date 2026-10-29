@@ -1,6 +1,7 @@
 import { formatCurrency, formatDate, formatDateTime, hexToRgb } from './utils.js';
 import { loadJsPdf } from './vendorLoader.js';
 import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung } from './positionsGrouping.js';
+import { baueGirocodePayload, erzeugeGirocodeDataUrl } from './girocode.js';
 
 function logoFormat(dataUrl) {
   const m = /^data:image\/(png|jpe?g)/i.exec(dataUrl || '');
@@ -122,6 +123,15 @@ export async function buildDocPdfBlob(opts) {
   let y = 20;
   const accentRgb = hexToRgb(opts.settings.dokAkzentfarbe);
   const baseFont = Number(opts.settings.dokSchriftgroesse) || 10;
+
+  // GiroCode (P0-unabhängiges Feature, siehe girocode.js): nur gesetzt für
+  // Rechnungen/Abschlagsrechnungen (opts.girocode kommt ausschließlich aus
+  // rechnungen.js, siehe dort) und nur, wenn IBAN/Empfänger/Betrag gültig
+  // sind - sonst bleibt girocodeDataUrl null und es wird einfach kein QR-Code
+  // gezeichnet (kein Fehler, kein kaputtes PDF).
+  const girocodeDataUrl = opts.girocode
+    ? await erzeugeGirocodeDataUrl(baueGirocodePayload(opts.girocode))
+    : null;
 
   // --- Header: logo (an eingestellter Position) + Titel & Meta-Box (Gegenposition) ---
   const logoBottomY = drawHeaderLogo(doc, opts.settings, marginX, rightX, y);
@@ -267,6 +277,28 @@ export async function buildDocPdfBlob(opts) {
 
   if (opts.totals) {
     if (y > maxY) { doc.addPage(); y = 20; }
+    // GiroCode links neben den (rechtsbündigen) Summenzeilen platzieren,
+    // solange beides auf dieselbe Seite passt - bei einem Seitenumbruch
+    // direkt davor (y wurde oben ggf. schon zurückgesetzt) ist das ohnehin
+    // der Fall, da y dann wieder bei 20 beginnt. qrBlockBottomY sorgt dafür,
+    // dass nachfolgende Inhalte (Steuerhinweis/Schlusstext/Unterschrift)
+    // nicht in den QR-Block hineinlaufen, auch wenn der eigentliche
+    // Summenblock (Netto/Steuer/Gesamt) weniger Platz braucht als der QR-Code.
+    let qrBlockBottomY = 0;
+    if (girocodeDataUrl) {
+      const qrGroesse = 26;
+      try {
+        doc.addImage(girocodeDataUrl, 'PNG', marginX, y, qrGroesse, qrGroesse);
+        doc.setFontSize(7.5);
+        doc.setTextColor(110);
+        const hinweisLines = doc.splitTextToSize('Mit der Banking-App scannen und bezahlen (GiroCode)', qrGroesse + 4);
+        doc.text(hinweisLines, marginX, y + qrGroesse + 3.5);
+        doc.setTextColor(20);
+        qrBlockBottomY = y + qrGroesse + 3.5 + hinweisLines.length * 3.2;
+      } catch (err) {
+        console.error('PDF: GiroCode konnte nicht eingebettet werden:', err);
+      }
+    }
     doc.setFontSize(10);
     doc.text(`Netto: ${formatCurrency(opts.totals.netto)}`, rightX, y, { align: 'right' });
     y += 5;
@@ -310,7 +342,7 @@ export async function buildDocPdfBlob(opts) {
       doc.setFont(undefined, 'normal');
       y += 6;
     }
-    y += 2;
+    y = Math.max(y, qrBlockBottomY) + 2;
   }
 
   const steuerHinweisText = opts.steuerHinweis || (opts.settings.kleinunternehmer ? 'Gemäß § 19 UStG wird keine Umsatzsteuer berechnet.' : '');
