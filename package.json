@@ -4,11 +4,12 @@
   "description": "Entwicklungs-Abhängigkeiten für lokale Tests (Firestore-Regel-Tests, Node-Unit-Tests, Browser-Smoke-Test) - NICHT Teil der Cloudflare-Worker-Laufzeit (die hat keine package.json/node_modules, siehe cloudflare-worker/README.md).",
   "scripts": {
     "test:rules": "firebase emulators:exec --only firestore \"node firestore-tests/rules.test.mjs\"",
+    "test:storage-rules": "firebase emulators:exec --only storage \"node firestore-tests/storage-rules.test.mjs\"",
     "test:belegvorschlaege": "firebase emulators:exec --only firestore --config firestore-tests/firebase.testconfig.json --project demo-test \"node firestore-tests/belegvorschlaege.test.mjs\"",
     "test:rechnungsnummer-concurrency": "firebase emulators:exec --only firestore \"node firestore-tests/rechnungsnummer-concurrency.test.mjs\"",
     "test:browser-smoke": "node verwaltung/tests/browser-smoke.test.mjs",
     "test:unit": "node scripts/run-all-tests.mjs",
-    "test:all": "npm run test:unit && npm run test:rules && npm run test:rechnungsnummer-concurrency"
+    "test:all": "npm run test:unit && npm run test:rules && npm run test:storage-rules && npm run test:rechnungsnummer-concurrency"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
