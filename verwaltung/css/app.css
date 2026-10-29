@@ -386,6 +386,13 @@ select option {
 .view {
   flex: 1;
   padding: 24px 28px 60px;
+  /* Als Home-Bildschirm-App (apple-mobile-web-app-capable + viewport-fit=cover,
+     siehe index.html) zeichnet sich der Inhalt randlos, die halbtransparente
+     Statusleiste liegt dann ÜBER der Seite statt sie nach unten zu schieben -
+     ohne das hier würde z.B. die Überschrift der Zeiterfassung-Ansicht direkt
+     unter/hinter der Statusleiste verschwinden (auf normalen Browsern/
+     Desktop ist env(safe-area-inset-top) 0, ändert dort also nichts). */
+  padding-top: calc(24px + env(safe-area-inset-top, 0px));
   min-width: 0;
 }
 
@@ -393,7 +400,11 @@ select option {
 .mobile-menu-btn {
   display: none;
   position: fixed;
-  top: 12px;
+  /* Gleicher Grund wie bei .view oben: ohne den safe-area-Zuschlag landet
+     der Button als Home-Bildschirm-App unter der halbtransparenten
+     Statusleiste - unsichtbar und nicht antippbar, das Menü wäre dann
+     praktisch nicht mehr erreichbar. */
+  top: calc(12px + env(safe-area-inset-top, 0px));
   left: 12px;
   z-index: 300;
   width: 42px;
@@ -440,6 +451,10 @@ select option {
     transform: translateX(-100%);
     transition: transform 0.22s ease;
     box-shadow: 6px 0 30px rgba(0,0,0,0.3);
+    /* Als Home-Bildschirm-App sonst unter der Statusleiste versteckt, siehe
+       .view/.mobile-menu-btn oben - beträfe hier .sidebar-brand (Logo/Titel
+       ganz oben im Menü). */
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .sidebar.open { transform: translateX(0); }
   .sidebar-backdrop:not([hidden]) {
@@ -449,7 +464,11 @@ select option {
     background: rgba(10, 16, 26, 0.5);
     z-index: 250;
   }
-  .view { padding: 68px 14px 50px; max-width: 100%; }
+  /* 68px reserviert Platz für den fest positionierten .mobile-menu-btn oben
+     links - plus denselben safe-area-Zuschlag wie .view/.mobile-menu-btn/
+     .sidebar oben, sonst rutscht dieser Wert als Home-Bildschirm-App unter
+     die halbtransparente Statusleiste (siehe dortige Kommentare). */
+  .view { padding: calc(68px + env(safe-area-inset-top, 0px)) 14px 50px; max-width: 100%; }
 }
 
 /* Headers */
