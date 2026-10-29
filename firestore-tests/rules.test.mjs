@@ -335,6 +335,21 @@ await pruefe('R31: ein Techniker kann über diese erweiterten Felder TROTZDEM ni
   }));
 });
 
+await pruefe('R31b: ein Techniker kann die Materialliste des eigenen Auftrags abhaken (zusammen mit dem Status)', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    status: 'in_bearbeitung',
+    materialliste: [{ titel: 'Kältemittel R32', erledigt: true }],
+  }));
+});
+
+await pruefe('R31c: Materialliste alleine (ohne die übrigen erlaubten Felder) ist für den eigenen Auftrag ebenfalls erlaubt', async () => {
+  const tech1 = testEnv.authenticatedContext('techniker-1');
+  await assertSucceeds(updateDoc(doc(tech1.firestore(), 'serviceauftraege', 'sa-1'), {
+    materialliste: [{ titel: 'Ersatzfilter', erledigt: true }],
+  }));
+});
+
 // =============================================================================
 // Service-/Techniker-/Personalverwaltung Phase 2 (JARVIS SmartDispatch):
 // jarvisTechnikerVorschlaege wie alle übrigen jarvis*-Collections admin-only

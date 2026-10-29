@@ -12,6 +12,7 @@ import * as lexoffice from '../lexoffice.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
 import { generateEntityFromStichpunkte } from '../ai.js';
 import { verschiebeProjektReferenzen } from '../projektMerge.js';
+import { sammleMaterialAusAngeboten, aktualisiereMaterialliste, renderMaterialChecklistHtml } from '../materialliste.js';
 
 const ALLE_OFFEN = '__offen__';
 const ALLE = '__alle__';
@@ -411,6 +412,46 @@ export async function render(container, opts = {}) {
         window.open(url, '_blank', 'noopener');
         setTimeout(() => URL.revokeObjectURL(url), 10000);
       });
+    });
+  }
+
+  // Materialliste: Abhak-Checkliste für das Material, das ein Techniker vor
+  // der Fahrt zum Einsatz mitnehmen muss - automatisch aus den Positionen
+  // der angenommenen Angebote dieses Projekts abgeleitet (siehe
+  // materialliste.js). Bewusst getrennt von renderVerwendungen() oben: das
+  // ist die tatsächlich VERBRAUCHTE Menge (nachträglich erfasst, für
+  // Nachkalkulation/Bestand), hier geht es um "was einpacken, bevor es
+  // losgeht" - beide Listen haben unterschiedliche Zwecke und bleiben
+  // unabhängig voneinander.
+  function renderMaterialliste(host, p) {
+    const positionen = p.materialliste || [];
+    host.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h2 style="font-size:14px;margin:0">Materialliste</h2>
+        <button type="button" class="btn btn-sm" id="btn-material-aktualisieren">↻ Aus Kalkulation aktualisieren</button>
+      </div>
+      ${renderMaterialChecklistHtml(positionen)}
+    `;
+    host.querySelectorAll('.material-item-toggle').forEach((cb) => {
+      cb.addEventListener('change', async () => {
+        const i = Number(cb.dataset.index);
+        p.materialliste = positionen.map((pos, idx) => (idx === i ? { ...pos, erledigt: cb.checked } : pos));
+        await put('projekte', p);
+        renderMaterialliste(host, p);
+      });
+    });
+    host.querySelector('#btn-material-aktualisieren').addEventListener('click', async () => {
+      const katalogById = Object.fromEntries(katalog.map((k) => [k.id, k]));
+      const eigeneAngebote = angebote.filter((a) => a.projektId === p.id);
+      const rohliste = sammleMaterialAusAngeboten(eigeneAngebote, katalogById);
+      if (!rohliste.length) {
+        toast('Keine Material-Positionen in den angenommenen Angeboten dieses Projekts gefunden.', 'info');
+        return;
+      }
+      p.materialliste = aktualisiereMaterialliste(p.materialliste, rohliste);
+      await put('projekte', p);
+      toast('Materialliste aktualisiert', 'success');
+      renderMaterialliste(host, p);
     });
   }
 
@@ -909,6 +950,7 @@ export async function render(container, opts = {}) {
             </div>
             <div class="akte-bereich" data-tab="details" id="nk-host"></div>
             <div class="akte-bereich" data-tab="details" id="ausgaben-host"></div>
+            <div class="akte-bereich" data-tab="dokumentation" id="material-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="verwendung-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="tc-host"></div>
             <div class="akte-bereich" data-tab="dokumentation" id="email-host"></div>
@@ -972,6 +1014,7 @@ export async function render(container, opts = {}) {
       projekt: p, ausgaben, zeiterfassung, rechnungen, mitarbeiter, settings,
     });
     renderProjektAusgaben(container.querySelector('#ausgaben-host'), p.id);
+    renderMaterialliste(container.querySelector('#material-host'), p);
     renderVerwendungen(container.querySelector('#verwendung-host'), p.id);
     renderTeamchat(container.querySelector('#tc-host'), p.id, mitarbeiter);
     renderProjektEmailVerlauf(container.querySelector('#email-host'), linkedEmails);

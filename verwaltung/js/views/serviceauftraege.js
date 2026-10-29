@@ -3,6 +3,7 @@ import { uid, escapeHtml, toast, formatDate, formatCurrency, todayISO } from '..
 import { openModal } from '../ui.js';
 import { renderDokumenteSection, SERVICEAUFTRAG_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { baueFreieMaterialliste, materiallisteAlsText, renderMaterialChecklistHtml } from '../materialliste.js';
 
 // Service-Auftragsverwaltung (Phase 1 der Service-/Techniker-/
 // Personalverwaltung, siehe Architektur-/Sicherheitsbericht Phase 0) -
@@ -481,6 +482,7 @@ export async function render(container) {
       auftragsfrist: '', geplanteWartungsdauer: '', geplanterNettoumsatz: '', hinweise: '',
       technikerIds: [], status: 'offen', technikerNotizen: '',
       checklistenPunkte: [], maengel: '', zusatzarbeitVorschlag: '', berichtsentwurf: '', terminId: '',
+      materialliste: [],
     };
     const { body, close } = openModal({
       // Anders als z.B. "Rechnung ${data.nummer}" in anderen Ansichten ist
@@ -529,6 +531,17 @@ export async function render(container) {
               <button type="button" class="btn btn-sm" id="sa-standard-checkliste" style="margin-top:6px">Standard-Checkliste einfügen</button>
             </div>
 
+            <div class="field col-span-2">
+              <label>Materialliste (eine Position je Zeile, zum Abhaken vor der Fahrt zum Einsatz)</label>
+              <textarea name="materiallisteText" rows="4" placeholder="z.B.&#10;Kältemittel R32 (1x Flasche)&#10;Ersatzfilter&#10;Dichtungsset">${escapeHtml(materiallisteAlsText(data.materialliste))}</textarea>
+              <p class="hint">Änderungen hier wirken erst nach "Speichern". Zum direkten Abhaken siehe die Liste unten.</p>
+            </div>
+            ${isEdit && (data.materialliste || []).length ? `
+              <div class="field col-span-2" id="sa-materialliste-checkbox-host">
+                ${renderMaterialChecklistHtml(data.materialliste)}
+              </div>
+            ` : ''}
+
             ${isEdit && data.technikerNotizen ? `<div class="field col-span-2"><label>Notizen des Technikers (nur lesend)</label><p class="hint">${escapeHtml(data.technikerNotizen)}</p></div>` : ''}
             ${isEdit && data.maengel ? `<div class="field col-span-2"><label>⚠️ Vom Techniker gemeldete Mängel (nur lesend)</label><p class="hint">${escapeHtml(data.maengel)}</p></div>` : ''}
             ${isEdit && data.zusatzarbeitVorschlag ? `<div class="field col-span-2"><label>💡 Zusatzarbeit-Vorschlag des Technikers (nur lesend)</label><p class="hint">${escapeHtml(data.zusatzarbeitVorschlag)}</p></div>` : ''}
@@ -557,6 +570,21 @@ export async function render(container) {
     });
     body.querySelector('#sa-standard-checkliste').addEventListener('click', () => {
       body.querySelector('textarea[name="checklistenPunkteText"]').value = STANDARD_WARTUNGSCHECKLISTE.join('\n');
+    });
+    // Direktes Abhaken der Materialliste (unabhängig vom "Speichern"-Button
+    // des übrigen Formulars, damit ein Techniker im Feld nicht versehentlich
+    // auch andere, ihm nicht erlaubte Felder mitsendet - siehe firestore.rules
+    // serviceauftraege: Techniker dürfen nur eine feste Feldliste ändern).
+    body.querySelector('#sa-materialliste-checkbox-host')?.addEventListener('change', async (e) => {
+      const cb = e.target.closest('.material-item-toggle');
+      if (!cb) return;
+      const i = Number(cb.dataset.index);
+      const neueListe = (data.materialliste || []).map((pos, idx) => (idx === i ? { ...pos, erledigt: cb.checked } : pos));
+      data.materialliste = neueListe;
+      const idx2 = auftraege.findIndex((a) => a.id === data.id);
+      if (idx2 !== -1) auftraege[idx2] = { ...auftraege[idx2], materialliste: neueListe };
+      await put('serviceauftraege', { ...data, materialliste: neueListe });
+      body.querySelector('#sa-materialliste-checkbox-host').innerHTML = renderMaterialChecklistHtml(neueListe);
     });
     if (isEdit) {
       mountTerminSection(body.querySelector('#termin-host'), data);
@@ -601,6 +629,7 @@ export async function render(container) {
         technikerIds: fd.getAll('technikerIds').map((v) => v.toString()),
         hinweise: (fd.get('hinweise') || '').toString().trim(),
         checklistenPunkte: baueChecklistenPunkte((fd.get('checklistenPunkteText') || '').toString(), data.checklistenPunkte),
+        materialliste: baueFreieMaterialliste((fd.get('materiallisteText') || '').toString(), data.materialliste),
         erstelltAm: data.erstelltAm || new Date().toISOString(),
         aktualisiertAm: new Date().toISOString(),
       };

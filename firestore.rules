@@ -392,7 +392,10 @@ service cloud.firestore {
     // (Haken auf der vom Büro vorbelegten Checkliste), maengel/
     // zusatzarbeitVorschlag (freier Text, löst NICHTS automatisch aus - das
     // Büro sieht und entscheidet in der eigenen Ansicht), berichtsentwurf
-    // (Rohtext für den späteren Wartungsbericht). Bewusst KEIN Zugriff auf
+    // (Rohtext für den späteren Wartungsbericht). materialliste (Materialliste
+    // zum Abhaken vor der Fahrt zum Einsatz) ebenso freigegeben, damit ein
+    // Techniker die vom Büro vorbelegte Liste selbst abhaken kann, ohne auf
+    // Büro-Felder zuzugreifen. Bewusst KEIN Zugriff auf
     // "dokumente"/"fotos" in dieser Phase - der eigentliche, versandfähige
     // Bericht entsteht weiterhin ausschließlich über die admin/büro-Ansicht
     // (siehe Phase 5/6 Kommentar in dokumente.js/serviceauftraege.js): erst
@@ -415,7 +418,7 @@ service cloud.firestore {
           && resource.data.status in ['zugewiesen', 'in_bearbeitung']
           && request.resource.data.status in ['in_bearbeitung', 'abgeschlossen']
           && request.resource.data.diff(resource.data).affectedKeys()
-               .hasOnly(['status', 'technikerNotizen', 'aktualisiertAm', 'checklistenPunkte', 'maengel', 'zusatzarbeitVorschlag', 'berichtsentwurf'])
+               .hasOnly(['status', 'technikerNotizen', 'aktualisiertAm', 'checklistenPunkte', 'maengel', 'zusatzarbeitVorschlag', 'berichtsentwurf', 'materialliste'])
         );
       allow read: if isTechniker() && myMitarbeiterId() in resource.data.technikerIds;
     }
