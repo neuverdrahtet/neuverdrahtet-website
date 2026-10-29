@@ -2592,13 +2592,46 @@ async function handleMcpRequest(request, ctx) {
   return mcpJsonRpcResponse(responses);
 }
 
+// P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03, Finding #7:
+// "mächtigste Schreibrechte aller Worker, aber kein Rate-Limiting"): normaler
+// "!=="-Stringvergleich bricht beim ersten abweichenden Zeichen ab -
+// theoretisch ein Timing-Seitenkanal für ein geteiltes Geheimnis wie
+// API_KEY. Konstante Laufzeit unabhängig vom Inhalt (1:1 aus
+// cloudflare-worker/worker.js übernommen, dort schon in Phase 9 gefixt).
+function zeitkonstanterVergleich(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let unterschied = 0;
+  for (let i = 0; i < a.length; i++) unterschied |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return unterschied === 0;
+}
+
+// Fehlt das RATE_LIMITER-Binding oder schlägt der Aufruf fehl, wird jetzt
+// FAIL-CLOSED gesperrt statt ungebremst durchgelassen - 1:1 dasselbe Muster
+// wie pruefeRateLimit() in cloudflare-worker/worker.js. Dieser Worker hat die
+// mächtigsten Schreibrechte aller zehn Worker (direkter Firestore-Admin-
+// Zugriff auf praktisch jede Werkora-Collection) - ohne Begrenzung hätte ein
+// geleakter API_KEY unbegrenzten Missbrauch erlaubt.
+async function pruefeRateLimit(env, ip) {
+  if (!env.RATE_LIMITER) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Worker wird FAIL-CLOSED gesperrt (siehe P0-Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
+  }
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Worker wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
+  }
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen, kein Netzwerk).
 export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
   customerToApi, apiToCustomer, taskToApi, appointmentToApi, projectToApi, quoteToApi, invoiceToApi,
   nextDailyNummer, calcTotals, leadStatusHinweis, addDaysISO, buildBueroChecklist,
   orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
-  stockMovementToApi, MCP_TOOLS, callWerkoraMcpTool, handleMcpRequest,
+  stockMovementToApi, MCP_TOOLS, callWerkoraMcpTool, handleMcpRequest, zeitkonstanterVergleich,
 };
 
 export default {
@@ -2606,9 +2639,19 @@ export default {
     if (request.method === 'OPTIONS') return jsonResponse(null, 204);
 
     if (!env.API_KEY) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (API_KEY fehlt).', 500);
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimit = await pruefeRateLimit(env, ip);
+    if (!rateLimit.erlaubt) {
+      const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+      return errorResponse(
+        istKonfigurationsproblem ? 'RATE_LIMITER_FEHLT' : 'RATE_LIMITED',
+        istKonfigurationsproblem ? 'API vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet).' : 'Zu viele Anfragen - bitte kurz warten.',
+        istKonfigurationsproblem ? 503 : 429,
+      );
+    }
     const authHeader = request.headers.get('Authorization') || '';
     const gesendeterSchluessel = authHeader.replace(/^Bearer\s+/i, '').trim();
-    if (gesendeterSchluessel !== env.API_KEY) {
+    if (!zeitkonstanterVergleich(gesendeterSchluessel, env.API_KEY)) {
       return errorResponse('UNAUTHORIZED', 'Ungültiger oder fehlender API-Schlüssel (Authorization: Bearer <Schlüssel>).', 401);
     }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).', 500);

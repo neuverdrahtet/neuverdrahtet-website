@@ -445,7 +445,14 @@ Datei per Dashboard-Quick-Edit deploybar bleibt (kein npm-Build nötig).
    hinzufügen: `0 6 * * *` (überfällig-Webhooks, optional falls keine Webhooks genutzt
    werden), sowie für den automatischen Büroablauf `0 6 * * 1-5`, `0 10 * * 1-5` und
    `0 14 * * 1-5` (siehe eigener Abschnitt weiter unten).
-5. Die im Dashboard angezeigte Worker-URL (endet auf `.workers.dev`) ist die Basis-URL für
+5. **Rate-Limiter-Binding einrichten** (P0-Sicherheitskorrektur, Oktober 2026): unter
+   **Einstellungen → Bindings** einen "Rate Limiting"-Binding mit Namen `RATE_LIMITER`
+   hinzufügen (bei Deploy per `wrangler deploy` passiert das automatisch über
+   `wrangler.toml`). **Ohne dieses Binding sperrt sich der Worker ab sofort selbst
+   (fail-closed, 503) statt ungebremst durchzulassen** - dieser Worker hat die
+   mächtigsten Schreibrechte aller zehn Worker, daher keine optionale
+   Komfort-Verbesserung, sondern Voraussetzung für den normalen Betrieb.
+6. Die im Dashboard angezeigte Worker-URL (endet auf `.workers.dev`) ist die Basis-URL für
    die KI-Bürokraft, z.B. `https://neuverdrahtet-ki-buerokraft.<dein-konto>.workers.dev`.
 
 ## Beleg-Analyse einrichten (analyze-receipt, Service-Bindung erforderlich)

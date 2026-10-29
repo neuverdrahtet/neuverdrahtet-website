@@ -2,6 +2,21 @@ name = "neuverdrahtet-api"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 
-# Secrets (API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON) werden NICHT hier
-# eingetragen, sondern per "wrangler secret put" bzw. im Cloudflare-
-# Dashboard gesetzt.
+# Secrets (API_KEY, API_KEY_READONLY, FIREBASE_SERVICE_ACCOUNT_JSON) werden
+# NICHT hier eingetragen, sondern per "wrangler secret put" bzw. im
+# Cloudflare-Dashboard gesetzt.
+
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03): begrenzt
+# jeden Aufruf auf 30 Anfragen je IP und Minute - schützt vor unbegrenztem
+# Missbrauch, falls der statische API_KEY jemals leakt. Fehlt dieses Binding
+# zur Laufzeit, sperrt sich der Worker jetzt bewusst FAIL-CLOSED (siehe
+# pruefeRateLimit in worker.js) statt ungebremst durchzulassen - daher eine
+# ZWINGENDE Voraussetzung. "[[unsafe.bindings]]" statt des neueren
+# "[[ratelimits]]", weil Letzteres vom in der GitHub-Actions-Pipeline
+# installierten wrangler 3.90.0 nicht erkannt wird (siehe ausführlicher
+# Kommentar dazu in cloudflare-worker/wrangler.toml).
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1007"
+simple = { limit = 30, period = 60 }

@@ -84,7 +84,7 @@ function authRequest(path, { method = 'POST', body } = {}) {
   });
 }
 
-const env = { API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount) };
+const env = { API_KEY, FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount), RATE_LIMITER: { limit: async () => ({ success: true }) } };
 // callWerkoraMcpTool() direkt aufrufen (ohne OAuth-Umweg) - firestoreGet/
 // Create/Update prüfen den Token-WERT nicht, nur dass einer gesendet wird.
 const ctx = { accessToken: 'fake-token', projectId: serviceAccount.project_id, ip: '' };
