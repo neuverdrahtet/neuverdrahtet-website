@@ -1,0 +1,15 @@
+# P0-Sicherheitskorrektur, Nachtrag (29.10.2026): die elf Deploy-Workflows
+# (deploy-*.yml) hängen seit Phase 5 vom wiederverwendbaren "test"-Job
+# (tests.yml) ab, feuern aber ausschließlich bei "push" auf main - eine
+# Pull Request zeigt dadurch bisher KEINEN Prüfstatus, bevor sie gemergt
+# wird. Dieser eigene, schlanke Workflow ruft denselben wiederverwendbaren
+# Testjob zusätzlich für jede Pull Request auf (unabhängig vom Ziel-Branch),
+# damit CI-Ergebnisse schon vor dem Merge auf der PR selbst sichtbar sind.
+name: CI (Pull Request)
+
+on:
+  pull_request: {}
+
+jobs:
+  test:
+    uses: ./.github/workflows/tests.yml

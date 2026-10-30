@@ -46,6 +46,7 @@ let aiWorkerAntwort = () => ({ haendler: 'Test-Lieferant GmbH', datum: '2026-01-
 const env = {
   API_KEY,
   FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount),
+  RATE_LIMITER: { limit: async () => ({ success: true }) },
   AI_WORKER: {
     async fetch(url, init) {
       aiWorkerAufrufe++;

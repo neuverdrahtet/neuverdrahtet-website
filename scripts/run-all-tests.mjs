@@ -27,6 +27,9 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const TEST_VERZEICHNISSE = [
   'verwaltung/tests',
   'cloudflare-worker/jarvis-tests',
+  'cloudflare-worker-ki-buerokraft/tests',
+  'cloudflare-worker-api/tests',
+  'cloudflare-worker-google-buero/tests',
 ];
 
 function findeTestdateien(verzeichnis) {

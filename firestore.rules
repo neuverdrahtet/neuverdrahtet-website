@@ -44,9 +44,20 @@ service cloud.firestore {
     // Sensible Geschäfts-/Finanz-/Personaldaten: nur Admin + Büro
     // (spiegelt ROUTE_ROLLEN aus db.js für kunden/katalog/angebote/rechnungen/
     // mahnungen/ausgaben/vorlagen/textbausteine/kanban).
+    //
+    // "rechnungen" ABSICHTLICH NICHT in dieser Liste (P0-Sicherheitskorrektur
+    // 28.10.2026, Master-Audit Bericht 03 Risiko #2): die generische
+    // Catch-all-Regel ganz unten gewährt jeder hier gelisteten Collection
+    // UNEINGESCHRÄNKTEN admin/büro-Schreibzugriff - für Rechnungen reichte
+    // das aus, um eine bereits versendete (GoBD-gesperrte) Rechnung über
+    // einen direkten Firestore-Zugriff (Browser-Devtools, manipulierte
+    // Anfrage) unbemerkt zu verändern oder zu löschen, obwohl die
+    // Verwaltungs-Oberfläche selbst das verhindert. "rechnungen" hat daher
+    // jetzt eine eigene, vollständige Regel weiter unten, die den
+    // inhaltlichen Kern einer versendeten Rechnung serverseitig sperrt.
     function isSensitiveCollection(collectionId) {
       return collectionId in [
-        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'rechnungen', 'gutschriften',
+        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'gutschriften',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
@@ -168,8 +179,52 @@ service cloud.firestore {
     match /angebote/{docId} {
       allow read: if isKunde() && myKundeId() == resource.data.kundeId;
     }
+    // P0-Sicherheitskorrektur 28.10.2026 (Master-Audit Bericht 03, Risiko
+    // #2, kritisch): bis hierhin schützte nur die Werkora-Oberfläche selbst
+    // (eine lokale "locked"-Formularvariable) eine bereits versendete
+    // Rechnung vor nachträglicher Änderung - jeder direkte Firestore-
+    // Zugriff mit admin/büro-Rolle (Browser-Devtools, manipulierte
+    // Anfrage) konnte das umgehen. Diese Collection ist deshalb bewusst
+    // NICHT Teil von isSensitiveCollection() (siehe Kommentar dort) und
+    // bekommt hier ihre eigene, vollständige Regel.
+    //
+    // Prinzip: der INHALTLICHE KERN einer Rechnung (was wurde wann an wen
+    // für wie viel berechnet) darf sich nicht mehr ändern, sobald
+    // "versendet" einmal true ist - das deckt sich mit der GoBD-
+    // Unveränderbarkeitspflicht für ausgestellte Rechnungen. Begleitende
+    // Status-/Zahlungs-/Verknüpfungsfelder (Storno, Zahlungseingang,
+    // Gutschrift-Verrechnung, Teilzahlung, Lexoffice-Sync) bleiben bewusst
+    // änderbar - das sind kontrollierte Folgeprozesse derselben Rechnung,
+    // keine Inhaltsänderung, und sie laufen in Werkora selbst über klar
+    // abgegrenzte Funktionen (siehe rechnungen.js: Storno-Dialog,
+    // zahlungsabgleich.js, bankabgleich.js).
+    function rechnungInhaltUnveraendert() {
+      return request.resource.data.nummer == resource.data.nummer
+        && request.resource.data.datum == resource.data.datum
+        && request.resource.data.kundeId == resource.data.kundeId
+        && request.resource.data.projektId == resource.data.projektId
+        && request.resource.data.positionen == resource.data.positionen
+        && request.resource.data.netto == resource.data.netto
+        && request.resource.data.steuer == resource.data.steuer
+        && request.resource.data.brutto == resource.data.brutto
+        && request.resource.data.steuerart == resource.data.steuerart
+        && request.resource.data.betreff == resource.data.betreff;
+    }
     match /rechnungen/{docId} {
-      allow read: if isKunde() && myKundeId() == resource.data.kundeId;
+      allow read: if (isKunde() && myKundeId() == resource.data.kundeId) || isAdminOrBuero();
+      allow create: if isSignedIn() && isAdminOrBuero();
+      allow update: if isSignedIn() && isAdminOrBuero()
+        && (resource.data.versendet != true || rechnungInhaltUnveraendert());
+      // Eine versendete Rechnung darf serverseitig gar nicht mehr gelöscht
+      // werden (nur Storno + Ersatzrechnung, siehe rechnungen.js). Eine
+      // NICHT versendete Rechnung (Entwurf) muss zunächst über den
+      // Papierkorb (remove(), ein "update" mit _geloescht:true) weich
+      // gelöscht werden - ein direkter, einstufiger Hard-Delete ist auch
+      // dafür gesperrt, damit kein direkter Firestore-Zugriff die
+      // Papierkorb-/Aufbewahrungsfrist-Prüfung aus db.js (siehe P0 Phase 1)
+      // umgehen kann.
+      allow delete: if isSignedIn() && isAdminOrBuero()
+        && resource.data.versendet != true && resource.data._geloescht == true;
     }
     match /termine/{docId} {
       allow read: if isKunde() && myKundeId() == resource.data.kundeId;
@@ -218,6 +273,19 @@ service cloud.firestore {
     // ein manueller Re-Trigger) nochmal eine Aufgabe/einen Entwurf erzeugt.
     match /jarvisEmailVerarbeitung/{docId} {
       allow read: if isAdmin();
+      allow write: if false;
+    }
+    // Freigabe-Warteschlange der KI-Bürokraft-API (cloudflare-worker-ki-
+    // buerokraft, P0-Sicherheitskorrektur 28.10.2026) für
+    // werkora_create_invoice/werkora_mark_invoice_paid/
+    // werkora_cancel_invoice/werkora_create_mahnung - admin+büro dürfen
+    // lesen (dieselbe Berechtigung wie für rechnungen/mahnungen selbst),
+    // aber NIE direkt schreiben: ein roher Firestore-Write würde nur das
+    // Status-Feld setzen, ohne die eigentliche Aktion auszuführen - die
+    // Freigabe läuft ausschließlich über den Worker (Admin-SDK, umgeht
+    // diese Regel ohnehin), siehe dessen bearbeiteFinanzFreigabe().
+    match /mcpFinanzFreigaben/{docId} {
+      allow read: if isAdminOrBuero();
       allow write: if false;
     }
     // Rechnungsentwürfe (Phase 3) - bewusst NICHT die echte Collection

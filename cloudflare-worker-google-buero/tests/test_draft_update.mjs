@@ -19,6 +19,7 @@ const env = {
   FIREBASE_SERVICE_ACCOUNT_JSON: JSON.stringify(serviceAccount),
   GOOGLE_OAUTH_CLIENT_ID: 'client-id',
   GOOGLE_OAUTH_CLIENT_SECRET: 'client-secret',
+  RATE_LIMITER: { limit: async () => ({ success: true }) },
 };
 
 let bestanden = 0, fehlgeschlagen = 0;

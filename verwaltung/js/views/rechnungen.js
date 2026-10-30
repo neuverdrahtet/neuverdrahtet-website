@@ -1,4 +1,4 @@
-import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
+import { getAll, put, remove, getSettings, resolveMarkeSettings, STEUERARTEN, vergibRechnungsnummerAtomisch } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, offenerRestbetrag, offenerGutschriftBetrag } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
@@ -571,19 +571,19 @@ export async function render(container, route) {
           : 'Keine gültigen Zeilen gefunden.';
         return;
       }
-      let currentSettings = await getSettings();
       for (const row of gueltigeRows) {
         const positionen = [{
           id: uid(), bezeichnung: row.betreff || 'Pauschalposition', beschreibung: '',
           einheit: 'Psch.', menge: 1, einzelpreis: row.netto, steuersatz: row.steuersatz,
         }];
         const totals = calcTotals(positionen);
-        let nummer = row.nummer;
-        if (!nummer) {
-          const next = nextDailyNummer(currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler });
-          nummer = next.nummer;
-          currentSettings = { ...currentSettings, rechnungNummerDatum: next.datum, rechnungNummerZaehler: next.zaehler };
-        }
+        // P0-Sicherheitskorrektur 28.10.2026: siehe Kommentar bei der
+        // Haupt-Speicherfunktion oben - jede Nummer einzeln atomar
+        // vergeben, statt den Zähler nur im Speicher mitzuführen und erst
+        // am Ende des Imports einmalig zu schreiben (sonst würde ein
+        // gleichzeitig laufender zweiter Import/eine zweite Rechnung
+        // denselben Zwischenstand überschreiben können).
+        const nummer = row.nummer || await vergibRechnungsnummerAtomisch(settings.rechnungPrefix);
         const rechnung = {
           id: uid(), nummer, kundeId: row.kundeId, projektId: '', angebotId: null, auftragsbestaetigungId: null,
           datum: row.datum, leistungsdatum: row.datum, faelligAm: row.faelligAm || addDays(row.datum, settings.zahlungszielTage || 14),
@@ -598,7 +598,6 @@ export async function render(container, route) {
         await syncBuchung(rechnung);
         rechnungen.push(rechnung);
       }
-      await setSettings({ rechnungNummerDatum: currentSettings.rechnungNummerDatum, rechnungNummerZaehler: currentSettings.rechnungNummerZaehler });
       toast(`${gueltigeRows.length} Rechnung(en) importiert${errors.length ? `, ${errors.length} Zeile(n) übersprungen` : ''}`, 'success');
       close();
       applyFilter();
@@ -1096,11 +1095,10 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       if (stornoBtn) {
         stornoBtn.addEventListener('click', () => {
           openStornoGrundDialog(data.nummer, async (stornoGrund, stornoGrundText, korrigierteErsatzrechnung) => {
-            const currentSettings = await getSettings();
-            const { nummer: stornoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-              currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
-            );
-            await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
+            // P0-Sicherheitskorrektur 28.10.2026: siehe Kommentar bei der
+            // Haupt-Speicherfunktion oben - atomare Vergabe statt
+            // getSettings->nextDailyNummer->setSettings.
+            const stornoNummer = await vergibRechnungsnummerAtomisch(settings.rechnungPrefix);
             const stornoPositionen = data.positionen.map((p) => ({ ...p, id: uid(), menge: -(Number(p.menge) || 0) }));
             const stornoTotals = calcTotals(stornoPositionen);
             const storno = {
@@ -1268,12 +1266,11 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       }
 
       if (!isEdit) {
-        const currentSettings = await getSettings();
-        const { nummer: autoNummer, datum: nDatum, zaehler: nZaehler } = nextDailyNummer(
-          currentSettings.rechnungPrefix, { datum: currentSettings.rechnungNummerDatum, zaehler: currentSettings.rechnungNummerZaehler }
-        );
-        if (!updated.nummer) updated.nummer = autoNummer;
-        await setSettings({ rechnungNummerDatum: nDatum, rechnungNummerZaehler: nZaehler });
+        // P0-Sicherheitskorrektur 28.10.2026: atomare Vergabe statt
+        // getSettings->nextDailyNummer->setSettings (Race Condition bei
+        // zwei fast gleichzeitigen Speichervorgängen) - siehe
+        // vergibRechnungsnummerAtomisch() in db.js.
+        if (!updated.nummer) updated.nummer = await vergibRechnungsnummerAtomisch(settings.rechnungPrefix);
       }
 
       if (!locked) {
