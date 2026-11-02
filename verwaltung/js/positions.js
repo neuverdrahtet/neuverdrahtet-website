@@ -314,5 +314,9 @@ Steckdose montieren;4;Std.;65;19"></textarea>
     getPositionen: () => posState,
     getTotals: () => calcTotals(posState),
     refresh: () => render(),
+    addPositionen: (liste) => {
+      for (const p of liste || []) posState.push({ ...p, id: uid() });
+      render();
+    },
   };
 }

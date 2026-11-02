@@ -51,7 +51,7 @@ service cloud.firestore {
         'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
-        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks',
+        'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks', 'teams',
         // Phase 10 (Mitarbeiter & Benefits): genauso schützenswert wie
         // "mitarbeiter" selbst (enthält Arbeitgeberkosten je Mitarbeiter) -
         // bewusst KEIN dokumentgebundenes Lese-Carve-out für mitarbeiter/

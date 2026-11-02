@@ -644,6 +644,16 @@ export async function render(container, route) {
           <p class="hint">KI-Preise sind Richtwerte aus einer Internetrecherche ohne Garantie - bei wichtigen Angeboten vor dem Versand prüfen.</p>
           <div id="pos-host"></div>
           <div id="tb-picker-host"></div>
+          <div class="flex-row" style="margin-top:10px;gap:8px;align-items:center" id="angebotsvorlage-host">
+            ${vorlagen.filter((v) => v.typ !== 'dokumentation' && v.notizen).length ? `
+              <select id="f-angebotsvorlage-select">
+                <option value="">📋 Komplette Vorlage laden ...</option>
+                ${vorlagen.filter((v) => v.typ !== 'dokumentation' && v.notizen).map((v) => `<option value="${v.id}">${escapeHtml(v.name)}</option>`).join('')}
+              </select>
+            ` : ''}
+            <button type="button" class="btn btn-sm btn-ghost" id="btn-save-angebotsvorlage">Als Angebotsvorlage speichern</button>
+          </div>
+          <p class="hint">"Komplette Vorlage laden" ersetzt Notizen/Schlusstext und ergänzt die Positionen der Vorlage. "Als Angebotsvorlage speichern" merkt sich Betreff, Notizen/Schlusstext und die aktuellen Positionen als neue Vorlage.</p>
           <div class="field col-span-2" style="margin-top:10px"><label>Notizen / Schlusstext</label><textarea name="notizen">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="divider"></div>
           <h2 style="font-size:14px;margin:0 0 8px">Unterschrift Kunde (Angebotsannahme)</h2>
@@ -692,6 +702,31 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
       positionen: data.positionen,
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
+    });
+
+    const angebotsvorlageSelect = body.querySelector('#f-angebotsvorlage-select');
+    if (angebotsvorlageSelect) {
+      angebotsvorlageSelect.addEventListener('change', () => {
+        const vorlage = vorlagen.find((v) => v.id === angebotsvorlageSelect.value);
+        angebotsvorlageSelect.value = '';
+        if (!vorlage) return;
+        const notizenField = body.querySelector('textarea[name="notizen"]');
+        if (notizenField) notizenField.value = vorlage.notizen || '';
+        editor.addPositionen(vorlage.positionen || []);
+      });
+    }
+    body.querySelector('#btn-save-angebotsvorlage').addEventListener('click', async () => {
+      const positionen = editor.getPositionen();
+      if (positionen.length === 0) { toast('Keine Positionen zum Speichern vorhanden', 'danger'); return; }
+      const name = window.prompt('Name für die neue Angebotsvorlage:');
+      if (!name || !name.trim()) return;
+      const notizenField = body.querySelector('textarea[name="notizen"]');
+      await put('vorlagen', {
+        id: uid(), typ: 'positionen', name: name.trim(),
+        notizen: notizenField?.value || '',
+        positionen: positionen.map((p) => ({ ...p, id: uid() })),
+      });
+      toast('Angebotsvorlage gespeichert', 'success');
     });
 
     mountTextbausteinPicker(body.querySelector('#tb-picker-host'), {

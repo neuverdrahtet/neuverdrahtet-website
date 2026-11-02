@@ -12,6 +12,7 @@ const LABELS = {
   mitarbeiter: { label: 'Mitarbeiter', icon: '🧑‍🔧', title: (m) => m.name || '(ohne Namen)' },
   subunternehmer: { label: 'Subunternehmer', icon: '🤝', title: (s) => s.firma || '(ohne Namen)' },
   geraete: { label: 'Geräte', icon: '🛠️', title: (g) => g.name || '(ohne Namen)' },
+  teams: { label: 'Teams', icon: '👥', title: (t) => t.name || '(ohne Namen)' },
   flotten: { label: 'Fahrzeuge', icon: '🚐', title: (f) => f.bezeichnung || '(ohne Bezeichnung)' },
   katalog: { label: 'Artikel & Leistungen', icon: '🧾', title: (k) => k.bezeichnung || '(ohne Bezeichnung)' },
   angebote: { label: 'Angebote', icon: '📄', title: (a) => a.nummer || '(ohne Nummer)' },

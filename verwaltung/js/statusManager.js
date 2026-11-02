@@ -13,8 +13,13 @@ import { openModal, confirmDelete } from './ui.js';
  * UI-Feld konnte es nie gesetzt werden (neue/umbenannte Spalten blieben für
  * immer "aktiv"), wodurch das Dashboard dauerhaft zu viele Projekte als
  * aktiv zählte statt mit der Pipeline übereinzustimmen.
+ *
+ * zeigeVerlustFlag: zeigt eine "Zählt als verloren"-Checkbox pro Zeile (Feld
+ * "istVerlustStatus"). Nur bei leadpipeline.js (kundenStatus) aktiviert -
+ * markiert, bei welchem Status (nicht nur fest "verloren") der Verlustgrund-
+ * Dialog erscheinen soll, auch wenn eine Stage umbenannt oder dupliziert wird.
  */
-export function openStatusManager({ title = 'Status verwalten', store, items, colorable = true, zeigeGeschlossen = false, canDelete = () => true, onChange }) {
+export function openStatusManager({ title = 'Status verwalten', store, items, colorable = true, zeigeGeschlossen = false, zeigeVerlustFlag = false, canDelete = () => true, onChange }) {
   let list = [...items].sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
 
   const { body, close } = openModal({
@@ -36,6 +41,12 @@ export function openStatusManager({ title = 'Status verwalten', store, items, co
           <label class="flex-row" style="gap:4px;font-size:12.5px;white-space:nowrap;cursor:pointer">
             <input type="checkbox" class="s-geschlossen" ${it.geschlossen ? 'checked' : ''}>
             Abgeschlossen
+          </label>
+        ` : ''}
+        ${zeigeVerlustFlag ? `
+          <label class="flex-row" style="gap:4px;font-size:12.5px;white-space:nowrap;cursor:pointer">
+            <input type="checkbox" class="s-verlust" ${it.istVerlustStatus ? 'checked' : ''}>
+            Zählt als verloren
           </label>
         ` : ''}
         <button type="button" class="btn btn-sm btn-ghost s-up" title="Nach oben">↑</button>
@@ -73,6 +84,13 @@ export function openStatusManager({ title = 'Status verwalten', store, items, co
       if (geschlossenInput) {
         geschlossenInput.addEventListener('change', async () => {
           it.geschlossen = geschlossenInput.checked;
+          await put(store, it);
+        });
+      }
+      const verlustInput = row.querySelector('.s-verlust');
+      if (verlustInput) {
+        verlustInput.addEventListener('change', async () => {
+          it.istVerlustStatus = verlustInput.checked;
           await put(store, it);
         });
       }

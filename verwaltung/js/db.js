@@ -50,6 +50,7 @@ const STORES = {
   nachrichten: 'id',
   geraete: 'id',
   flotten: 'id',
+  teams: 'id',
   terminStatus: 'id',
   textbausteine: 'id',
   aufgabenStatus: 'id',
@@ -345,7 +346,7 @@ export async function openDB() {
 // Mehrfachauswahl+Löschen-Funktion haben; Hilfsdaten wie Kanban-Spalten,
 // Termine, E-Mails oder Verwendungen bleiben normale Hard-Deletes.
 export const TRASH_STORES = [
-  'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten',
+  'kunden', 'projekte', 'aufgaben', 'mitarbeiter', 'geraete', 'flotten', 'teams',
   'katalog', 'angebote', 'rechnungen', 'gutschriften', 'mahnungen', 'ausgaben', 'zeiterfassung', 'vorlagen', 'lieferanten',
   'subunternehmer',
 ];
@@ -2387,7 +2388,7 @@ export const DEFAULT_KUNDEN_STATUS = [
   { id: 'lead', titel: 'Lead', farbe: '#2b7fd6', reihenfolge: 0 },
   { id: 'interessent', titel: 'Interessent', farbe: '#f0a020', reihenfolge: 1 },
   { id: 'kunde', titel: 'Kunde', farbe: '#1f8a4c', reihenfolge: 2 },
-  { id: 'verloren', titel: 'Verloren', farbe: '#95a5a6', reihenfolge: 3, geschlossen: true },
+  { id: 'verloren', titel: 'Verloren', farbe: '#95a5a6', reihenfolge: 3, geschlossen: true, istVerlustStatus: true },
 ];
 
 export const ZUGRIFFSROLLEN = [
@@ -2479,6 +2480,7 @@ export const ROUTE_ROLLEN = {
   jarvis: ['admin'],
   partnerimport: ['admin'],
   geraete: ['admin', 'buero', 'mitarbeiter'],
+  teams: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],
   lieferanten: ['admin', 'buero'],

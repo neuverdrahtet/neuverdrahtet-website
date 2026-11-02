@@ -65,6 +65,7 @@ const routeLoaders = {
   urlaubsantraege: () => import('./views/urlaubsantraege.js'),
   formulare: () => import('./views/formulare.js'),
   geraete: () => import('./views/geraete.js'),
+  teams: () => import('./views/teams.js'),
   papierkorb: () => import('./views/papierkorb.js'),
   social: () => import('./views/social.js'),
 };

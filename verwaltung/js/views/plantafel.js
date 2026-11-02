@@ -15,6 +15,7 @@ const LANE_HEIGHT = 24;
 
 const RES_TYPES = [
   { type: 'mitarbeiter', field: 'mitarbeiterIds', label: 'Mitarbeiter', nameKey: 'name', colorFallback: '#f0a020' },
+  { type: 'team', field: 'teamIds', label: 'Teams', nameKey: 'name', colorFallback: '#a463f2' },
   { type: 'geraet', field: 'geraeteIds', label: 'Geräte', nameKey: 'name', colorFallback: '#14b8a6' },
   { type: 'flotte', field: 'flottenIds', label: 'Flotten', nameKey: 'bezeichnung', colorFallback: '#4d8bf0' },
 ];
@@ -96,12 +97,13 @@ export async function render(container, route, { autoSync = true } = {}) {
     });
   }
 
-  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, settings, terminStatus, marken] = await Promise.all([
-    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getSettings(), getAll('terminStatus'), getAll('marken'),
+  let [termine, kunden, projekte, mitarbeiter, geraete, flotten, teams, settings, terminStatus, marken] = await Promise.all([
+    getAll('termine'), getAll('kunden'), getAll('projekte'), getAll('mitarbeiter'), getAll('geraete'), getAll('flotten'), getAll('teams'), getSettings(), getAll('terminStatus'), getAll('marken'),
   ]);
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   geraete.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   flotten.sort((a, b) => (a.bezeichnung || '').localeCompare(b.bezeichnung || ''));
+  teams.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   terminStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
@@ -117,7 +119,7 @@ export async function render(container, route, { autoSync = true } = {}) {
   const activeStatusFilter = new Set();
   let bereichFilter = '';
 
-  const resourceLists = { mitarbeiter, geraet: geraete, flotte: flotten };
+  const resourceLists = { mitarbeiter, team: teams, geraet: geraete, flotte: flotten };
 
   const now = new Date();
   let weekStart = startOfWeek(now);
@@ -753,6 +755,7 @@ export async function render(container, route, { autoSync = true } = {}) {
       id: uid(), titel: prefill?.titel || '', typ: 'termin', start: `${prefill?.date || todayStr}T09:00`, ende: '',
       ort: prefill?.ort || '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '',
       mitarbeiterIds: prefill?.resType === 'mitarbeiter' ? [prefill.resId] : [],
+      teamIds: prefill?.resType === 'team' ? [prefill.resId] : [],
       geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
       flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
       notizen: '', farbe: '', status: terminStatus[0]?.id || 'geplant',
@@ -825,6 +828,17 @@ export async function render(container, route, { autoSync = true } = {}) {
               <div class="tag-list" id="mitarbeiter-checklist"></div>
               <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
             </div>
+            ${teams.length ? `
+              <div class="field col-span-2"><label>Teams</label>
+                <div class="tag-list">
+                  ${teams.map((tm) => `
+                    <label class="field-checkbox" style="border:1px solid var(--border);border-radius:8px;padding:5px 10px;">
+                      <input type="checkbox" name="teamIds" value="${tm.id}" ${data.teamIds?.includes(tm.id) ? 'checked' : ''}> ${escapeHtml(tm.name)}
+                    </label>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
             ${geraete.length ? `
               <div class="field col-span-2"><label>Geräte</label>
                 <div class="tag-list">
@@ -995,6 +1009,7 @@ export async function render(container, route, { autoSync = true } = {}) {
       updated.projektId = fd.get('projektId') || '';
       updated.status = fd.get('status') || terminStatus[0]?.id || 'geplant';
       updated.mitarbeiterIds = fd.getAll('mitarbeiterIds');
+      updated.teamIds = fd.getAll('teamIds');
       updated.geraeteIds = fd.getAll('geraeteIds');
       updated.flottenIds = fd.getAll('flottenIds');
       updated.notizen = (fd.get('notizen') || '').toString().trim();

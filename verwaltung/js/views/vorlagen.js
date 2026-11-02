@@ -179,7 +179,7 @@ export async function render(container) {
 
   function openForm(v) {
     const isEdit = !!v;
-    const data = v || { id: uid(), typ: 'positionen', name: '', positionen: [], textVorlage: '', abschnitte: [] };
+    const data = v || { id: uid(), typ: 'positionen', name: '', positionen: [], notizen: '', textVorlage: '', abschnitte: [] };
     let abschnitteState = (data.abschnitte || []).map((a) => ({ ...a }));
 
     function bodyFor(typ) {
@@ -197,7 +197,15 @@ export async function render(container) {
           <p class="hint">Diese Vorlage steht bei Projekt-/Mitarbeiter-Dokumenten unter "Bericht aus Vorlage erstellen" zur Auswahl.</p>
         `;
       }
-      return `<div class="divider"></div><div id="pos-host"></div>`;
+      return `
+        <div class="divider"></div>
+        <div class="field">
+          <label>Notizen / Schlusstext für das Angebot (optional)</label>
+          <textarea name="notizen" style="min-height:100px" placeholder="Wird beim Laden dieser Vorlage ins Notizen-/Schlusstext-Feld des Angebots übernommen">${escapeHtml(data.notizen || '')}</textarea>
+        </div>
+        <p class="hint">Nur relevant, wenn diese Vorlage im Angebot über "Komplette Vorlage laden" (statt nur "Vorlage einfügen") verwendet wird.</p>
+        <div class="divider"></div>
+        <div id="pos-host"></div>`;
     }
 
     const { body, close } = openModal({
@@ -267,6 +275,7 @@ export async function render(container) {
         name: (fd.get('name') || '').toString().trim(),
         typ,
         positionen: typ === 'dokumentation' ? [] : editor.getPositionen(),
+        notizen: typ === 'dokumentation' ? '' : (fd.get('notizen') || '').toString(),
         textVorlage: typ === 'dokumentation' ? (fd.get('textVorlage') || '').toString() : '',
         abschnitte: typ === 'dokumentation' ? abschnitteState : [],
       };

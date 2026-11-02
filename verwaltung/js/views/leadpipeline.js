@@ -5,6 +5,21 @@ import { openStatusManager } from '../statusManager.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
+// Analog zu GRUENDE_ABLEHNUNG/GRUENDE_ANNAHME in views/angebote.js - bewusst
+// eine feste Liste statt einer konfigurierbaren Einstellung, passend zum dort
+// bereits etablierten Muster für "Grund auswählen"-Felder.
+const VERLUSTGRUENDE = [
+  { id: 'preis', titel: 'Preis zu hoch' },
+  { id: 'konkurrenz', titel: 'Anderer Anbieter gewählt' },
+  { id: 'verschoben', titel: 'Projekt verschoben / auf Eis gelegt' },
+  { id: 'entfaellt', titel: 'Projekt entfällt' },
+  { id: 'keine_rueckmeldung', titel: 'Keine Rückmeldung vom Kunden' },
+  { id: 'sonstiges', titel: 'Sonstiges' },
+];
+function verlustgrundTitel(id) {
+  return VERLUSTGRUENDE.find((g) => g.id === id)?.titel || '';
+}
+
 function kuerzeText(text, maxLaenge) {
   const einzeilig = (text || '').replace(/\s+/g, ' ').trim();
   return einzeilig.length > maxLaenge ? einzeilig.slice(0, maxLaenge - 1) + '…' : einzeilig;
@@ -27,6 +42,54 @@ export async function render(container) {
   `;
   const board = container.querySelector('#board');
 
+  function istVerlustStatusId(statusId) {
+    return !!spalten.find((s) => s.id === statusId)?.istVerlustStatus;
+  }
+
+  // Zentrale Stelle für jeden Statuswechsel (Drag&Drop, card-move-Select,
+  // Bearbeiten-Formular) - fängt den Wechsel IN einen Verlust-Status ab und
+  // fragt erst den Grund ab, bevor der neue Status tatsächlich gespeichert
+  // wird. onCancel kann z.B. ein <select> wieder auf den alten Wert zurücksetzen.
+  function wechsleStatus(kunde, neuerStatus, { onCancel } = {}) {
+    if (neuerStatus === kunde.status) return;
+    if (istVerlustStatusId(neuerStatus) && !istVerlustStatusId(kunde.status)) {
+      openVerlustgrundModal(kunde, neuerStatus, onCancel);
+      return;
+    }
+    kunde.status = neuerStatus;
+    put('kunden', kunde).then(renderBoard);
+  }
+
+  function openVerlustgrundModal(kunde, neuerStatus, onCancel) {
+    const { body, close } = openModal({
+      title: `Verlustgrund – ${escapeHtml(kunde.firma)}`,
+      bodyHtml: `
+        <div class="field"><label>Warum wurde dieser Lead verloren?</label>
+          <select id="vg-grund">${VERLUSTGRUENDE.map((g) => `<option value="${g.id}">${escapeHtml(g.titel)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label>Notiz (optional)</label><input type="text" id="vg-text" placeholder="Details"></div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="vg-cancel">Abbrechen</button>
+          <button type="button" class="btn btn-primary" id="vg-save">Als verloren speichern</button>
+        </div>
+      `,
+    });
+    body.querySelector('#vg-cancel').addEventListener('click', () => {
+      close();
+      if (onCancel) onCancel();
+      renderBoard();
+    });
+    body.querySelector('#vg-save').addEventListener('click', async () => {
+      kunde.status = neuerStatus;
+      kunde.verlustgrund = body.querySelector('#vg-grund').value;
+      kunde.verlustgrundText = body.querySelector('#vg-text').value.toString().trim();
+      await put('kunden', kunde);
+      close();
+      renderBoard();
+    });
+  }
+
   function renderBoard() {
     board.innerHTML = spalten.map((s) => {
       const cards = kunden.filter((k) => (k.status || 'kunde') === s.id);
@@ -43,6 +106,7 @@ export async function render(container) {
                 ${k.ansprechpartner ? `<div class="meta">${escapeHtml(k.ansprechpartner)}</div>` : ''}
                 ${k.telefon ? `<div class="meta">${escapeHtml(k.telefon)}</div>` : ''}
                 ${k.notizen ? `<div class="meta text-mute" style="white-space:pre-wrap">${escapeHtml(kuerzeText(k.notizen, 140))}</div>` : ''}
+                ${istVerlustStatusId(k.status) && k.verlustgrund ? `<div class="meta"><span class="badge badge-danger">Verloren: ${escapeHtml(verlustgrundTitel(k.verlustgrund))}</span></div>` : ''}
                 <select class="card-move" data-id="${k.id}" title="Status wechseln (auch per Ziehen möglich)">
                   ${spalten.map((s2) => `<option value="${s2.id}" ${s2.id === (k.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s2.titel)}</option>`).join('')}
                 </select>
@@ -67,13 +131,12 @@ export async function render(container) {
 
     board.querySelectorAll('.card-move').forEach((select) => {
       select.addEventListener('click', (e) => e.stopPropagation());
-      select.addEventListener('change', async (e) => {
+      select.addEventListener('change', (e) => {
         e.stopPropagation();
         const kunde = kunden.find((k) => k.id === select.dataset.id);
         if (!kunde) return;
-        kunde.status = select.value;
-        await put('kunden', kunde);
-        renderBoard();
+        const vorherigerStatus = kunde.status;
+        wechsleStatus(kunde, select.value, { onCancel: () => { select.value = vorherigerStatus; } });
       });
     });
 
@@ -83,16 +146,14 @@ export async function render(container) {
         col.classList.add('drag-over');
       });
       col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
-      col.addEventListener('drop', async (e) => {
+      col.addEventListener('drop', (e) => {
         e.preventDefault();
         col.classList.remove('drag-over');
         const id = e.dataTransfer.getData('text/plain');
         const kunde = kunden.find((k) => k.id === id);
         const newStatus = col.dataset.col;
-        if (!kunde || !newStatus || kunde.status === newStatus) return;
-        kunde.status = newStatus;
-        await put('kunden', kunde);
-        renderBoard();
+        if (!kunde || !newStatus) return;
+        wechsleStatus(kunde, newStatus);
       });
     });
   }
@@ -103,6 +164,7 @@ export async function render(container) {
       title: 'Kunden-Status verwalten',
       store: 'kundenStatus',
       items: spalten,
+      zeigeVerlustFlag: true,
       canDelete: (it) => !kunden.some((k) => (k.status || 'kunde') === it.id),
       onChange: () => render(container),
     });
@@ -124,6 +186,13 @@ export async function render(container) {
             </div>
             <div class="field"><label>Telefon</label><input name="telefon" value="${escapeHtml(data.telefon || '')}"></div>
             <div class="field"><label>E-Mail</label><input type="email" name="email" value="${escapeHtml(data.email || '')}"></div>
+            <div class="col-span-2" id="verlust-grund-section" ${istVerlustStatusId(data.status) ? '' : 'hidden'}>
+              <div class="field">
+                <label>Verlustgrund</label>
+                <select name="verlustgrund">${VERLUSTGRUENDE.map((g) => `<option value="${g.id}" ${g.id === data.verlustgrund ? 'selected' : ''}>${escapeHtml(g.titel)}</option>`).join('')}</select>
+                <input type="text" name="verlustgrundText" value="${escapeHtml(data.verlustgrundText || '')}" placeholder="Notiz (optional)" style="margin-top:6px">
+              </div>
+            </div>
             <div class="field col-span-2"><label>Notizen / Anliegen</label><textarea name="notizen" rows="4">${escapeHtml(data.notizen || '')}</textarea></div>
           </div>
           <div class="modal-actions">
@@ -136,6 +205,9 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('select[name="status"]').addEventListener('change', (e) => {
+      body.querySelector('#verlust-grund-section').hidden = !istVerlustStatusId(e.target.value);
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Kunde "${data.firma}" in den Papierkorb verschieben?`)) return;
@@ -151,6 +223,13 @@ export async function render(container) {
       const updated = { ...data };
       for (const key of ['firma', 'ansprechpartner', 'status', 'telefon', 'email', 'notizen']) {
         updated[key] = (fd.get(key) || '').toString().trim();
+      }
+      if (istVerlustStatusId(updated.status)) {
+        updated.verlustgrund = (fd.get('verlustgrund') || '').toString().trim();
+        updated.verlustgrundText = (fd.get('verlustgrundText') || '').toString().trim();
+      } else {
+        updated.verlustgrund = '';
+        updated.verlustgrundText = '';
       }
       if (!updated.firma) return;
       await put('kunden', updated);
