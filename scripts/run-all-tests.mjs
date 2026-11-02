@@ -30,6 +30,10 @@ const TEST_VERZEICHNISSE = [
   'cloudflare-worker-ki-buerokraft/tests',
   'cloudflare-worker-api/tests',
   'cloudflare-worker-google-buero/tests',
+  'cloudflare-worker-ki-check/tests',
+  'cloudflare-worker-ki-assistent/tests',
+  'cloudflare-worker-ki-assistent-whatsapp/tests',
+  'cloudflare-worker-kostenschaetzer/tests',
 ];
 
 function findeTestdateien(verzeichnis) {

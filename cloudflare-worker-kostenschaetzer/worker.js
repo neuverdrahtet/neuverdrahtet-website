@@ -80,15 +80,20 @@ function jsonResponse(data, status, headers) {
 // Schützt vor einem Skript, das die Timing-/Honeypot-Anti-Spam-Heuristik
 // unten umgeht und unbegrenzt Leads anlegt (+ WhatsApp-Benachrichtigungen
 // an den Inhaber auslöst). env.RATE_LIMITER kann fehlen (Binding noch nicht
-// deployed/konfiguriert) - dann einfach nicht blockieren, statt den
-// öffentlichen Kostenschätzer/das Kontaktformular komplett auszuhebeln.
-async function unterSchwellenwert(env, ip) {
-  if (!env.RATE_LIMITER) return true;
+// P0-Sicherheitskorrektur: fehlt das RATE_LIMITER-Binding oder schlägt der
+// Aufruf fehl, wird FAIL-CLOSED gesperrt statt ungebremst durchgelassen -
+// 1:1 dasselbe Muster wie pruefeRateLimit() in cloudflare-worker/worker.js.
+async function pruefeRateLimit(env, ip) {
+  if (!env.RATE_LIMITER) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Worker wird FAIL-CLOSED gesperrt (siehe P0-Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
+  }
   try {
     const { success } = await env.RATE_LIMITER.limit({ key: ip });
-    return success;
-  } catch {
-    return true;
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Worker wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
   }
 }
 
@@ -525,8 +530,14 @@ export default {
     }
 
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-    if (!(await unterSchwellenwert(env, ip))) {
-      return jsonResponse({ error: 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.' }, 429, headers);
+    const rateLimit = await pruefeRateLimit(env, ip);
+    if (!rateLimit.erlaubt) {
+      const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+      return jsonResponse({
+        error: istKonfigurationsproblem
+          ? 'Dienst vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet).'
+          : 'Zu viele Anfragen. Bitte kurz warten und erneut versuchen.',
+      }, istKonfigurationsproblem ? 503 : 429, headers);
     }
 
     let body;

@@ -452,15 +452,23 @@ async function validateMetaSignature({ appSecret, rawBody, signature }) {
 // Begrenzt Claude-Aufrufe pro Absendernummer, falls eine einzelne Nummer den
 // Bot mit Nachrichten flutet - zusätzlich zur Signaturprüfung oben (die
 // gefälschte Absender blockiert, nicht aber eine echte, aber sehr aktive
-// Nummer). env.RATE_LIMITER kann fehlen (Binding noch nicht deployed/
-// konfiguriert) - dann einfach nicht blockieren.
-async function unterSchwellenwert(env, key) {
-  if (!env.RATE_LIMITER) return true;
+// Nummer). P0-Sicherheitskorrektur: fehlt das RATE_LIMITER-Binding oder
+// schlägt der Aufruf fehl, wird FAIL-CLOSED gesperrt (keine KI-Anfrage)
+// statt ungebremst durchgelassen - 1:1 dasselbe Muster wie
+// pruefeRateLimit() in cloudflare-worker/worker.js. Der Aufrufer antwortet
+// Meta trotzdem immer mit 200 (siehe unten), nur ohne die KI-Antwort
+// auszulösen - sonst wiederholt Meta den Webhook-Aufruf unnötig.
+async function pruefeRateLimit(env, key) {
+  if (!env.RATE_LIMITER) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Worker wird FAIL-CLOSED gesperrt (siehe P0-Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
+  }
   try {
     const { success } = await env.RATE_LIMITER.limit({ key });
-    return success;
-  } catch {
-    return true;
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Worker wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
   }
 }
 
@@ -571,8 +579,9 @@ export default {
     // mit 200 bestätigen, sonst wiederholt Meta den Webhook-Aufruf unnötig.
     if (!eingehend || !eingehend.text) return new Response('OK', { status: 200 });
 
-    if (!(await unterSchwellenwert(env, eingehend.von))) {
-      console.error(`ki-assistent-whatsapp: Rate-Limit überschritten für ${eingehend.von}.`);
+    const rateLimit = await pruefeRateLimit(env, eingehend.von);
+    if (!rateLimit.erlaubt) {
+      console.error(`ki-assistent-whatsapp: Rate-Limit nicht erfüllt für ${eingehend.von} (Grund: ${rateLimit.grund}).`);
       return new Response('OK', { status: 200 });
     }
 

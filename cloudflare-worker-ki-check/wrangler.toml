@@ -9,9 +9,14 @@ compatibility_date = "2026-01-01"
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
 
 # Begrenzt teure Claude-Vision-Aufrufe auf 20 pro IP und Minute - schützt vor
-# unbegrenzten Kosten durch ein Skript. Wird von Cloudflare beim ersten Deploy
-# automatisch angelegt, keine manuelle Einrichtung im Dashboard nötig.
-[[ratelimits]]
+# unbegrenzten Kosten durch ein Skript. Seit P0-Sicherheitskorrektur (siehe
+# pruefeRateLimit in worker.js) FAIL-CLOSED statt ungebremst durchzulassen -
+# daher eine ZWINGENDE Voraussetzung. "[[unsafe.bindings]]" statt des
+# neueren "[[ratelimits]]", weil Letzteres vom in der GitHub-Actions-Pipeline
+# installierten wrangler 3.90.0 nicht erkannt wird (siehe ausführlicher
+# Kommentar dazu in cloudflare-worker/wrangler.toml).
+[[unsafe.bindings]]
 name = "RATE_LIMITER"
+type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 20, period = 60 }
