@@ -19,11 +19,26 @@
  *   API_KEY                       (Secret, erforderlich) – frei gewählter,
  *                        langer zufälliger Schlüssel. Wird von Zapier/Make/
  *                        eigenen Skripten als "Authorization: Bearer <Schlüssel>"
- *                        mitgeschickt.
+ *                        mitgeschickt. Hat vollen Lese-/Schreibzugriff.
+ *   API_KEY_READONLY              (Secret, optional) – P0-Sicherheitskorrektur
+ *                        (Oktober 2026, Master-Audit Bericht 03: "1 Schlüssel
+ *                        ohne Rollentrennung"): ein ZWEITER, unabhängiger
+ *                        Schlüssel, der nur GET erlaubt (POST/PATCH liefern
+ *                        damit 403). Für Drittsysteme gedacht, die nur lesen
+ *                        müssen (z.B. ein Reporting-Zapier-Zap) - damit nicht
+ *                        jede Integration zwangsläufig auch Schreibzugriff
+ *                        bekommt. Rein additiv: ohne dieses Secret verhält
+ *                        sich der Worker wie bisher (nur der volle API_KEY).
  *   FIREBASE_SERVICE_ACCOUNT_JSON (Secret, erforderlich) – kompletter Inhalt
  *                        einer Firebase-Service-Account-JSON-Datei, als
  *                        einzeiliger String. Dasselbe Firebase-Projekt wie
  *                        die Verwaltungs-Software.
+ *   RATE_LIMITER                  (Binding, siehe wrangler.toml) – begrenzt
+ *                        alle Aufrufe auf 30 Anfragen je IP und Minute
+ *                        (P0-Sicherheitskorrektur: ohne dieses Binding, oder
+ *                        bei dessen Ausfall, sperrt sich der Worker jetzt
+ *                        bewusst FAIL-CLOSED, siehe pruefeRateLimit unten -
+ *                        gleiches Muster wie in cloudflare-worker/worker.js).
  *
  * Endpunkte (jeweils unter https://<worker-url>/):
  *   GET    /kunden              Liste aller Kunden (max. 200, neueste zuerst nicht garantiert)
@@ -213,10 +228,39 @@ async function firestoreUpdate({ accessToken, projectId, collection, id, data })
   return docToPlain(await res.json());
 }
 
+// P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03): normaler
+// "!=="-Stringvergleich bricht beim ersten abweichenden Zeichen ab -
+// theoretisch ein Timing-Seitenkanal für ein geteiltes Geheimnis wie
+// API_KEY. Konstante Laufzeit unabhängig vom Inhalt (1:1 aus
+// cloudflare-worker/worker.js übernommen, dort schon in Phase 9 gefixt).
+function zeitkonstanterVergleich(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let unterschied = 0;
+  for (let i = 0; i < a.length; i++) unterschied |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return unterschied === 0;
+}
+
+// P0-Sicherheitskorrektur: fehlt das RATE_LIMITER-Binding oder schlägt der
+// Aufruf fehl, wird FAIL-CLOSED gesperrt statt ungebremst durchgelassen -
+// 1:1 dasselbe Muster wie pruefeRateLimit() in cloudflare-worker/worker.js.
+async function pruefeRateLimit(env, ip) {
+  if (!env.RATE_LIMITER) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Worker wird FAIL-CLOSED gesperrt (siehe P0-Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
+  }
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Worker wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
+  }
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
 // ohne Netzwerkzugriff) - der Cloudflare-Worker-Laufzeit stört das nicht,
 // die Plattform ruft ausschließlich den default-Export auf.
-export { toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain };
+export { toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain, zeitkonstanterVergleich };
 
 export default {
   async fetch(request, env) {
@@ -225,10 +269,25 @@ export default {
     if (!env.API_KEY) {
       return jsonResponse({ error: 'Worker ist nicht korrekt eingerichtet (API_KEY fehlt).' }, 500);
     }
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimit = await pruefeRateLimit(env, ip);
+    if (!rateLimit.erlaubt) {
+      const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+      return jsonResponse({
+        error: istKonfigurationsproblem
+          ? 'API vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet).'
+          : 'Zu viele Anfragen - bitte kurz warten.',
+      }, istKonfigurationsproblem ? 503 : 429);
+    }
     const authHeader = request.headers.get('Authorization') || '';
     const gesendeterSchluessel = authHeader.replace(/^Bearer\s+/i, '');
-    if (gesendeterSchluessel !== env.API_KEY) {
+    const istVollzugriff = zeitkonstanterVergleich(gesendeterSchluessel, env.API_KEY);
+    const istNurLesend = !istVollzugriff && !!env.API_KEY_READONLY && zeitkonstanterVergleich(gesendeterSchluessel, env.API_KEY_READONLY);
+    if (!istVollzugriff && !istNurLesend) {
       return jsonResponse({ error: 'Ungültiger oder fehlender API-Schlüssel (Authorization: Bearer <Schlüssel>).' }, 401);
+    }
+    if (istNurLesend && request.method !== 'GET') {
+      return jsonResponse({ error: 'Dieser API-Schlüssel ist nur lesend (API_KEY_READONLY) - Schreibzugriff erfordert den vollen API_KEY.' }, 403);
     }
 
     const url = new URL(request.url);

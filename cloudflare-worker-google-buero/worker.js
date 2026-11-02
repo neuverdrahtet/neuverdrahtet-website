@@ -345,23 +345,64 @@ async function logAction(fsCtx, { action, resourceType, resourceId, status, erro
   try { await firestoreSet({ ...fsCtx, collection: 'google_action_log', id: entry.id, data: entry }); } catch { /* Protokoll darf echte Aufrufe nicht stören */ }
 }
 
+// P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03, Finding #9:
+// "echter Gmail/Kalender-Zugriff ohne Rate-Limiting"): normaler "!=="-
+// Stringvergleich bricht beim ersten abweichenden Zeichen ab - theoretisch
+// ein Timing-Seitenkanal für ein geteiltes Geheimnis wie API_KEY/
+// OAUTH_SETUP_SECRET. Konstante Laufzeit unabhängig vom Inhalt (1:1 aus
+// cloudflare-worker/worker.js übernommen, dort schon in Phase 9 gefixt).
+function zeitkonstanterVergleich(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
+  let unterschied = 0;
+  for (let i = 0; i < a.length; i++) unterschied |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return unterschied === 0;
+}
+
+// Fehlt das RATE_LIMITER-Binding oder schlägt der Aufruf fehl, wird jetzt
+// FAIL-CLOSED gesperrt statt ungebremst durchgelassen - 1:1 dasselbe Muster
+// wie pruefeRateLimit() in cloudflare-worker/worker.js. Dieser Worker hat
+// echten Lese-/Schreibzugriff auf das Firmen-Gmail-/Kalender-Konto.
+async function pruefeRateLimit(env, ip) {
+  if (!env.RATE_LIMITER) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Binding fehlt - Worker wird FAIL-CLOSED gesperrt (siehe P0-Sicherheitskorrektur).');
+    return { erlaubt: false, grund: 'rate_limiter_fehlt' };
+  }
+  try {
+    const { success } = await env.RATE_LIMITER.limit({ key: ip });
+    return success ? { erlaubt: true } : { erlaubt: false, grund: 'limit_ueberschritten' };
+  } catch (err) {
+    console.warn('pruefeRateLimit: RATE_LIMITER-Aufruf fehlgeschlagen - Worker wird FAIL-CLOSED gesperrt:', err.message);
+    return { erlaubt: false, grund: 'rate_limiter_fehler' };
+  }
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen, kein Netzwerk).
 export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
   buildAuthUrl, buildGmailQuery, getHeader, extractGmailBodyAndAttachments, gmailMessageToApi, buildMimeMessage,
-  calendarEventToApi, computeFreeSlots, base64UrlEncode, base64UrlDecodeToString,
+  calendarEventToApi, computeFreeSlots, base64UrlEncode, base64UrlDecodeToString, zeitkonstanterVergleich,
 };
 
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return jsonResponse(null, 204);
+    const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+    const rateLimit = await pruefeRateLimit(env, ip);
+    if (!rateLimit.erlaubt) {
+      const istKonfigurationsproblem = rateLimit.grund !== 'limit_ueberschritten';
+      return errorResponse(
+        istKonfigurationsproblem ? 'RATE_LIMITER_FEHLT' : 'RATE_LIMITED',
+        istKonfigurationsproblem ? 'API vorübergehend nicht erreichbar (Rate-Limiter nicht eingerichtet).' : 'Zu viele Anfragen - bitte kurz warten.',
+        istKonfigurationsproblem ? 503 : 429,
+      );
+    }
     const url = new URL(request.url);
     const teile = url.pathname.split('/').filter(Boolean);
     const q = url.searchParams;
 
     // --- OAuth-Einrichtung (kein Bearer-API_KEY, eigener Setup-Schlüssel als Schutz) ---
     if (teile[0] === 'oauth' && teile[1] === 'authorize') {
-      if (!env.OAUTH_SETUP_SECRET || q.get('setup_key') !== env.OAUTH_SETUP_SECRET) {
+      if (!env.OAUTH_SETUP_SECRET || !zeitkonstanterVergleich(q.get('setup_key') || '', env.OAUTH_SETUP_SECRET)) {
         return errorResponse('FORBIDDEN', 'Ungültiger oder fehlender setup_key.', 403);
       }
       if (!env.GOOGLE_OAUTH_CLIENT_ID) return errorResponse('SERVER_MISCONFIGURED', 'GOOGLE_OAUTH_CLIENT_ID fehlt.', 500);
@@ -372,7 +413,7 @@ export default {
     if (teile[0] === 'oauth' && teile[1] === 'callback') {
       const code = q.get('code');
       const state = q.get('state');
-      if (!code || !env.OAUTH_SETUP_SECRET || state !== env.OAUTH_SETUP_SECRET) {
+      if (!code || !env.OAUTH_SETUP_SECRET || !zeitkonstanterVergleich(state || '', env.OAUTH_SETUP_SECRET)) {
         return errorResponse('FORBIDDEN', 'Ungültige OAuth-Antwort (code/state fehlt oder falsch).', 403);
       }
       if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return errorResponse('SERVER_MISCONFIGURED', 'FIREBASE_SERVICE_ACCOUNT_JSON fehlt.', 500);
@@ -395,7 +436,7 @@ export default {
     // --- Ab hier: normale API, geschützt mit Bearer API_KEY ---
     if (!env.API_KEY) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (API_KEY fehlt).', 500);
     const authHeader = request.headers.get('Authorization') || '';
-    if (authHeader.replace(/^Bearer\s+/i, '') !== env.API_KEY) {
+    if (!zeitkonstanterVergleich(authHeader.replace(/^Bearer\s+/i, ''), env.API_KEY)) {
       return errorResponse('UNAUTHORIZED', 'Ungültiger oder fehlender API-Schlüssel (Authorization: Bearer <Schlüssel>).', 401);
     }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return errorResponse('SERVER_MISCONFIGURED', 'FIREBASE_SERVICE_ACCOUNT_JSON fehlt.', 500);

@@ -7,6 +7,20 @@ compatibility_date = "2026-01-01"
 #   API_KEY
 #   FIREBASE_SERVICE_ACCOUNT_JSON
 
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03, Finding #7):
+# begrenzt jeden Aufruf auf 30 Anfragen je IP und Minute - dieser Worker hat
+# die mächtigsten Schreibrechte aller zehn Worker, war aber ohne jedes
+# Rate-Limiting. Fehlt dieses Binding zur Laufzeit, sperrt sich der Worker
+# jetzt bewusst FAIL-CLOSED (siehe pruefeRateLimit in worker.js) statt
+# ungebremst durchzulassen - daher eine ZWINGENDE Voraussetzung.
+# "[[unsafe.bindings]]" statt "[[ratelimits]]" aus demselben Grund wie in
+# cloudflare-worker/wrangler.toml (wrangler 3.90.0 erkennt Letzteres nicht).
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1008"
+simple = { limit = 30, period = 60 }
+
 # Cron-Jobs (alle Zeiten in UTC - siehe README.md für die genaue Bedeutung
 # und die Umrechnung in deutsche Zeit):
 #   "0 6 * * *"    - täglich: invoice.overdue/task.overdue-Webhooks
@@ -38,3 +52,10 @@ name = "neuverdrahtet-ki-buerokraft-staging"
 # Haupt-Workers steht (siehe dessen [env.staging.vars] ALLOWED_ORIGINS).
 # MUSS exakt mit einem der dort gelisteten Werte übereinstimmen.
 AI_WORKER_ORIGIN = "<STAGING-PREVIEW-DOMAIN, identisch zu ALLOWED_ORIGINS im Haupt-Worker>"
+
+# Eigener, vom Produktions-RATE_LIMITER komplett unabhängiger Staging-Limiter.
+[[env.staging.unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1011"
+simple = { limit = 30, period = 60 }

@@ -2,23 +2,90 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    // Zugriff auf Storage-Objekte (Fotos/Dokumente/Belege/Zeiterfassungs-Medien)
-    // ist an einen gültigen Login gebunden. Eine feinere, rollenbasierte
-    // Aufteilung wie in firestore.rules (Admin+Büro vs. alle drei Rollen) ist
-    // über Storage Rules technisch zwar mit firestore.get()/firestore.exists()
-    // möglich, lässt sich aber mit der Firebase Local Emulator Suite nicht
-    // zuverlässig testen (Cross-Service-Regeln zwischen Storage und Firestore
-    // werden dort nicht ausgewertet) - deshalb bewusst hier nicht verwendet.
-    // Der eigentliche Schutz sensibler Daten (z.B. Ausgaben/Belege) passiert
-    // bereits in firestore.rules: nur wer das zugehörige Firestore-Dokument
-    // lesen darf (Admin/Büro), erfährt überhaupt den genauen Storage-Pfad.
-    match /{allPaths=**} {
-      allow read: if request.auth != null;
-      // Größenobergrenze (25 MB, dieselbe wie der Client-seitige Check in
-      // blobstore.js uploadBlobToStorage) - verhindert, dass ein eingeloggter
-      // Nutzer (versehentlich oder per Skript an der normalen App vorbei)
-      // beliebig große Dateien hochlädt und dabei Storage-Kosten verursacht.
-      allow write: if request.auth != null && request.resource.size < 25 * 1024 * 1024;
+    // P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03,
+    // Finding #8: "storage.rules: Zugriff nach Pfad-Präfix einschränken,
+    // wo möglich"): vorher durfte JEDER eingeloggte Nutzer (admin, büro,
+    // mitarbeiter, techniker, UND kunde-Portal-Accounts) per catch-all
+    // {allPaths=**} lesen/schreiben - ohne Rücksicht auf Pfad oder Inhalt.
+    //
+    // Eine ECHTE, rollenbasierte Einschränkung (wie in firestore.rules
+    // über get() auf die Firestore-Collection "users") wurde geprüft, aber
+    // bewusst NICHT umgesetzt: Storage Rules können laut Firebase-Doku per
+    // firestore.get()/firestore.exists() zwar in PRODUKTION auf Firestore
+    // zugreifen, das Firebase Local Emulator Suite unterstützt diese
+    // Cross-Service-Prüfung aber nicht zuverlässig (empirisch am
+    // 29.10.2026 gegen den echten Emulator nachgewiesen: dieselbe Regel
+    // lieferte für JEDE Rolle - auch admin - einen "Null value error" und
+    // pauschale Ablehnung, siehe Commit-Beschreibung). Eine Regel, die sich
+    // nicht gegen den Emulator verifizieren lässt, bevor sie live geht, ist
+    // hier bewusst nicht erwünscht (Rücksprache mit Danny, 29.10.2026) -
+    // stattdessen diese testbare, pfadbasierte Variante:
+    //
+    //  - Nur noch genau die Pfad-Präfixe erlaubt, die die App tatsächlich
+    //    verwendet (siehe uploadBlobToStorage()-Aufrufe in verwaltung/js/)
+    //    - alles andere wird jetzt grundsätzlich abgelehnt (vorher: alles
+    //      erlaubt). Schließt die Möglichkeit, beliebige/unerwartete Pfade
+    //      zu beschreiben oder zu lesen.
+    //  - Je Bereich ein zum tatsächlichen Inhalt passender Dateityp- und
+    //    Größen-Grenzwert (Belege/Fotos/Zeiterfassung = Bild oder PDF,
+    //    enger als die bisherige pauschale 25-MB-Grenze für alles).
+    //  - Lesen bleibt bewusst "jeder eingeloggte Nutzer" (wie bisher) -
+    //    eine echte Rollentrennung beim Lesen bräuchte denselben, hier
+    //    nicht verifizierbaren Cross-Service-Zugriff. Der eigentliche
+    //    Schutz sensibler Daten (z.B. Ausgaben/Belege) passiert weiterhin
+    //    primär in firestore.rules: nur wer das zugehörige Firestore-
+    //    Dokument lesen darf (Admin/Büro), erfährt überhaupt den genauen
+    //    Storage-Pfad/Download-Token.
+    function istEingeloggt() { return request.auth != null; }
+    function istBildOderPdf() {
+      return request.resource.contentType.matches('image/.*') || request.resource.contentType == 'application/pdf';
     }
+    function istBild() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    // Ausgaben/Belege (Finanzbelege) - Fotos oder gescannte PDFs, siehe
+    // ausgaben.js/belegimport.js/postfach.js.
+    match /ausgaben/{belegId} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBildOderPdf() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Allgemeine Dokumente (Arbeitsberichte als PDF, Kunden-Upload-Link-
+    // Dateien, Projektdokumente) - siehe dokumente.js, kunde-upload-Route
+    // im Haupt-Worker.
+    match /dokumente/{bezugTyp}/{bezugId}/{docId} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBildOderPdf() && request.resource.size < 25 * 1024 * 1024;
+    }
+
+    // Aufmaß-Fotos - siehe aufmass.js.
+    match /aufmasse/{projektId}/{docId} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBild() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Projektfotos - siehe fotos.js.
+    match /fotos/{projektId}/{docId} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBild() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Social-Media-Beitragsbilder - siehe views/social.js.
+    match /socialPosts/{dateiname} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBild() && request.resource.size < 15 * 1024 * 1024;
+    }
+
+    // Zeiterfassung: Fotos/Unterschriften zu einem Arbeitszeiteintrag -
+    // siehe views/zeiterfassung.js (medien/{id} und unterschrift).
+    match /zeiterfassung/{entryId}/{rest=**} {
+      allow read: if istEingeloggt();
+      allow write: if istEingeloggt() && istBild() && request.resource.size < 10 * 1024 * 1024;
+    }
+
+    // Kein {allPaths=**}-Catch-all mehr: jeder nicht oben gelistete Pfad
+    // wird von Firebase Storage automatisch abgelehnt (Standardverhalten
+    // ohne passende Regel ist "kein Zugriff").
   }
 }

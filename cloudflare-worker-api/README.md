@@ -23,9 +23,20 @@ Server-zu-Server-Aufrufe gedacht (z.B. von Zapier), aber **nicht öffentlich**
    einfügen; oder per CLI: `cd cloudflare-worker-api && npx wrangler deploy`).
 4. **Secrets setzen** (Cloudflare Dashboard → Worker → Settings → Variables,
    oder `npx wrangler secret put <NAME>`):
-   - `API_KEY` = der oben erzeugte Schlüssel
+   - `API_KEY` = der oben erzeugte Schlüssel (voller Lese-/Schreibzugriff)
+   - `API_KEY_READONLY` (optional) = ein ZWEITER, unabhängiger Schlüssel nur
+     für Integrationen, die ausschließlich lesen sollen (z.B. ein Reporting-
+     Zap) - damit per GET alles sichtbar ist, POST/PATCH damit aber 403
+     liefern. Ohne dieses Secret verhält sich der Worker wie bisher.
    - `FIREBASE_SERVICE_ACCOUNT_JSON` = kompletter Inhalt der Firebase-
      Service-Account-JSON-Datei
+5. **Rate-Limiter-Binding einrichten** (P0-Sicherheitskorrektur, Oktober
+   2026): im Cloudflare-Dashboard unter Worker → Settings → Bindings einen
+   "Rate Limiting"-Binding mit Namen `RATE_LIMITER` hinzufügen (bei Deploy
+   per `wrangler deploy` passiert das automatisch über `wrangler.toml`).
+   **Ohne dieses Binding sperrt sich der Worker ab sofort selbst (fail-closed,
+   503) statt ungebremst durchzulassen** - ist also keine optionale
+   Komfort-Verbesserung, sondern Voraussetzung für den normalen Betrieb.
 
 ## Nutzung
 
@@ -69,19 +80,26 @@ zurückgegebenen Feld-Set orientieren.
 
 ## Sicherheitshinweis
 
-Der API-Schlüssel gewährt **vollen Lese-/Schreibzugriff** auf Kunden,
-Projekte und Termine, ohne Rollen-Einschränkung (anders als die Login-Rollen
-in der Verwaltungs-Software). Den Schlüssel daher wie ein Passwort behandeln
-- nicht in öffentlichen Repos, Screenshots o.ä. teilen. Bei Verdacht auf
-Kompromittierung: im Cloudflare Dashboard einfach einen neuen `API_KEY`-Wert
-setzen, der alte wird damit sofort ungültig.
+Der volle `API_KEY` gewährt **vollen Lese-/Schreibzugriff** auf Kunden,
+Projekte und Termine. Seit der P0-Sicherheitskorrektur (Oktober 2026) gibt es
+optional einen zweiten, nur-lesenden `API_KEY_READONLY` für Integrationen,
+die keinen Schreibzugriff brauchen sollten (siehe oben) - eine echte,
+feingranulare Rollenverwaltung pro Integration ist das trotzdem nicht
+(beide Schlüssel sind weiterhin statisch und geteilt, kein Login pro
+Integration). Jeden Schlüssel daher wie ein Passwort behandeln - nicht in
+öffentlichen Repos, Screenshots o.ä. teilen. Bei Verdacht auf Kompromittierung:
+im Cloudflare Dashboard einfach einen neuen Wert setzen, der alte wird damit
+sofort ungültig. Zusätzlich begrenzt ein `RATE_LIMITER`-Binding jeden Aufruf
+auf 30 Anfragen je IP und Minute (siehe Setup oben) - bei einem geleakten
+Schlüssel begrenzt das zumindest, wie schnell er ausgenutzt werden kann.
 
 ## Spätere Ausbaustufen (nicht Teil dieser ersten Version)
 
 - Weitere Collections (z.B. Angebote, Rechnungen) nach Bedarf ergänzen -
   einfach in `ERLAUBTE_COLLECTIONS` in `worker.js` eintragen.
-- Feingranularere Rechte (z.B. eigene Schlüssel pro Integration, nur-Lesen-
-  Schlüssel) falls mehrere Drittsysteme gleichzeitig angebunden werden.
+- Echte feingranulare Rechte pro Integration (eigene Schlüssel mit eigener
+  Identität/eigenem Audit-Log statt nur "voll" vs. "nur lesend") falls
+  mehrere Drittsysteme gleichzeitig angebunden werden.
 - Webhook-Push (Werkora meldet sich bei Änderungen selbst bei Zapier) statt
   nur Abrufen auf Anfrage - aktuell muss die Gegenseite (Zapier "Polling"-
   Trigger) selbst regelmäßig nachfragen.

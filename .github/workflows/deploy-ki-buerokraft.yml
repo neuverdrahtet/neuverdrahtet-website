@@ -6,9 +6,10 @@
 # gepflegt (siehe README.md im jeweiligen Worker-Ordner), stehen also nie im
 # Git-Repo und nie in diesem Workflow.
 #
-# Seit P0-Phase-1/Massnahme-1 (CI-Testgate): ein vorgelagerter 'test'-Job
-# fuehrt 'npm run test:unit' aus; der Deploy-Job haengt per 'needs: test'
-# daran und startet nur, wenn alle Tests bestehen.
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03): deployt erst,
+# wenn der wiederverwendbare "test"-Job (.github/workflows/tests.yml, führt
+# "npm run test:all" aus) ohne Fehler durchlief - vorher lief ein Push auf main
+# ungetestet direkt in die Produktion.
 name: Deploy neuverdrahtet-ki-buerokraft
 
 on:
@@ -21,15 +22,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:unit
+    uses: ./.github/workflows/tests.yml
 
   deploy:
     needs: test

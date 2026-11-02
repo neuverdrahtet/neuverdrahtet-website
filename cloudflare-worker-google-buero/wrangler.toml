@@ -12,6 +12,21 @@ compatibility_date = "2026-01-01"
 # Optional als normale Variable (kein Geheimnis):
 #   GOOGLE_CALENDAR_ID (Standard: "primary")
 
+# P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03, Finding #9):
+# begrenzt jeden Aufruf (inkl. der /oauth/*-Einrichtungsrouten) auf 30
+# Anfragen je IP und Minute - dieser Worker hat echten Lese-/Schreibzugriff
+# auf das Firmen-Gmail-/Kalender-Konto, war aber ohne jedes Rate-Limiting.
+# Fehlt dieses Binding zur Laufzeit, sperrt sich der Worker jetzt bewusst
+# FAIL-CLOSED (siehe pruefeRateLimit in worker.js) statt ungebremst
+# durchzulassen - daher eine ZWINGENDE Voraussetzung. "[[unsafe.bindings]]"
+# statt "[[ratelimits]]" aus demselben Grund wie in
+# cloudflare-worker/wrangler.toml (wrangler 3.90.0 erkennt Letzteres nicht).
+[[unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1009"
+simple = { limit = 30, period = 60 }
+
 # Kein Cron-Trigger nötig - dieser Worker wird ausschließlich von der
 # KI-Bürokraft (ChatGPT-Action) live aufgerufen, im Gegensatz zu
 # cloudflare-worker-ki-buerokraft/ gibt es hier keine geplanten Aufgaben.
@@ -25,3 +40,10 @@ compatibility_date = "2026-01-01"
 # Test-Gmail-/Kalender-Konto - niemals die Produktions-Werte wiederverwenden.
 [env.staging]
 name = "neuverdrahtet-google-buero-staging"
+
+# Eigener, vom Produktions-RATE_LIMITER komplett unabhängiger Staging-Limiter.
+[[env.staging.unsafe.bindings]]
+name = "RATE_LIMITER"
+type = "ratelimit"
+namespace_id = "1012"
+simple = { limit = 30, period = 60 }

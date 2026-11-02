@@ -49,6 +49,16 @@ Im Cloudflare Dashboard unter **Worker → Einstellungen → Variablen und Gehei
 | `OAUTH_SETUP_SECRET` | Secret | frei wählen, schützt die einmalige Google-Anmeldung davor, dass jemand anderes sie kapert |
 | `GOOGLE_CALENDAR_ID` | Variable (kein Geheimnis, optional) | Standard `primary` - nur setzen, falls ihr einen anderen als den Hauptkalender des Firmenkontos anbinden wollt |
 
+Zusätzlich (P0-Sicherheitskorrektur, Oktober 2026): unter **Worker →
+Einstellungen → Bindings** einen "Rate Limiting"-Binding mit Namen
+`RATE_LIMITER` hinzufügen (bei Deploy per `wrangler deploy` passiert das
+automatisch über `wrangler.toml`). **Ohne dieses Binding sperrt sich der
+Worker ab sofort selbst (fail-closed, 503) statt ungebremst
+durchzulassen** - dieser Worker hat echten Lese-/Schreibzugriff auf das
+Firmen-Gmail-/Kalender-Konto, daher keine optionale Komfort-Verbesserung,
+sondern Voraussetzung für den normalen Betrieb. Die Begrenzung (30
+Anfragen je IP und Minute) gilt auch für die beiden `/oauth/*`-Routen.
+
 ## 2) Google-Cloud-Konsole: OAuth-Zugang einrichten
 
 Das ist der einzige wirklich neue Teil gegenüber dem ersten Worker - dort reichte der
