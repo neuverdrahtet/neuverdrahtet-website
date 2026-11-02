@@ -16,6 +16,12 @@
 # secret). Ohne dieses Secret läuft dieser Workflow bei jedem betroffenen
 # Push fehl, bis es gesetzt ist - alle anderen Workflows/Worker sind davon
 # nicht betroffen.
+#
+# Seit P0-Phase-1/Massnahme-1 (CI-Testgate): ein vorgelagerter 'test'-Job
+# fuehrt sowohl 'npm run test:unit' als auch 'npm run test:rules' (echte
+# Firestore-Emulator-Tests gegen genau die Regeln, die gleich deployt werden)
+# aus; der Deploy-Job haengt per 'needs: test' daran und startet nur, wenn
+# beide bestehen.
 name: Deploy Firebase Security Rules
 
 on:
@@ -30,7 +36,19 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run test:unit
+      - run: npm run test:rules
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

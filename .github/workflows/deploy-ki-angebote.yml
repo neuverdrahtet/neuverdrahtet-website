@@ -5,6 +5,10 @@
 # weiterhin separat per "wrangler secret put" bzw. im Cloudflare-Dashboard
 # gepflegt (siehe README.md im jeweiligen Worker-Ordner), stehen also nie im
 # Git-Repo und nie in diesem Workflow.
+#
+# Seit P0-Phase-1/Massnahme-1 (CI-Testgate): ein vorgelagerter 'test'-Job
+# fuehrt 'npm run test:unit' aus; der Deploy-Job haengt per 'needs: test'
+# daran und startet nur, wenn alle Tests bestehen.
 name: Deploy neuverdrahtet-ki-angebote
 
 on:
@@ -16,7 +20,18 @@ on:
   workflow_dispatch: {}
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run test:unit
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
