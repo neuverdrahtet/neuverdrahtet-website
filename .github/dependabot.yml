@@ -1,0 +1,32 @@
+---
+# Maßnahme 10 (Dependabot/Vendor-SDK-Update-Prozess, November 2026):
+# automatische Update-Pull-Requests für die beiden tatsächlich per
+# Paketmanager verwalteten Abhängigkeitsarten in diesem Repo:
+#  - npm: nur package.json im Repo-Root (reine Test-/Dev-Werkzeuge -
+#    Firebase-Emulator, Playwright, firebase-admin fürs Testen - siehe
+#    deren Beschreibung dort. KEIN Build-/Laufzeit-Bundle für die
+#    verwaltung/-App, die lädt ihre Bibliotheken als fertige Dateien aus
+#    verwaltung/js/vendor/ - siehe docs/vendor-sdk-versionen.md für DEREN
+#    Update-Prozess, den Dependabot technisch nicht abdecken kann).
+#  - github-actions: die in .github/workflows/*.yml verwendeten Actions
+#    (z.B. actions/checkout, actions/setup-node).
+# Jeder Cloudflare-Worker (cloudflare-worker*/) hat bewusst KEIN eigenes
+# package.json (siehe cloudflare-worker/README.md) - dort gibt es für
+# Dependabot nichts zu überwachen.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
