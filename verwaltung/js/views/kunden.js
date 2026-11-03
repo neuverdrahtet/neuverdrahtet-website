@@ -10,6 +10,7 @@ import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteCustomer, revokeInvite, revokeUserAccess, getCustomerAuthStatus } from '../employeeAuth.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
 import { generateEntityFromStichpunkte } from '../ai.js';
+import { erzeugeDatenauskunft, berechneLoeschung } from '../dsgvo.js';
 
 const KUNDEN_FELDER = ['firma', 'ansprechpartner', 'strasse', 'plz', 'ort', 'telefon', 'email', 'notizen'];
 const KUNDEN_HEADER = ['Firma/Name', 'Ansprechpartner', 'Straße', 'PLZ', 'Ort', 'Telefon', 'E-Mail', 'Notizen'];
@@ -210,9 +211,9 @@ function parseLexofficeCsv(text) {
 }
 
 export async function render(container, route) {
-  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben, emails, gutschriften] = await Promise.all([
+  let [kunden, projekte, spalten, kategorien, dokumente, settings, ausgaben, marken, kundenStatusListe, termine, angebote, auftragsbestaetigungen, rechnungen, aufgaben, emails, gutschriften, mahnungen] = await Promise.all([
     getAll('kunden'), getAll('projekte'), getAll('kanbanSpalten'), getAll('kategorien'), getAll('dokumente'), getSettings(), getAll('ausgaben'), getAll('marken'), getAll('kundenStatus'),
-    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'), getAll('emails'), getAll('gutschriften'),
+    getAll('termine'), getAll('angebote'), getAll('auftragsbestaetigungen'), getAll('rechnungen'), getAll('aufgaben'), getAll('emails'), getAll('gutschriften'), getAll('mahnungen'),
   ]);
   kunden.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
@@ -926,6 +927,60 @@ export async function render(container, route) {
     }
   }
 
+  // Maßnahme 9 (DSGVO, November 2026): Auskunft (Art. 15) + Löschung auf
+  // Antrag (Art. 17) je Kunde - siehe dsgvo.js für die eigentliche Logik,
+  // hier nur die Modal-Bedienung.
+  function dsgvoKontext() {
+    return { projekte, termine, angebote, auftragsbestaetigungen, rechnungen, gutschriften, ausgaben, emails, dokumente, mahnungen };
+  }
+
+  function openDsgvoModal(kunde) {
+    const { gesperrt, gesperrteBelege } = berechneLoeschung(kunde, dsgvoKontext());
+    const { body, close } = openModal({
+      title: `Datenschutz – ${kunde.firma}`,
+      bodyHtml: `
+        <div class="card">
+          <h2 style="margin-top:0;font-size:14px">Auskunft (Art. 15 DSGVO)</h2>
+          <p class="hint">Erzeugt eine JSON-Datei mit allen zu diesem Kunden in Werkora gespeicherten Daten (Stammdaten, Projekte, Termine, Angebote, Rechnungen, Gutschriften, Mahnungen, Ausgaben, E-Mails, Dokumente-Metadaten).</p>
+          <button type="button" class="btn" id="btn-dsgvo-auskunft">⇩ Auskunft als JSON herunterladen</button>
+        </div>
+        <div class="divider"></div>
+        <div class="card">
+          <h2 style="margin-top:0;font-size:14px">Löschung auf Antrag (Art. 17 DSGVO)</h2>
+          <p class="hint">Löscht sofort: Ansprechpartner, Telefon, E-Mail, Notizen, Portal-Zugangscode.</p>
+          ${gesperrt ? `
+            <p class="hint">⚠️ Firma/Name und Anschrift bleiben bestehen, solange folgende GoBD-gesperrte Belege existieren (§147 AO – Aufbewahrungspflicht):</p>
+            <ul class="cal-event-list">${gesperrteBelege.map((b) => `<li>${escapeHtml(b.typ)} ${escapeHtml(b.nummer)}</li>`).join('')}</ul>
+          ` : '<p class="hint">Keine GoBD-gesperrten Belege gefunden – Firma/Name und Anschrift werden ebenfalls anonymisiert.</p>'}
+          <p class="hint">Projekte, Rechnungen, Gutschriften, Mahnungen und Belege selbst bleiben für die Buchhaltung/Historie bestehen, nur ohne erkennbaren Personenbezug, soweit rechtlich möglich.</p>
+          <button type="button" class="btn btn-danger" id="btn-dsgvo-loeschen">Löschung jetzt durchführen</button>
+        </div>
+        <div class="modal-actions" style="border:none;padding-top:10px">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="btn-dsgvo-close">Schließen</button>
+        </div>
+      `,
+    });
+    body.querySelector('#btn-dsgvo-close').addEventListener('click', close);
+    body.querySelector('#btn-dsgvo-auskunft').addEventListener('click', () => {
+      const auskunft = erzeugeDatenauskunft(kunde, dsgvoKontext());
+      downloadTextFile(`dsgvo-auskunft-${(kunde.firma || kunde.id).toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(auskunft, null, 2), 'application/json;charset=utf-8');
+      toast('Auskunft erstellt', 'success');
+    });
+    body.querySelector('#btn-dsgvo-loeschen').addEventListener('click', async () => {
+      const { aktualisiert, geloeschteFelder } = berechneLoeschung(kunde, dsgvoKontext());
+      if (geloeschteFelder.length === 0) {
+        toast('Keine löschbaren personenbezogenen Daten mehr vorhanden.', 'info');
+        return;
+      }
+      if (!confirmDelete(`Folgende Daten von "${kunde.firma}" jetzt unwiderruflich löschen/anonymisieren?\n\n${geloeschteFelder.join(', ')}`)) return;
+      await put('kunden', aktualisiert);
+      toast('Löschung durchgeführt', 'success');
+      close();
+      renderKundenakte(aktualisiert);
+    });
+  }
+
   // Ganzseitige Kundenakte (ToolTime-Vorbild) - kompletter Überblick über
   // alles, was zu einem Kunden gehört: Projekte, Termine, Angebote,
   // Rechnungen, Ausgaben und Dokumente an einer Stelle statt verteilt über
@@ -982,6 +1037,7 @@ export async function render(container, route) {
           <button type="button" class="btn-back" id="akte-back">← ${escapeHtml(kunde.firma)}</button>
           <div class="fullpage-form-actions">
             <button type="button" class="btn" id="akte-upload-link" title="Link erzeugen, über den der Kunde ohne Login Fotos/Dokumente hochladen kann">📎 Upload-Link</button>
+          <button type="button" class="btn" id="akte-dsgvo" title="Auskunft (Art. 15) oder Löschung auf Antrag (Art. 17) DSGVO">🔐 Datenschutz</button>
           <button type="button" class="btn" id="akte-edit">✏️ Bearbeiten</button>
           </div>
         </div>
@@ -1165,6 +1221,7 @@ export async function render(container, route) {
     container.querySelector('#akte-back').addEventListener('click', close);
     container.querySelector('#akte-edit').addEventListener('click', () => openForm(kunde));
     container.querySelector('#akte-upload-link').addEventListener('click', () => openUploadLinkModal(kunde));
+    container.querySelector('#akte-dsgvo').addEventListener('click', () => openDsgvoModal(kunde));
     container.querySelectorAll('.akte-email-row').forEach((row) => {
       row.addEventListener('click', () => {
         const e = kEmails.find((x) => x.id === row.dataset.id);
