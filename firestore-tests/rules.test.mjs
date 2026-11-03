@@ -456,6 +456,7 @@ await pruefe('R41: nur admin darf einen Bonus-Referenzwert anlegen/ändern, bür
 await pruefe('R42: mitarbeiterBenefits ist admin/büro-Vollzugriff, aber NICHT für mitarbeiter/techniker lesbar (genauso schützenswert wie mitarbeiter selbst)', async () => {
   await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'mitarbeiterBenefits', 'b-1'), {
     mitarbeiterId: 'ma-tech-1', benefitTyp: 'jobrad', arbeitgeberKostenMonatlich: 30, beginnDatum: '2026-01-01', endeDatum: '',
+    geaendertVon: 'buero-1', erstelltVon: 'buero-1',
   }));
   await assertSucceeds(getDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'mitarbeiterBenefits', 'b-1')));
   await assertFails(getDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'mitarbeiterBenefits', 'b-1')));
@@ -550,12 +551,17 @@ await testEnv.withSecurityRulesDisabled(async (ctx) => {
 });
 
 await pruefe('R48: büro kann eine neue Rechnung anlegen, mitarbeiter nicht', async () => {
-  await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-neu'), RECHNUNG_ENTWURF));
-  await assertFails(setDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'rechnungen', 'r-neu-2'), RECHNUNG_ENTWURF));
+  await assertSucceeds(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-neu'), { ...RECHNUNG_ENTWURF, geaendertVon: 'buero-1', erstelltVon: 'buero-1' }));
+  await assertFails(setDoc(doc(testEnv.authenticatedContext('mitarbeiter-1').firestore(), 'rechnungen', 'r-neu-2'), { ...RECHNUNG_ENTWURF, geaendertVon: 'mitarbeiter-1', erstelltVon: 'mitarbeiter-1' }));
+});
+
+await pruefe('R48b: eine neue Rechnung ohne korrektes geaendertVon/erstelltVon (fremde oder fehlende uid) wird abgelehnt, auch für büro', async () => {
+  await assertFails(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-neu-3'), RECHNUNG_ENTWURF));
+  await assertFails(setDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-neu-4'), { ...RECHNUNG_ENTWURF, geaendertVon: 'buero-1', erstelltVon: 'admin-1' }));
 });
 
 await pruefe('R49: ein NICHT versendeter Rechnungsentwurf lässt sich inhaltlich frei bearbeiten (admin/büro)', async () => {
-  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-entwurf'), { netto: 200, steuer: 38, brutto: 238 }));
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-entwurf'), { netto: 200, steuer: 38, brutto: 238, geaendertVon: 'buero-1', erstelltVon: 'buero-1' }));
 });
 
 await pruefe('R50: eine VERSENDETE Rechnung darf ihren Inhalt (Betrag) NICHT mehr ändern, auch nicht für admin', async () => {
@@ -564,9 +570,24 @@ await pruefe('R50: eine VERSENDETE Rechnung darf ihren Inhalt (Betrag) NICHT meh
   await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { kundeId: 'kunde-2' }));
 });
 
-await pruefe('R51: eine VERSENDETE Rechnung darf weiterhin Status/Zahlungs-/Verknüpfungsfelder ändern (Storno, Zahlungseingang)', async () => {
-  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'bezahlt', bezahltAm: '2026-02-01', skontoGenutzt: false, zahlungsart: 'ueberweisung' }));
-  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'storniert', storniertDurchNummer: 'R-2026-0099', verrechneteGutschriften: [], gutschriftVerrechnetAm: '' }));
+await pruefe('R51: eine VERSENDETE Rechnung darf weiterhin Status/Zahlungs-/Verknüpfungsfelder ändern (Storno, Zahlungseingang) - erstelltVon bleibt dabei dauerhaft erhalten (Maßnahme 6), nur geaendertVon zeigt den jeweils Handelnden', async () => {
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('buero-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'bezahlt', bezahltAm: '2026-02-01', skontoGenutzt: false, zahlungsart: 'ueberweisung', geaendertVon: 'buero-1', erstelltVon: 'buero-1' }));
+  // Die ursprüngliche erstelltVon-Zuordnung (buero-1, aus dem Aufruf direkt
+  // darüber) muss auch bei einem ZWEITEN Update durch eine ANDERE Person
+  // (admin-1) exakt erhalten bleiben - das ist der eigentliche Zweck von
+  // Maßnahme 6 (wer hat diese Rechnung ursprünglich ausgestellt, bleibt auch
+  // nach einem späteren Storno durch jemand anderen nachvollziehbar).
+  await assertSucceeds(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'storniert', storniertDurchNummer: 'R-2026-0099', verrechneteGutschriften: [], gutschriftVerrechnetAm: '', geaendertVon: 'admin-1', erstelltVon: 'buero-1' }));
+  let nachStorno;
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    nachStorno = await getDoc(doc(ctx.firestore(), 'rechnungen', 'r-versendet'));
+  });
+  if (nachStorno.data().erstelltVon !== 'buero-1') throw new Error(`erstelltVon muss weiterhin "buero-1" sein, war "${nachStorno.data().erstelltVon}"`);
+  if (nachStorno.data().geaendertVon !== 'admin-1') throw new Error(`geaendertVon muss jetzt "admin-1" sein, war "${nachStorno.data().geaendertVon}"`);
+});
+
+await pruefe('R51b: beim Storno darf erstelltVon NICHT auf eine andere Person als die ursprüngliche umgeschrieben werden', async () => {
+  await assertFails(updateDoc(doc(testEnv.authenticatedContext('admin-1').firestore(), 'rechnungen', 'r-versendet'), { status: 'bezahlt', geaendertVon: 'admin-1', erstelltVon: 'admin-1' }));
 });
 
 await pruefe('R52: eine VERSENDETE Rechnung lässt sich nie hart löschen, auch nicht als admin oder im Papierkorb', async () => {

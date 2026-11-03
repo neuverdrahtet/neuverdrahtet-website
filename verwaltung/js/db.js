@@ -12,8 +12,9 @@ import { deleteBlobFromStorage } from './blobstore.js';
 // und die Zugangsdaten eingetragen sind.
 const FIREBASE_ENABLED = !!firebaseConfig.projectId;
 let firestore = null;
+let auth = null;
 if (FIREBASE_ENABLED) {
-  ({ firestore } = await import('./firebase.js'));
+  ({ firestore, auth } = await import('./firebase.js'));
 }
 
 export const DB_NAME = 'neuverdrahtet-verwaltung';
@@ -295,11 +296,27 @@ function katalogOeffentlichData(value) {
   };
 }
 
+// Maßnahme 6 (Audit-Log: erzwungene Wer-Zuordnung, November 2026) - die
+// firestore.rules verlangen bei sensiblen Collections jetzt ein echtes
+// "geaendertVon" (= request.auth.uid) auf JEDEM create/update, plus ein
+// einmal gesetztes, danach unveränderliches "erstelltVon". Zentral hier statt
+// in jeder einzelnen views/*.js, damit kein Schreibpfad das vergessen kann -
+// "erstelltVon" wird NUR gesetzt, wenn value es nicht schon (aus dem zuvor
+// geladenen, bereits gestempelten Dokument) mitbringt, sonst bliebe die
+// ursprüngliche Zuordnung nicht erhalten (siehe geaendertMitEchterIdentitaet
+// in firestore.rules, die genau das verlangt).
+function mitAenderungsIdentitaet(value) {
+  const uid = auth?.currentUser?.uid;
+  if (!uid || !value || typeof value !== 'object') return value;
+  return { ...value, geaendertVon: uid, geaendertAm: new Date().toISOString(), erstelltVon: value.erstelltVon || uid };
+}
+
 async function putFs(storeName, value) {
   if (storeName === 'einstellungen') {
     await setDoc(EINSTELLUNGEN_DOC(), { [value.key]: value.value }, { merge: true });
     return value.key;
   }
+  value = mitAenderungsIdentitaet(value);
   await setDoc(doc(firestore, storeName, value.id), value);
   if (storeName === 'mitarbeiter') {
     await setDoc(doc(firestore, MITARBEITER_OEFFENTLICH, value.id), mitarbeiterOeffentlichData(value));

@@ -55,6 +55,42 @@ service cloud.firestore {
     // Verwaltungs-Oberfläche selbst das verhindert. "rechnungen" hat daher
     // jetzt eine eigene, vollständige Regel weiter unten, die den
     // inhaltlichen Kern einer versendeten Rechnung serverseitig sperrt.
+    // Maßnahme 6 (Audit-Log: erzwungene Wer-Zuordnung, November 2026):
+    // bisher gab es für menschliche Änderungen an sensiblen Daten (Kunden,
+    // Rechnungen, Mitarbeiter, Angebote, ...) KEINE Spur, wer sie
+    // vorgenommen hat - weder serverseitig erzwungen noch überhaupt
+    // gespeichert. Diese beiden Funktionen erzwingen ab jetzt, dass jede
+    // Änderung die ECHTE, angemeldete uid als "geaendertVon" trägt (vom
+    // Client nicht fälschbar: request.auth.uid kommt aus dem geprüften
+    // Auth-Token, nicht aus gesendeten Daten) und dass "erstelltVon" nach der
+    // allerersten Zuordnung nicht mehr überschrieben werden kann (schließt
+    // insbesondere die GoBD-Lücke bei Rechnungen: wer eine Rechnung ausstellt,
+    // bleibt auch nach einem späteren Storno dauerhaft nachvollziehbar).
+    // Bewusst OHNE Alt/Neu-Wert-Protokoll (das wäre nur clientseitig
+    // "best effort" möglich, da dieses Projekt keine Cloud Functions nutzt,
+    // über die sich ein Schreibzugriff serverseitig zuverlässig abfangen
+    // ließe) - diese Erweiterung beantwortet ausschließlich "wer hat das
+    // zuletzt angefasst/ursprünglich angelegt", dafür aber lückenlos und
+    // nicht umgehbar.
+    // Direkter Feldzugriff auf ein in der Map fehlendes Feld (z.B.
+    // resource.data.erstelltVon, wenn das Dokument das Feld nie hatte) ist
+    // in Firestore-Regeln KEIN "null", sondern ein Auswertungsfehler
+    // ("Property X is undefined on object") - deshalb hier jeden Zugriff
+    // zuerst mit "in" auf Existenz prüfen (kurzschlussauswertendes "&&"),
+    // nie direkt zugreifen.
+    function erstelltMitEchterIdentitaet() {
+      return ('geaendertVon' in request.resource.data) && request.resource.data.geaendertVon == request.auth.uid
+        && ('erstelltVon' in request.resource.data) && request.resource.data.erstelltVon == request.auth.uid;
+    }
+    function geaendertMitEchterIdentitaet() {
+      return ('geaendertVon' in request.resource.data) && request.resource.data.geaendertVon == request.auth.uid
+        && ('erstelltVon' in request.resource.data) && (
+          ('erstelltVon' in resource.data)
+            ? request.resource.data.erstelltVon == resource.data.erstelltVon
+            : request.resource.data.erstelltVon == request.auth.uid
+        );
+    }
+
     function isSensitiveCollection(collectionId) {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'gutschriften',
@@ -212,8 +248,8 @@ service cloud.firestore {
     }
     match /rechnungen/{docId} {
       allow read: if (isKunde() && myKundeId() == resource.data.kundeId) || isAdminOrBuero();
-      allow create: if isSignedIn() && isAdminOrBuero();
-      allow update: if isSignedIn() && isAdminOrBuero()
+      allow create: if isSignedIn() && isAdminOrBuero() && erstelltMitEchterIdentitaet();
+      allow update: if isSignedIn() && isAdminOrBuero() && geaendertMitEchterIdentitaet()
         && (resource.data.versendet != true || rechnungInhaltUnveraendert());
       // Eine versendete Rechnung darf serverseitig gar nicht mehr gelöscht
       // werden (nur Storno + Ersatzrechnung, siehe rechnungen.js). Eine
@@ -564,7 +600,24 @@ service cloud.firestore {
     }
 
     match /{collectionId}/{docId} {
-      allow read, write: if isSignedIn() && (
+      allow read: if isSignedIn() && (
+        (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||
+        (isSharedCollection(collectionId) && isAnyRole())
+      );
+      // Maßnahme 6 (Audit-Log): create/update sensibler Collections
+      // brauchen zusätzlich eine echte, nicht fälschbare Wer-Zuordnung
+      // (siehe erstelltMitEchterIdentitaet/geaendertMitEchterIdentitaet oben)
+      // - für isSharedCollection (operative Daten wie projekte/aufgaben)
+      // bewusst NICHT verschärft, das ist eine eigene, spätere Erweiterung.
+      allow create: if isSignedIn() && (
+        (isSensitiveCollection(collectionId) && isAdminOrBuero() && erstelltMitEchterIdentitaet()) ||
+        (isSharedCollection(collectionId) && isAnyRole())
+      );
+      allow update: if isSignedIn() && (
+        (isSensitiveCollection(collectionId) && isAdminOrBuero() && geaendertMitEchterIdentitaet()) ||
+        (isSharedCollection(collectionId) && isAnyRole())
+      );
+      allow delete: if isSignedIn() && (
         (isSensitiveCollection(collectionId) && isAdminOrBuero()) ||
         (isSharedCollection(collectionId) && isAnyRole())
       );
