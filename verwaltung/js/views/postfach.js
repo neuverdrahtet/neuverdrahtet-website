@@ -545,7 +545,7 @@ export async function render(container) {
       navigiereMitPrefill('nv-projekt-prefill', {
         kundeId: kontakt.kundeId, titel: kontakt.anliegen, bereich: 'auftrag',
         beschreibung: (message.text || '').slice(0, 2000),
-      }, '#/projekte');
+      }, '#/auftraege');
     }
 
     function starteAnfrageAusMail(message) {
