@@ -6629,6 +6629,93 @@ async function runTagescheck(env) {
 const KATALOG_AKTUALISIERUNG_BATCH_SIZE = 25;
 
 /**
+ * Wöchentlicher Firestore-Export nach Cloud Storage (P0 Phase 1, Maßnahme 3
+ * "Backup/Restore-Konzept"). Bis hierhin gab es KEINE serverseitige,
+ * automatisierte Firestore-Backup-Pipeline - nur den optionalen,
+ * standardmäßig deaktivierten Google-Drive-JSON-Export in der
+ * Verwaltungs-UI (siehe google.js/einstellungen.js) und die von Google
+ * separat aktivierte Point-in-Time-Recovery (7-Tage-Rückblickfenster,
+ * deckt versehentliche Schreib-/Löschfehler kurzfristig ab, aber NICHT
+ * einen Verlust/eine Kompromittierung des gesamten Firebase-Projekts).
+ * Dieser Export ergänzt PITR um eine LANGFRISTIGE, vom Firestore-Projekt
+ * UNABHÄNGIGE Kopie in Cloud Storage - nutzt dieselbe native Firestore-
+ * Admin-Export-API, die auch "gcloud firestore export" verwendet.
+ *
+ * Läuft wöchentlich (nicht täglich) statt über einen eigenen Cron-Trigger
+ * im bestehenden täglichen 05:00-Trigger mit (siehe scheduled() unten) -
+ * Cloudflare Workers Free begrenzt Cron-Trigger auf 5 PRO ACCOUNT, ein
+ * zusätzlicher Trigger würde den Deploy scheitern lassen (exakt dasselbe
+ * Muster wie bei runKatalogAktualisierung unten).
+ *
+ * Voraussetzungen, die NICHT per Code/Deploy gesetzt werden können
+ * (einmalige manuelle Einrichtung in der Google-Cloud-Konsole, siehe
+ * docs/backup-restore.md):
+ *  1. BACKUP_GCS_BUCKET in wrangler.toml auf einen echten Cloud-Storage-
+ *     Bucket setzen (z.B. das ohnehin vorhandene Firebase-Storage-Bucket
+ *     des Projekts).
+ *  2. Dem Service-Account aus FIREBASE_SERVICE_ACCOUNT_JSON die IAM-Rolle
+ *     "Cloud Datastore Import Export Admin" (roles/datastore.importExportAdmin)
+ *     auf Projektebene zuweisen.
+ *  3. Optional, aber empfohlen: eine Lifecycle-Regel auf dem Bucket, die
+ *     Exporte älter als z.B. 90 Tage automatisch löscht (siehe
+ *     docs/backup-restore.md für den gsutil-Befehl) - ohne das wächst der
+ *     Speicherverbrauch/die Kosten unbegrenzt.
+ * Erst wenn 1+2 erledigt sind, BACKUP_EXPORT_AKTIV auf "true" setzen -
+ * Standard ist "false", damit ein Deploy ohne abgeschlossene Einrichtung
+ * nicht fehlschlägt oder stillschweigend nichts tut, ohne dass das auffällt
+ * (der Job-Status landet trotzdem in "jarvisJobs" wie bei den anderen
+ * Checks, aber ohne aktivierten Schalter läuft der Export gar nicht erst an).
+ *
+ * WICHTIG: dieser Aufruf STARTET den Export nur (die Firestore-Admin-API
+ * liefert sofort ein Operation-Objekt zurück, der eigentliche Export läuft
+ * danach asynchron auf Google-Seite weiter) - es wird NICHT auf den
+ * Abschluss gewartet/gepollt (ein Cloudflare-Worker-Aufruf kann nicht
+ * beliebig lange laufen). Der Operation-Name wird im Job-Dokument
+ * gespeichert, damit sich der Fortschritt bei Bedarf manuell nachschlagen
+ * lässt (`gcloud firestore operations describe <name>`).
+ */
+async function runFirestoreBackup(env) {
+  if (env.BACKUP_EXPORT_AKTIV !== 'true') return;
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  if (!env.BACKUP_GCS_BUCKET) {
+    await protokolliereJarvisFehler({
+      serviceAccount, quelle: 'firestore-backup', kritisch: true,
+      fehler: new Error('BACKUP_EXPORT_AKTIV ist "true", aber BACKUP_GCS_BUCKET fehlt - Export kann nicht gestartet werden.'),
+      kontext: {},
+    });
+    return;
+  }
+
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `firestore-backup-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'firestore-backup' });
+  if (!job) return;
+
+  try {
+    const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+    const outputUriPrefix = `gs://${env.BACKUP_GCS_BUCKET}/firestore-backups/${heute}`;
+    const res = await fetch(`https://firestore.googleapis.com/v1/projects/${serviceAccount.project_id}/databases/(default):exportDocuments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ outputUriPrefix }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Firestore-Export-API-Fehler (${res.status}): ${text.slice(0, 300)}`);
+    }
+    const operation = await res.json();
+    await firestoreMergeFelder({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      felder: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: `Export gestartet nach ${outputUriPrefix} (Operation: ${operation.name || 'unbekannt'}). Läuft asynchron auf Google-Seite weiter, kein Polling hier.` },
+    });
+  } catch (err) {
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'firestore-backup', fehler: err, kontext: { jobId }, kritisch: true });
+  }
+}
+
+/**
  * Wöchentlicher automatischer Katalog-Check (Cloudflare Cron Trigger, siehe
  * scheduled() unten): recherchiert für einen rotierenden Ausschnitt des
  * Artikel-/Leistungskatalogs per Web-Search aktuelle Marktpreise und schlägt
@@ -6782,6 +6869,9 @@ export default {
     const heuteWochentag = new Date().toLocaleDateString('en-US', { timeZone: 'Europe/Berlin', weekday: 'long' });
     if (heuteWochentag === 'Monday') {
       ctx.waitUntil(runKatalogAktualisierung(env));
+    }
+    if (heuteWochentag === 'Sunday') {
+      ctx.waitUntil(runFirestoreBackup(env)); // Maßnahme 3 (Backup/Restore) - Flag BACKUP_EXPORT_AKTIV, Standard aus
     }
     // JARVIS autonome Hintergrund-Checks - laufen im selben Trigger mit,
     // täglich (nicht nur montags). Jeder Check hat einen EIGENEN
@@ -7899,4 +7989,6 @@ export const __test__ = {
   baueServiceauftragAktualisierungAusPartnerImportZeile, fuehrePartnerImportAnalyseAus,
   fuehrePartnerImportUebernahmeAus, fuehrePartnerImportVerwerfAus, callClaudePartnerImportAnalyse,
   PARTNER_QUELLEN, PARTNERIMPORT_FELDER,
+  // P0 Phase 1, Maßnahme 3 - Backup/Restore (wöchentlicher Firestore-Export)
+  runFirestoreBackup,
 };

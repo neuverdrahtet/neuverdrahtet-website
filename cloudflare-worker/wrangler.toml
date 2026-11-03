@@ -26,6 +26,26 @@ JARVIS_CONTROL_AKTIV = "true"
 JARVIS_TAGESCHECK_AKTIV = "true"
 JARVIS_DISPATCH_AKTIV = "true"
 
+# P0 Phase 1, Massnahme 3 (Backup/Restore) - wöchentlicher (sonntags, siehe
+# scheduled() in worker.js) nativer Firestore-Export nach Cloud Storage,
+# ergänzt die von Google separat aktivierte Point-in-Time-Recovery (7 Tage)
+# um eine langfristige, vom Firestore-Projekt unabhängige Kopie. Erst auf
+# "true" stellen, NACHDEM beide folgenden manuellen Schritte in der
+# Google-Cloud-Konsole erledigt sind (siehe docs/backup-restore.md):
+#  1. BACKUP_GCS_BUCKET unten auf einen echten Cloud-Storage-Bucket setzen.
+#  2. Dem Service-Account aus dem Secret FIREBASE_SERVICE_ACCOUNT_JSON die
+#     IAM-Rolle "Cloud Datastore Import Export Admin"
+#     (roles/datastore.importExportAdmin) auf Projektebene zuweisen.
+# Ohne abgeschlossene Einrichtung bewusst auf "false" lassen - der Export
+# würde sonst bei jedem Lauf fehlschlagen (Job landet dann wöchentlich als
+# "failed" in jarvisJobs/ai_action_log, aber es passiert nichts Schlimmeres).
+BACKUP_EXPORT_AKTIV = "false"
+# <GCS-BUCKET-NAME> ersetzen, z.B. mit dem ohnehin vorhandenen
+# Firebase-Storage-Bucket dieses Projekts (siehe Firebase-Konsole -> Storage
+# -> Dateien, Bucket-Name meist "<projekt-id>.firebasestorage.app" oder
+# "<projekt-id>.appspot.com").
+BACKUP_GCS_BUCKET = "<GCS-BUCKET-NAME>"
+
 # Cloudflare Service Bindings zu den beiden anderen, separat deployten
 # Worker-zu-Worker-Anbindungen (Google-Büro + KI-Bürokraft, siehe
 # callGoogleBuero()/callKiBuerokraftRest() in worker.js) - ein Aufruf über ein
