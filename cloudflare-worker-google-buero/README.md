@@ -14,6 +14,11 @@ Kalender: searchCalendarEvents, getCalendarEvent, getCalendarAvailability,
           createCalendarEvent, updateCalendarEvent
 ```
 
+**Seit Maßnahme 5 (Google-Kalender-Freigabe-Gate, November 2026)**: `createCalendarEvent`/
+`updateCalendarEvent` schreiben den Termin nicht mehr sofort, sondern legen nur eine
+Freigabe-Anfrage an - dazu 3 neue Operationen `listPendingCalendarApprovals`,
+`approveCalendarAction`, `rejectCalendarAction` (siehe Abschnitt "6a) Freigabe-Gate" unten).
+
 ## Sicherheitsregeln (wie in deiner Vorgabe gefordert, fest im Code)
 
 - **Kein `sendEmail`.** Die KI kann nur Entwürfe anlegen (`createEmailDraft`) - versendet
@@ -181,12 +186,19 @@ curl -H "Authorization: Bearer <API_KEY>" \
   "https://<worker-url>/calendar/availability?date_from=2026-08-17&date_to=2026-08-17"
 ```
 
-Testtermin anlegen (erscheint im echten Google-Kalender des Firmenkontos):
+Testtermin anlegen - legt seit Maßnahme 5 NUR eine Freigabe-Anfrage an (Antwort: 202 +
+`approval_id`), noch NICHTS im echten Kalender:
 
 ```bash
 curl -X POST -H "Authorization: Bearer <API_KEY>" -H "Content-Type: application/json" \
   -d '{"title":"Werkora-Testtermin","start":"2026-08-20T09:00:00+02:00","end":"2026-08-20T10:00:00+02:00"}' \
   "https://<worker-url>/calendar/events"
+```
+
+Erst mit der `approval_id` aus der Antwort freigeben - das legt den Termin jetzt tatsächlich an:
+
+```bash
+curl -X POST -H "Authorization: Bearer <API_KEY>" "https://<worker-url>/approvals/<approval_id>/approve"
 ```
 
 Danach im Google-Kalender des Firmenkontos nachschauen, ob der Termin erschienen ist, dann
@@ -207,9 +219,13 @@ GET   /calendar/events/{event_id}                                 getCalendarEve
 GET   /calendar/availability?date_from=&date_to=&duration_minutes= getCalendarAvailability
 POST  /calendar/events  { title, start, end, description?,
                            location?, attendee_emails?,
-                           werkora_appointment_id? }               createCalendarEvent
+                           werkora_appointment_id? }               createCalendarEvent (legt NUR eine Freigabe-Anfrage an, siehe unten)
 PATCH /calendar/events/{event_id}  { title?, start?, end?,
-                                      description?, location? }    updateCalendarEvent
+                                      description?, location? }    updateCalendarEvent (legt NUR eine Freigabe-Anfrage an, siehe unten)
+
+GET   /approvals                                                  listPendingCalendarApprovals
+POST  /approvals/{approval_id}/approve  { }                        approveCalendarAction
+POST  /approvals/{approval_id}/reject   { reason? }                 rejectCalendarAction
 
 DELETE (auf jedem Endpunkt)                                       -> 403 (gesperrt)
 ```
@@ -217,7 +233,38 @@ DELETE (auf jedem Endpunkt)                                       -> 403 (gesper
 `createCalendarEvent` verhindert Dubletten: wird `werkora_appointment_id` mitgeschickt und
 existiert dafür schon ein Google-Kalendereintrag (aus einem früheren Aufruf), wird **kein**
 zweiter Termin angelegt - stattdessen liefert die Antwort den bestehenden Termin mit
-`"already_existed": true`.
+`"already_existed": true`, OHNE Freigabe-Anfrage (reiner Lesezugriff, kein Risiko).
+
+## 6a) Freigabe-Gate für Kalendertermine (Maßnahme 5, November 2026)
+
+`createCalendarEvent`/`updateCalendarEvent` schreiben **nicht mehr sofort** in den echten
+Firmenkalender - genau wie die Finanzaktionen im Schwester-Worker
+(`cloudflare-worker-ki-buerokraft/`) vor dessen P0-Sicherheitskorrektur hätte ein
+fehlerhafter/halluzinierter KI-Aufruf sonst einen echten Termin anlegen oder verschieben
+können, den Kunden/Mitarbeiter im Kalender sehen, ohne dass Danny vorher etwas davon
+mitbekommt.
+
+Beide Endpunkte legen jetzt stattdessen nur eine Freigabe-Anfrage in der neuen
+Firestore-Collection `kalenderFreigaben` an und antworten mit HTTP 202 und
+`{ approval_required: true, approval_id, action, summary, message, expires_at }`. Erst ein
+zweiter, separater Aufruf führt die Aktion tatsächlich aus:
+
+- `GET /approvals` - listet alle offenen Freigabe-Anfragen.
+- `POST /approvals/{approval_id}/approve` - führt die Aktion jetzt im echten Kalender aus.
+- `POST /approvals/{approval_id}/reject` - lehnt ab, führt nichts aus.
+
+Freigabe-Anfragen laufen nach 24 Stunden automatisch ab (dann erneut anfordern); eine
+bereits bearbeitete (freigegeben/abgelehnt/abgelaufen) `approval_id` lässt sich nicht
+erneut bearbeiten (Schutz vor doppelter Ausführung, gleiches Claim-Muster wie beim
+Schwester-Worker). Die ChatGPT-Action (`chatgpt-actions-schema.json`) und die
+Anweisungen (`chatgpt-instructions.md`) sind entsprechend aktualisiert - die KI fragt
+Danny jetzt ausdrücklich nach Zustimmung, bevor sie `approveCalendarAction` aufruft.
+
+Bekannte, bewusst nicht behobene Einschränkung (identisch zur Finanz-Freigabe-Engine):
+da der `API_KEY` keine Nutzeridentität trägt, kann der Worker nicht unterscheiden, WER eine
+Freigabe anfordert und WER sie erteilt. Das schützt vor allem gegen
+versehentliche/fehlerhafte KI-Aktionen, nicht gegen einen Angreifer, der bereits den
+vollen `API_KEY` besitzt.
 
 ## 7) KI-Aktionsprotokoll
 

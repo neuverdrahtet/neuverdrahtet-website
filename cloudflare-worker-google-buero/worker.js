@@ -345,6 +345,120 @@ async function logAction(fsCtx, { action, resourceType, resourceId, status, erro
   try { await firestoreSet({ ...fsCtx, collection: 'google_action_log', id: entry.id, data: entry }); } catch { /* Protokoll darf echte Aufrufe nicht stören */ }
 }
 
+// --- Maßnahme 5 (Google-Kalender-Freigabe-Gate, November 2026) ---
+//
+// createCalendarEvent/updateCalendarEvent schrieben bisher SOFORT in den
+// echten, produktiven Firmenkalender - ohne jede Prüfung, genau wie die
+// Finanzaktionen im Schwester-Worker (cloudflare-worker-ki-buerokraft) vor
+// deren P0-Sicherheitskorrektur. Ein fehlerhafter/halluzinierter KI-Aufruf
+// hätte einen echten Termin verschoben/angelegt, den Kunden/Mitarbeiter so
+// im Kalender sehen - ohne dass Danny vorher etwas davon mitbekommt. Dieselbe
+// "erst Freigabe-Anfrage anlegen, erst ein zweiter Aufruf führt wirklich aus"-
+// Engine wie dort, 1:1 übertragen (eigene Collection, da dieser Worker eine
+// eigene Firestore-Instanz-Nutzung mit eigenen Helfern hat - siehe
+// firestoreSet() oben: anders als firestoreUpdate() im Schwester-Worker OHNE
+// updateMask, also ein VOLLER Dokument-Überschreiben - deshalb wird bei jeder
+// Statusänderung hier immer das komplette, im Speicher gemergte Freigabe-
+// Objekt zurückgeschrieben, nie nur ein einzelnes Feld).
+const KALENDER_FREIGABE_COLLECTION = 'kalenderFreigaben';
+const KALENDER_FREIGABE_ABLAUF_STUNDEN = 24;
+const KALENDER_FREIGABE_STATUS = { OFFEN: 'offen', FREIGEGEBEN: 'freigegeben', ABGELEHNT: 'abgelehnt', AUSGEFUEHRT: 'ausgefuehrt', FEHLGESCHLAGEN: 'fehlgeschlagen', ABGELAUFEN: 'abgelaufen' };
+
+async function erstelleKalenderFreigabe(fsCtx, { aktion, args, zusammenfassung }) {
+  const id = crypto.randomUUID();
+  const jetzt = new Date();
+  const ablauf = new Date(jetzt.getTime() + KALENDER_FREIGABE_ABLAUF_STUNDEN * 60 * 60 * 1000);
+  const data = {
+    id, aktion, args: args || {}, zusammenfassung: zusammenfassung || '',
+    status: KALENDER_FREIGABE_STATUS.OFFEN,
+    angefordertAm: jetzt.toISOString(), ablaufAm: ablauf.toISOString(),
+    bearbeitetAm: '', ausgefuehrtAm: '', fehler: '',
+  };
+  await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id, data });
+  await logAction(fsCtx, { action: `kalenderfreigabe.angefordert.${aktion}`, resourceType: KALENDER_FREIGABE_COLLECTION, resourceId: id, status: 'success' });
+  return data;
+}
+
+function kalenderFreigabeAntwort(freigabe) {
+  return {
+    approval_required: true,
+    approval_id: freigabe.id,
+    action: freigabe.aktion,
+    summary: freigabe.zusammenfassung,
+    message: `Dieser Kalender-Eintrag erfordert eine separate Freigabe, bevor er wirklich im Firmenkalender angelegt/geändert wird. Mit POST /approvals/${freigabe.id}/approve freigeben und ausführen, oder mit POST /approvals/${freigabe.id}/reject ablehnen. Läuft automatisch ab am ${freigabe.ablaufAm}, danach erneut anfordern.`,
+    expires_at: freigabe.ablaufAm,
+  };
+}
+
+// Tatsächliche Ausführung NACH Freigabe - dieselbe Logik, die vorher direkt
+// aus dem jeweiligen POST/PATCH-Zweig lief (siehe weiter unten), nur hierhin
+// verschoben und erst über bearbeiteKalenderFreigabe() erreichbar.
+async function fuehreCreateCalendarEventAus(kctx, args) {
+  const { accessToken, calendarId, fsCtx } = kctx;
+  const created = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ summary: args.title, description: args.description || '', location: args.location || '', start: { dateTime: args.start }, end: { dateTime: args.end }, attendees: (args.attendee_emails || []).map((email) => ({ email })) }),
+  });
+  if (args.werkora_appointment_id) {
+    await firestoreSet({ ...fsCtx, collection: 'google_calendar_links', id: args.werkora_appointment_id, data: { werkora_appointment_id: args.werkora_appointment_id, google_calendar_event_id: created.id, created_at: new Date().toISOString() } });
+  }
+  return { ...calendarEventToApi(created), werkora_appointment_id: args.werkora_appointment_id || undefined, already_existed: false };
+}
+
+async function fuehreUpdateCalendarEventAus(kctx, args) {
+  const { accessToken, calendarId } = kctx;
+  const patch = {};
+  if (args.title !== undefined) patch.summary = args.title;
+  if (args.description !== undefined) patch.description = args.description;
+  if (args.location !== undefined) patch.location = args.location;
+  if (args.start !== undefined) patch.start = { dateTime: args.start };
+  if (args.end !== undefined) patch.end = { dateTime: args.end };
+  const updated = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events/${args.event_id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  return calendarEventToApi(updated);
+}
+
+async function fuehreKalenderAktionAus(kctx, aktion, args) {
+  switch (aktion) {
+    case 'create_calendar_event': return fuehreCreateCalendarEventAus(kctx, args);
+    case 'update_calendar_event': return fuehreUpdateCalendarEventAus(kctx, args);
+    default: throw new Error(`Unbekannte freigabepflichtige Kalender-Aktion: ${aktion}`);
+  }
+}
+
+// Claim-vor-Ausführung, 1:1 dasselbe Schutzmuster vor doppelter Ausführung
+// wie bearbeiteFinanzFreigabe() im Schwester-Worker.
+async function bearbeiteKalenderFreigabe(kctx, approvalId, { freigeben, kommentar }) {
+  const { fsCtx } = kctx;
+  const freigabe = await firestoreGet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId });
+  if (!freigabe) return { ok: false, code: 'APPROVAL_NOT_FOUND', message: 'Keine Freigabe-Anfrage mit dieser approval_id gefunden.' };
+  if (freigabe.status !== KALENDER_FREIGABE_STATUS.OFFEN) {
+    return { ok: false, code: 'APPROVAL_NOT_PENDING', message: `Diese Freigabe-Anfrage hat bereits den Status "${freigabe.status}" und kann nicht erneut bearbeitet werden.` };
+  }
+  if (new Date(freigabe.ablaufAm).getTime() < Date.now()) {
+    await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId, data: { ...freigabe, status: KALENDER_FREIGABE_STATUS.ABGELAUFEN, bearbeitetAm: new Date().toISOString() } });
+    return { ok: false, code: 'APPROVAL_EXPIRED', message: `Diese Freigabe-Anfrage ist am ${freigabe.ablaufAm} abgelaufen - bitte die ursprüngliche Aktion erneut anfordern.` };
+  }
+  if (!freigeben) {
+    await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId, data: { ...freigabe, status: KALENDER_FREIGABE_STATUS.ABGELEHNT, bearbeitetAm: new Date().toISOString(), fehler: kommentar || '' } });
+    await logAction(fsCtx, { action: 'kalenderfreigabe.abgelehnt', resourceType: KALENDER_FREIGABE_COLLECTION, resourceId: approvalId, status: 'success' });
+    return { ok: true, result: { approval_id: approvalId, status: 'abgelehnt' } };
+  }
+  // Claim VOR der Ausführung (siehe Funktionskommentar oben) - ein zweiter,
+  // überlappender Freigabe-Versuch für dieselbe ID sieht dadurch nicht mehr
+  // "offen" und wird abgelehnt, auch wenn die eigentliche Ausführung noch läuft.
+  await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId, data: { ...freigabe, status: KALENDER_FREIGABE_STATUS.FREIGEGEBEN, bearbeitetAm: new Date().toISOString() } });
+  try {
+    const ausgefuehrtesErgebnis = await fuehreKalenderAktionAus(kctx, freigabe.aktion, freigabe.args);
+    await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId, data: { ...freigabe, status: KALENDER_FREIGABE_STATUS.AUSGEFUEHRT, bearbeitetAm: new Date().toISOString(), ausgefuehrtAm: new Date().toISOString() } });
+    await logAction(fsCtx, { action: `kalenderfreigabe.ausgefuehrt.${freigabe.aktion}`, resourceType: KALENDER_FREIGABE_COLLECTION, resourceId: approvalId, status: 'success' });
+    return { ok: true, result: ausgefuehrtesErgebnis };
+  } catch (err) {
+    await firestoreSet({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION, id: approvalId, data: { ...freigabe, status: KALENDER_FREIGABE_STATUS.FEHLGESCHLAGEN, bearbeitetAm: new Date().toISOString(), fehler: String(err.message || err) } });
+    await logAction(fsCtx, { action: `kalenderfreigabe.fehlgeschlagen.${freigabe.aktion}`, resourceType: KALENDER_FREIGABE_COLLECTION, resourceId: approvalId, status: 'error' });
+    return { ok: false, code: 'EXECUTION_FAILED', message: `Freigabe wurde erteilt, die Ausführung ist aber fehlgeschlagen: ${err.message || err}` };
+  }
+}
+
 // P0-Sicherheitskorrektur (Oktober 2026, Master-Audit Bericht 03, Finding #9:
 // "echter Gmail/Kalender-Zugriff ohne Rate-Limiting"): normaler "!=="-
 // Stringvergleich bricht beim ersten abweichenden Zeichen ab - theoretisch
@@ -547,6 +661,9 @@ export default {
       if (teile[0] === 'calendar' && teile[1] === 'events' && !teile[2] && request.method === 'POST') {
         let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
         if (!body.title || !body.start || !body.end) return errorResponse('VALIDATION_ERROR', 'Felder "title", "start" und "end" sind erforderlich.', 400);
+        // Dubletten-Prüfung bleibt VOR der Freigabe-Anfrage (rein lesend, kein
+        // echter Kalender-Schreibzugriff) - für einen bereits vorhandenen
+        // Termin braucht es keine neue Freigabe-Anfrage.
         if (body.werkora_appointment_id) {
           const existingLink = await firestoreGet({ ...fsCtx, collection: 'google_calendar_links', id: body.werkora_appointment_id });
           if (existingLink) {
@@ -557,27 +674,44 @@ export default {
             }
           }
         }
-        const created = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ summary: body.title, description: body.description || '', location: body.location || '', start: { dateTime: body.start }, end: { dateTime: body.end }, attendees: (body.attendee_emails || []).map((email) => ({ email })) }),
+        // Maßnahme 5 (Google-Kalender-Freigabe-Gate): legt NICHT mehr sofort
+        // einen echten Kalendereintrag an, sondern nur noch eine Freigabe-
+        // Anfrage - siehe fuehreCreateCalendarEventAus() für die tatsächliche
+        // Ausführung, erst nach POST /approvals/{id}/approve.
+        const freigabe = await erstelleKalenderFreigabe(fsCtx, {
+          aktion: 'create_calendar_event', args: body,
+          zusammenfassung: `Termin "${body.title}" anlegen (${body.start} - ${body.end}).`,
         });
-        if (body.werkora_appointment_id) {
-          await firestoreSet({ ...fsCtx, collection: 'google_calendar_links', id: body.werkora_appointment_id, data: { werkora_appointment_id: body.werkora_appointment_id, google_calendar_event_id: created.id, created_at: new Date().toISOString() } });
-        }
-        await logAction(fsCtx, { action: 'create_calendar_event', resourceType: 'event', resourceId: created.id, status: 'success' });
-        return okResponse({ ...calendarEventToApi(created), werkora_appointment_id: body.werkora_appointment_id || undefined, already_existed: false }, 201);
+        return okResponse(kalenderFreigabeAntwort(freigabe), 202);
       }
       if (teile[0] === 'calendar' && teile[1] === 'events' && teile[2] && request.method === 'PATCH') {
         let body; try { body = await request.json(); } catch { return errorResponse('INVALID_BODY', 'Ungültiger JSON-Body.', 400); }
-        const patch = {};
-        if (body.title !== undefined) patch.summary = body.title;
-        if (body.description !== undefined) patch.description = body.description;
-        if (body.location !== undefined) patch.location = body.location;
-        if (body.start !== undefined) patch.start = { dateTime: body.start };
-        if (body.end !== undefined) patch.end = { dateTime: body.end };
-        const updated = await calendarFetch(accessToken, `/calendars/${encodeURIComponent(calendarId)}/events/${teile[2]}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
-        await logAction(fsCtx, { action: 'update_calendar_event', resourceType: 'event', resourceId: teile[2], status: 'success' });
-        return okResponse(calendarEventToApi(updated));
+        // Maßnahme 5 (Google-Kalender-Freigabe-Gate): ändert NICHT mehr sofort
+        // den echten Kalendereintrag, sondern nur noch eine Freigabe-Anfrage -
+        // siehe fuehreUpdateCalendarEventAus() für die tatsächliche Ausführung.
+        const freigabe = await erstelleKalenderFreigabe(fsCtx, {
+          aktion: 'update_calendar_event', args: { ...body, event_id: teile[2] },
+          zusammenfassung: `Termin ${teile[2]} ändern.`,
+        });
+        return okResponse(kalenderFreigabeAntwort(freigabe), 202);
+      }
+
+      // --- Freigabe-Warteschlange für die kalenderwirksamen KI-Aktionen oben
+      // (Maßnahme 5, November 2026). ---
+      if (teile[0] === 'approvals') {
+        const kctx = { fsCtx, accessToken, calendarId };
+        if (request.method === 'GET' && !teile[1]) {
+          let freigaben = await firestoreList({ ...fsCtx, collection: KALENDER_FREIGABE_COLLECTION });
+          freigaben = freigaben.filter((f) => f.status === KALENDER_FREIGABE_STATUS.OFFEN).sort((a, b) => (a.angefordertAm || '').localeCompare(b.angefordertAm || ''));
+          return okResponse(freigaben.map((f) => ({ approval_id: f.id, action: f.aktion, summary: f.zusammenfassung, requested_at: f.angefordertAm, expires_at: f.ablaufAm })));
+        }
+        if (request.method === 'POST' && teile[1] && (teile[2] === 'approve' || teile[2] === 'reject')) {
+          let body = {}; try { body = await request.json(); } catch { /* Body optional (z.B. ohne reason) */ }
+          const ergebnis = await bearbeiteKalenderFreigabe(kctx, teile[1], { freigeben: teile[2] === 'approve', kommentar: body.reason });
+          if (!ergebnis.ok) return errorResponse(ergebnis.code, ergebnis.message, ergebnis.code === 'APPROVAL_NOT_FOUND' ? 404 : 409);
+          return okResponse(ergebnis.result);
+        }
+        return errorResponse('METHOD_NOT_ALLOWED', 'Methode nicht unterstützt.', 405);
       }
 
       return errorResponse('NOT_FOUND', `Unbekannter Endpunkt: ${request.method} ${url.pathname}`, 404);
