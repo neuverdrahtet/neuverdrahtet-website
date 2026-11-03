@@ -37,6 +37,29 @@
       <p id="auth-error" class="lock-error" hidden></p>
       <p id="auth-hint" class="lock-hint">Bitte mit deiner E-Mail und deinem Passwort anmelden.</p>
       <a href="#" id="auth-mode-toggle" class="lock-toggle">Als eingeladener Mitarbeiter registrieren</a>
+      <a href="#" id="auth-forgot-toggle" class="lock-toggle">Passwort vergessen?</a>
+    </form>
+  </div>
+  <div id="lock-forgot-box" class="lock-box" hidden>
+    <form id="forgot-form">
+      <h1>Werkora</h1>
+      <h2>Passwort zurücksetzen</h2>
+      <input type="email" id="forgot-email" autocomplete="username" placeholder="E-Mail-Adresse" required>
+      <button type="submit" id="forgot-submit">Link zum Zurücksetzen senden</button>
+      <p id="forgot-error" class="lock-error" hidden></p>
+      <p id="forgot-hint" class="lock-hint">Du bekommst eine E-Mail mit einem Link, um ein neues Passwort zu setzen.</p>
+      <a href="#" id="forgot-back" class="lock-toggle">Zurück zur Anmeldung</a>
+    </form>
+  </div>
+  <div id="lock-mfa-box" class="lock-box" hidden>
+    <form id="mfa-form">
+      <h1>Werkora</h1>
+      <h2>Zwei-Faktor-Code</h2>
+      <input type="text" id="mfa-code" inputmode="numeric" autocomplete="one-time-code" placeholder="6-stelliger Code aus deiner Authenticator-App" required minlength="6" maxlength="6" pattern="[0-9]{6}">
+      <button type="submit" id="mfa-submit">Bestätigen</button>
+      <p id="mfa-error" class="lock-error" hidden></p>
+      <p class="lock-hint">Öffne deine Authenticator-App (z.B. Google Authenticator) und gib den aktuellen Code ein.</p>
+      <a href="#" id="mfa-back" class="lock-toggle">Zurück zur Anmeldung</a>
     </form>
   </div>
 </div>

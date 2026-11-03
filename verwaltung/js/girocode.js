@@ -18,7 +18,7 @@
 //  10. Verwendungszweck strukturiert (hier leer, wir nutzen unstrukturiert)
 //  11. Verwendungszweck unstrukturiert (max. 140 Zeichen) - hier Rechnungsnummer + Kundenname
 //  12. Hinweis des Empfängers an den Zahler (hier leer)
-import { loadZXing } from './vendorLoader.js';
+import { renderQrPngDataUrl } from './qrcode.js';
 
 function kuerzeAufLaenge(text, maxLaenge) {
   return (text || '').toString().trim().slice(0, maxLaenge);
@@ -57,40 +57,12 @@ export function baueGirocodePayload({ empfaenger, iban, bic, betrag, verwendungs
 
 /**
  * Rendert den GiroCode-Payload als PNG-Data-URL (für jsPDF addImage()).
- * Nutzt denselben ZXing-QR-Writer wie die Geräte-Kopplung (geraete.js):
- * BrowserQRCodeSvgWriter liefert ein SVG-Element, das hier über einen
- * Canvas-Umweg zu PNG rasterisiert wird (jsPDF kann SVG nicht direkt
- * einbetten). Gibt null zurück, wenn die QR-Bibliothek nicht geladen werden
- * konnte oder die Erzeugung fehlschlägt - der Aufrufer lässt den QR-Code
- * dann einfach weg, statt das ganze PDF scheitern zu lassen.
+ * Nutzt den gemeinsamen QR-Renderer aus qrcode.js (derselbe ZXing-Writer
+ * wie bisher) - jsPDF kann SVG nicht direkt einbetten, daher der
+ * Canvas-Umweg zu PNG dort. Gibt null zurück, wenn die QR-Bibliothek nicht
+ * geladen werden konnte oder die Erzeugung fehlschlägt - der Aufrufer lässt
+ * den QR-Code dann einfach weg, statt das ganze PDF scheitern zu lassen.
  */
 export async function erzeugeGirocodeDataUrl(payload, groesse = 300) {
-  if (!payload) return null;
-  try {
-    await loadZXing();
-    if (!window.ZXing) return null;
-    const writer = new window.ZXing.BrowserQRCodeSvgWriter();
-    const svg = writer.write(payload, groesse, groesse);
-    const svgText = new XMLSerializer().serializeToString(svg);
-    const svgDataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svgText)))}`;
-
-    return await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = groesse;
-        canvas.height = groesse;
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, groesse, groesse);
-        ctx.drawImage(img, 0, 0, groesse, groesse);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      img.onerror = () => resolve(null);
-      img.src = svgDataUrl;
-    });
-  } catch (err) {
-    console.error('GiroCode: QR-Code konnte nicht erzeugt werden:', err);
-    return null;
-  }
+  return renderQrPngDataUrl(payload, groesse);
 }

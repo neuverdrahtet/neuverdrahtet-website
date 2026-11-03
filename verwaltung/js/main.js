@@ -68,6 +68,7 @@ const routeLoaders = {
   teams: () => import('./views/teams.js'),
   papierkorb: () => import('./views/papierkorb.js'),
   social: () => import('./views/social.js'),
+  sicherheit: () => import('./views/sicherheit.js'),
 };
 
 const viewEl = document.getElementById('view');
@@ -199,6 +200,7 @@ function applyRoleToNav() {
     const info = document.createElement('div');
     info.className = 'sidebar-user';
     info.innerHTML = `<span>${session.name ? session.name : (session.role === 'admin' ? 'Administrator' : session.role)}</span>` +
+      '<a href="#/sicherheit" class="btn btn-sm btn-ghost">🔐 Sicherheit</a>' +
       (sessionStorage.getItem('nv-unlocked-session') ? '<button type="button" id="btn-lock" class="btn btn-sm btn-ghost">🔒 Sperren</button>' : '');
     footer.prepend(info);
     const lockBtn = footer.querySelector('#btn-lock');

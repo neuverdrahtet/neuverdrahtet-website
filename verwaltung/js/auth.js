@@ -111,13 +111,25 @@ const AUTH_ERROR_MESSAGES = {
   'auth/too-many-requests': 'Zu viele Versuche. Bitte kurz warten und erneut versuchen.',
 };
 
+// Maßnahme 8 (MFA, November 2026): eigene Fehlermeldungen für den
+// Zwei-Faktor-Code-Schritt (getrennt von AUTH_ERROR_MESSAGES oben, da
+// dieselben Codes dort eine andere, hier unpassende Meldung hätten).
+const MFA_ERROR_MESSAGES = {
+  'auth/invalid-verification-code': 'Der Code ist falsch oder abgelaufen. Bitte den aktuellen Code aus der App eingeben.',
+  'auth/code-expired': 'Der Code ist abgelaufen. Bitte den aktuellen Code aus der App eingeben.',
+  'auth/too-many-requests': 'Zu viele Versuche. Bitte kurz warten und erneut versuchen.',
+};
+
 async function initFirebaseLogin() {
   const [{ auth, firestore }, authMod, fsMod] = await Promise.all([
     import('./firebase.js'),
     import('./vendor/firebase/firebase-auth.js'),
     import('./vendor/firebase/firebase-firestore.js'),
   ]);
-  const { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } = authMod;
+  const {
+    onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+    sendPasswordResetEmail, getMultiFactorResolver, TotpMultiFactorGenerator,
+  } = authMod;
   const { doc, getDocFromServer, setDoc, deleteDoc } = fsMod;
 
   const lockScreen = document.getElementById('lock-screen');
@@ -133,6 +145,78 @@ async function initFirebaseLogin() {
   const submitBtn = document.getElementById('auth-submit');
   const modeToggle = document.getElementById('auth-mode-toggle');
   const hint = document.getElementById('auth-hint');
+  const forgotToggle = document.getElementById('auth-forgot-toggle');
+
+  // --- Passwort vergessen (Maßnahme 8) ---
+  const forgotBox = document.getElementById('lock-forgot-box');
+  const forgotForm = document.getElementById('forgot-form');
+  const forgotEmailInput = document.getElementById('forgot-email');
+  const forgotError = document.getElementById('forgot-error');
+  const forgotSubmitBtn = document.getElementById('forgot-submit');
+  const forgotBack = document.getElementById('forgot-back');
+
+  forgotToggle.addEventListener('click', (e) => {
+    e.preventDefault();
+    forgotEmailInput.value = emailInput.value.trim();
+    authBox.hidden = true;
+    forgotError.hidden = true;
+    forgotBox.hidden = false;
+  });
+  forgotBack.addEventListener('click', (e) => {
+    e.preventDefault();
+    forgotBox.hidden = true;
+    authBox.hidden = false;
+  });
+  forgotForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    forgotError.hidden = true;
+    const email = forgotEmailInput.value.trim();
+    if (!email) return;
+    forgotSubmitBtn.disabled = true;
+    try {
+      await sendPasswordResetEmail(auth, email);
+      zeigeForgotErfolg();
+    } catch (err) {
+      // "auth/user-not-found" bewusst GENAUSO wie Erfolg behandeln - sonst
+      // liesse sich über die Fehlermeldung ausprobieren, welche E-Mail-
+      // Adressen überhaupt als Konto angelegt sind (Enumeration). Echte
+      // andere Fehler (ungültige Adresse, zu viele Versuche) zeigen wir
+      // dagegen normal an.
+      if (err.code === 'auth/user-not-found') {
+        zeigeForgotErfolg();
+      } else {
+        forgotError.className = 'lock-error';
+        forgotError.textContent = err.code === 'auth/invalid-email' ? 'Ungültige E-Mail-Adresse.'
+          : err.code === 'auth/too-many-requests' ? 'Zu viele Versuche. Bitte kurz warten und erneut versuchen.'
+          : err.message || 'Unbekannter Fehler.';
+        forgotError.hidden = false;
+      }
+    } finally {
+      forgotSubmitBtn.disabled = false;
+    }
+    function zeigeForgotErfolg() {
+      forgotError.className = 'lock-hint';
+      forgotError.textContent = 'Falls zu dieser E-Mail-Adresse ein Konto existiert, wurde gerade eine E-Mail zum Zurücksetzen versendet.';
+      forgotError.hidden = false;
+    }
+  });
+
+  // --- Zwei-Faktor-Code beim Login (Maßnahme 8) ---
+  const mfaBox = document.getElementById('lock-mfa-box');
+  const mfaForm = document.getElementById('mfa-form');
+  const mfaCodeInput = document.getElementById('mfa-code');
+  const mfaError = document.getElementById('mfa-error');
+  const mfaSubmitBtn = document.getElementById('mfa-submit');
+  const mfaBack = document.getElementById('mfa-back');
+  let aktiverMfaResolver = null;
+
+  mfaBack.addEventListener('click', (e) => {
+    e.preventDefault();
+    aktiverMfaResolver = null;
+    mfaCodeInput.value = '';
+    mfaBox.hidden = true;
+    authBox.hidden = false;
+  });
 
   let mode = 'login';
   function setMode(next) {
@@ -200,6 +284,43 @@ async function initFirebaseLogin() {
       setMode(mode === 'login' ? 'register' : 'login');
     });
 
+    // Zwei-Faktor-Code-Eingabe nach einem Login-Versuch, der von Firebase
+    // mit "auth/multi-factor-auth-required" abgelehnt wurde (siehe unten) -
+    // aktiverMfaResolver wird dabei gesetzt, bevor diese Box sichtbar wird.
+    mfaForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      mfaError.hidden = true;
+      if (!aktiverMfaResolver) return;
+      const code = mfaCodeInput.value.trim();
+      if (!code) return;
+      mfaSubmitBtn.disabled = true;
+      try {
+        const totpHint = aktiverMfaResolver.hints.find((h) => h.factorId === TotpMultiFactorGenerator.FACTOR_ID);
+        if (!totpHint) throw new Error('Für dieses Konto ist kein Authenticator-App-Faktor hinterlegt.');
+        const assertion = TotpMultiFactorGenerator.assertionForSignIn(totpHint.uid, code);
+        const cred = await aktiverMfaResolver.resolveSignIn(assertion);
+        const session = await loadSessionFor(cred.user.uid, cred.user.email);
+        if (session) {
+          aktiverMfaResolver = null;
+          finish(session);
+        } else {
+          await signOut(auth);
+          aktiverMfaResolver = null;
+          mfaBox.hidden = true;
+          authBox.hidden = false;
+          error.textContent = 'Dieses Konto wurde noch nicht freigeschaltet. Bitte vom Admin einladen lassen.';
+          error.hidden = false;
+        }
+      } catch (err) {
+        mfaError.textContent = MFA_ERROR_MESSAGES[err.code] || err.message || 'Unbekannter Fehler.';
+        mfaError.hidden = false;
+        mfaCodeInput.value = '';
+        mfaCodeInput.focus();
+      } finally {
+        mfaSubmitBtn.disabled = false;
+      }
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       error.hidden = true;
@@ -209,7 +330,21 @@ async function initFirebaseLogin() {
       submitBtn.disabled = true;
       try {
         if (mode === 'login') {
-          const cred = await signInWithEmailAndPassword(auth, email, password);
+          let cred;
+          try {
+            cred = await signInWithEmailAndPassword(auth, email, password);
+          } catch (err) {
+            if (err.code === 'auth/multi-factor-auth-required') {
+              aktiverMfaResolver = getMultiFactorResolver(auth, err);
+              authBox.hidden = true;
+              mfaError.hidden = true;
+              mfaCodeInput.value = '';
+              mfaBox.hidden = false;
+              mfaCodeInput.focus();
+              return;
+            }
+            throw err;
+          }
           const session = await loadSessionFor(cred.user.uid, cred.user.email);
           if (session) {
             finish(session);
