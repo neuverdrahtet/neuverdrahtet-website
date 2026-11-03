@@ -2008,6 +2008,9 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 }
 .postfach-detail-header h2 { margin: 0 0 6px; font-size: 17px; }
 .postfach-detail-header .actions { margin-top: 10px; margin-bottom: 14px; }
+.postfach-verknuepfung { padding: 12px 14px; margin-bottom: 14px; }
+.postfach-verknuepfung h3 { font-size: 13px; margin: 0 0 10px; color: var(--text-mute); }
+.postfach-verknuepfung .form-grid { gap: 10px; }
 .postfach-body-host { border-top: 1px solid var(--border); padding-top: 12px; }
 .postfach-body-text { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 13px; }
 .postfach-body-iframe { width: 100%; min-height: 400px; border: none; background: #fff; border-radius: 6px; }

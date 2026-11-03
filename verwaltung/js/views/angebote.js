@@ -284,6 +284,16 @@ export async function render(container, route) {
     const zielAngebot = angebote.find((a) => a.id === route);
     if (zielAngebot) openForm(zielAngebot);
   }
+  // Übergabe aus dem Postfach ("📋 Angebot erstellen" an einer E-Mail, siehe
+  // postfach.js) - einmaliger Prefill-Schlüssel, gleiches Muster wie
+  // nv-anlage-prefill zwischen ausgaben.js und buchhaltung.js.
+  try {
+    const prefillRaw = sessionStorage.getItem('nv-angebot-prefill');
+    if (prefillRaw) {
+      sessionStorage.removeItem('nv-angebot-prefill');
+      openForm(null, JSON.parse(prefillRaw));
+    }
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-new-privat').addEventListener('click', () => openPrivatkundenSchnellstart());
   container.querySelector('#btn-gaeb-import').addEventListener('click', () => openGaebImport());
@@ -580,7 +590,7 @@ export async function render(container, route) {
     const data = a || {
       id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
       gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
-      status: 'entwurf', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
+      status: 'entwurf', betreff: prefill?.betreff || '', notizen: prefill?.notizen || '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
       detailgrad: 'einzelpreise',

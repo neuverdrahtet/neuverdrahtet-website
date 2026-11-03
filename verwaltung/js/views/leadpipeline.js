@@ -159,6 +159,16 @@ export async function render(container) {
   }
 
   container.querySelector('#btn-new-card').addEventListener('click', () => openCardForm());
+  // Übergabe aus dem Postfach ("🎯 Anfrage anlegen" an einer E-Mail, siehe
+  // postfach.js) - einmaliger Prefill-Schlüssel, gleiches Muster wie
+  // nv-anlage-prefill zwischen ausgaben.js und buchhaltung.js.
+  try {
+    const prefillRaw = sessionStorage.getItem('nv-lead-prefill');
+    if (prefillRaw) {
+      sessionStorage.removeItem('nv-lead-prefill');
+      openCardForm(null, JSON.parse(prefillRaw));
+    }
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
   container.querySelector('#btn-status-manage').addEventListener('click', () => {
     openStatusManager({
       title: 'Kunden-Status verwalten',
@@ -170,10 +180,13 @@ export async function render(container) {
     });
   });
 
-  function openCardForm(k) {
+  function openCardForm(k, prefill) {
     const isEdit = !!k;
     const neueId = uid();
-    const data = k || { id: neueId, firma: '', ansprechpartner: '', telefon: '', email: '', notizen: '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN), createdAt: new Date().toISOString() };
+    const data = k || {
+      id: neueId, firma: prefill?.firma || '', ansprechpartner: prefill?.ansprechpartner || '', telefon: prefill?.telefon || '',
+      email: prefill?.email || '', notizen: prefill?.notizen || '', status: spalten[0]?.id || '', farbe: farbeAusText(neueId, KUNDEN_FARBEN), createdAt: new Date().toISOString(),
+    };
     const { body, close } = openModal({
       title: isEdit ? 'Lead bearbeiten' : 'Neuer Lead',
       bodyHtml: `

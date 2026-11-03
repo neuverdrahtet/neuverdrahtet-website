@@ -1,6 +1,6 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime, nextDailyNummer } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
@@ -105,7 +105,11 @@ export async function render(container) {
   }
 
   async function renderMailbox() {
-    let allEmails = (await getAll('emails')).sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+    let [allEmails, kunden, projekte, angebote] = await Promise.all([
+      getAll('emails'), getAll('kunden'), getAll('projekte'), getAll('angebote'),
+    ]);
+    allEmails.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
+    const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
     let query = '';
     let richtungFilter = 'alle';
     let kategorieFilter = 'alle';
@@ -236,6 +240,19 @@ export async function render(container) {
             ${full.kundeAngelegtId ? `<span class="badge badge-success">✅ Kunde/Projekt angelegt</span>` : ''}
             <button class="btn btn-danger" id="pf-delete-btn">🗑️ Löschen</button>
           </div>
+          <div class="actions" style="margin-top:6px">
+            <button class="btn" id="pf-angebot-btn">📋 Angebot erstellen</button>
+            <button class="btn" id="pf-auftrag-btn">📁 Auftrag anlegen</button>
+            <button class="btn" id="pf-anfrage-btn">🎯 Anfrage anlegen</button>
+          </div>
+        </div>
+        <div class="card postfach-verknuepfung">
+          <h3>🔗 Verknüpfung</h3>
+          <div class="form-grid">
+            <div class="field"><label>Kunde</label><div id="pf-link-kunde-host"></div></div>
+            <div class="field"><label>Projekt/Auftrag</label><div id="pf-link-projekt-host"></div></div>
+            <div class="field"><label>Angebot</label><div id="pf-link-angebot-host"></div></div>
+          </div>
         </div>
         <div class="postfach-body-host">${bodyHtml}</div>
         ${full.attachments.length ? `
@@ -257,6 +274,46 @@ export async function render(container) {
       detailHost.querySelector('#pf-reply-btn').addEventListener('click', () => openCompose({ replyTo: full }));
       detailHost.querySelector('#pf-task-btn').addEventListener('click', () => openTaskFromMessage(full));
       detailHost.querySelector('#pf-kunde-btn')?.addEventListener('click', () => openKundeVorschlag(full));
+      detailHost.querySelector('#pf-angebot-btn').addEventListener('click', () => starteAngebotAusMail(full));
+      detailHost.querySelector('#pf-auftrag-btn').addEventListener('click', () => starteAuftragAusMail(full));
+      detailHost.querySelector('#pf-anfrage-btn').addEventListener('click', () => starteAnfrageAusMail(full));
+
+      // Manuelle Verknüpfung mit einem bestehenden Kunden/Projekt/Angebot -
+      // unabhängig vom automatischen Adressabgleich (verknuepfeEmailsMitKundenUndProjekten)
+      // und von den Schnellaktions-Buttons oben, die stattdessen NEUE Datensätze anlegen.
+      mountChipPicker(detailHost.querySelector('#pf-link-kunde-host'), {
+        icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde verknüpft –',
+        items: kunden, selectedId: full.kundeId || '',
+        itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+        onChange: async (kundeId) => {
+          full.kundeId = kundeId || '';
+          await put('emails', full);
+          const idx = allEmails.findIndex((m) => m.id === full.id);
+          if (idx !== -1) allEmails[idx] = full;
+        },
+      });
+      mountChipPicker(detailHost.querySelector('#pf-link-projekt-host'), {
+        icon: '📁', title: 'Projekt/Auftrag wählen', placeholder: '– kein Projekt verknüpft –',
+        items: projekte, selectedId: full.projektId || '',
+        itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+        onChange: async (projektId) => {
+          full.projektId = projektId || '';
+          await put('emails', full);
+          const idx = allEmails.findIndex((m) => m.id === full.id);
+          if (idx !== -1) allEmails[idx] = full;
+        },
+      });
+      mountChipPicker(detailHost.querySelector('#pf-link-angebot-host'), {
+        icon: '📋', title: 'Angebot wählen', placeholder: '– kein Angebot verknüpft –',
+        items: angebote, selectedId: full.angebotId || '',
+        itemLabel: (a) => `${a.nummer || '(Entwurf)'} – ${a.betreff || ''}`.trim(), itemSub: (a) => kundenById[a.kundeId]?.firma || '',
+        onChange: async (angebotId) => {
+          full.angebotId = angebotId || '';
+          await put('emails', full);
+          const idx = allEmails.findIndex((m) => m.id === full.id);
+          if (idx !== -1) allEmails[idx] = full;
+        },
+      });
       detailHost.querySelector('#pf-delete-btn').addEventListener('click', async () => {
         if (!confirmDelete('Diese E-Mail wirklich unwiderruflich löschen? Sie wandert dabei auch in den Gmail-Papierkorb.')) return;
         const btn = detailHost.querySelector('#pf-delete-btn');
@@ -443,6 +500,60 @@ export async function render(container) {
           submitBtn.disabled = false;
         }
       });
+    }
+
+    // Gemeinsame Kontakt-Ableitung für die drei Schnellaktionen unten -
+    // gleiche Vorrang-Logik wie in openKundeVorschlag (KI-Kontaktauszug vor
+    // dem rohen "Absender"-Header, siehe dortiger Kommentar).
+    function leiteKontaktAb(message) {
+      const kiKontakt = message.kontakt;
+      const email = kiKontakt?.email || extractEmailAddress(message.from);
+      const name = kiKontakt?.name || (message.from || '').split('<')[0].trim().replace(/^"|"$/g, '') || email;
+      const bestehenderKunde = email ? kunden.find((k) => (k.email || '').toLowerCase() === email.toLowerCase()) : null;
+      return {
+        email, name, telefon: kiKontakt?.telefon || '',
+        anliegen: kiKontakt?.anliegen || message.subject || '',
+        kundeId: message.kundeId || bestehenderKunde?.id || '',
+      };
+    }
+
+    // Übergabe an eine andere Ansicht per einmaligem sessionStorage-Schlüssel
+    // (gleiches Muster wie nv-anlage-prefill zwischen ausgaben.js und
+    // buchhaltung.js) - robuster als ein Hash-Query-Parameter, weil die
+    // Zielformulare (Angebot/Projekt/Lead) bereits ein Prefill-Objekt statt
+    // nur einer ID entgegennehmen.
+    function navigiereMitPrefill(key, prefill, hash) {
+      try {
+        sessionStorage.setItem(key, JSON.stringify(prefill));
+      } catch {
+        toast('Übergabe nicht möglich (sessionStorage nicht verfügbar) - bitte manuell anlegen.', 'danger');
+        return;
+      }
+      window.location.hash = hash;
+    }
+
+    function starteAngebotAusMail(message) {
+      const kontakt = leiteKontaktAb(message);
+      navigiereMitPrefill('nv-angebot-prefill', {
+        kundeId: kontakt.kundeId, betreff: kontakt.anliegen,
+        notizen: (message.text || '').slice(0, 2000),
+      }, '#/angebote');
+    }
+
+    function starteAuftragAusMail(message) {
+      const kontakt = leiteKontaktAb(message);
+      navigiereMitPrefill('nv-projekt-prefill', {
+        kundeId: kontakt.kundeId, titel: kontakt.anliegen, bereich: 'auftrag',
+        beschreibung: (message.text || '').slice(0, 2000),
+      }, '#/projekte');
+    }
+
+    function starteAnfrageAusMail(message) {
+      const kontakt = leiteKontaktAb(message);
+      navigiereMitPrefill('nv-lead-prefill', {
+        firma: kontakt.name, telefon: kontakt.telefon, email: kontakt.email,
+        notizen: kontakt.anliegen !== message.subject ? kontakt.anliegen : (message.text || '').slice(0, 2000),
+      }, '#/leadpipeline');
     }
 
     async function openTaskFromMessage(message) {

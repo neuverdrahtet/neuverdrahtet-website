@@ -217,6 +217,16 @@ export async function render(container, opts = {}) {
   container.querySelector('#bereich-filter').addEventListener('change', applyFilter);
   container.querySelector('#gewerk-filter').addEventListener('change', applyFilter);
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
+  // Übergabe aus dem Postfach ("📁 Auftrag anlegen" an einer E-Mail, siehe
+  // postfach.js) - einmaliger Prefill-Schlüssel, gleiches Muster wie
+  // nv-anlage-prefill zwischen ausgaben.js und buchhaltung.js.
+  try {
+    const prefillRaw = sessionStorage.getItem('nv-projekt-prefill');
+    if (prefillRaw) {
+      sessionStorage.removeItem('nv-projekt-prefill');
+      openForm(null, JSON.parse(prefillRaw));
+    }
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
   container.querySelector('#btn-duplikate').addEventListener('click', () => openProjektDuplikateModal());
   container.querySelector('#btn-export').addEventListener('click', () => {
     const header = ['Titel', 'Kunde', 'Bereich', 'Status', 'Gewerk', 'Beschreibung', 'Start', 'Ende', 'Erstellt am'];
@@ -633,11 +643,11 @@ export async function render(container, opts = {}) {
     }
   }
 
-  function openForm(p) {
+  function openForm(p, prefill) {
     const isEdit = !!p;
     const data = p || {
-      id: uid(), titel: '', kundeId: '', status: spalten[0]?.id || '', beschreibung: '',
-      start: '', ende: '', mitarbeiterIds: [], subunternehmerIds: [], bereich: bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
+      id: uid(), titel: prefill?.titel || '', kundeId: prefill?.kundeId || '', status: spalten[0]?.id || '', beschreibung: prefill?.beschreibung || '',
+      start: '', ende: '', mitarbeiterIds: [], subunternehmerIds: [], bereich: prefill?.bereich || bereichScope?.[0] || 'auftrag', kategorieId: '', gewerk: '', farbe: '', markeId: '', createdAt: new Date().toISOString(),
     };
     const kategorienForBereich = (bereich) => kategorien.filter((k) => k.bereich === bereich);
 
