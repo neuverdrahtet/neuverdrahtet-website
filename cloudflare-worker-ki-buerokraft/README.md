@@ -253,6 +253,13 @@ Jeder Aufruf – egal ob erfolgreich, blockiert oder fehlerhaft – wird als Dok
 Firestore-Collection `ai_action_log` geschrieben (Felder wie in deiner Vorgabe, Abschnitt
 29). In Werkora unter **KI-Aktivität** (Admin-Rolle) einsehbar.
 
+**Seit Maßnahme 4 (Token-Härtung, November 2026)** wird auch jeder fehlgeschlagene
+Authentifizierungsversuch (falscher oder fehlender `API_KEY`) protokolliert – Status
+`auth_failed`, eigene KPI-Kachel "Unbefugte Zugriffe" in **KI-Aktivität**. Der versuchte
+Schlüssel selbst wird dabei NIE mitprotokolliert. Vorher blieb ein falscher Schlüssel
+spurlos (nur 401-Antwort, keine Spur in Werkora) – ein geleakter/erratener `API_KEY` wäre
+unbemerkt geblieben.
+
 Jede blockierte/gesperrte Aktion (403) legt zusätzlich einen Eintrag in `ki_freigaben` an.
 In Werkora unter **KI-Freigaben** (Admin-Rolle) einsehbar, mit den Aktionen "Freigeben",
 "Bearbeiten" (Kommentar hinterlegen) und "Ablehnen" - wie in deiner Vorgabe (Abschnitt 30)
@@ -436,8 +443,10 @@ Datei per Dashboard-Quick-Edit deploybar bleibt (kein npm-Build nötig).
    hineinkopieren (alles markieren, löschen, einfügen), **Bereitstellen**.
 3. Zurück zur Worker-Übersicht → **Einstellungen** → **Variablen und Geheimnisse**:
    - `API_KEY` als **Secret** anlegen – ein langer, zufälliger Schlüssel (z.B. mit einem
-     Passwort-Generator erzeugen, mind. 32 Zeichen). Diesen Schlüssel bekommt später nur
-     die KI-Bürokraft zu sehen.
+     Passwort-Generator erzeugen, **mind. 32 Zeichen – der Worker erzwingt das seit
+     Maßnahme 4/Token-Härtung und lehnt jede Anfrage mit `SERVER_MISCONFIGURED` ab, falls
+     der gesetzte Schlüssel kürzer ist**). Diesen Schlüssel bekommt später nur die
+     KI-Bürokraft zu sehen.
    - `FIREBASE_SERVICE_ACCOUNT_JSON` als **Secret** anlegen – derselbe Wert, den ihr schon
      beim Kostenschätzer-Worker und beim offenen-REST-API-Worker verwendet habt (einmal
      erzeugte Firebase-Service-Account-JSON-Datei, kompletter Inhalt als ein Secret).

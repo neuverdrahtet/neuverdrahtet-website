@@ -2625,6 +2625,31 @@ async function pruefeRateLimit(env, ip) {
   }
 }
 
+// Maßnahme 4 (Token-Härtung, November 2026): ein falscher/fehlender API_KEY
+// führte bisher zu einem sofortigen 401 - aber OHNE jede Spur in Werkora.
+// Weder ein geleakter Schlüssel noch ein aktiver Rateversuch wären für Danny
+// sichtbar gewesen (nur in den Cloudflare-Worker-Logs, die niemand
+// regelmäßig prüft). Best-effort-Protokollierung analog zu logAction() -
+// eigener Status "auth_failed" (siehe ki-aktivitaet.js), damit solche
+// Versuche in der bestehenden "KI-Aktivität"-Ansicht auffallen. Bewusst OHNE
+// den gesendeten Schlüssel selbst zu protokollieren (kein Secret-Leck ins
+// eigene Log). Durch das bestehende 30/Min-IP-Rate-Limit (siehe
+// pruefeRateLimit) ist die zusätzliche Google-OAuth-Token-Anfrage je
+// Fehlversuch von Natur aus begrenzt.
+async function protokolliereFehlgeschlagenenZugriff(env, ip) {
+  try {
+    const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+    const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
+    await logAction({ accessToken, projectId: serviceAccount.project_id, ip }, {
+      action: 'auth.failed', status: 'auth_failed',
+    });
+  } catch {
+    // Darf selbst nie fehlschlagen können - sonst würde ein falsch
+    // konfigurierter FIREBASE_SERVICE_ACCOUNT_JSON zusätzlich den (korrekten)
+    // 401-Fehlerfall verschlucken. Best effort, wie logAction() selbst.
+  }
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen, kein Netzwerk).
 export {
   toFirestoreValue, toFirestoreFields, fromFirestoreValue, fromFirestoreFields, docToPlain,
@@ -2632,13 +2657,20 @@ export {
   nextDailyNummer, calcTotals, leadStatusHinweis, addDaysISO, buildBueroChecklist,
   orderToApi, workReportToApi, apiToWorkReport, documentToApi, paymentToApi, reminderToApi, articleToApi, employeeToApi,
   stockMovementToApi, MCP_TOOLS, callWerkoraMcpTool, handleMcpRequest, zeitkonstanterVergleich,
+  protokolliereFehlgeschlagenenZugriff,
 };
 
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') return jsonResponse(null, 204);
 
-    if (!env.API_KEY) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (API_KEY fehlt).', 500);
+    // Maßnahme 4 (Token-Härtung): Mindestlänge erzwingen (README empfiehlt
+    // beim Einrichten bereits "mind. 32 Zeichen") - ein versehentlich zu
+    // kurzer/schwacher API_KEY wird jetzt als Fehlkonfiguration behandelt
+    // statt klaglos akzeptiert zu werden.
+    if (!env.API_KEY || env.API_KEY.length < 32) {
+      return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (API_KEY fehlt oder ist zu kurz, mind. 32 Zeichen erforderlich).', 500);
+    }
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const rateLimit = await pruefeRateLimit(env, ip);
     if (!rateLimit.erlaubt) {
@@ -2652,6 +2684,7 @@ export default {
     const authHeader = request.headers.get('Authorization') || '';
     const gesendeterSchluessel = authHeader.replace(/^Bearer\s+/i, '').trim();
     if (!zeitkonstanterVergleich(gesendeterSchluessel, env.API_KEY)) {
+      await protokolliereFehlgeschlagenenZugriff(env, ip);
       return errorResponse('UNAUTHORIZED', 'Ungültiger oder fehlender API-Schlüssel (Authorization: Bearer <Schlüssel>).', 401);
     }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return errorResponse('SERVER_MISCONFIGURED', 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).', 500);

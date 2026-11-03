@@ -5,8 +5,8 @@ import { escapeHtml, formatDateTime } from '../utils.js';
 // geschrieben vom Worker in cloudflare-worker-ki-buerokraft/). Absichtlich
 // ohne Löschen/Bearbeiten - ein Audit-Log soll nicht nachträglich
 // veränderbar sein.
-const STATUS_LABEL = { success: 'Erfolgreich', blocked: 'Blockiert', error: 'Fehler' };
-const STATUS_BADGE = { success: 'badge-success', blocked: 'badge-danger', error: 'badge-warn' };
+const STATUS_LABEL = { success: 'Erfolgreich', blocked: 'Blockiert', error: 'Fehler', auth_failed: 'Unbefugter Zugriff' };
+const STATUS_BADGE = { success: 'badge-success', blocked: 'badge-danger', error: 'badge-warn', auth_failed: 'badge-danger' };
 
 export async function render(container) {
   let eintraege = await getAll('ai_action_log');
@@ -34,6 +34,10 @@ export async function render(container) {
         <div class="kpi-value">${eintraege.filter((e) => e.status === 'error').length}</div>
         <div class="kpi-label">Fehler</div>
       </div>
+      <div class="kpi-card kpi-clickable kpi-danger" id="kpi-auth-failed">
+        <div class="kpi-value">${eintraege.filter((e) => e.status === 'auth_failed').length}</div>
+        <div class="kpi-label">Unbefugte Zugriffe</div>
+      </div>
     </div>
     <div class="form-row">
       <div class="field"><label>Status</label>
@@ -42,6 +46,7 @@ export async function render(container) {
           <option value="success">Erfolgreich</option>
           <option value="blocked">Blockiert</option>
           <option value="error">Fehler</option>
+          <option value="auth_failed">Unbefugter Zugriff</option>
         </select>
       </div>
       <div class="field"><label>Suche (Aktion/Entität)</label><input id="filter-suche" placeholder="z.B. customers.create"></div>
@@ -84,7 +89,7 @@ export async function render(container) {
   }
 
   function markActiveKpi() {
-    const idByStatus = { success: 'kpi-success', blocked: 'kpi-blocked', error: 'kpi-error', '': 'kpi-alle' };
+    const idByStatus = { success: 'kpi-success', blocked: 'kpi-blocked', error: 'kpi-error', auth_failed: 'kpi-auth-failed', '': 'kpi-alle' };
     container.querySelectorAll('.kpi-card').forEach((el) => el.classList.remove('kpi-active'));
     const active = container.querySelector(`#${idByStatus[filterStatus.value] || 'kpi-alle'}`);
     if (active) active.classList.add('kpi-active');
@@ -95,6 +100,7 @@ export async function render(container) {
   container.querySelector('#kpi-success').addEventListener('click', () => { filterStatus.value = 'success'; markActiveKpi(); renderTable(); });
   container.querySelector('#kpi-blocked').addEventListener('click', () => { filterStatus.value = 'blocked'; markActiveKpi(); renderTable(); });
   container.querySelector('#kpi-error').addEventListener('click', () => { filterStatus.value = 'error'; markActiveKpi(); renderTable(); });
+  container.querySelector('#kpi-auth-failed').addEventListener('click', () => { filterStatus.value = 'auth_failed'; markActiveKpi(); renderTable(); });
   markActiveKpi();
   renderTable();
 }

@@ -15,7 +15,7 @@ const serviceAccount = {
   private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }),
   project_id: 'ki-buerokraft-test',
 };
-const API_KEY = 'test-api-key-123456';
+const API_KEY = 'test-api-key-123456-mindestens-32-zeichen';
 
 function jsonResponse(status, data) {
   return { ok: status >= 200 && status < 300, status, json: async () => data, text: async () => JSON.stringify(data) };
