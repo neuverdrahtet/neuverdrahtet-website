@@ -2566,15 +2566,14 @@ export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
   tagesuebersicht: ['admin', 'buero', 'mitarbeiter'],
   kunden: ['admin', 'buero'],
-  leadpipeline: ['admin', 'buero'], // enthält jetzt auch den Kanban-Reiter (Projekt-Status), siehe leadpipeline.js
+  leadpipeline: ['admin', 'buero'], // enthält jetzt auch den Pipeline-Reiter (Projekt-Status) und den Projekte-Reiter (Bereich 'projekt'), siehe leadpipeline.js
 
-  projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
   reisekosten: [], // Solo-Betrieb: eigene Reisekosten laufen nicht über Werkora.
   performance: [], // Solo-Betrieb: Performance/Bonus ist für Angestellte gedacht.
   benefits: [], // Solo-Betrieb: Mitarbeiter-Benefits sind für Angestellte gedacht.
-  service: ['admin', 'buero', 'mitarbeiter'],
+  service: [], // Solo-Betrieb: eigener Reiter für Bereich 'service' nicht mehr gebraucht - bereits bestehende Projekte mit diesem Bereich bleiben in Firestore erhalten, aber ohne eigene Route unsichtbar.
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   termine: ['admin', 'buero', 'mitarbeiter'],
@@ -2592,8 +2591,8 @@ export const ROUTE_ROLLEN = {
   teams: [], // Solo-Betrieb: keine Kolonnen, da nur eine Person.
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],
-  lieferanten: ['admin', 'buero'],
-  inventur: ['admin', 'buero'],
+  lieferanten: [], // Solo-Betrieb: Lieferanten-Verwaltungsseite zu - ACHTUNG: Katalog/Angebote können bestehende Lieferanten weiter als Auswahl anzeigen, aber ohne diese Route kann kein neuer Lieferant mehr angelegt werden.
+  inventur: [], // Solo-Betrieb: keine regelmäßige Inventur.
   formulare: ['admin', 'buero', 'mitarbeiter'],
   vorlagen: ['admin', 'buero'],
   angebote: ['admin', 'buero'],

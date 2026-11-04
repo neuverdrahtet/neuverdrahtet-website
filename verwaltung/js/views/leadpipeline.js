@@ -3,6 +3,7 @@ import { uid, escapeHtml, toast, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { render as renderProjekteKanban } from './kanban.js';
+import { render as renderProjekteBereich } from './projekte.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
@@ -262,29 +263,48 @@ async function renderLeads(container) {
   renderBoard();
 }
 
-export async function render(container) {
+// Solo-Betrieb-Vereinfachung: "Projekte" (Bereich 'projekt' - der
+// Standard-Bereich, in den jedes neue, über den Pipeline-Reiter per
+// openCardForm() angelegte Projekt automatisch fällt, siehe bereich:
+// 'projekt' in kanban.js) bekam bewusst KEINE eigene, separate Route mehr,
+// sondern wurde hier als dritter Reiter ergänzt - sonst wäre die volle
+// Projekt-Akte (Fotos, Dokumente, Aufmaß, Kalkulation) für genau die
+// Projekte, die über den Pipeline-Reiter entstehen, nicht mehr erreichbar
+// gewesen. Der frühere Kanban-Reiter heißt deshalb jetzt "Pipeline" (zeigt
+// den Status-Verlauf aller Projekte über kanbanSpalten), um ihn klar vom
+// neuen "Projekte"-Reiter (volle Akte, nach Bereich gefiltert) zu
+// unterscheiden.
+const TABS = [
+  { id: 'leads', label: '🧲 Leads', render: (host) => renderLeads(host) },
+  { id: 'pipeline', label: '🗂️ Pipeline', render: (host) => renderProjekteKanban(host) },
+  { id: 'projekte', label: '📁 Projekte', render: (host) => renderProjekteBereich(host, { bereichScope: ['projekt'], titel: 'Projekte' }) },
+];
+
+// route: optionaler Teil nach "#/leadpipeline/" (z.B. aus Dashboard-Links
+// auf "#/leadpipeline/projekte") - wählt den initial aktiven Reiter, damit
+// z.B. das Dashboard direkt auf den Projekte-Reiter verlinken kann statt
+// immer auf "Leads" zu landen.
+export async function render(container, route) {
+  const startTab = TABS.some((t) => t.id === route) ? route : TABS[0].id;
   container.innerHTML = `
     <div class="tabs" id="lp-tabs">
-      <button type="button" class="tab-item active" data-tab="leads">🧲 Leads</button>
-      <button type="button" class="tab-item" data-tab="projekte">🗂️ Projekte</button>
+      ${TABS.map((t) => `<button type="button" class="tab-item${t.id === startTab ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`).join('')}
     </div>
-    <div id="lp-tab-leads"></div>
-    <div id="lp-tab-projekte" hidden></div>
+    ${TABS.map((t) => `<div id="lp-tab-${t.id}"${t.id === startTab ? '' : ' hidden'}></div>`).join('')}
   `;
   const tabs = container.querySelector('#lp-tabs');
-  const leadsHost = container.querySelector('#lp-tab-leads');
-  const projekteHost = container.querySelector('#lp-tab-projekte');
-  await renderLeads(leadsHost);
-  let projekteGeladen = false;
+  const hosts = Object.fromEntries(TABS.map((t) => [t.id, container.querySelector(`#lp-tab-${t.id}`)]));
+  const geladen = new Set();
+  await TABS.find((t) => t.id === startTab).render(hosts[startTab]);
+  geladen.add(startTab);
   tabs.querySelectorAll('.tab-item').forEach((btn) => {
     btn.addEventListener('click', async () => {
       tabs.querySelectorAll('.tab-item').forEach((b) => b.classList.toggle('active', b === btn));
       const aktivTab = btn.dataset.tab;
-      leadsHost.hidden = aktivTab !== 'leads';
-      projekteHost.hidden = aktivTab !== 'projekte';
-      if (aktivTab === 'projekte' && !projekteGeladen) {
-        projekteGeladen = true;
-        await renderProjekteKanban(projekteHost);
+      Object.entries(hosts).forEach(([id, host]) => { host.hidden = id !== aktivTab; });
+      if (!geladen.has(aktivTab)) {
+        geladen.add(aktivTab);
+        await TABS.find((t) => t.id === aktivTab).render(hosts[aktivTab]);
       }
     });
   });

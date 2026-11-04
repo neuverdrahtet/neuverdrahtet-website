@@ -186,7 +186,7 @@ async function autoErstelleKundeAusAnfrage(email) {
       push.notifyRoles(['admin', 'buero'], {
         title: 'Weitere Anfrage zu bestehendem Projekt',
         body: `${kundeName}: ${titel}`,
-        url: './index.html#/projekte',
+        url: './index.html#/auftraege',
       }).catch(() => { /* Push ist ein Komfort-Feature */ });
       return { kundeId, projektId: zielProjekt.id };
     }

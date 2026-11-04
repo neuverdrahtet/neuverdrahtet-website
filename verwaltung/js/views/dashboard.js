@@ -299,7 +299,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
     </div>
     <div class="kpi-grid">
       <a class="kpi-card" href="#/kunden"><div class="kpi-value">${kunden.length}</div><div class="kpi-label">Kunden</div></a>
-      <a class="kpi-card" href="#/projekte"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></a>
+      <a class="kpi-card" href="#/leadpipeline/pipeline"><div class="kpi-value">${aktiveProjekte.length}</div><div class="kpi-label">Aktive Projekte</div></a>
       <a class="kpi-card kpi-warn" href="#/rechnungen/offen"><div class="kpi-value">${offen.length}</div><div class="kpi-label">Offene Rechnungen &middot; ${formatCurrency(offenSumme)}</div></a>
       <a class="kpi-card kpi-danger" href="#/rechnungen/ueberfaellig"><div class="kpi-value">${ueberfaellig.length}</div><div class="kpi-label">Überfällig &middot; ${formatCurrency(ueberfaelligSumme)}</div></a>
     </div>
@@ -370,12 +370,12 @@ export async function render(container, _route, { autoSync = true } = {}) {
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
             <h2 style="margin:0">Projekt-Pipeline</h2>
-            <a class="text-mute" href="#/projekte" style="font-size:12.5px">Alle Projekte →</a>
+            <a class="text-mute" href="#/leadpipeline/pipeline" style="font-size:12.5px">Alle Projekte →</a>
           </div>
           <div class="dash-pipeline">
             ${spalten.map((s) => {
               const count = projekte.filter((p) => p.status === s.id).length;
-              return `<a class="dash-pipeline-col" href="#/projekte"><span class="count">${count}</span><span class="label">${escapeHtml(s.titel)}</span></a>`;
+              return `<a class="dash-pipeline-col" href="#/leadpipeline/pipeline"><span class="count">${count}</span><span class="label">${escapeHtml(s.titel)}</span></a>`;
             }).join('')}
           </div>
         </div>
@@ -436,7 +436,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div class="dash-quicklinks">
             <a class="btn" href="#/plantafel">📅 Neuer Termin</a>
             <a class="btn" href="#/kunden">👥 Neuer Kunde</a>
-            <a class="btn" href="#/projekte">📁 Neues Projekt</a>
+            <a class="btn" href="#/leadpipeline/pipeline">📁 Neues Projekt</a>
           </div>
         </div>
 
