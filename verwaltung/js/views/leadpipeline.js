@@ -2,6 +2,7 @@ import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast, farbeAusText } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
+import { render as renderProjekteKanban } from './kanban.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
@@ -25,7 +26,13 @@ function kuerzeText(text, maxLaenge) {
   return einzeilig.length > maxLaenge ? einzeilig.slice(0, maxLaenge - 1) + '…' : einzeilig;
 }
 
-export async function render(container) {
+// Maßnahme "Solo-Betrieb-Vereinfachung" (November 2026): Lead-Pipeline
+// (Kunden-Status, diese Funktion) und Kanban (Projekt-Status, kanban.js)
+// sind bewusst unterschiedliche Datenmodelle (kunden/kundenStatus vs.
+// projekte/kanbanSpalten) und bleiben technisch getrennt - zusammengelegt
+// wurde hier nur die NAVIGATION (ein Menüpunkt mit zwei Reitern statt
+// zwei getrennten Menüpunkten, siehe render() unten), nicht die Daten.
+async function renderLeads(container) {
   let [kunden, spalten] = await Promise.all([getAll('kunden'), getAll('kundenStatus')]);
   spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
 
@@ -176,7 +183,7 @@ export async function render(container) {
       items: spalten,
       zeigeVerlustFlag: true,
       canDelete: (it) => !kunden.some((k) => (k.status || 'kunde') === it.id),
-      onChange: () => render(container),
+      onChange: () => renderLeads(container),
     });
   });
 
@@ -227,7 +234,7 @@ export async function render(container) {
         await remove('kunden', data.id);
         toast('Kunde in den Papierkorb verschoben');
         close();
-        render(container);
+        renderLeads(container);
       });
     }
     body.querySelector('#lead-form').addEventListener('submit', async (e) => {
@@ -248,9 +255,37 @@ export async function render(container) {
       await put('kunden', updated);
       toast(isEdit ? 'Kunde aktualisiert' : 'Lead angelegt', 'success');
       close();
-      render(container);
+      renderLeads(container);
     });
   }
 
   renderBoard();
+}
+
+export async function render(container) {
+  container.innerHTML = `
+    <div class="tabs" id="lp-tabs">
+      <button type="button" class="tab-item active" data-tab="leads">🧲 Leads</button>
+      <button type="button" class="tab-item" data-tab="projekte">🗂️ Projekte</button>
+    </div>
+    <div id="lp-tab-leads"></div>
+    <div id="lp-tab-projekte" hidden></div>
+  `;
+  const tabs = container.querySelector('#lp-tabs');
+  const leadsHost = container.querySelector('#lp-tab-leads');
+  const projekteHost = container.querySelector('#lp-tab-projekte');
+  await renderLeads(leadsHost);
+  let projekteGeladen = false;
+  tabs.querySelectorAll('.tab-item').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      tabs.querySelectorAll('.tab-item').forEach((b) => b.classList.toggle('active', b === btn));
+      const aktivTab = btn.dataset.tab;
+      leadsHost.hidden = aktivTab !== 'leads';
+      projekteHost.hidden = aktivTab !== 'projekte';
+      if (aktivTab === 'projekte' && !projekteGeladen) {
+        projekteGeladen = true;
+        await renderProjekteKanban(projekteHost);
+      }
+    });
+  });
 }

@@ -24,8 +24,10 @@ const routeLoaders = {
   dashboard: () => import('./views/dashboard.js'),
   tagesuebersicht: () => import('./views/tagesuebersicht.js'),
   kunden: () => import('./views/kunden.js'),
+  // Solo-Betrieb-Vereinfachung: Kanban (Projekt-Status) ist jetzt ein
+  // Reiter innerhalb der Lead-Pipeline-Ansicht (siehe leadpipeline.js),
+  // keine eigene Route mehr nötig.
   leadpipeline: () => import('./views/leadpipeline.js'),
-  kanban: () => import('./views/kanban.js'),
   projekte: () => import('./views/projekte.js'),
   auftraege: () => import('./views/auftraege.js'),
   serviceauftraege: () => import('./views/serviceauftraege.js'),

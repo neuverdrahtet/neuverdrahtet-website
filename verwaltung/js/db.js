@@ -2553,34 +2553,43 @@ export const STANDARD_WARTUNGSCHECKLISTE = [
   'Kunde eingewiesen / Übergabe erfolgt',
 ];
 
+// Solo-Betrieb-Vereinfachung (November 2026, auf ausdrücklichen Wunsch von
+// Danny): neuverdrahtet ist ein Ein-Mann-Betrieb - Bereiche, die auf
+// mehrere Mitarbeiter/eine Personalverwaltung ausgelegt sind, sowie nie
+// genutzte Funktionen wurden bewusst auf ein leeres Rollen-Array ([])
+// gesetzt statt entfernt: Code UND bisherige Daten bleiben vollständig
+// erhalten (z.B. falls später doch Mitarbeiter eingestellt werden), nur
+// der UI-Zugriff ist für JEDE Rolle inkl. admin gesperrt (hasRouteAccess()
+// gibt bei einem leeren Array für keine Rolle true zurück). Einfach die
+// echte Rollenliste wieder eintragen, um einen Bereich zu reaktivieren.
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
   tagesuebersicht: ['admin', 'buero', 'mitarbeiter'],
   kunden: ['admin', 'buero'],
-  leadpipeline: ['admin', 'buero'],
-  kanban: ['admin', 'buero'],
+  leadpipeline: ['admin', 'buero'], // enthält jetzt auch den Kanban-Reiter (Projekt-Status), siehe leadpipeline.js
+
   projekte: ['admin', 'buero', 'mitarbeiter'],
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
-  reisekosten: ['admin', 'buero', 'mitarbeiter'],
-  performance: ['admin', 'buero'],
-  benefits: ['admin', 'buero'],
+  reisekosten: [], // Solo-Betrieb: eigene Reisekosten laufen nicht über Werkora.
+  performance: [], // Solo-Betrieb: Performance/Bonus ist für Angestellte gedacht.
+  benefits: [], // Solo-Betrieb: Mitarbeiter-Benefits sind für Angestellte gedacht.
   service: ['admin', 'buero', 'mitarbeiter'],
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   termine: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
-  urlaubsantraege: ['admin', 'buero', 'mitarbeiter'],
-  mitarbeiter: ['admin', 'buero'],
-  subunternehmer: ['admin', 'buero'],
+  urlaubsantraege: [], // Solo-Betrieb: Urlaub/Krankmeldung ist für Angestellte gedacht.
+  mitarbeiter: [], // Solo-Betrieb: Dannys eigener Mitarbeiter-Datensatz bleibt bestehen (für Zeiterfassung), nur die Verwaltungsseite ist zu.
+  subunternehmer: [], // Solo-Betrieb: aktuell keine Zusammenarbeit mit Subunternehmern.
   'ki-freigaben': ['admin'],
   'ki-aktivitaet': ['admin'],
   'ki-assistent': ['admin', 'buero'],
-  jarvis: ['admin'],
+  jarvis: [], // Solo-Betrieb: autonome JARVIS-Funktionen werden nicht genutzt (Partner-Import bleibt als eigene Route).
   partnerimport: ['admin'],
-  geraete: ['admin', 'buero', 'mitarbeiter'],
-  teams: ['admin', 'buero', 'mitarbeiter'],
+  geraete: [], // Solo-Betrieb: keine Flotte/mehrere Mitarbeitergeräte zu verwalten.
+  teams: [], // Solo-Betrieb: keine Kolonnen, da nur eine Person.
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],
   lieferanten: ['admin', 'buero'],
@@ -2596,7 +2605,7 @@ export const ROUTE_ROLLEN = {
   ausgaben: ['admin', 'buero'],
   postfach: ['admin', 'buero'],
   buchhaltung: ['admin'],
-  zahlungsabgleich: ['admin'],
+  zahlungsabgleich: [], // Solo-Betrieb: Qonto-Zahlungsabgleich wird nicht genutzt.
   auswertungen: ['admin'],
   papierkorb: ['admin'],
   einstellungen: ['admin'],
