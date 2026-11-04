@@ -1,5 +1,5 @@
 import { formatCurrency, formatDate, escapeHtml, toast } from './utils.js';
-import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung } from './positionsGrouping.js';
+import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung, abschnittsZwischensummenEinfuegen } from './positionsGrouping.js';
 
 export function printHtml(bodyHtml, settings) {
   const root = document.getElementById('print-root');
@@ -181,7 +181,10 @@ export function buildDocHtml({
       <tbody>${rows}</tbody>
     </table>`;
   } else if (showPositions && positionen && positionen.length) {
-    const rows = positionen.map((p, i) => {
+    const rows = abschnittsZwischensummenEinfuegen(positionen).map((p, i) => {
+      if (p.typ === 'zwischensumme') {
+        return `<tr><td colspan="5" style="text-align:right;font-weight:700;border-top:1px solid #ccc">Zwischensumme ${p.abschnittNr}.</td><td style="text-align:right;font-weight:700;border-top:1px solid #ccc">${formatCurrency(p.summe)}</td></tr>`;
+      }
       if (p.typ === 'ueberschrift') {
         return `<tr><td colspan="6" style="font-weight:700;padding-top:10px">${escapeHtml(p.bezeichnung || '')}</td></tr>`;
       }

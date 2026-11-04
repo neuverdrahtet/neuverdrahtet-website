@@ -1,6 +1,6 @@
 import { formatCurrency, formatDate, formatDateTime, hexToRgb } from './utils.js';
 import { loadJsPdf } from './vendorLoader.js';
-import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung } from './positionsGrouping.js';
+import { gruppierePositionenNachAbschnitt, hatAbschnitte, abschnittKurzbeschreibung, abschnittsZwischensummenEinfuegen } from './positionsGrouping.js';
 import { baueGirocodePayload, erzeugeGirocodeDataUrl } from './girocode.js';
 
 function logoFormat(dataUrl) {
@@ -245,7 +245,12 @@ export async function buildDocPdfBlob(opts) {
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
       head: [['Pos.', 'Bezeichnung', 'Menge', 'Einheit', 'Einzel €', 'Gesamt €']],
-      body: opts.positionen.map((p, i) => (p.typ === 'ueberschrift'
+      body: abschnittsZwischensummenEinfuegen(opts.positionen).map((p, i) => (p.typ === 'zwischensumme'
+        ? [
+          { content: `Zwischensumme ${p.abschnittNr}.`, colSpan: 5, styles: { fontStyle: 'bold', halign: 'right' } },
+          { content: formatCurrency(p.summe), styles: { fontStyle: 'bold', halign: 'right' } },
+        ]
+        : p.typ === 'ueberschrift'
         ? [{ content: p.bezeichnung || '', colSpan: 6, styles: { fontStyle: 'bold' } }]
         : [
           p.posNr || String(i + 1),

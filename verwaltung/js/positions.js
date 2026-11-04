@@ -128,10 +128,14 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
         </tr></thead>
         <tbody>
           ${posState.map((p, i) => {
+            const moveButtons = `
+              <button type="button" class="btn btn-sm btn-ghost btn-move-up" title="Nach oben verschieben" ${i === 0 ? 'disabled' : ''}>▲</button>
+              <button type="button" class="btn btn-sm btn-ghost btn-move-down" title="Nach unten verschieben" ${i === posState.length - 1 ? 'disabled' : ''}>▼</button>
+            `;
             if (p.typ === 'ueberschrift') return `
               <tr class="row-ueberschrift" data-i="${i}">
                 <td colspan="7"><input class="f-ueberschrift-text" value="${escapeHtml(p.bezeichnung || '')}" placeholder="Neue Überschrift / Abschnittstitel, z.B. &quot;Abrissarbeiten&quot;"></td>
-                <td class="col-del"><button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
+                <td class="col-del">${moveButtons}<button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
               </tr>
               <tr class="row-ueberschrift-beschreibung" data-i="${i}">
                 <td></td>
@@ -147,7 +151,7 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
               <td class="col-preis"><input class="f-preis" type="number" step="0.01" value="${p.einzelpreis ?? 0}"></td>
               <td class="col-steuer"><input class="f-steuer" type="number" step="1" value="${p.steuersatz ?? defaultSteuersatz}"></td>
               <td class="col-sum">${formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0))}</td>
-              <td class="col-del"><button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
+              <td class="col-del">${moveButtons}<button type="button" class="btn btn-sm btn-ghost btn-remove-pos" title="Entfernen">✕</button></td>
             </tr>
             <tr class="row-langtext" data-i="${i}">
               <td></td>
@@ -184,6 +188,18 @@ export function createPositionsEditor({ host, katalog, positionen, defaultSteuer
     host.querySelectorAll('tbody tr:not(.row-langtext):not(.row-ueberschrift-beschreibung)').forEach((row) => {
       const i = Number(row.dataset.i);
       row.querySelector('.btn-remove-pos').addEventListener('click', () => { posState.splice(i, 1); render(); });
+      const moveUpBtn = row.querySelector('.btn-move-up');
+      if (moveUpBtn) moveUpBtn.addEventListener('click', () => {
+        if (i === 0) return;
+        [posState[i - 1], posState[i]] = [posState[i], posState[i - 1]];
+        render();
+      });
+      const moveDownBtn = row.querySelector('.btn-move-down');
+      if (moveDownBtn) moveDownBtn.addEventListener('click', () => {
+        if (i === posState.length - 1) return;
+        [posState[i], posState[i + 1]] = [posState[i + 1], posState[i]];
+        render();
+      });
       if (posState[i].typ === 'ueberschrift') {
         row.querySelector('.f-ueberschrift-text').addEventListener('input', (e) => { posState[i].bezeichnung = e.target.value; });
         return;
