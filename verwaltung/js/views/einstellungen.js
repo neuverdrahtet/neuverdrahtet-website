@@ -8,7 +8,6 @@ import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 import { isStandalone, canPromptInstall, isIos, onInstallAvailabilityChange, promptInstall } from '../installPrompt.js';
-import { ensureJarvisFont } from '../main.js';
 
 function blobToDataUrl(blob) {
   return new Promise((resolve, reject) => {
@@ -114,7 +113,7 @@ export async function render(container) {
   const marken = await getAll('marken');
   marken.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   const isLight = settings.theme === 'light';
-  const currentTheme = settings.theme === 'dark' ? 'dark' : settings.theme === 'jarvis' ? 'jarvis' : 'light';
+  const currentTheme = settings.theme === 'dark' ? 'dark' : 'light';
   const pushCapable = push.isBrowserCapable();
   const pushPermission = push.permissionState();
   const pushSubscribed = pushCapable ? await push.isSubscribed() : false;
@@ -126,7 +125,6 @@ export async function render(container) {
         <div class="theme-switch-group" role="group" aria-label="Design">
           <button type="button" class="btn btn-sm theme-opt" data-theme-choice="light" aria-pressed="${currentTheme === 'light'}">☀️ Hell</button>
           <button type="button" class="btn btn-sm theme-opt" data-theme-choice="dark" aria-pressed="${currentTheme === 'dark'}">🌙 Dunkel</button>
-          <button type="button" class="btn btn-sm theme-opt" data-theme-choice="jarvis" aria-pressed="${currentTheme === 'jarvis'}">🤖 Jarvis</button>
         </div>
       </div>
     </div>
@@ -601,7 +599,6 @@ export async function render(container) {
       const theme = btn.dataset.themeChoice;
       await setSettings({ theme });
       document.documentElement.dataset.theme = theme;
-      if (theme === 'jarvis') ensureJarvisFont();
       container.querySelectorAll('.theme-opt').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
       toast('Darstellung gespeichert', 'success');
     });

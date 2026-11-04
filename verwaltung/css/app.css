@@ -50,76 +50,11 @@
   color-scheme: dark;
 }
 
-/* "Jarvis"-Theme - dunkler HUD-Look mit Amber-Akzent, als dritte Opt-in-
-   Variante neben Hell/Dunkel (siehe Einstellungen). Rein eine Farb-/
-   Schriftvariante über dieselben CSS-Variablen wie oben - keine eigene
-   Layout-Logik, damit jede bestehende Ansicht automatisch mitzieht. */
-:root[data-theme="jarvis"] {
-  --navy: #12152b;
-  --navy-2: #171a35;
-  --sidebar-active: #8b7bf7;
-  --accent: #8b7bf7;
-  --accent-2: #6d5ce8;
-  --accent-rgb: 139, 123, 247;
-  --bg: #12152b;
-  --card: rgba(255, 255, 255, 0.06);
-  --card-2: rgba(255, 255, 255, 0.03);
-  --modal-bg: #1b1f3d;
-  --border: rgba(255, 255, 255, 0.13);
-  --text: #f3f4fb;
-  --text-mute: #b7bbd9;
-  --danger: #ff6b8a;
-  --danger-bg: rgba(255, 107, 138, 0.18);
-  --success: #3ddc97;
-  --success-bg: rgba(61, 220, 151, 0.18);
-  --warn: #ffb648;
-  --warn-bg: rgba(255, 182, 72, 0.18);
-  --shadow: 0 0 24px rgba(139, 123, 247, 0.12), 0 4px 18px rgba(0, 0, 0, 0.55);
-  color-scheme: dark;
-}
-:root[data-theme="jarvis"] .sidebar-brand,
-:root[data-theme="jarvis"] .view-header h1,
-:root[data-theme="jarvis"] .kpi-value,
-:root[data-theme="jarvis"] .stat-value {
-  font-family: 'Orbitron', 'Inter', system-ui, sans-serif;
-  letter-spacing: .02em;
-}
-:root[data-theme="jarvis"] .sidebar-nav a.active {
-  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.5);
-}
-:root[data-theme="jarvis"] .btn-primary {
-  box-shadow: 0 0 16px rgba(var(--accent-rgb), 0.35);
-}
-/* Ambiente-Glow im Hintergrund statt flacher Fläche, wie bei den
-   Referenzbildern - reine Deko-Ebene auf body, verändert kein Layout. */
-:root[data-theme="jarvis"] body {
-  background:
-    radial-gradient(ellipse 1700px 1100px at 15% 0%, rgba(99, 102, 241, 0.26), transparent 70%),
-    radial-gradient(ellipse 1500px 1000px at 100% 100%, rgba(236, 72, 153, 0.18), transparent 70%),
-    var(--bg);
-  background-attachment: fixed;
-}
-/* Große Kartenflächen bekommen echtes Glas (transparenter Hintergrund +
-   Weichzeichner), damit der Ambiente-Glow von body durchscheint - wie bei
-   den Referenzbildern. Bewusst nur auf .card/.kpi-card (die großen,
-   namensgebenden Blöcke), nicht auf jedes Formularfeld/jede Tabellenzeile -
-   dort bleibt es aus Lesbarkeitsgründen deckend. */
-:root[data-theme="jarvis"] .card,
-:root[data-theme="jarvis"] .kpi-card {
-  background: var(--card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-color: var(--border);
-  box-shadow: 0 0 1px rgba(var(--accent-rgb), 0.35), 0 8px 28px rgba(0, 0, 0, 0.45);
-}
 
-/* Dashboard-Startseite hat unabhängig vom gewählten Theme (Hell/Dunkel/
-   Jarvis) immer diesen blau-violetten Glas-Look - eigener CSS-Variablen-
-   Scope auf dem Routen-Container (siehe main.js router(), setzt
-   #view[data-route]), genau nach demselben Muster wie die :root[data-theme]-
-   Blöcke oben. #view[data-route="dashboard"] gewinnt gegen
-   :root[data-theme="jarvis"] .card allein durch höhere Selektor-
-   Spezifität (ID-Selektor), keine !important nötig. */
+/* Dashboard-Startseite hat unabhängig vom gewählten Theme (Hell/Dunkel)
+   immer diesen blau-violetten Glas-Look - eigener CSS-Variablen-Scope auf
+   dem Routen-Container (siehe main.js router(), setzt #view[data-route]),
+   genau nach demselben Muster wie der :root[data-theme]-Block oben. */
 #view[data-route="dashboard"] {
   --bg: #171b36;
   --card: rgba(255, 255, 255, 0.07);
@@ -155,48 +90,10 @@
   box-shadow: var(--shadow);
 }
 
-/* JARVIS-Dashboard-Tab (28.10.2026) - derselbe Glas-/Glow-Look wie die
-   Dashboard-Startseite oben, aber als eigene Klasse statt an die Route
-   gebunden: nur dieser EINE Tab innerhalb von JARVIS (siehe jarvis.js
-   renderDashboard) bekommt ihn, die übrigen JARVIS-Tabs (Zentrale/TECH/
-   Mobile/Status/Chat) bleiben im normal gewählten Theme (Hell/Dunkel/
-   Jarvis). Layout-Klassen (.dash-layout/.dash-score-gauge/...) sind
-   bereits generisch (siehe oben, nicht an die Route gebunden) und werden
-   hier einfach mitbenutzt.*/
-.jv-dashboard-glow {
-  --bg: #171b36;
-  --card: rgba(255, 255, 255, 0.07);
-  --card-2: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.14);
-  --text: #f3f4fb;
-  --text-mute: #b7bbd9;
-  --accent: #8b7bf7;
-  --accent-2: #6d5ce8;
-  --accent-rgb: 139, 123, 247;
-  --danger: #ff6b8a;
-  --danger-bg: rgba(255, 107, 138, 0.18);
-  --success: #3ddc97;
-  --success-bg: rgba(61, 220, 151, 0.18);
-  --warn: #ffb648;
-  --warn-bg: rgba(255, 182, 72, 0.18);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-  color: var(--text);
-  border-radius: var(--radius);
-  padding: 16px;
-  background:
-    radial-gradient(ellipse 1300px 850px at 8% -5%, rgba(99, 102, 241, 0.35), transparent 62%),
-    radial-gradient(ellipse 1100px 750px at 100% 105%, rgba(236, 72, 153, 0.2), transparent 62%),
-    linear-gradient(160deg, #161a30 0%, #201a3a 55%, #171d38 100%);
-}
-.jv-dashboard-glow .card,
-.jv-dashboard-glow .kpi-card {
-  background: var(--card);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-.jv-dashboard-glow .badge { color: #fff; }
+/* JARVIS-Dashboard-Tab: reine Layout-Klassen (Flex/Grid), kein eigenes
+   Aussehen mehr - der ehemalige eigene Glas-/Glow-Look (.jv-dashboard-glow)
+   wurde am 04.11.2026 auf Dannys Wunsch entfernt, dieser Tab folgt jetzt wie
+   jede andere Werkora-Seite dem normal gewählten Hell/Dunkel-Theme. */
 .jv-dashboard-hero {
   display: flex;
   align-items: center;
@@ -247,7 +144,7 @@ input::placeholder, textarea::placeholder { color: var(--text-mute); opacity: 0.
 /* Das <select>-Feld selbst zieht Hintergrund/Textfarbe automatisch aus den
    Theme-Variablen oben mit, die aufklappende Options-Liste aber ist ein
    natives Browser-Element, das nur die Textfarbe erbt, nicht zwingend den
-   Hintergrund - ohne das hier wird im dunklen/Jarvis-Theme heller Text auf
+   Hintergrund - ohne das hier wird im Dunkel-Theme heller Text auf
    hellem System-Hintergrund gerendert und ist unlesbar. */
 select option {
   background: var(--modal-bg);
@@ -579,21 +476,6 @@ select option {
   color: #4a3b06;
 }
 .card-hinweis strong { color: #332801; }
-/* Bug gefunden 28.10.2026: im Jarvis-Theme überschreibt die generische
-   Regel ":root[data-theme='jarvis'] .card" (siehe oben) NUR den
-   Hintergrund auf dunkles Glas, lässt aber die feste dunkle Textfarbe
-   oben unverändert - Ergebnis war dunkler Text auf dunklem Hintergrund,
-   praktisch unlesbar (Danny-Screenshot). Gleiche Spezifität wie die
-   .card-Regel oben (":root[data-theme] .class"), gewinnt also nur durch
-   die spätere Position im Stylesheet - muss nach jener Regel stehen. */
-:root[data-theme="jarvis"] .card-hinweis {
-  background: #fff6e0;
-  border-color: #f0d78c;
-  color: #4a3b06;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-:root[data-theme="jarvis"] .card-hinweis strong { color: #332801; }
 
 /* Auswertungen: horizontale Balkenlisten (Top-Kunden, Auslastung) */
 .auswertung-liste { display: flex; flex-direction: column; gap: 10px; }
@@ -1084,7 +966,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   .settings-nav-item { width: auto; flex: 1 1 auto; }
 }
 
-/* Design-Auswahl (Hell/Dunkel/Jarvis) */
+/* Design-Auswahl (Hell/Dunkel) */
 .theme-switch-group { display: inline-flex; gap: 4px; }
 .theme-opt[aria-pressed="true"] {
   background: var(--accent);

@@ -1646,12 +1646,13 @@ async function renderStatus(container) {
 }
 
 // =============================================================================
-// JARVIS-Dashboard (28.10.2026) - Übersichtsseite angelehnt an die von Danny
-// gezeigte Sci-Fi-Dashboard-Vorlage, aber bewusst NUR mit echten, bereits
+// JARVIS-Dashboard (28.10.2026, Glas-/Glow-Look am 04.11.2026 auf Dannys
+// Wunsch wieder entfernt - sieht jetzt aus wie jede andere Werkora-Seite und
+// folgt dem normal gewählten Hell/Dunkel-Theme, statt ein eigenes Aussehen
+// zu erzwingen) - Übersichtsseite angelehnt an die von Danny gezeigte
+// Sci-Fi-Dashboard-Vorlage, aber bewusst NUR mit echten, bereits
 // vorhandenen Daten (holeJarvisStatus/holeJarvisZentrale - keine neue
-// Backend-Aktion nötig) und im bestehenden Werkora-Glas-Look (siehe
-// .jv-dashboard-glow in app.css, derselbe Stil wie die normale
-// Dashboard-Startseite). Elemente aus der Vorlage, die es bei uns nicht
+// Backend-Aktion nötig). Elemente aus der Vorlage, die es bei uns nicht
 // gibt oder die unserem Freigabe-Prinzip widersprechen würden, wurden
 // bewusst NICHT nachgebaut: GitHub/Slack/WhatsApp/Notion (keine echten
 // Integrationen), mehrere LLM-Anbieter (wir nutzen ausschließlich Claude/
@@ -1693,7 +1694,6 @@ async function renderDashboard(container, zeigeTab) {
   const gesamtFlags = Object.values(status.featureFlags).length;
 
   container.innerHTML = `
-    <div class="jv-dashboard-glow">
       <div class="card jv-dashboard-hero">
         <div class="dash-score-gauge" style="--score-color:${g.farbe};width:100px;height:100px">
           <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="34" fill="none" stroke="var(--border)" stroke-width="8"/>
@@ -1805,7 +1805,6 @@ async function renderDashboard(container, zeigeTab) {
           ` : ''}
         </div>
       </div>
-    </div>
   `;
 
   container.querySelectorAll('[data-tab]').forEach((el) => {
