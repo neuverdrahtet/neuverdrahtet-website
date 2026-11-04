@@ -8,6 +8,17 @@ function typInfo(typId) {
   return TERMIN_TYPEN.find((t) => t.id === typId) || TERMIN_TYPEN[0];
 }
 
+// Verhindert ein Wettrennen zwischen zwei refresh()-Aufrufen auf demselben
+// viewEl: Seiten, die sich selbst neu rendern können, während refresh() noch
+// läuft (z.B. das Dashboard nach einem Google-Kalender-Hintergrundsync oder
+// nach Klick auf "Synchronisieren"), starten dabei einen zweiten mountKarte()
+// mit frischeren Terminen - ohne diese Sperre konnte der ältere, noch
+// laufende Aufruf (langsames Geokodieren einzelner Adressen) seine veralteten
+// Marker/Liste zuletzt in dasselbe #map/#karte-list schreiben und so die
+// gerade erst aktualisierte Karte wieder mit alten Terminen überschreiben -
+// "Karte synchronisiert nicht mit den aktuellen Terminen" (Danny, 04.11.2026).
+const aktuellerRefreshToken = new WeakMap();
+
 /**
  * Mounts a Leaflet map of Termine-with-Ort into `viewEl` in a split layout:
  * map on one side, a clickable list + detail panel (Kunde/Mitarbeiter/Ort)
@@ -89,12 +100,16 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
     const statusEl = viewEl.querySelector('#karte-status');
     const mapEl = viewEl.querySelector('#map');
     if (!statusEl || !mapEl) return;
+    const meinToken = {};
+    aktuellerRefreshToken.set(viewEl, meinToken);
+    const nochAktuell = () => aktuellerRefreshToken.get(viewEl) === meinToken;
     try {
       await loadLeaflet();
     } catch {
       statusEl.textContent = 'Kartenbibliothek konnte nicht geladen werden.';
       return;
     }
+    if (!nochAktuell()) return;
 
     const mitOrt = termine.filter((t) => t.ort?.trim()).slice(0, 60);
     if (mitOrt.length === 0) {
@@ -116,6 +131,7 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
 
     const toGeocode = mitOrt.filter((t) => !(t.lat && t.lng));
     for (let i = 0; i < toGeocode.length; i++) {
+      if (!nochAktuell()) return;
       const t = toGeocode[i];
       statusEl.textContent = `Adressen werden geladen ... (${i + 1}/${toGeocode.length})`;
       try {
@@ -129,6 +145,7 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
         // ignore single geocoding failures, continue with the rest
       }
     }
+    if (!nochAktuell()) return;
 
     const withCoords = mitOrt.filter((t) => t.lat && t.lng);
     statusEl.textContent = withCoords.length
