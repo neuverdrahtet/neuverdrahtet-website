@@ -2,6 +2,25 @@ import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
 import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText, offenerRestbetrag } from '../utils.js';
 import * as google from '../google.js';
 import { syncCalendar } from '../googlesync.js';
+import { istWidgetSichtbar, oeffneWidgetAuswahl } from '../dashboardWidgets.js';
+
+const DASHBOARD_WIDGETS = [
+  { id: 'cashflow', label: 'Cashflow-Score' },
+  { id: 'umsatzChart', label: 'Umsatz & Ausgaben (Diagramm)' },
+  { id: 'umsatzMarke', label: 'Umsatz nach Marke' },
+  { id: 'pipeline', label: 'Projekt-Pipeline' },
+  { id: 'schlafendeKunden', label: 'Kunden ohne aktuellen Auftrag' },
+  { id: 'plantafelWoche', label: 'Plantafel – diese Woche' },
+  { id: 'wetter', label: 'Wetter' },
+  { id: 'schnellzugriff', label: 'Schnellzugriff' },
+  { id: 'postfach', label: 'Postfach' },
+  { id: 'aufgaben', label: 'Meine Aufgaben' },
+  { id: 'mitarbeiter', label: 'Mitarbeiter' },
+  { id: 'heutigeTermine', label: 'Heutige Termine' },
+  { id: 'ueberfaelligeRechnungen', label: 'Überfällige Rechnungen (Tabelle)' },
+  { id: 'angeboteNachfassen', label: 'Angebote ohne Rückmeldung' },
+  { id: 'niedrigBestand', label: 'Niedriger Lagerbestand' },
+];
 
 const DOW = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 
@@ -274,6 +293,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
   const meineAufgaben = aufgaben.filter((a) => !aufgabenStatusById[a.status]?.geschlossen && (!currentMa || a.zugewiesenAn === currentMa)).slice(0, 6);
 
   // --- Plantafel-Vorschau (aktuelle Woche) ---
+  const widgetConfig = settings.dashboardWidgets;
+  const sichtbar = (id) => istWidgetSichtbar(widgetConfig, id);
+
   const weekStartDate = startOfWeek(new Date());
   const wocheTage = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStartDate);
@@ -294,6 +316,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       <h1>Dashboard</h1>
       <div class="actions">
         <span id="dash-clock" class="text-mute"></span>
+        <button type="button" class="btn btn-sm" id="btn-dash-anpassen">⚙️ Dashboard anpassen</button>
         ${settings.googleClientId ? '<button class="btn btn-sm" id="btn-dash-sync">🔄 Mit Google synchronisieren</button>' : ''}
       </div>
     </div>
@@ -306,6 +329,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
     <div class="dash-layout">
       <div class="dash-main">
+        ${sichtbar('cashflow') ? `
         <div class="card">
           <div class="dash-score-row">
             <div>
@@ -327,7 +351,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
           <p class="hint"><a href="#/rechnungen">Alle Rechnungen →</a></p>
         </div>
+        ` : ''}
 
+        ${sichtbar('umsatzChart') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:8px">
             <h2 style="margin:0">Umsatz &amp; Ausgaben</h2>
@@ -346,8 +372,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
           ${buildLineChart(months, umsatzSeries, ausgabenSeries)}
         </div>
+        ` : ''}
 
-        ${marken.length > 0 ? `
+        ${marken.length > 0 && sichtbar('umsatzMarke') ? `
           <div class="card">
             <div class="flex-row" style="justify-content:space-between;margin-bottom:6px">
               <h2 style="margin:0">Umsatz nach Marke <span class="text-mute" style="font-size:12px;font-weight:400">(${dashJahr})</span></h2>
@@ -367,6 +394,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
         ` : ''}
 
+        ${sichtbar('pipeline') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
             <h2 style="margin:0">Projekt-Pipeline</h2>
@@ -379,8 +407,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
             }).join('')}
           </div>
         </div>
+        ` : ''}
 
-        ${schlafendeKunden.length > 0 ? `
+        ${schlafendeKunden.length > 0 && sichtbar('schlafendeKunden') ? `
           <div class="card">
             <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
               <h2 style="margin:0">Kunden ohne aktuellen Auftrag</h2>
@@ -400,6 +429,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
         ` : ''}
 
+        ${sichtbar('plantafelWoche') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:10px">
             <h2 style="margin:0">Plantafel – diese Woche</h2>
@@ -424,13 +454,17 @@ export async function render(container, _route, { autoSync = true } = {}) {
             `).join('')}
           </div>
         </div>
+        ` : ''}
       </div>
 
       <div class="dash-side">
+        ${sichtbar('wetter') ? `
         <div class="card" id="wetter-card">
           <p class="text-mute" style="margin:0">Wetter wird geladen ...</p>
         </div>
+        ` : ''}
 
+        ${sichtbar('schnellzugriff') ? `
         <div class="card">
           <h2>Schnellzugriff</h2>
           <div class="dash-quicklinks">
@@ -439,7 +473,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
             <a class="btn" href="#/leadpipeline/pipeline">📁 Neues Projekt</a>
           </div>
         </div>
+        ` : ''}
 
+        ${sichtbar('postfach') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Postfach</h2>
@@ -465,7 +501,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           `}
           <p class="hint"><a href="#/postfach">Zum Postfach →</a></p>
         </div>
+        ` : ''}
 
+        ${sichtbar('aufgaben') ? `
         <div class="card">
           <h2>Meine Aufgaben</h2>
           <div class="search-bar" style="margin-bottom:8px">
@@ -482,7 +520,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
           <p class="hint"><a href="#/aufgaben">Alle Aufgaben →</a></p>
         </div>
+        ` : ''}
 
+        ${sichtbar('mitarbeiter') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Mitarbeiter</h2>
@@ -498,7 +538,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
           </div>
           <p class="hint"><a href="#/mitarbeiter">Alle Mitarbeiter →</a></p>
         </div>
+        ` : ''}
 
+        ${sichtbar('heutigeTermine') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Heutige Termine</h2>
@@ -519,10 +561,11 @@ export async function render(container, _route, { autoSync = true } = {}) {
             </ul>
           `}
         </div>
+        ` : ''}
       </div>
     </div>
 
-    ${ueberfaellig.length ? `
+    ${ueberfaellig.length && sichtbar('ueberfaelligeRechnungen') ? `
       <div class="card">
         <h2>Überfällige Rechnungen${mahnBereitCount > 0 ? ` <span class="badge badge-danger">${mahnBereitCount} bereit für nächste Mahnstufe</span>` : ''}</h2>
         <table class="data-table">
@@ -545,7 +588,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     ` : ''}
 
-    ${angeboteNachfassen.length ? `
+    ${angeboteNachfassen.length && sichtbar('angeboteNachfassen') ? `
       <div class="card">
         <h2>Angebote ohne Rückmeldung <span class="badge badge-warn">${angeboteNachfassen.length}</span></h2>
         <table class="data-table">
@@ -565,7 +608,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
       </div>
     ` : ''}
 
-    <div id="dash-niedrig-bestand-host"></div>
+    ${sichtbar('niedrigBestand') ? '<div id="dash-niedrig-bestand-host"></div>' : ''}
   `;
 
   function bindRowLinks(root) {
@@ -633,7 +676,17 @@ export async function render(container, _route, { autoSync = true } = {}) {
     }
   });
 
-  container.querySelector('#dash-aufgabe-add').addEventListener('click', async () => {
+  container.querySelector('#btn-dash-anpassen').addEventListener('click', () => {
+    oeffneWidgetAuswahl({
+      titel: 'Dashboard anpassen',
+      settingsKey: 'dashboardWidgets',
+      widgets: DASHBOARD_WIDGETS,
+      config: widgetConfig,
+      onSave: () => render(container, null, { autoSync: false }),
+    });
+  });
+
+  container.querySelector('#dash-aufgabe-add')?.addEventListener('click', async () => {
     const input = container.querySelector('#dash-aufgabe-input');
     const titel = input.value.trim();
     if (!titel) return;
@@ -646,6 +699,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   });
 
   const wetterCard = container.querySelector('#wetter-card');
+  if (wetterCard) {
   loadWeather(settings.wetterLat || 51.4556, settings.wetterLng || 7.0116).then((data) => {
     const cw = data.current_weather;
     const icon = WEATHER_ICON[cw.weathercode] || '🌡️';
@@ -675,6 +729,7 @@ export async function render(container, _route, { autoSync = true } = {}) {
   }).catch(() => {
     wetterCard.innerHTML = `<h2>Wetter</h2><p class="text-mute">Wetterdaten aktuell nicht verfügbar.</p>`;
   });
+  }
 
   // Live-Uhr im Kopfbereich - zeigt immer das tatsächliche lokale Datum/Uhrzeit
   // des Browsers, unabhängig davon, wann die Seite geladen wurde. render()

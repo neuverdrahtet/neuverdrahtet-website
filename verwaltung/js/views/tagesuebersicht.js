@@ -1,6 +1,14 @@
 import { getAll, getSettings, TERMIN_TYPEN } from '../db.js';
 import { escapeHtml, formatCurrency, formatDate, todayISO, localDateStr, openDokumentMitVorbelegung, offenerRestbetrag } from '../utils.js';
 import { mountKarte } from '../karte.js';
+import { istWidgetSichtbar, oeffneWidgetAuswahl } from '../dashboardWidgets.js';
+
+const TAGESUEBERSICHT_WIDGETS = [
+  { id: 'karte', label: 'Einsätze heute auf der Karte' },
+  { id: 'termineHeute', label: 'Termine heute' },
+  { id: 'offeneAngebote', label: 'Offene Angebote' },
+  { id: 'faelligeRechnungen', label: 'Fällige Rechnungen' },
+];
 
 // Tagesfokussierte Startseite (Ergänzung zum bestehenden, eher betriebswirt-
 // schaftlich orientierten Dashboard): "Was ist heute los, wo sind die
@@ -39,10 +47,16 @@ export async function render(container) {
 
   const angeboteOffen = angebote.filter((a) => a.status === 'versendet').sort((a, b) => (a.gueltigBis || '').localeCompare(b.gueltigBis || ''));
 
+  const widgetConfig = settings.tagesuebersichtWidgets;
+  const sichtbar = (id) => istWidgetSichtbar(widgetConfig, id);
+
   container.innerHTML = `
     <div class="view-header">
       <h1>Tagesübersicht</h1>
-      <span class="text-mute">${new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</span>
+      <div class="actions">
+        <span class="text-mute">${new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }).format(new Date())}</span>
+        <button type="button" class="btn btn-sm" id="btn-tu-anpassen">⚙️ Ansicht anpassen</button>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -54,6 +68,7 @@ export async function render(container) {
 
     <div class="dash-layout">
       <div class="dash-main">
+        ${sichtbar('karte') ? `
         <div class="card">
           <h2 style="margin-top:0">Einsätze heute auf der Karte</h2>
           <div class="karte-split">
@@ -68,7 +83,9 @@ export async function render(container) {
             </div>
           </div>
         </div>
+        ` : ''}
 
+        ${sichtbar('termineHeute') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Termine heute</h2>
@@ -93,9 +110,11 @@ export async function render(container) {
             </ul>
           `}
         </div>
+        ` : ''}
       </div>
 
       <div class="dash-side">
+        ${sichtbar('offeneAngebote') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Offene Angebote</h2>
@@ -113,7 +132,9 @@ export async function render(container) {
           `}
           <p class="hint"><a href="#/angebote">Alle Angebote →</a></p>
         </div>
+        ` : ''}
 
+        ${sichtbar('faelligeRechnungen') ? `
         <div class="card">
           <div class="flex-row" style="justify-content:space-between;margin-bottom:8px">
             <h2 style="margin:0">Fällige Rechnungen</h2>
@@ -134,9 +155,20 @@ export async function render(container) {
           `}
           <p class="hint"><a href="#/rechnungen/offen">Alle offenen Rechnungen →</a></p>
         </div>
+        ` : ''}
       </div>
     </div>
   `;
+
+  container.querySelector('#btn-tu-anpassen').addEventListener('click', () => {
+    oeffneWidgetAuswahl({
+      titel: 'Tagesübersicht anpassen',
+      settingsKey: 'tagesuebersichtWidgets',
+      widgets: TAGESUEBERSICHT_WIDGETS,
+      config: widgetConfig,
+      onSave: () => render(container),
+    });
+  });
 
   container.querySelectorAll('.btn-rechnung').forEach((btn) => {
     btn.addEventListener('click', (e) => {
