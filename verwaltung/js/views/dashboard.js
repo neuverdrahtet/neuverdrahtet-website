@@ -3,8 +3,10 @@ import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurr
 import * as google from '../google.js';
 import { syncCalendar } from '../googlesync.js';
 import { istWidgetSichtbar, oeffneWidgetAuswahl } from '../dashboardWidgets.js';
+import { mountKarte } from '../karte.js';
 
 const DASHBOARD_WIDGETS = [
+  { id: 'karte', label: 'Einsätze heute auf der Karte' },
   { id: 'cashflow', label: 'Cashflow-Score' },
   { id: 'umsatzChart', label: 'Umsatz & Ausgaben (Diagramm)' },
   { id: 'umsatzMarke', label: 'Umsatz nach Marke' },
@@ -329,6 +331,23 @@ export async function render(container, _route, { autoSync = true } = {}) {
 
     <div class="dash-layout">
       <div class="dash-main">
+        ${sichtbar('karte') ? `
+        <div class="card">
+          <h2 style="margin-top:0">Einsätze heute auf der Karte</h2>
+          <div class="karte-split">
+            <div class="karte-map-col">
+              <p class="hint" id="karte-status">Termine mit Ort werden geladen ...</p>
+              <div id="map" style="height:420px;border-radius:var(--radius);"></div>
+            </div>
+            <div class="karte-list-col">
+              <div class="card" id="karte-detail-card">
+                <p class="text-mute">Auf einen Marker oder Eintrag in der Liste klicken, um Details zu sehen.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        ` : ''}
+
         ${sichtbar('cashflow') ? `
         <div class="card">
           <div class="dash-score-row">
@@ -736,6 +755,9 @@ export async function render(container, _route, { autoSync = true } = {}) {
   // kann sich selbst erneut aufrufen (Aufgabe hinzufügen, Sync fertig) -
   // einen eventuell schon laufenden Timer immer zuerst stoppen, sonst laufen
   // mit jedem Re-Render weitere Intervalle unsichtbar im Hintergrund mit.
+  const karte = mountKarte(container, { termine: heute, kundenById, mitarbeiterById, settings });
+  karte.refresh();
+
   if (container._dashClockInterval) clearInterval(container._dashClockInterval);
   const clockEl = container.querySelector('#dash-clock');
   const clockFormatter = new Intl.DateTimeFormat('de-DE', { dateStyle: 'full', timeStyle: 'medium' });

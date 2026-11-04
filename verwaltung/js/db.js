@@ -2564,7 +2564,7 @@ export const STANDARD_WARTUNGSCHECKLISTE = [
 // echte Rollenliste wieder eintragen, um einen Bereich zu reaktivieren.
 export const ROUTE_ROLLEN = {
   dashboard: ['admin', 'buero', 'mitarbeiter'],
-  tagesuebersicht: ['admin', 'buero', 'mitarbeiter'],
+  tagesuebersicht: [], // auf Dannys Wunsch entfernt (04.11.2026) - die Karte "Einsätze heute" ist jetzt ein Dashboard-Widget, der Rest (Termine/Angebote/Rechnungen) stand schon redundant im Dashboard.
   kunden: ['admin', 'buero'],
   leadpipeline: ['admin', 'buero'], // enthält jetzt auch den Pipeline-Reiter (Projekt-Status) und den Projekte-Reiter (Bereich 'projekt'), siehe leadpipeline.js
 
