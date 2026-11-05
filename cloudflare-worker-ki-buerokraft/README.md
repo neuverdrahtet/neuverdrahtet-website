@@ -33,7 +33,8 @@ noch NICHT Gmail/Google-Kalender aus dem oben genannten `cloudflare-worker-googl
 das wäre eine naheliegende Erweiterung (der Worker existiert ja schon), aber noch nicht
 verdrahtet.
 
-**Noch nicht gebaut**: MCP-Server (siehe unten). Sag Bescheid, wenn's damit weitergehen soll.
+**Zusätzlich gebaut**: MCP-Server (siehe Abschnitt "MCP-Server" unten) - lässt sich als
+Custom Connector in Claude.ai/Claude Desktop einbinden.
 
 ## Wichtige Abweichungen von deiner Vorgabe (und warum)
 
@@ -82,10 +83,11 @@ verdrahtet.
   serverseitige Google-Anmeldung mit dauerhafter Berechtigung (Google-Cloud-Konsole,
   eigener Consent-Bildschirm, sicher gespeichertes Berechtigungs-Token) - ein eigenständiges
   Projekt, kein Nebenprodukt dieses Workers. Sag Bescheid, wenn das gewünscht ist.
-- **MCP-Server nicht gebaut** - deine Vorgabe nennt ihn selbst als späteren, optionalen
-  Zusatz ("kann Werkora später einen MCP-Server erhalten"), der laut Vorgabe ausschließlich
-  auf diese REST-API zugreifen soll. Kann jederzeit separat ergänzt werden, ohne diesen
-  Worker zu ändern.
+- **MCP-Server ist inzwischen gebaut** (siehe Abschnitt "MCP-Server" unten) - deine Vorgabe
+  nannte ihn als späteren, optionalen Zusatz ("kann Werkora später einen MCP-Server
+  erhalten"), der laut Vorgabe ausschließlich auf diese REST-API zugreifen soll. Genau so
+  umgesetzt: eigener Pfad (`/mcp`) im selben Worker, nutzt dieselbe Fach-/Filterlogik wie
+  die REST-Routen, keine eigene Parallellogik.
 
 ## Endpunkte
 
