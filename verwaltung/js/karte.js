@@ -115,6 +115,7 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
     if (mitOrt.length === 0) {
       statusEl.textContent = 'Keine Termine mit hinterlegtem Ort gefunden.';
     }
+    let geocodeFehler = 0;
 
     const center = [settings.wetterLat || 51.4556, settings.wetterLng || 7.0116];
     if (!mapInstance) {
@@ -140,9 +141,11 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
           t.lat = pos.lat;
           t.lng = pos.lng;
           await put('termine', t);
+        } else {
+          geocodeFehler++; // Adresse nicht gefunden (z.B. Tippfehler) - kein Ausnahmefehler, aber trotzdem kein Treffer
         }
       } catch (err) {
-        // ignore single geocoding failures, continue with the rest
+        geocodeFehler++; // z.B. Geokodierungsdienst nicht erreichbar
       }
     }
     if (!nochAktuell()) return;
@@ -150,7 +153,11 @@ export function mountKarte(viewEl, { termine, kundenById, mitarbeiterById = {}, 
     const withCoords = mitOrt.filter((t) => t.lat && t.lng);
     statusEl.textContent = withCoords.length
       ? `${withCoords.length} Termin(e) mit Standort auf der Karte. Adressen werden einmalig geokodiert und dann gespeichert.`
-      : 'Keine Standorte konnten ermittelt werden.';
+      : mitOrt.length === 0
+        ? 'Keine Termine mit hinterlegtem Ort gefunden.'
+        : geocodeFehler > 0
+          ? `Für ${geocodeFehler} von ${mitOrt.length} Termin(en) mit Ort konnte keine Adresse gefunden werden - bitte Schreibweise prüfen oder später erneut versuchen.`
+          : 'Keine Standorte konnten ermittelt werden.';
 
     markersByTerminId = new Map();
     const bounds = [];
