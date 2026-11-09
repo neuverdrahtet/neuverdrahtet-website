@@ -185,7 +185,7 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.neuverdrahte
       // Netzwerk-Fehler in der Konsole, sinnlose Wartezeit für den
       // Besucher). Gleiche Fallback-Nachricht wie bei echtem Fetch-Fehler.
       setTyping(false);
-      addBubble('assistant', 'Der Assistent ist gerade nicht erreichbar. Sie erreichen uns auch direkt unter 01706398575 oder neuverdrahtet@gmail.com.');
+      addBubble('assistant', 'Der Assistent ist gerade nicht erreichbar. Sie erreichen uns auch direkt unter 020189040405 oder neuverdrahtet@gmail.com.');
       wirdGesendet = false;
       return;
     }
@@ -199,7 +199,7 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.neuverdrahte
       const data = await res.json().catch(() => ({}));
       setTyping(false);
       if (!res.ok || data.error) {
-        addBubble('assistant', `${data.error || 'Es ist ein Fehler aufgetreten.'} Sie erreichen uns auch direkt unter 01706398575 oder neuverdrahtet@gmail.com.`);
+        addBubble('assistant', `${data.error || 'Es ist ein Fehler aufgetreten.'} Sie erreichen uns auch direkt unter 020189040405 oder neuverdrahtet@gmail.com.`);
         return;
       }
       verlauf.push({ role: 'assistant', content: data.reply });
@@ -207,7 +207,7 @@ const KI_ASSISTENT_WORKER_URL = 'https://neuverdrahtet-ki-assistent.neuverdrahte
       speichereVerlauf();
     } catch {
       setTyping(false);
-      addBubble('assistant', 'Der Assistent ist gerade nicht erreichbar. Sie erreichen uns auch direkt unter 01706398575 oder neuverdrahtet@gmail.com.');
+      addBubble('assistant', 'Der Assistent ist gerade nicht erreichbar. Sie erreichen uns auch direkt unter 020189040405 oder neuverdrahtet@gmail.com.');
     } finally {
       wirdGesendet = false;
     }

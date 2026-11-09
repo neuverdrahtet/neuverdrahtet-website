@@ -600,9 +600,9 @@ export async function importAll(data, { replace = false } = {}) {
 
 const DEFAULT_SETTINGS = {
   firmenname: 'neuverdrahtet UG',
-  strasse: 'Donnerstr. 131',
-  plzOrt: '45357 Essen',
-  telefon: '01706398575',
+  strasse: 'Krayerstr. 245',
+  plzOrt: '45307 Essen',
+  telefon: '020189040405',
   email: 'neuverdrahtet@gmail.com',
   ustId: '',
   steuernummer: '',

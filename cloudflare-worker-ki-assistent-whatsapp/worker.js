@@ -331,7 +331,7 @@ async function termineVorschlagen({ env }) {
 function buildSystemPrompt(telefon) {
   return `Du bist der KI-Assistent der Firma neuverdrahtet, einem Elektro-Fachbetrieb in Essen (Nordrhein-Westfalen), und antwortest gerade per WhatsApp. Geschäftsführer: Danny Berger. Slogan: "Smarte Elektrokonzepte für Alt & Neubau".
 
-Kontakt: Donnerstr. 131, 45357 Essen · Telefon 01706398575 · E-Mail neuverdrahtet@gmail.com
+Kontakt: Krayerstr. 245, 45307 Essen · Telefon 020189040405 · E-Mail neuverdrahtet@gmail.com
 Einsatzgebiet: Essen (alle Stadtteile) und Ruhrgebiet (u.a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen, Bottrop, Duisburg).
 
 Leistungen (12 unter einem Dach): Elektroinstallation, Beleuchtungstechnik, Smart Home, Photovoltaik (Elektroanschluss), Wallbox, Wärmepumpe (Elektroanschluss), E-Check, DGUV-V3-Prüfung, Wartung, Elektrosanierung, Zählerschrank, Unterverteilung.
@@ -398,7 +398,7 @@ async function chatMitClaude({ env, messages, telefon }) {
 
     const data = await res.json();
     if (data.stop_reason === 'refusal') {
-      return 'Entschuldigung, dazu kann ich nichts sagen. Bitte rufen Sie uns direkt an: 01706398575.';
+      return 'Entschuldigung, dazu kann ich nichts sagen. Bitte rufen Sie uns direkt an: 020189040405.';
     }
 
     const toolUses = (data.content || []).filter((b) => b.type === 'tool_use');
@@ -433,7 +433,7 @@ async function chatMitClaude({ env, messages, telefon }) {
     conversation = [...conversation, { role: 'user', content: toolResults }];
   }
 
-  return 'Entschuldigung, das dauert gerade zu lange. Bitte rufen Sie uns direkt an: 01706398575.';
+  return 'Entschuldigung, das dauert gerade zu lange. Bitte rufen Sie uns direkt an: 020189040405.';
 }
 
 // --- Meta-Webhook-Signaturprüfung (siehe developers.facebook.com/docs/graph-api/webhooks/getting-started#validate-payloads) ---
@@ -529,7 +529,7 @@ async function verarbeiteEingehendeNachricht({ env, von, text, profilName }) {
     // Kunden-Antwort - dort nur ein freundlicher, generischer Hinweis.
     console.error('ki-assistent-whatsapp Fehler:', err);
     try {
-      await sendeWhatsAppNachricht({ env, an: von, text: 'Es ist ein technisches Problem aufgetreten. Bitte rufen Sie uns direkt an: 01706398575.' });
+      await sendeWhatsAppNachricht({ env, an: von, text: 'Es ist ein technisches Problem aufgetreten. Bitte rufen Sie uns direkt an: 020189040405.' });
     } catch (sendeErr) {
       console.error('ki-assistent-whatsapp Fehler beim Senden der Fehlermeldung:', sendeErr);
     }
