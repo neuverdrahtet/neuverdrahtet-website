@@ -557,12 +557,21 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
    Cookie-Consent (Google Consent Mode v2)
    ========================================================= */
 (() => {
-  const CONSENT_KEY = 'nv-cookie-consent';
+  // v2: Einwilligung umfasst seit der Google-Ads-Einführung auch Werbe-Cookies.
+  // Neuer Schlüssel, damit Besucher, die nur Analytics zugestimmt hatten,
+  // erneut gefragt werden.
+  const CONSENT_KEY = 'nv-cookie-consent-v2';
   const stored = localStorage.getItem(CONSENT_KEY);
 
   const updateConsent = (granted) => {
     if (typeof gtag !== 'function') return;
-    gtag('consent', 'update', { analytics_storage: granted ? 'granted' : 'denied' });
+    const value = granted ? 'granted' : 'denied';
+    gtag('consent', 'update', {
+      analytics_storage: value,
+      ad_storage: value,
+      ad_user_data: value,
+      ad_personalization: value
+    });
   };
 
   if (stored === 'granted') {
@@ -572,7 +581,7 @@ document.querySelectorAll('.calc-multi').forEach(calc => {
     banner.className = 'cookie-banner';
     banner.innerHTML = `
       <div class="cookie-banner-inner">
-        <p>Wir nutzen Google Analytics, um die Website zu verbessern. Cookies werden erst nach Ihrer Zustimmung gesetzt. Mehr dazu in unserer <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
+        <p>Mit Ihrer Zustimmung nutzen wir Google Analytics, um die Website zu verbessern, und Google Ads, um den Erfolg unserer Anzeigen zu messen und passende Werbung auszuspielen. Cookies werden erst nach Ihrer Zustimmung gesetzt. Mehr dazu in unserer <a href="datenschutz.html">Datenschutzerklärung</a>.</p>
         <div class="cookie-banner-actions">
           <button type="button" class="btn btn-outline btn-sm" id="cookieDecline">Ablehnen</button>
           <button type="button" class="btn btn-primary btn-sm" id="cookieAccept">Akzeptieren</button>
