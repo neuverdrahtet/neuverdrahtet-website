@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TAETIGKEITEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage, toCsv, downloadTextFile } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, openProjektSchnellanlage } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
@@ -192,6 +192,52 @@ export async function render(container, route) {
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   eintraege.sort((a, b) => (b.datum || '').localeCompare(a.datum || ''));
+
+  // Kunde-Auswahl + Projekt-Auswahl (gefiltert auf den gewählten Kunden) +
+  // "+ Neu"-Schnellanlage, wiederverwendet in allen drei Formularen (manueller
+  // Eintrag, Timer-Start, Tagesbericht) - damit Zeiten immer einem
+  // tatsächlich existierenden Projekt zugeordnet werden, statt mangels
+  // Auswahl auf dem ersten Projekt der Liste zu landen (ohne leere Option
+  // gab es vorher keinen "nichts ausgewählt"-Zustand für das <select>).
+  function projektOptionsHtml(selectedId, kundeFilterId) {
+    const liste = kundeFilterId ? projekte.filter((p) => p.kundeId === kundeFilterId) : projekte;
+    if (liste.length === 0) return `<option value="">– keine Projekte für diesen Kunden –</option>`;
+    return `<option value="">– wählen –</option>${liste.map((p) => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}`;
+  }
+  function kundeProjektFieldsHtml(prefix, { kundeId = '', projektId = '', projektRequired = false } = {}) {
+    return `
+      <div class="field"><label>Kunde</label>
+        <select id="${prefix}-kunde">
+          <option value="">– alle Kunden –</option>
+          ${kunden.map((k) => `<option value="${k.id}" ${k.id === kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Projekt${projektRequired ? ' *' : ' (optional)'}</label>
+        <div class="flex-row" style="gap:6px">
+          <select name="projektId" id="${prefix}-projekt" ${projektRequired ? 'required' : ''} style="flex:1">${projektOptionsHtml(projektId, kundeId)}</select>
+          <button type="button" class="btn btn-sm" id="${prefix}-projekt-neu" title="Neues Projekt anlegen">+ Neu</button>
+        </div>
+      </div>
+    `;
+  }
+  function wireKundeProjektFields(body, prefix) {
+    const kundeSelect = body.querySelector(`#${prefix}-kunde`);
+    const projektSelect = body.querySelector(`#${prefix}-projekt`);
+    kundeSelect.addEventListener('change', () => {
+      projektSelect.innerHTML = projektOptionsHtml('', kundeSelect.value);
+    });
+    body.querySelector(`#${prefix}-projekt-neu`).addEventListener('click', () => {
+      openProjektSchnellanlage({
+        kundeId: kundeSelect.value,
+        onCreated: (neuesProjekt) => {
+          projekte.push(neuesProjekt);
+          projekteById[neuesProjekt.id] = neuesProjekt;
+          if (neuesProjekt.kundeId && neuesProjekt.kundeId !== kundeSelect.value) kundeSelect.value = neuesProjekt.kundeId;
+          projektSelect.innerHTML = projektOptionsHtml(neuesProjekt.id, kundeSelect.value);
+        },
+      });
+    });
+  }
   let filtered = eintraege;
   const bulk = createBulkSelect('zeiterfassung', { label: 'Einträge' });
   let tickInterval = null;
@@ -403,9 +449,7 @@ export async function render(container, route) {
       timerCard.innerHTML = `
         <h2>Zeit stoppen</h2>
         <div class="form-grid">
-          <div class="field"><label>Projekt *</label>
-            <select id="timer-projekt"><option value="">– wählen –</option>${projekte.map((p) => `<option value="${p.id}">${escapeHtml(p.titel)}</option>`).join('')}</select>
-          </div>
+          ${kundeProjektFieldsHtml('timer', { projektRequired: true })}
           <div class="field"><label>Mitarbeiter</label>
             <select id="timer-mitarbeiter"><option value="">–</option>${mitarbeiter.map((m) => `<option value="${m.id}">${escapeHtml(m.name)}</option>`).join('')}</select>
           </div>
@@ -415,6 +459,7 @@ export async function render(container, route) {
         </div>
         <button class="btn btn-primary" id="btn-start" style="margin-top:10px;font-size:16px;padding:14px 22px">▶️ Zeit starten</button>
       `;
+      wireKundeProjektFields(timerCard, 'timer');
       timerCard.querySelector('#btn-start').addEventListener('click', () => {
         const projektId = timerCard.querySelector('#timer-projekt').value;
         if (!projektId) { toast('Bitte ein Projekt wählen', 'danger'); return; }
@@ -644,12 +689,7 @@ export async function render(container, route) {
                 ${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === data.mitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
               </select>
             </div>
-            <div class="field"><label>Projekt (optional)</label>
-              <select name="projektId">
-                <option value="">–</option>
-                ${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}
-              </select>
-            </div>
+            ${kundeProjektFieldsHtml('tb', { kundeId: projekteById[data.projektId]?.kundeId || '', projektId: data.projektId })}
           </div>
           <div class="field"><label>Notizen (Mehrzeiligen Text eingeben, ggf. in Bulletpoints)</label><textarea name="notizen" style="min-height:90px">${escapeHtml(data.notizen || '')}</textarea></div>
           <div class="form-grid">
@@ -690,6 +730,7 @@ export async function render(container, route) {
       `,
     });
 
+    wireKundeProjektFields(body, 'tb');
     const beginnInput = body.querySelector('#tb-beginn');
     const endeInput = body.querySelector('#tb-ende');
     const pauseInput = body.querySelector('#tb-pause');
@@ -811,9 +852,7 @@ export async function render(container, route) {
       bodyHtml: `
         <form id="ze-form">
           <div class="form-grid">
-            <div class="field"><label>Projekt *</label>
-              <select name="projektId" required>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
+            ${kundeProjektFieldsHtml('ze', { kundeId: projekteById[data.projektId]?.kundeId || '', projektId: data.projektId, projektRequired: true })}
             <div class="field"><label>Mitarbeiter</label>
               <select name="mitarbeiterId"><option value="">–</option>${mitarbeiter.map((m) => `<option value="${m.id}" ${m.id === data.mitarbeiterId ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}</select>
             </div>
@@ -836,6 +875,7 @@ export async function render(container, route) {
         </form>
       `,
     });
+    wireKundeProjektFields(body, 'ze');
     const startzeitInput = body.querySelector('#ze-startzeit');
     const endzeitInput = body.querySelector('#ze-endzeit');
     const dauerInput = body.querySelector('#ze-dauer');

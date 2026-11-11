@@ -1,6 +1,6 @@
 import { el, escapeHtml, debounce, uid, toast, farbeAusText, nextDailyNummer } from './utils.js';
 import { searchAddress } from './geocode.js';
-import { put, getSettings, setSettings } from './db.js';
+import { put, getAll, getSettings, setSettings } from './db.js';
 
 // Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
 // (Tabellen, Positionstabellen, Plantafel-Gantt, Tag-Kalender, Kanban) - macht
@@ -402,6 +402,66 @@ export function openKundeSchnellanlage({ kunde, onCreated, onUpdated } = {}) {
     close();
     if (isEdit) { if (onUpdated) onUpdated(gespeicherterKunde); }
     else if (onCreated) onCreated(gespeicherterKunde);
+  });
+}
+
+/**
+ * Schlankes "Neues Projekt"-Formular für die Schnellanlage aus anderen
+ * Dialogen heraus (z.B. Zeiterfassung, wenn das passende Projekt für einen
+ * Zeiteintrag noch fehlt) - analog zu openKundeSchnellanlage oben. Legt nur
+ * die Kernfelder an (Titel, Kunde); alles Weitere (Beschreibung, Farbe,
+ * Gewerk usw.) lässt sich danach wie gewohnt in Kanban/Projekte ergänzen.
+ * `kundeId` belegt die Kunde-Auswahl vor, falls im Aufrufer bereits ein
+ * Kunde gewählt war. `onCreated(neuesProjekt)` wird nach dem Anlegen
+ * aufgerufen - der Aufrufer ist dafür zuständig, das neue Projekt in seine
+ * eigenen lokalen Listen (projekte/projekteById) einzutragen.
+ */
+export async function openProjektSchnellanlage({ kundeId = '', onCreated } = {}) {
+  const [kunden, spalten] = await Promise.all([getAll('kunden'), getAll('kanbanSpalten')]);
+  spalten.sort((a, b) => a.reihenfolge - b.reihenfolge);
+  const { body, close } = openModal({
+    title: 'Neues Projekt',
+    bodyHtml: `
+      <form id="projekt-schnell-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Titel *</label><input name="titel" required autofocus></div>
+          <div class="field col-span-2"><label>Kunde</label>
+            <select name="kundeId">
+              <option value="">– kein Kunde –</option>
+              ${kunden.map((k) => `<option value="${k.id}" ${k.id === kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="ps-cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Anlegen</button>
+        </div>
+      </form>
+    `,
+  });
+  body.querySelector('#ps-cancel').addEventListener('click', close);
+  body.querySelector('#projekt-schnell-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const titel = (fd.get('titel') || '').toString().trim();
+    if (!titel) return;
+    const submitBtn = body.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const neuesProjekt = {
+      id: uid(), titel, kundeId: (fd.get('kundeId') || '').toString(), status: spalten[0]?.id || '',
+      beschreibung: '', bereich: 'projekt', farbe: farbeAusText(titel, KUNDE_SCHNELL_FARBEN), createdAt: new Date().toISOString(),
+    };
+    try {
+      await put('projekte', neuesProjekt);
+    } catch (err) {
+      toast(`Projekt anlegen fehlgeschlagen: ${err.message}`, 'danger');
+      submitBtn.disabled = false;
+      return;
+    }
+    toast('Projekt angelegt', 'success');
+    close();
+    if (onCreated) onCreated(neuesProjekt);
   });
 }
 
