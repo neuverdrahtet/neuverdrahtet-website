@@ -277,6 +277,9 @@ export async function render(container) {
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-neuer-termin">📅 + Termin</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neues-angebot">📄 + Angebot</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neue-rechnung">🧾 + Rechnung</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neue-ab">✅ + Auftragsbestätigung</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -329,6 +332,10 @@ export async function render(container) {
         close();
         openTerminMitVorbelegung(prefill);
       });
+      const dokumentPrefill = () => ({ kundeId: body.querySelector('select[name="kundeId"]').value || '', projektId: data.id });
+      body.querySelector('#btn-neues-angebot').addEventListener('click', () => { close(); openDokumentMitVorbelegung('angebote', dokumentPrefill()); });
+      body.querySelector('#btn-neue-rechnung').addEventListener('click', () => { close(); openDokumentMitVorbelegung('rechnungen', dokumentPrefill()); });
+      body.querySelector('#btn-neue-ab').addEventListener('click', () => { close(); openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill()); });
     }
     body.querySelector('#card-form').addEventListener('submit', async (e) => {
       e.preventDefault();

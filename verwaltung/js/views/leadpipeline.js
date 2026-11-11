@@ -231,6 +231,9 @@ async function renderLeads(container) {
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neues-angebot">📄 + Angebot</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neue-rechnung">🧾 + Rechnung</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-neue-ab">✅ + Auftragsbestätigung</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -250,6 +253,9 @@ async function renderLeads(container) {
         close();
         renderLeads(container);
       });
+      body.querySelector('#btn-neues-angebot').addEventListener('click', () => { close(); openDokumentMitVorbelegung('angebote', { kundeId: data.id }); });
+      body.querySelector('#btn-neue-rechnung').addEventListener('click', () => { close(); openDokumentMitVorbelegung('rechnungen', { kundeId: data.id }); });
+      body.querySelector('#btn-neue-ab').addEventListener('click', () => { close(); openDokumentMitVorbelegung('auftragsbestaetigung', { kundeId: data.id }); });
     }
     body.querySelector('#lead-form').addEventListener('submit', async (e) => {
       e.preventDefault();
