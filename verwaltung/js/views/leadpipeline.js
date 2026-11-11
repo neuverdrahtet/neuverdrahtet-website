@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast, farbeAusText } from '../utils.js';
+import { uid, escapeHtml, toast, farbeAusText, openDokumentMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { render as renderProjekteKanban } from './kanban.js';
@@ -115,6 +115,11 @@ async function renderLeads(container) {
                 ${k.telefon ? `<div class="meta">${escapeHtml(k.telefon)}</div>` : ''}
                 ${k.notizen ? `<div class="meta text-mute" style="white-space:pre-wrap">${escapeHtml(kuerzeText(k.notizen, 140))}</div>` : ''}
                 ${istVerlustStatusId(k.status) && k.verlustgrund ? `<div class="meta"><span class="badge badge-danger">Verloren: ${escapeHtml(verlustgrundTitel(k.verlustgrund))}</span></div>` : ''}
+                <div class="card-quick-actions">
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${k.id}" data-action="angebote" title="Angebot erstellen">📄</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${k.id}" data-action="rechnungen" title="Rechnung erstellen">🧾</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${k.id}" data-action="auftragsbestaetigung" title="Auftragsbestätigung erstellen">✅</button>
+                </div>
                 <select class="card-move" data-id="${k.id}" title="Status wechseln (auch per Ziehen möglich)">
                   ${spalten.map((s2) => `<option value="${s2.id}" ${s2.id === (k.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s2.titel)}</option>`).join('')}
                 </select>
@@ -132,8 +137,16 @@ async function renderLeads(container) {
       });
       card.addEventListener('dragend', () => card.classList.remove('dragging'));
       card.addEventListener('click', (e) => {
-        if (e.target.closest('.card-move')) return;
+        if (e.target.closest('.card-move') || e.target.closest('.card-quick-action')) return;
         openCardForm(kunden.find((k) => k.id === card.dataset.id));
+      });
+    });
+
+    board.querySelectorAll('.card-quick-action').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const kunde = kunden.find((k) => k.id === btn.dataset.id);
+        if (kunde) openDokumentMitVorbelegung(btn.dataset.action, { kundeId: kunde.id });
       });
     });
 

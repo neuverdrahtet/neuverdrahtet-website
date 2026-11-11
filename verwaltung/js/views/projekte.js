@@ -141,7 +141,7 @@ export async function render(container, opts = {}) {
     tableHost.innerHTML = `
       ${bulk.barHtml()}
       <table class="data-table">
-        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th>${marken.length > 0 ? '<th>Marke</th>' : ''}<th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th></tr></thead>
+        <thead><tr>${bulk.headerCell()}<th></th><th>Titel</th><th>Kunde</th>${marken.length > 0 ? '<th>Marke</th>' : ''}<th>Gewerk</th><th>Bereich</th><th>Status</th><th>Start</th><th>Ende</th><th></th></tr></thead>
         <tbody>
           ${filtered.map((p) => {
             const statusFarbe = spaltenById[p.status]?.farbe || 'var(--border)';
@@ -161,6 +161,13 @@ export async function render(container, opts = {}) {
               </td>
               <td style="color:${escapeHtml(statusFarbe)}">${formatDate(p.start)}</td>
               <td style="color:${escapeHtml(statusFarbe)}">${formatDate(p.ende)}</td>
+              <td>
+                <div class="card-quick-actions">
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="angebote" title="Angebot erstellen">📄</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="rechnungen" title="Rechnung erstellen">🧾</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="auftragsbestaetigung" title="Auftragsbestätigung erstellen">✅</button>
+                </div>
+              </td>
             </tr>
           `; }).join('')}
         </tbody>
@@ -180,6 +187,11 @@ export async function render(container, opts = {}) {
                 <span>${escapeHtml(p.titel)}</span>
               </div>
               ${adresse ? `<div class="tt-card-sub">${escapeHtml(adresse)}</div>` : ''}
+              <div class="card-quick-actions">
+                <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="angebote" title="Angebot erstellen">📄</button>
+                <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="rechnungen" title="Rechnung erstellen">🧾</button>
+                <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="auftragsbestaetigung" title="Auftragsbestätigung erstellen">✅</button>
+              </div>
             </div>
           `;
         }).join('')}
@@ -187,8 +199,15 @@ export async function render(container, opts = {}) {
     `;
     tableHost.querySelectorAll('tbody tr, .tt-card').forEach((row) => {
       row.addEventListener('click', (e) => {
-        if (e.target.closest('.status-select')) return;
+        if (e.target.closest('.status-select') || e.target.closest('.card-quick-action')) return;
         renderProjektAkte(projekte.find((p) => p.id === row.dataset.id));
+      });
+    });
+    tableHost.querySelectorAll('.card-quick-action').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projekt = projekte.find((p) => p.id === btn.dataset.id);
+        if (projekt) openDokumentMitVorbelegung(btn.dataset.action, { kundeId: projekt.kundeId || '', projektId: projekt.id });
       });
     });
     tableHost.querySelectorAll('.status-select').forEach((select) => {

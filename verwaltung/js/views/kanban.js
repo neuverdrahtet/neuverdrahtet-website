@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate } from '../utils.js';
+import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate, openDokumentMitVorbelegung } from '../utils.js';
 import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { verschiebeProjektReferenzen } from '../projektMerge.js';
@@ -46,6 +46,11 @@ export async function render(container) {
                 <div class="title">${escapeHtml(p.titel)}</div>
                 <div class="meta">${escapeHtml(kundenById[p.kundeId]?.firma || '')}</div>
                 ${p.mitarbeiterIds?.length ? `<div class="meta">${p.mitarbeiterIds.map((id) => escapeHtml(mitarbeiterById[id]?.name || '')).filter(Boolean).join(', ')}</div>` : ''}
+                <div class="card-quick-actions">
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="angebote" title="Angebot erstellen">📄</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="rechnungen" title="Rechnung erstellen">🧾</button>
+                  <button type="button" class="btn btn-sm card-quick-action" data-id="${p.id}" data-action="auftragsbestaetigung" title="Auftragsbestätigung erstellen">✅</button>
+                </div>
                 <select class="card-move" data-id="${p.id}" title="Spalte wechseln (auch per Ziehen möglich)">
                   ${spalten.map((s2) => `<option value="${s2.id}" ${s2.id === p.status ? 'selected' : ''}>${escapeHtml(s2.titel)}</option>`).join('')}
                 </select>
@@ -71,7 +76,7 @@ export async function render(container) {
       });
       card.addEventListener('dragend', () => card.classList.remove('dragging'));
       card.addEventListener('click', async (e) => {
-        if (e.target.closest('.card-move')) return;
+        if (e.target.closest('.card-move') || e.target.closest('.card-quick-action')) return;
         const p = projekte.find((p) => p.id === card.dataset.id);
         if (p?.autoErstellt) {
           p.autoErstellt = false;
@@ -91,6 +96,14 @@ export async function render(container) {
         projekt.status = select.value;
         await put('projekte', projekt);
         renderBoard();
+      });
+    });
+
+    board.querySelectorAll('.card-quick-action').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const projekt = projekte.find((p) => p.id === btn.dataset.id);
+        if (projekt) openDokumentMitVorbelegung(btn.dataset.action, { kundeId: projekt.kundeId || '', projektId: projekt.id });
       });
     });
 

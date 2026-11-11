@@ -1024,6 +1024,16 @@ table.data-table th.col-select, table.data-table td.col-select {
   font-size: 11.5px;
   background: var(--card-2);
 }
+.card-quick-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+.card-quick-actions .btn {
+  flex: 1;
+  padding: 4px 2px;
+  justify-content: center;
+}
 .kanban-add-col {
   width: 220px;
   flex-shrink: 0;
