@@ -126,6 +126,9 @@ try {
     assert.equal(await page.isVisible('#hauptnav'), true);
     await page.click('.mega-schalter');
     assert.equal(await page.isVisible('#mega a[href="bodenlegearbeiten.html"]'), true);
+    // Menü muss den Bildschirm bis unten füllen und darf nicht abgeschnitten sein
+    const imMenue = await page.evaluate(() => [300, 600, 780].every((y) => document.getElementById('hauptnav').contains(document.elementFromPoint(195, y))));
+    assert.equal(imMenue, true, 'mobiles Menü wird abgeschnitten');
     await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
     assert.equal(await page.isVisible('#hauptnav'), false);
     const zuBreit = [];

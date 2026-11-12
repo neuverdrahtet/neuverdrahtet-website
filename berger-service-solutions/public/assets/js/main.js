@@ -6,6 +6,9 @@
   var nav = document.getElementById('hauptnav');
 
   function menueSetzen(offen) {
+    // Menü beginnt genau unter der Kopfzeile (Statusband darüber ist variabel hoch).
+    var kopf = document.getElementById('kopf');
+    if (offen && kopf) html.style.setProperty('--kopf-unten', Math.round(kopf.getBoundingClientRect().bottom) + 'px');
     html.classList.toggle('nav-offen', offen);
     if (schalter) {
       schalter.setAttribute('aria-expanded', String(offen));
