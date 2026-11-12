@@ -223,5 +223,15 @@
   "b": 1080,
   "h": 810,
   "kb": 640
+ },
+ "ladenlokal-vorher-eingang": {
+  "b": 770,
+  "h": 1280,
+  "kb": 640
+ },
+ "ladenlokal-vorher-front": {
+  "b": 770,
+  "h": 1280,
+  "kb": 640
  }
 }

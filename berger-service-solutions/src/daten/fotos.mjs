@@ -54,6 +54,12 @@ const LISTE = [
 export const FOTOS = LISTE.map((f) => ({ ...f, ...MASSE[f.id] }));
 export const FOTO = Object.fromEntries(FOTOS.map((f) => [f.id, f]));
 
+/** Gewerbeumbau Ladenlokal (Elektro und Innenausbau) – Zustand vor dem Umbau. Nur auf der Gewerbekunden-Seite. */
+export const GEWERBE_FOTOS = [
+  { id: 'ladenlokal-vorher-eingang', alt: 'Leerstehendes Ladenlokal mit Natursteinfassade, abgeklebten Schaufenstern und Eingangstür vor dem Umbau', titel: 'Ladenlokal vor dem Umbau', leistungen: [], ...MASSE['ladenlokal-vorher-eingang'] },
+  { id: 'ladenlokal-vorher-front', alt: 'Schaufensterfront des Ladenlokals vor Beginn der Elektro- und Innenausbauarbeiten', titel: 'Ausgangszustand: Schaufensterfront', leistungen: [], ...MASSE['ladenlokal-vorher-front'] },
+];
+
 /** Vorher/Nachher desselben Raums. */
 export const VORHER_NACHHER = {
   vorher: { id: 'sanierung-vorher', alt: 'Derselbe Raum vor der Sanierung: Rohwände mit Leitungen, offene Decke, Kleberreste auf dem Boden', ...MASSE['sanierung-vorher'] },

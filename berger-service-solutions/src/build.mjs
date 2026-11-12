@@ -11,7 +11,7 @@ import { LEISTUNGEN_ELEKTRO } from './daten/leistungen-elektro.mjs';
 import { LEISTUNGEN_HANDWERK, LEISTUNGEN_BODEN } from './daten/leistungen-handwerk.mjs';
 import { LEISTUNGEN_OBJEKT, LEISTUNGEN_RUECKBAU } from './daten/leistungen-objekt-rueckbau.mjs';
 import { ORTSSEITEN } from './daten/orte-seiten.mjs';
-import { FOTOS, FOTO, VORHER_NACHHER, GALERIE_START } from './daten/fotos.mjs';
+import { FOTOS, FOTO, VORHER_NACHHER, GALERIE_START, GEWERBE_FOTOS } from './daten/fotos.mjs';
 import { ORTE, pruefeEinsatzgebiet } from '../public/assets/js/einsatzgebiet-logik.mjs';
 import {
   esc, absUrl, icon, navigation, fuss, layout, brotkrumenJsonLd, unternehmenJsonLd,
@@ -456,12 +456,13 @@ ${ctaBand()}`;
   seite({ pfad: 'ablauf.html', titel: 'So arbeiten wir – Abläufe von Anfrage bis Rechnung', beschreibung: 'Feste Abläufe für Wartung und Prüfung, Sanierung, Objektservice und Entrümpelung – von der Anfrage über Angebot und Ausführung bis zur Dokumentation.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen)] });
 }
 
-function zielgruppenseite({ pfad, titel, beschreibung, h1, intro, punkte, leistungen, faq, krumenName }) {
+function zielgruppenseite({ pfad, titel, beschreibung, h1, intro, punkte, leistungen, faq, krumenName, fotoBlock = '' }) {
   const krumen = [[krumenName, pfad]];
   const inhalt = `
 <section class="seitenkopf"><div class="huelle"><h1>${esc(h1)}</h1>${intro.map((p) => `<p class="lead">${esc(p)}</p>`).join('')}<div class="knopf-gruppe"><a class="knopf knopf-akzent" href="buchen.html?art=anfrage">${icon('dokument')}Anfrage stellen</a></div></div></section>
 <section class="abschnitt"><div class="huelle"><h2>Was Sie von uns erwarten können</h2><div class="raster raster-2">${punkte.map(([t, d]) => `<div class="vorteil">${icon('haken', 'icon icon-gross')}<div><h3>${esc(t)}</h3><p>${esc(d)}</p></div></div>`).join('')}</div></div></section>
 <section class="abschnitt abschnitt-hell"><div class="huelle"><h2>Passende Leistungen</h2><div class="raster raster-3">${leistungen.map((s) => karte(NACH_SLUG[s])).join('')}</div></div></section>
+${fotoBlock}
 ${faqHtml(faq)}
 ${ctaBand()}`;
   seite({ pfad, titel, beschreibung, inhalt, krumen, prioritaet: 0.8, jsonld: [brotkrumenJsonLd(krumen), faqJsonLd(faq)] });
@@ -652,8 +653,9 @@ export function bauen() {
     beschreibung: 'Für Gewerbekunden in Essen: DGUV-V3-Prüfung, Klima- und Wärmepumpenwartung, Büroreinigung, Umbauten und Gewerbeentrümpelung – planbar und dokumentiert.',
     h1: 'Prüfung, Wartung, Reinigung und Umbau für Gewerbekunden',
     intro: ['Für Betriebe zählen Planbarkeit und Nachweise. Wir übernehmen wiederkehrende Prüfungen und Wartungen mit Fristüberwachung, die Reinigung Ihrer Räume sowie Umbauten und Räumungen – mit festen Ansprechpartnern und vollständiger Dokumentation.'],
-    punkte: [['Fristüberwachung', 'Prüf- und Wartungsfristen werden hinterlegt; wir erinnern rechtzeitig.'], ['Prüfprotokolle', 'Digitale Protokolle für Ihre Dokumentationspflichten, z. B. gegenüber Berufsgenossenschaft und Versicherer.'], ['Termine außerhalb der Kernzeiten', 'Nach Absprache auch früh morgens oder abends, damit der Betrieb weiterläuft.'], ['Ein Vertrag, mehrere Leistungen', 'Prüfung, Wartung und Reinigung in einer Vereinbarung.']],
-    leistungen: ['dguv-v3-pruefung', 'klimaanlagenwartung', 'gebaeudereinigung', 'beleuchtungstechnik', 'trockenbau-innenausbau', 'entruempelung'],
+    punkte: [['Fristüberwachung', 'Prüf- und Wartungsfristen werden hinterlegt; wir erinnern rechtzeitig.'], ['Prüfprotokolle', 'Digitale Protokolle für Ihre Dokumentationspflichten, z. B. gegenüber Berufsgenossenschaft und Versicherer.'], ['Termine außerhalb der Kernzeiten', 'Nach Absprache auch früh morgens oder abends, damit der Betrieb weiterläuft.'], ['Ein Vertrag, mehrere Leistungen', 'Prüfung, Wartung und Reinigung in einer Vereinbarung.'], ['Umbau von Gewerbeflächen', 'Elektroinstallation und Innenausbau für Ladenlokale, Büros und Praxen – koordiniert, damit die Fläche schnell nutzbar ist.']],
+    leistungen: ['elektroinstallation', 'trockenbau-innenausbau', 'dguv-v3-pruefung', 'klimaanlagenwartung', 'gebaeudereinigung', 'beleuchtungstechnik'],
+    fotoBlock: galerie(GEWERBE_FOTOS, 'Projekt: Umbau eines Ladenlokals', 'Elektroinstallation und Innenausbau für ein leerstehendes Ladenlokal – hier der Ausgangszustand vor Beginn der Arbeiten.'),
     faq: [['Prüfen Sie auch außerhalb der Geschäftszeiten?', 'Nach Absprache ja.'], ['Erhalten wir ein Geräteverzeichnis?', 'Ja, mit Prüfdatum, Ergebnis und nächstem Prüftermin je Gerät.']],
   });
   ueberUns();
