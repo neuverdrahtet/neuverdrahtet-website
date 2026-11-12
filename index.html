@@ -637,68 +637,109 @@
         <h2>Technischen Service anfragen.</h2>
         <p>Grundangaben, Leistungsart, technische Zusatzangaben und optionaler Datei-Upload. Oder direkt <a href="tel:+4920189040405" style="color:var(--orange-2);">anrufen</a> oder <a href="https://wa.me/4920189040405" target="_blank" rel="noopener" style="color:#25D366;font-weight:600;">per WhatsApp schreiben</a> — Rückmeldung i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
       </div>
-      <form class="ajax-form" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="homepage-kontaktformular" data-werkora-lead="true">
+      <div class="wizard-progress" aria-hidden="true"></div>
+      <form class="ajax-form wizard" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="homepage-kontaktformular" data-werkora-lead="true">
         <input type="hidden" name="_next" value="">
-        <h3 style="font-size:15px;margin-bottom:14px;color:var(--ink-soft);font-weight:600;">Ihre Angaben</h3>
-        <div class="form-row">
-          <div class="field"><label for="h-firma">Firma</label><input type="text" id="h-firma" name="firma"></div>
-          <div class="field"><label for="h-ansprechpartner">Ansprechpartner *</label><input type="text" id="h-ansprechpartner" name="name" required></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label for="h-telefon">Telefon</label><input type="tel" id="h-telefon" name="phone"></div>
-          <div class="field"><label for="h-email">E-Mail *</label><input type="email" id="h-email" name="email" required></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label for="h-plz">PLZ</label><input type="text" id="h-plz" name="plz" inputmode="numeric" pattern="[0-9]*"></div>
-          <div class="field"><label for="h-ort">Ort</label><input type="text" id="h-ort" name="ort" value="Essen"></div>
+
+        <div class="wizard-step" data-step="1">
+          <h3 class="wizard-step-title">1. Welche Leistung benötigen Sie?</h3>
+          <div class="field">
+            <label for="h-leistung">Leistung *</label>
+            <select id="h-leistung" name="service" required>
+              <option value="">Bitte wählen</option>
+              <option>DGUV / Prüftechnik</option>
+              <option>Wartung</option>
+              <option>Wärmepumpe</option>
+              <option>Klimaanlage</option>
+              <option>MSR / Gebäudeautomation</option>
+              <option>Elektrotechnik</option>
+              <option>Wallbox</option>
+              <option>Photovoltaik</option>
+              <option>Smart Home</option>
+              <option>Rauchwarnmelder</option>
+              <option>Störung</option>
+              <option>Sonstiges</option>
+            </select>
+          </div>
         </div>
 
-        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Leistungsart</h3>
-        <div class="field">
-          <label for="h-leistung">Worum geht es? *</label>
-          <select id="h-leistung" name="service" required>
-            <option value="">Bitte wählen</option>
-            <option>DGUV / Prüftechnik</option>
-            <option>Wartung</option>
-            <option>Wärmepumpe</option>
-            <option>Klimaanlage</option>
-            <option>MSR / Gebäudeautomation</option>
-            <option>Elektrotechnik</option>
-            <option>Wallbox</option>
-            <option>Photovoltaik</option>
-            <option>Smart Home</option>
-            <option>Rauchwarnmelder</option>
-            <option>Störung</option>
-            <option>Sonstiges</option>
-          </select>
+        <div class="wizard-step" data-step="2">
+          <h3 class="wizard-step-title">2. Wo ist der Einsatzort?</h3>
+          <div class="field"><label for="h-strasse">Straße &amp; Hausnummer</label><input type="text" id="h-strasse" name="strasse"></div>
+          <div class="form-row">
+            <div class="field"><label for="h-plz">PLZ</label><input type="text" id="h-plz" name="plz" inputmode="numeric" pattern="[0-9]*" maxlength="5"></div>
+            <div class="field"><label for="h-ort">Ort</label><input type="text" id="h-ort" name="ort" value="Essen"></div>
+          </div>
+          <p class="plz-check-result" data-plz-hint></p>
         </div>
 
-        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Technische Angaben (optional, hilft bei der Einschätzung)</h3>
-        <div class="form-row-3">
-          <div class="field"><label for="h-anlagenart">Anlagenart</label><input type="text" id="h-anlagenart" name="anlagenart" placeholder="z. B. Wärmepumpe"></div>
-          <div class="field"><label for="h-hersteller">Hersteller</label><input type="text" id="h-hersteller" name="hersteller"></div>
-          <div class="field"><label for="h-modell">Modell</label><input type="text" id="h-modell" name="modell"></div>
-        </div>
-        <div class="form-row">
-          <div class="field"><label for="h-anzahl">Anzahl Betriebsmittel</label><input type="number" id="h-anzahl" name="anzahl_betriebsmittel" placeholder="z. B. 40"></div>
-          <div class="field"><label for="h-termin">Gewünschter Termin</label><input type="text" id="h-termin" name="termin" placeholder="z. B. nächste 2 Wochen"></div>
-        </div>
-        <div class="field"><label for="h-beschreibung">Beschreibung</label><textarea id="h-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
+        <div class="wizard-step" data-step="3">
+          <h3 class="wizard-step-title">3. Details &amp; Termin</h3>
 
-        <h3 style="font-size:15px;margin:28px 0 14px;color:var(--ink-soft);font-weight:600;">Dateien (optional)</h3>
-        <div class="upload-box">
-          📎 <b>Fotos, Typenschild, Prüfliste oder Dokumente</b> hochladen — hilft bei der ersten Einschätzung.
-          <div style="margin-top:8px;"><input type="file" name="attachment" multiple aria-label="Dateien hochladen" style="font-size:12.5px;"></div>
+          <div class="form-row-3" data-service-group="pruefung" hidden>
+            <div class="field"><label for="h-anzahl">Anzahl Betriebsmittel/Anlagen</label><input type="number" id="h-anzahl" name="anzahl_betriebsmittel" placeholder="z. B. 40"></div>
+          </div>
+          <div class="form-row-3" data-service-group="waermepumpe" hidden>
+            <div class="field"><label for="h-hersteller">Hersteller</label><input type="text" id="h-hersteller" name="hersteller" placeholder="z. B. Stiebel Eltron"></div>
+            <div class="field"><label for="h-modell">Modell</label><input type="text" id="h-modell" name="modell"></div>
+          </div>
+          <div class="form-row-3" data-service-group="wallbox" hidden>
+            <div class="field"><label for="h-stellplatz">Stellplatz</label><input type="text" id="h-stellplatz" name="stellplatz" placeholder="z. B. Garage, Carport"></div>
+            <div class="field">
+              <label for="h-zaehlerschrank">Zählerschrank vorhanden?</label>
+              <select id="h-zaehlerschrank" name="zaehlerschrank_vorhanden">
+                <option value="">Bitte wählen</option>
+                <option>Ja, ausreichend Platz</option>
+                <option>Ja, vermutlich kein Platz mehr</option>
+                <option>Weiß ich nicht</option>
+              </select>
+            </div>
+          </div>
+          <div class="field" data-service-group="waermepumpe" hidden>
+            <p class="field-hint" style="margin-top:0;">Falls vorhanden: Typenschildfoto unten hochladen — hilft bei der Einschätzung.</p>
+          </div>
+
+          <div class="field"><label for="h-anlagenart">Anlagenart (optional)</label><input type="text" id="h-anlagenart" name="anlagenart" placeholder="z. B. Unterverteilung, Klimagerät ..."></div>
+          <div class="form-row">
+            <div class="field"><label for="h-termin">Gewünschter Termin</label><input type="text" id="h-termin" name="termin" placeholder="z. B. nächste 2 Wochen"></div>
+          </div>
+          <div class="field"><label for="h-beschreibung">Beschreibung</label><textarea id="h-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
+
+          <div class="upload-box">
+            📎 <b>Fotos, Typenschild, Prüfliste oder Dokumente</b> hochladen — hilft bei der ersten Einschätzung.
+            <div style="margin-top:8px;"><input type="file" name="attachment" multiple aria-label="Dateien hochladen" style="font-size:12.5px;"></div>
+          </div>
         </div>
 
-        <label class="checkbox-row">
-          <input type="checkbox" required>
-          <span>Ich stimme der Verarbeitung meiner Daten gemäß <a href="datenschutz.html" style="color:var(--orange-2);">Datenschutzerklärung</a> zu. *</span>
-        </label>
+        <div class="wizard-step" data-step="4">
+          <h3 class="wizard-step-title">4. Ihre Kontaktdaten</h3>
+          <div class="form-row">
+            <div class="field"><label for="h-firma">Firma</label><input type="text" id="h-firma" name="firma"></div>
+            <div class="field"><label for="h-ansprechpartner">Ansprechpartner *</label><input type="text" id="h-ansprechpartner" name="name" required></div>
+          </div>
+          <div class="form-row">
+            <div class="field"><label for="h-telefon">Telefon</label><input type="tel" id="h-telefon" name="phone"></div>
+            <div class="field"><label for="h-email">E-Mail *</label><input type="email" id="h-email" name="email" required></div>
+          </div>
+        </div>
 
-        <button type="submit" class="btn btn-primary btn-block">Service anfragen</button>
-        <p class="form-status" role="status"></p>
-        <p class="form-note" style="margin-top:14px;">Felder mit * sind erforderlich. Wir melden uns i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
+        <div class="wizard-step" data-step="5">
+          <h3 class="wizard-step-title">5. Angaben prüfen</h3>
+          <div data-wizard-summary class="wizard-summary"></div>
+          <label class="checkbox-row">
+            <input type="checkbox" required>
+            <span>Ich stimme der Verarbeitung meiner Daten gemäß <a href="datenschutz.html" style="color:var(--orange-2);">Datenschutzerklärung</a> zu. *</span>
+          </label>
+          <p class="form-status" role="status"></p>
+          <p class="form-note">Felder mit * sind erforderlich. Wir melden uns i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
+        </div>
+
+        <div class="wizard-nav">
+          <button type="button" class="btn btn-outline" data-wizard-back hidden>← Zurück</button>
+          <span style="flex:1"></span>
+          <button type="button" class="btn btn-primary" data-wizard-next>Weiter →</button>
+          <button type="submit" class="btn btn-primary" hidden>Service anfragen</button>
+        </div>
       </form>
     </div>
   </section>
@@ -737,7 +778,7 @@
     </div>
     <div class="footer-bottom">
       <span>© 2026 neuverdrahtet UG (haftungsbeschränkt), Essen</span>
-      <span>Smarte Elektrokonzepte für Alt &amp; Neubau</span>
+      <span>Essen &amp; Ruhrgebiet</span>
       <a href="https://g.page/r/CRU47AKZiD_eEBM/review" target="_blank" rel="noopener" style="color:var(--orange-2);font-weight:600;">★ Bei Google bewerten</a>
     </div>
   </div>
@@ -753,5 +794,6 @@
 <div class="contact-fab"></div>
 <script src="assets/script.min.js" defer></script>
 <script src="assets/plz-check.js" defer></script>
+<script src="assets/anfrage-wizard.js" defer></script>
 </body>
 </html>
