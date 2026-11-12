@@ -64,7 +64,7 @@ Technische Dateien: `sitemap.xml`, `robots.txt`, `llms.txt` (Zusammenfassung fü
 
 ## Gestaltung
 
-- Farben: Marine `#0f2233` (Vertrauen, Technik), Bernstein `#f2a516` (Handwerk, Aufmerksamkeit für CTAs). Jeder Bereich hat eine Kennfarbe (Elektro Bernstein, Handwerk Petrol, Objekt Blau, Rückbau Rost).
+- Farben aus dem Firmenlogo: Dunkelblau `#0a2654`, Nachtblau `#020b1e`, Blau `#1a6fc4`, Cyan `#1ec8f5`, Gelb `#ffcd00` (CTAs, Akzentlinien). Bereichsfarben: Elektro Gelb, Handwerk Blau, Objekt Dunkelblau, Rückbau Cyan.
 - Schrift: Inter, selbst gehostet (keine Google-Fonts-Verbindung).
-- Logo: Wortmarke „BERGER / SERVICE SOLUTIONS“ mit B-Signet (SVG). **Platzhalter-Logo** – ein final gestaltetes Logo kann ohne Codeänderung unter `public/assets/img/` ersetzt werden.
+- Logo: Firmenlogo (Originale in `marke/`). Helle Version in der Kopfzeile (`logo-hell.webp`), dunkle Version im Startbereich und in der Fußzeile (`logo-dunkel.webp`), Haus-B-Signet als Favicon/App-Icon, dunkles Banner als Link-Vorschaubild (`og-bild.jpg`).
 - Bilder: bewusst keine Stockfotos. Echte Projektfotos (mit Zustimmung) sind der wirksamste nächste Schritt für Vertrauen und lokale Relevanz.

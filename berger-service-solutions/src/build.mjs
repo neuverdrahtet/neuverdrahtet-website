@@ -105,7 +105,7 @@ function startseite() {
       <div class="knopf-gruppe"><a class="knopf knopf-akzent knopf-gross" href="buchen.html">${icon('kalender')}Termin online buchen</a><a class="knopf knopf-hell knopf-gross" href="buchen.html?art=anfrage">${icon('dokument')}Projekt anfragen</a></div>
       <ul class="held-punkte"><li>${icon('haken')}Prüf- und Wartungstermine direkt buchbar</li><li>${icon('haken')}Schriftliche Angebote nach Besichtigung</li><li>${icon('haken')}Digitale Dokumentation jedes Einsatzes</li></ul>
     </div>
-    <div class="held-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div>
+    <div class="held-seite"><img class="held-logo" src="assets/img/logo-dunkel.webp" width="900" height="330" alt="" fetchpriority="high"><div class="held-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div>
   </div>
 </section>
 <section class="abschnitt" aria-labelledby="bereiche-titel"><div class="huelle">

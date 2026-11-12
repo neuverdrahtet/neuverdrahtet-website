@@ -38,7 +38,8 @@ const PFADE = {
 export const icon = (name, klasse = 'icon') =>
   `<svg class="${klasse}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PFADE[name] || ''}</svg>`;
 
-const LOGO = `<svg class="logo-zeichen" viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="9" fill="var(--marke)"/><path d="M12 9h10a6 6 0 0 1 2.2 11.6A6.5 6.5 0 0 1 22.5 31H12z" fill="none" stroke="var(--akzent)" stroke-width="3.2" stroke-linejoin="round"/><path d="M12 20h10" stroke="var(--akzent)" stroke-width="3.2"/></svg>`;
+// Firmenlogo (Originale in marke/, web-optimiert in public/assets/img/)
+const LOGO = '<img class="logo-bild" src="assets/img/logo-hell.webp" width="520" height="163" alt="BERGER SERVICE SOLUTIONS – Handwerk. Service. Lösungen.">';
 
 // ---------------------------------------------------------------------------
 // Navigation
@@ -52,7 +53,7 @@ export function navigation(leistungenNachBereich) {
   return `
 <header class="kopf" id="kopf">
   <div class="huelle kopf-innen">
-    <a class="logo" href="index.html" aria-label="${esc(CONFIG.firma.name)} – Startseite">${LOGO}<span class="logo-text"><strong>BERGER</strong><small>SERVICE SOLUTIONS</small></span></a>
+    <a class="logo" href="index.html" title="Zur Startseite">${LOGO}</a>
     <button class="nav-schalter" type="button" aria-expanded="false" aria-controls="hauptnav"><span class="nur-sr">Menü öffnen</span>${icon('menue')}</button>
     <nav class="hauptnav" id="hauptnav" aria-label="Hauptnavigation">
       <ul class="nav-liste">
@@ -102,8 +103,7 @@ export function fuss(leistungenNachBereich, orteSeiten, ortName) {
 <footer class="fuss">
   <div class="huelle fuss-raster">
     <div>
-      <p class="fuss-marke">${esc(CONFIG.firma.name)}</p>
-      <p class="fuss-slogan">${esc(CONFIG.firma.slogan)}</p>
+      <img class="fuss-logo" src="assets/img/logo-dunkel.webp" width="900" height="330" alt="BERGER SERVICE SOLUTIONS – Handwerk. Service. Lösungen." loading="lazy">
       <ul class="fuss-liste">${kontaktZeilen}</ul>
       <a class="knopf knopf-akzent" href="buchen.html">${icon('kalender')}Termin oder Angebot anfragen</a>
     </div>
@@ -132,8 +132,8 @@ export function unternehmenJsonLd(orte) {
     alternateName: MARKE,
     slogan: CONFIG.firma.slogan,
     url: absUrl('index.html'),
-    logo: absUrl('assets/img/logo.svg'),
-    image: absUrl('assets/img/og-bild.png'),
+    logo: absUrl('assets/img/logo-hell-gross.png'),
+    image: absUrl('assets/img/og-bild.jpg'),
     description: 'Elektrotechnik, Prüfung und Wartung, Handwerk und Sanierung inklusive Bodenlegearbeiten, Hausmeister- und Objektservice sowie Entrümpelung und Rückbau in Essen und im Umkreis von rund 50 Kilometern.',
     areaServed: [
       { '@type': 'GeoCircle', geoMidpoint: { '@type': 'GeoCoordinates', latitude: CONFIG.einsatzgebiet.zentrum.lat, longitude: CONFIG.einsatzgebiet.zentrum.lon }, geoRadius: String(CONFIG.einsatzgebiet.radiusKm * 1000) },
@@ -188,9 +188,12 @@ export function layout({ pfad, titel, beschreibung, inhalt, krumen = [], jsonld 
 <meta property="og:title" content="${esc(vollTitel)}">
 <meta property="og:description" content="${esc(beschreibung)}">
 <meta property="og:url" content="${esc(absUrl(pfad))}">
-<meta property="og:image" content="${esc(absUrl('assets/img/og-bild.png'))}">
-<meta name="theme-color" content="#0f2233">
-<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<meta property="og:image" content="${esc(absUrl('assets/img/og-bild.jpg'))}">
+<meta name="theme-color" content="#0a2654">
+<link rel="icon" href="assets/img/favicon.ico" sizes="any">
+<link rel="icon" href="assets/img/favicon-48.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
+<link rel="preload" href="assets/img/logo-hell.webp" as="image">
 <link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/css/style.css">
 <script type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>
