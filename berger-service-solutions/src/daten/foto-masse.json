@@ -188,5 +188,40 @@
   "b": 1080,
   "h": 717,
   "kb": 640
+ },
+ "dg-balken-einbaustrahler": {
+  "b": 1080,
+  "h": 717,
+  "kb": 640
+ },
+ "dg-balken-wohnraum": {
+  "b": 1080,
+  "h": 717,
+  "kb": 640
+ },
+ "wohnraum-spotdecke": {
+  "b": 1080,
+  "h": 743,
+  "kb": 640
+ },
+ "bad-freistehende-wanne": {
+  "b": 1080,
+  "h": 720,
+  "kb": 640
+ },
+ "dachzimmer-fenstertuer": {
+  "b": 1080,
+  "h": 810,
+  "kb": 640
+ },
+ "boden-vintage-holzoptik": {
+  "b": 1080,
+  "h": 810,
+  "kb": 640
+ },
+ "dachgaube-vintage-boden": {
+  "b": 1080,
+  "h": 810,
+  "kb": 640
  }
 }
