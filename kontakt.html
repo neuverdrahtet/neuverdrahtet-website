@@ -4,20 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://*.analytics.google.com https://formspree.io https://neuverdrahtetworkersdevworkersdev.neuverdrahtetworkersdev.workers.dev; frame-src https://www.google.com; object-src 'none'; base-uri 'self'; form-action 'self' https://formspree.io">
-<title>Technischen Service anfragen | neuverdrahtet</title>
+<title>Kontakt | neuverdrahtet</title>
 <meta name="description" content="Technischen Service in Essen &amp; Ruhrgebiet anfragen: Prüftechnik, Wartung, Wärmepumpe, Klimaanlage, MSR oder Elektrotechnik — ein Ansprechpartner.">
 <link rel="canonical" href="https://neuverdrahtet.com/kontakt.html">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="neuverdrahtet">
-<meta property="og:title" content="Technischen Service anfragen | neuverdrahtet">
+<meta property="og:title" content="Kontakt | neuverdrahtet">
 <meta property="og:description" content="Technischen Service in Essen &amp; Ruhrgebiet anfragen: Prüftechnik, Wartung, Wärmepumpe, Klimaanlage, MSR oder Elektrotechnik — ein Ansprechpartner.">
 <meta property="og:url" content="https://neuverdrahtet.com/kontakt.html">
 <meta property="og:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
 <meta property="og:locale" content="de_DE">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Technischen Service anfragen | neuverdrahtet">
+<meta name="twitter:title" content="Kontakt | neuverdrahtet">
 <meta name="twitter:description" content="Technischen Service in Essen &amp; Ruhrgebiet anfragen: Prüftechnik, Wartung, Wärmepumpe, Klimaanlage, MSR oder Elektrotechnik — ein Ansprechpartner.">
 <meta name="twitter:image" content="https://neuverdrahtet.com/assets/og-image.jpg">
 <meta name="geo.region" content="DE-NW">
@@ -329,7 +329,7 @@
       "@type": "WebPage",
       "@id": "https://neuverdrahtet.com/kontakt.html#webpage",
       "url": "https://neuverdrahtet.com/kontakt.html",
-      "name": "Technischen Service anfragen | neuverdrahtet",
+      "name": "Kontakt | neuverdrahtet",
       "description": "Technischen Service in Essen &amp; Ruhrgebiet anfragen: Prüftechnik, Wartung, Wärmepumpe, Klimaanlage, MSR oder Elektrotechnik — ein Ansprechpartner.",
       "isPartOf": {
         "@id": "https://neuverdrahtet.com/#website"
@@ -459,7 +459,7 @@
       <div>
         <div class="breadcrumb"><a href="index.html">Start</a> · Kontakt</div>
         <p class="eyebrow">Kontakt</p>
-        <h1>Technischen Service anfragen</h1>
+        <h1>Kontakt</h1>
         <p class="hero-lede">Ob Prüftechnik, Wartung, Wärme &amp; Klima, MSR oder Elektrotechnik — ein Ansprechpartner für Essen und das Ruhrgebiet. Je genauer die Angaben, desto schneller die Rückmeldung.</p>
         <div class="pill-row">
           <span class="pill">Elektrofachbetrieb</span>
@@ -475,8 +475,12 @@
     <div class="wrap">
       <div class="section-head">
         <p class="eyebrow">Anfrageformular</p>
-        <h2>Technischen Service anfragen</h2>
-        <p>Grundangaben, Leistungsart, technische Zusatzangaben und optionaler Datei-Upload.</p>
+        <h2>Jetzt anfragen</h2>
+        <p>Grundangaben, Leistungsart und Wunschtermin in wenigen Schritten — oder direkt anrufen oder per WhatsApp schreiben.</p>
+        <div class="hero-actions" style="margin-top:18px;">
+          <a class="btn btn-outline" href="tel:+4920189040405">📞 Jetzt anrufen</a>
+          <a class="btn btn-whatsapp" href="https://wa.me/4920189040405" target="_blank" rel="noopener">Per WhatsApp schreiben</a>
+        </div>
       </div>
 
       <div class="wizard-progress" aria-hidden="true"></div>
@@ -537,32 +541,33 @@
               </select>
             </div>
           </div>
-          <div class="field" data-service-group="waermepumpe" hidden>
-            <p class="field-hint" style="margin-top:0;">Falls vorhanden: Typenschildfoto unten hochladen — hilft bei der Einschätzung.</p>
-          </div>
-
           <div class="field"><label for="c-anlagenart">Anlagenart (optional)</label><input type="text" id="c-anlagenart" name="anlagenart" placeholder="z. B. Unterverteilung, Klimagerät ..."></div>
-          <div class="form-row">
-            <div class="field"><label for="c-termin">Gewünschter Termin</label><input type="text" id="c-termin" name="termin" placeholder="z. B. nächste 2 Wochen"></div>
-          </div>
-          <div class="field"><label for="c-beschreibung">Beschreibung</label><textarea id="c-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
 
-          <div class="upload-box">
-            📎 <b>Fotos, Typenschild, Prüfliste oder Dokumente</b> hochladen — hilft bei der ersten Einschätzung.
-            <div style="margin-top:8px;"><input type="file" name="attachment" multiple aria-label="Dateien hochladen" style="font-size:12.5px;"></div>
+          <h4 class="wizard-substep-title">Wunschtermin</h4>
+          <div class="form-row">
+            <div class="field"><label for="c-termin-datum">Wunschdatum</label><input type="date" id="c-termin-datum" name="termin_datum"></div>
+            <div class="field">
+              <label for="c-termin-zeitfenster">Zeitfenster</label>
+              <select id="c-termin-zeitfenster" name="termin_zeitfenster">
+                <option value="">Flexibel</option>
+                <option>Vormittags (8–12 Uhr)</option>
+                <option>Nachmittags (12–17 Uhr)</option>
+              </select>
+            </div>
           </div>
+          <p class="field-hint">Das ist ein Terminwunsch — die Bestätigung erfolgt nach Kalenderabgleich.</p>
+
+          <div class="field"><label for="c-beschreibung">Beschreibung</label><textarea id="c-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
         </div>
 
         <div class="wizard-step" data-step="4">
           <h3 class="wizard-step-title">4. Ihre Kontaktdaten</h3>
           <div class="form-row">
-            <div class="field"><label for="c-firma">Firma</label><input type="text" id="c-firma" name="firma"></div>
-            <div class="field"><label for="c-ansprechpartner">Ansprechpartner *</label><input type="text" id="c-ansprechpartner" name="name" required></div>
-          </div>
-          <div class="form-row">
+            <div class="field"><label for="c-ansprechpartner">Name *</label><input type="text" id="c-ansprechpartner" name="name" required></div>
             <div class="field"><label for="c-telefon">Telefon</label><input type="tel" id="c-telefon" name="phone"></div>
-            <div class="field"><label for="c-email">E-Mail *</label><input type="email" id="c-email" name="email" required></div>
           </div>
+          <div class="field"><label for="c-email">E-Mail *</label><input type="email" id="c-email" name="email" required></div>
+          <div class="field"><label for="c-firma">Firma <span class="field-hint-inline">(optional, nur bei gewerblichen Anfragen)</span></label><input type="text" id="c-firma" name="firma"></div>
         </div>
 
         <div class="wizard-step" data-step="5">
@@ -580,7 +585,7 @@
           <button type="button" class="btn btn-outline" data-wizard-back hidden>← Zurück</button>
           <span style="flex:1"></span>
           <button type="button" class="btn btn-primary" data-wizard-next>Weiter →</button>
-          <button type="submit" class="btn btn-primary" hidden>Service anfragen</button>
+          <button type="submit" class="btn btn-primary" hidden>Anfrage senden</button>
         </div>
       </form>
     </div>
