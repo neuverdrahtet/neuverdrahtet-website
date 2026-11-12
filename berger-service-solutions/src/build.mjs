@@ -11,6 +11,7 @@ import { LEISTUNGEN_ELEKTRO } from './daten/leistungen-elektro.mjs';
 import { LEISTUNGEN_HANDWERK, LEISTUNGEN_BODEN } from './daten/leistungen-handwerk.mjs';
 import { LEISTUNGEN_OBJEKT, LEISTUNGEN_RUECKBAU } from './daten/leistungen-objekt-rueckbau.mjs';
 import { ORTSSEITEN } from './daten/orte-seiten.mjs';
+import { FOTOS, FOTO, VORHER_NACHHER, GALERIE_START } from './daten/fotos.mjs';
 import { ORTE, pruefeEinsatzgebiet } from '../public/assets/js/einsatzgebiet-logik.mjs';
 import {
   esc, absUrl, icon, navigation, fuss, layout, brotkrumenJsonLd, unternehmenJsonLd,
@@ -48,6 +49,25 @@ const buchungsKnopf = (l, klasse = 'knopf knopf-akzent') => l.buchung === 'direk
 const buchungsEtikett = (l) => l.buchung === 'direkt'
   ? '<span class="etikett etikett-direkt">Direkt buchbar</span>'
   : '<span class="etikett">Besichtigung & Angebot</span>';
+
+// ---------------------------------------------------------------------------
+// Projektfotos
+// ---------------------------------------------------------------------------
+const fotoPfad = (id, groesse) => `assets/img/projekte/${id}-${groesse}.webp`;
+function bild(f, { sizes = '(min-width: 1000px) 33vw, (min-width: 700px) 50vw, 100vw', lazy = true, klasse = '' } = {}) {
+  return `<img${klasse ? ` class="${klasse}"` : ''} src="${fotoPfad(f.id, 'klein')}" srcset="${fotoPfad(f.id, 'klein')} ${f.kb}w, ${fotoPfad(f.id, 'gross')} ${f.b}w" sizes="${sizes}" width="${f.b}" height="${f.h}" alt="${esc(f.alt)}"${lazy ? ' loading="lazy" decoding="async"' : ''}>`;
+}
+function galerie(fotos, titel = 'Aus unseren Projekten', text = 'Eigene Fotos von unseren Baustellen – ohne Stockbilder.') {
+  if (!fotos.length) return '';
+  return `<section class="abschnitt" aria-labelledby="galerie-titel"><div class="huelle"><h2 id="galerie-titel">${esc(titel)}</h2><p class="unterzeile">${esc(text)}</p>
+<div class="galerie">${fotos.map((f) => `<figure class="foto ${f.h > f.b ? 'foto-hoch' : ''}"><a href="${fotoPfad(f.id, 'gross')}">${bild(f)}</a><figcaption>${esc(f.titel)}</figcaption></figure>`).join('')}</div></div></section>`;
+}
+function vorherNachherHtml() {
+  const v = VORHER_NACHHER;
+  return `<section class="abschnitt abschnitt-hell" aria-labelledby="vn-titel"><div class="huelle"><h2 id="vn-titel">${esc(v.titel)}</h2><p class="unterzeile">${esc(v.text)}</p>
+<div class="vorher-nachher"><figure class="foto"><span class="vn-etikett">Vorher</span>${bild(v.vorher, { sizes: '(min-width: 900px) 50vw, 100vw' })}</figure><figure class="foto"><span class="vn-etikett vn-nachher">Nachher</span>${bild(v.nachher, { sizes: '(min-width: 900px) 50vw, 100vw' })}</figure></div></div></section>`;
+}
+const fotosFuer = (slugs) => FOTOS.filter((f) => f.leistungen.some((s) => slugs.includes(s)));
 
 function karte(l) {
   return `<article class="karte"><h3><a href="${l.slug}.html">${esc(l.name)}</a></h3><p>${esc(l.kurz)}</p><p class="karte-fuss">${buchungsEtikett(l)}<span class="mehr">Mehr erfahren ${icon('pfeil')}</span></p></article>`;
@@ -118,6 +138,8 @@ function startseite() {
   <p class="unterzeile">Standardleistungen mit planbarer Dauer buchen Sie ohne Umweg. Die Bestätigung erfolgt nach Kalenderabgleich.</p>
   <div class="raster raster-3">${direkt.map(karte).join('')}</div>
 </div></section>
+${galerie(GALERIE_START.map((id) => FOTO[id]), 'Einblicke in unsere Arbeit', 'Echte Fotos von unseren Baustellen: Zählerschränke, Photovoltaik, Elektroinstallation und Sanierung.')}
+${vorherNachherHtml()}
 <section class="abschnitt" aria-labelledby="warum-titel"><div class="huelle">
   <h2 id="warum-titel">Warum ein Betrieb für mehrere Gewerke?</h2>
   <div class="raster raster-4 vorteile">
@@ -172,6 +194,7 @@ function bereichsseite(b) {
   const inhalt = `
 <section class="seitenkopf seitenkopf-${b.id}"><div class="huelle"><p class="dachzeile">${icon(b.icon)} Leistungsbereich</p><h1>${esc(b.h1)}</h1>${b.intro.map((p) => `<p class="lead">${esc(p)}</p>`).join('')}<div class="knopf-gruppe"><a class="knopf knopf-akzent" href="buchen.html?bereich=${b.id}">${icon('kalender')}Buchen oder anfragen</a></div></div></section>
 <section class="abschnitt"><div class="huelle"><h2>Leistungen im Bereich ${esc(b.kurzname)}</h2><div class="raster raster-3">${leistungen.map(karte).join('')}</div></div></section>
+${galerie(fotosFuer(leistungen.map((l) => l.slug)).slice(0, 6))}
 <section class="abschnitt abschnitt-hell"><div class="huelle schmal"><h2>Für wen?</h2>${liste(b.zielgruppen)}</div></section>
 ${prozessIds.map((id) => ablaufHtml(id, `Ablauf: ${PROZESSE[id].name}`)).join('')}
 ${faqHtml(faq)}
@@ -213,6 +236,8 @@ function leistungsseite(l) {
   </dl></aside>
 </div></section>
 <section class="abschnitt" id="leistungsumfang"><div class="huelle schmal"><h2>Leistungsumfang</h2>${liste(l.leistungen)}${unterseiten.length ? `<h3>Unsere Bodenbeläge im Detail</h3><div class="raster raster-2">${unterseiten.map(karte).join('')}</div>` : ''}</div></section>
+${galerie(fotosFuer([l.slug]), `${l.name}: Aus unseren Projekten`)}
+${VORHER_NACHHER.leistungen.includes(l.slug) ? vorherNachherHtml() : ''}
 ${abschnitte}
 <section class="abschnitt abschnitt-hell"><div class="huelle schmal raster raster-2 ausgeglichen">
   <div><h2>Für wen?</h2>${liste(l.zielgruppen)}</div>
@@ -231,6 +256,7 @@ ${ctaBand(l.buchung === 'direkt' ? 'Wählen Sie einen Wunschtermin – wir best�
     url: absUrl(`${l.slug}.html`), provider: { '@id': ORG['@id'] },
     areaServed: { '@type': 'GeoCircle', geoMidpoint: { '@type': 'GeoCoordinates', latitude: CONFIG.einsatzgebiet.zentrum.lat, longitude: CONFIG.einsatzgebiet.zentrum.lon }, geoRadius: String(CONFIG.einsatzgebiet.radiusKm * 1000) },
     category: b.name,
+    ...(fotosFuer([l.slug]).length ? { image: fotosFuer([l.slug]).map((f) => absUrl(fotoPfad(f.id, 'gross'))) } : {}),
     potentialAction: { '@type': 'ReserveAction', target: absUrl(buchungsLink(l)), name: l.buchung === 'direkt' ? 'Termin online buchen' : 'Angebot anfragen' },
   };
   seite({ pfad: `${l.slug}.html`, titel: l.title, beschreibung: l.description, inhalt, krumen, prioritaet: l.istHub ? 0.9 : 0.8, jsonld: [service, brotkrumenJsonLd(krumen), faqJsonLd(l.faq)] });
@@ -448,9 +474,11 @@ function ueberUns() {
 <section class="abschnitt"><div class="huelle schmal">
 <h2>Wer wir sind</h2><p>BERGER SERVICE SOLUTIONS ist ein Dienstleistungsunternehmen aus Essen. Wir verbinden Elektrotechnik mit Renovierung, Objektbetreuung und Entrümpelung. Für unsere Kunden bedeutet das: weniger Abstimmungsaufwand, weniger Schnittstellen und ein Ansprechpartner, der das ganze Objekt im Blick hat.</p>
 <h2>Wie wir arbeiten</h2>${liste(['Feste Abläufe für jeden Leistungsbereich', 'Schriftliche Angebote nach Besichtigung und Aufmaß', 'Digitale Dokumentation mit Fotos, Protokollen und Leistungsnachweisen', 'Arbeiten in zulassungspflichtigen Gewerken nur mit entsprechender Berechtigung oder eingetragenen Partnerbetrieben', 'Keine Versprechen, die wir nicht belegen können'])}
-<h2>Referenzen</h2><p>Wir veröffentlichen ausschließlich echte Projekte, deren Veröffentlichung die Auftraggeber zugestimmt haben. Dieser Bereich wird ergänzt, sobald freigegebene Projektberichte vorliegen.</p>
+<h2>Referenzen</h2><p>Die Fotos auf dieser Website stammen von eigenen Baustellen. Ausführliche Projektberichte mit Ort und Umfang veröffentlichen wir nur mit Zustimmung der Auftraggeber; dieser Bereich wird ergänzt, sobald freigegebene Berichte vorliegen.</p>
 <h2>Qualifikationen</h2><p>Angaben zu Handwerksrolleneintragungen, Zertifizierungen und Versicherungen veröffentlichen wir hier nach Abschluss der Prüfung vollständig und mit Nachweis.</p>
 </div></section>
+${galerie(FOTOS, 'Fotos von unseren Baustellen', 'Elektroinstallation, Zählerschränke, Photovoltaik, Rückbau und Sanierung.')}
+${vorherNachherHtml()}
 ${ctaBand()}`;
   seite({ pfad: 'ueber-uns.html', titel: 'Über uns – Handwerk. Service. Lösungen.', beschreibung: 'BERGER SERVICE SOLUTIONS aus Essen verbindet Elektrotechnik, Renovierung, Objektservice und Entrümpelung – mit festen Abläufen und digitaler Dokumentation.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'AboutPage', name: 'Über BERGER SERVICE SOLUTIONS', about: { '@id': ORG['@id'] } }] });
 }

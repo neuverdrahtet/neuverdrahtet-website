@@ -165,6 +165,16 @@ test('Barrierefreiheit: lang, Viewport, Sprungmarke, Labels für Formularfelder'
     }
   }
 });
+test('Bilder: Alternativtext, feste Maße, Projektfotos lazy geladen', () => {
+  let anzahl = 0;
+  for (const [f, s] of Object.entries(html)) for (const m of s.matchAll(/<img\b([^>]*)>/g)) {
+    const a = m[1]; anzahl++;
+    assert.match(a, /\balt="/, `${f}: Bild ohne alt`);
+    assert.match(a, /\bwidth="\d+"/, `${f}: Bild ohne width`); assert.match(a, /\bheight="\d+"/, `${f}: Bild ohne height`);
+    if (a.includes('/projekte/')) { assert.match(a, /alt="[^"]{20,}"/, `${f}: Projektfoto mit zu kurzem alt`); assert.match(a, /loading="lazy"/, `${f}: Projektfoto nicht lazy`); }
+  }
+  assert.ok(anzahl > 100, String(anzahl));
+});
 test('Buchungsseite: Katalog-JSON enthält alle Leistungen, direkte Buchung nur für Standardleistungen', () => {
   const k = JSON.parse(erstes(html['buchen.html'], /<script type="application\/json" id="katalog">([\s\S]*?)<\/script>/));
   assert.equal(k.leistungen.length, leistungen.length);

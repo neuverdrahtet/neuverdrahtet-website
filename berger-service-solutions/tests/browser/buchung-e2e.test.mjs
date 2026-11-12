@@ -150,6 +150,21 @@ try {
     await page.close();
   });
 
+  await test('Projektfotos laden vollständig (Startseite, Über uns, Photovoltaik, Komplettsanierung)', async () => {
+    const page = await neueSeite({ viewport: { width: 1280, height: 900 } });
+    const http = []; page.on('response', (r) => { if (r.status() >= 400) http.push(`${r.status()} ${r.url()}`); });
+    for (const f of ['index.html', 'ueber-uns.html', 'photovoltaik-batteriespeicher.html', 'komplettsanierung.html']) {
+      await page.goto(`${basis}/${f}`);
+      const hoehe = await page.evaluate(() => document.body.scrollHeight);
+      for (let y = 0; y < hoehe; y += 500) { await page.evaluate((y) => scrollTo(0, y), y); await page.waitForTimeout(60); }
+      await page.waitForFunction(() => [...document.querySelectorAll('main img')].every((i) => i.complete), null, { timeout: 10000 });
+      const kaputt = await page.evaluate(() => [...document.querySelectorAll('main img')].filter((i) => !i.naturalWidth).map((i) => i.src));
+      assert.deepEqual(kaputt, [], f);
+    }
+    assert.deepEqual(http, []);
+    await page.close();
+  });
+
   await test('keine JavaScript-Fehler auf allen besuchten Seiten', async () => { assert.deepEqual(jsFehler, []); });
 } finally {
   await browser.close();

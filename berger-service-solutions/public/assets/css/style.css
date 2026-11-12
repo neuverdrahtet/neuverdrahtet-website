@@ -274,6 +274,21 @@ input:focus, select:focus, textarea:focus { border-color: var(--marke-3); outlin
 .bestaetigung .icon-gross { color: var(--ok); width: 3rem; height: 3rem; }
 .vorgang { font-family: ui-monospace, 'IBM Plex Mono', monospace; background: var(--hell); padding: 2px 8px; border-radius: 6px; }
 
+/* Projektfotos */
+.galerie { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .galerie { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .galerie { grid-template-columns: repeat(3, 1fr); } }
+.foto { margin: 0; position: relative; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius); overflow: hidden; }
+.foto img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; background: var(--hell); }
+.foto-hoch img { object-position: center 35%; }
+.foto a { display: block; }
+.foto figcaption { padding: 10px 14px; font-size: .92rem; font-weight: 600; color: var(--marke); border-top: 3px solid var(--akzent); }
+.vorher-nachher { display: grid; gap: 14px; }
+@media (min-width: 900px) { .vorher-nachher { grid-template-columns: 1fr 1fr; } }
+.vorher-nachher img { aspect-ratio: auto; }
+.vn-etikett { position: absolute; top: 12px; left: 12px; z-index: 1; background: var(--marke); color: #fff; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; }
+.vn-nachher { background: var(--akzent); color: var(--marke); }
+
 /* Kontakt, Rechtstexte */
 .kontakt-karte { background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius); padding: 22px; }
 .kontakt-karte h2 { font-size: 1.2rem; margin-top: 10px; }

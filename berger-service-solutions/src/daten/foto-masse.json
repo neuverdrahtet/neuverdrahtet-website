@@ -1,0 +1,67 @@
+{
+ "zaehlerschrank-verdrahtung": {
+  "b": 675,
+  "h": 1200,
+  "kb": 640
+ },
+ "zaehlerschrank-fertig": {
+  "b": 1200,
+  "h": 675,
+  "kb": 640
+ },
+ "pv-neubau-montage": {
+  "b": 900,
+  "h": 1200,
+  "kb": 640
+ },
+ "pv-einfamilienhaus-geruest": {
+  "b": 900,
+  "h": 1200,
+  "kb": 640
+ },
+ "pv-einfamilienhaus": {
+  "b": 554,
+  "h": 1200,
+  "kb": 554
+ },
+ "sanierung-bad-rohbau": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "sanierung-wohnraum-rohbau": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "elektro-leitungsfuehrung": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "sanierung-vorher": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "sanierung-nachher": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "sanierung-verputzt": {
+  "b": 1200,
+  "h": 554,
+  "kb": 640
+ },
+ "elektro-kuechenwand": {
+  "b": 1200,
+  "h": 900,
+  "kb": 640
+ },
+ "rueckbau-decke-offen": {
+  "b": 1200,
+  "h": 900,
+  "kb": 640
+ }
+}
