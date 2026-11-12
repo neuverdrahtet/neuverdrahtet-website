@@ -20,10 +20,16 @@ const LISTE = [
   { id: 'rueckbau-decke-offen', alt: 'Entkernter Raum mit entfernter Deckenverkleidung, freiliegender Holzlattung und Dampfbremse', titel: 'Rückbau: Decke geöffnet', leistungen: ['rueckbau-entkernung', 'komplettsanierung', 'trockenbau-innenausbau'] },
   { id: 'boden-holzdielen-tuer', alt: 'Renovierter Raum mit dunklem Holzdielenboden, weißen Sockelleisten und Balkontür', titel: 'Dunkler Dielenboden mit Sockelleisten', leistungen: ['bodenlegearbeiten', 'wohnungssanierung', 'renovierung-mieterwechsel'] },
   { id: 'boden-holzdielen-fenster', alt: 'Heller Raum mit zwei bodentiefen Fenstern und durchgehend verlegtem dunklem Holzboden', titel: 'Bodenbelag nach der Renovierung', leistungen: ['bodenlegearbeiten', 'renovierung-mieterwechsel'] },
+  { id: 'boden-wohnraum-gross', alt: 'Großer leerer Wohnraum mit durchgehend verlegtem dunklem Holzboden, weißen Sockelleisten und bodentiefen Fenstertüren', titel: 'Dielenboden im Wohnraum', leistungen: ['bodenlegearbeiten', 'wohnungssanierung', 'renovierung-mieterwechsel'] },
+  { id: 'boden-wohnzimmer-balkon', alt: 'Wohnzimmer mit dunklem Holzboden vor zwei Balkon-Fenstertüren', titel: 'Wohnzimmer nach der Renovierung', leistungen: ['bodenlegearbeiten', 'renovierung-mieterwechsel'] },
+  { id: 'boden-flur-uebergaenge', alt: 'Flur mit durchgehendem dunklem Holzboden, sauberen Übergängen in die angrenzenden Räume und weißen Sockelleisten', titel: 'Durchgehender Boden ohne Übergangsschienen', leistungen: ['bodenlegearbeiten'] },
   { id: 'raum-strukturwand', alt: 'Renovierter Raum mit Strukturwand aus Wellenpaneelen, weißen Wänden und dunklem Holzboden', titel: 'Wandgestaltung und Boden', leistungen: ['bodenlegearbeiten', 'maler-tapezierarbeiten', 'trockenbau-innenausbau', 'wohnungssanierung'] },
   { id: 'bad-dusche', alt: 'Modernisiertes Duschbad mit weißen Wandfliesen, Falttüren-Duschabtrennung und Waschtisch mit Unterschrank', titel: 'Duschbad nach der Modernisierung', leistungen: ['badsanierung', 'fliesenarbeiten', 'wohnungssanierung'] },
   { id: 'bad-waschtisch', alt: 'Waschtisch vor gefliestem Vorwandelement mit Ablage, Spiegel mit Beleuchtung und Steckdosen außerhalb des Spritzbereichs', titel: 'Vorwand mit Ablage und Waschtisch', leistungen: ['badsanierung', 'fliesenarbeiten'] },
   { id: 'bad-wc', alt: 'Wand-WC vor weiß gefliester Vorwand, großformatige dunkle Bodenfliesen und Handtuchheizkörper', titel: 'Wand-WC und großformatige Bodenfliesen', leistungen: ['badsanierung', 'fliesenarbeiten'] },
+  { id: 'bad-bodengleich-uebersicht', alt: 'Großes Bad mit bodengleicher Dusche, Glaswand, Mosaikstreifen, großformatigen dunklen Bodenfliesen und Waschtisch mit Unterschrank', titel: 'Bad mit bodengleicher Dusche', leistungen: ['badsanierung', 'fliesenarbeiten', 'wohnungssanierung'] },
+  { id: 'bad-bodengleiche-dusche', alt: 'Bodengleiche Dusche mit Duschrinne, Regendusche vor Mosaikstreifen und Glas-Duschwand', titel: 'Bodengleiche Dusche mit Rinne', leistungen: ['badsanierung', 'fliesenarbeiten'] },
+  { id: 'bad-walk-in-dusche', alt: 'Walk-in-Dusche mit Glaswand, großformatigen weißen Wandfliesen und dunklen Bodenfliesen vor einem Fenster', titel: 'Walk-in-Dusche', leistungen: ['badsanierung'] },
   { id: 'bad-uebersicht', alt: 'Kompaktes Duschbad mit Waschtisch, Spiegel und Duschabtrennung aus Glas', titel: 'Kompaktes Duschbad', leistungen: ['badsanierung'] },
   { id: 'sanierung-verputzt', alt: 'Sanierter Raum mit glatt verputzten Wänden, gespachtelter Decke und gesetzten Elektrodosen', titel: 'Verputzt und bereit für Boden und Anstrich', leistungen: ['trockenbau-innenausbau', 'maler-tapezierarbeiten', 'wohnungssanierung'] },
 ];
@@ -41,4 +47,4 @@ export const VORHER_NACHHER = {
 };
 
 /** Reihenfolge der Galerie auf Startseite und „Über uns“. */
-export const GALERIE_START = ['zaehlerschrank-verdrahtung', 'pv-stehfalzdach-abend', 'bad-dusche', 'elektro-leitungsfuehrung', 'boden-holzdielen-tuer', 'pv-speicher-wechselrichter', 'zaehlerschrank-fertig', 'raum-strukturwand', 'rueckbau-decke-offen'];
+export const GALERIE_START = ['zaehlerschrank-verdrahtung', 'pv-stehfalzdach-abend', 'bad-bodengleich-uebersicht', 'elektro-leitungsfuehrung', 'boden-wohnraum-gross', 'pv-speicher-wechselrichter', 'zaehlerschrank-fertig', 'raum-strukturwand', 'rueckbau-decke-offen'];

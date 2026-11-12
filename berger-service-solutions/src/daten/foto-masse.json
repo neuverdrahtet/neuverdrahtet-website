@@ -108,5 +108,35 @@
   "b": 1400,
   "h": 1050,
   "kb": 640
+ },
+ "bad-bodengleich-uebersicht": {
+  "b": 1400,
+  "h": 1867,
+  "kb": 640
+ },
+ "bad-bodengleiche-dusche": {
+  "b": 1400,
+  "h": 1867,
+  "kb": 640
+ },
+ "bad-walk-in-dusche": {
+  "b": 1400,
+  "h": 1867,
+  "kb": 640
+ },
+ "boden-flur-uebergaenge": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "boden-wohnzimmer-balkon": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "boden-wohnraum-gross": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
  }
 }
