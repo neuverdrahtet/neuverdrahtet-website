@@ -431,6 +431,15 @@
           <span class="pill">Dokumentierte Prüfungen</span>
           <span class="pill">Persönlicher Ansprechpartner</span>
         </div>
+        <div class="plz-check">
+          <p class="plz-check-label">Liegt Ihre Adresse im Einsatzgebiet?</p>
+          <form id="plz-check-form">
+            <input type="text" id="plz-check-input" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="PLZ, z. B. 45127" aria-label="Postleitzahl">
+            <button type="submit" class="btn btn-outline btn-sm">Prüfen</button>
+          </form>
+          <p id="plz-check-result" class="plz-check-result" aria-live="polite"></p>
+          <p class="plz-check-note">Die Prüfung läuft vollständig im Browser. Es werden keine Daten übertragen.</p>
+        </div>
       </div>
     </div>
   </section>
@@ -540,6 +549,49 @@
             <li>Installation nach DIN 14676</li><li>Fachgerechte Platzierung</li><li>Wartung &amp; Funktionsprüfung</li><li>Batteriewechsel &amp; Dokumentation</li><li>Nachrüstung im Bestand</li><li>Beratung zur Rauchmelderpflicht NRW</li>
           </ul>
           <span class="more">Rauchwarnmelder entdecken →</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-alt" id="schnell-anfragen">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Ohne Umweg</p>
+        <h2>Schnell anfragen.</h2>
+        <p>Für diese Leistungen reicht meist eine kurze Beschreibung — Rückmeldung in der Regel am nächsten Werktag, Terminbestätigung nach Kalenderabgleich.</p>
+      </div>
+      <div class="quick-grid">
+        <a class="quick-tile" href="fehlerdiagnose.html"><span class="tag">Planbar</span><h3>Elektroreparatur &amp; Störungsbeseitigung</h3><span class="more">Anfragen →</span></a>
+        <a class="quick-tile" href="prueftechnik-dguv-v3.html"><span class="tag">Planbar</span><h3>DGUV-V3-Prüfung</h3><span class="more">Anfragen →</span></a>
+        <a class="quick-tile" href="prueftechnik-vde-pruefungen.html"><span class="tag">Planbar</span><h3>E-Check &amp; Elektroprüfung nach DIN VDE</h3><span class="more">Anfragen →</span></a>
+        <a class="quick-tile" href="waermepumpenwartung.html"><span class="tag">Planbar</span><h3>Wärmepumpenwartung</h3><span class="more">Anfragen →</span></a>
+        <a class="quick-tile" href="klimaanlagenwartung.html"><span class="tag">Planbar</span><h3>Klimaanlagenwartung</h3><span class="more">Anfragen →</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="fuer-wen">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="eyebrow">Für wen wir arbeiten</p>
+        <h2>Privat, Hausverwaltung oder Gewerbe.</h2>
+      </div>
+      <div class="audience-grid">
+        <a class="audience-tile" href="privatkunden.html">
+          <h3>Privatkunden</h3>
+          <p>Eigentümer und Mieter mit Reparatur-, Prüf- oder Renovierungsbedarf — vom Störungstermin bis zur Elektrosanierung.</p>
+          <span class="more">Leistungen ansehen →</span>
+        </a>
+        <a class="audience-tile" href="geschaeftskunden.html">
+          <h3>Vermieter &amp; Hausverwaltungen</h3>
+          <p>Objektbetreuung, Mieterwechsel, Prüfungen und Wartungen mit festen Intervallen und dokumentierten Nachweisen.</p>
+          <span class="more">Für Hausverwaltungen →</span>
+        </a>
+        <a class="audience-tile" href="geschaeftskunden.html">
+          <h3>Gewerbe</h3>
+          <p>DGUV-V3-Prüfungen, Wartungsverträge, Fehlerdiagnose und Umbauten — planbar und dokumentiert.</p>
+          <span class="more">Für Gewerbekunden →</span>
         </a>
       </div>
     </div>
@@ -700,5 +752,6 @@
 
 <div class="contact-fab"></div>
 <script src="assets/script.min.js" defer></script>
+<script src="assets/plz-check.js" defer></script>
 </body>
 </html>
