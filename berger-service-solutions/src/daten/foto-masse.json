@@ -63,5 +63,50 @@
   "b": 1200,
   "h": 900,
   "kb": 640
+ },
+ "pv-speicher-wechselrichter": {
+  "b": 1024,
+  "h": 1180,
+  "kb": 640
+ },
+ "pv-stehfalzdach-abend": {
+  "b": 1080,
+  "h": 1350,
+  "kb": 640
+ },
+ "boden-holzdielen-tuer": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "boden-holzdielen-fenster": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "raum-strukturwand": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "bad-dusche": {
+  "b": 1400,
+  "h": 1867,
+  "kb": 640
+ },
+ "bad-waschtisch": {
+  "b": 1400,
+  "h": 1867,
+  "kb": 640
+ },
+ "bad-wc": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
+ },
+ "bad-uebersicht": {
+  "b": 1400,
+  "h": 1050,
+  "kb": 640
  }
 }

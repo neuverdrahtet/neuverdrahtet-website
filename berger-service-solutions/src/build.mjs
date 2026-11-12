@@ -138,7 +138,7 @@ function startseite() {
   <p class="unterzeile">Standardleistungen mit planbarer Dauer buchen Sie ohne Umweg. Die Bestätigung erfolgt nach Kalenderabgleich.</p>
   <div class="raster raster-3">${direkt.map(karte).join('')}</div>
 </div></section>
-${galerie(GALERIE_START.map((id) => FOTO[id]), 'Einblicke in unsere Arbeit', 'Echte Fotos von unseren Baustellen: Zählerschränke, Photovoltaik, Elektroinstallation und Sanierung.')}
+${galerie(GALERIE_START.map((id) => FOTO[id]), 'Einblicke in unsere Arbeit', 'Echte Fotos von unseren Baustellen: Zählerschränke, Photovoltaik mit Speicher, Elektroinstallation, Bad, Boden und Sanierung.')}
 ${vorherNachherHtml()}
 <section class="abschnitt" aria-labelledby="warum-titel"><div class="huelle">
   <h2 id="warum-titel">Warum ein Betrieb für mehrere Gewerke?</h2>
@@ -477,7 +477,7 @@ function ueberUns() {
 <h2>Referenzen</h2><p>Die Fotos auf dieser Website stammen von eigenen Baustellen. Ausführliche Projektberichte mit Ort und Umfang veröffentlichen wir nur mit Zustimmung der Auftraggeber; dieser Bereich wird ergänzt, sobald freigegebene Berichte vorliegen.</p>
 <h2>Qualifikationen</h2><p>Angaben zu Handwerksrolleneintragungen, Zertifizierungen und Versicherungen veröffentlichen wir hier nach Abschluss der Prüfung vollständig und mit Nachweis.</p>
 </div></section>
-${galerie(FOTOS, 'Fotos von unseren Baustellen', 'Elektroinstallation, Zählerschränke, Photovoltaik, Rückbau und Sanierung.')}
+${galerie(FOTOS, 'Fotos von unseren Baustellen', 'Elektroinstallation, Zählerschränke, Photovoltaik, Bad, Boden, Rückbau und Sanierung.')}
 ${vorherNachherHtml()}
 ${ctaBand()}`;
   seite({ pfad: 'ueber-uns.html', titel: 'Über uns – Handwerk. Service. Lösungen.', beschreibung: 'BERGER SERVICE SOLUTIONS aus Essen verbindet Elektrotechnik, Renovierung, Objektservice und Entrümpelung – mit festen Abläufen und digitaler Dokumentation.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'AboutPage', name: 'Über BERGER SERVICE SOLUTIONS', about: { '@id': ORG['@id'] } }] });
