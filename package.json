@@ -9,7 +9,11 @@
     "test:rechnungsnummer-concurrency": "firebase emulators:exec --only firestore \"node firestore-tests/rechnungsnummer-concurrency.test.mjs\"",
     "test:browser-smoke": "node verwaltung/tests/browser-smoke.test.mjs",
     "test:unit": "node scripts/run-all-tests.mjs",
-    "test:all": "npm run test:unit && npm run test:rules && npm run test:storage-rules && npm run test:rechnungsnummer-concurrency"
+    "test:all": "npm run test:unit && npm run test:rules && npm run test:storage-rules && npm run test:rechnungsnummer-concurrency",
+    "build:bss": "node berger-service-solutions/src/build.mjs",
+    "test:bss": "node berger-service-solutions/tests/logik.test.mjs && node berger-service-solutions/tests/site-qualitaet.test.mjs",
+    "test:bss-browser": "node berger-service-solutions/tests/browser/buchung-e2e.test.mjs",
+    "start:bss": "node berger-service-solutions/tests/hilfen/server.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",

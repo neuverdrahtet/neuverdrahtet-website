@@ -1,0 +1,3 @@
+# Prototyp: Indexierung gesperrt, bis CONFIG.website.indexierbar = true
+User-agent: *
+Disallow: /

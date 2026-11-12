@@ -34,6 +34,7 @@ const TEST_VERZEICHNISSE = [
   'cloudflare-worker-ki-assistent/tests',
   'cloudflare-worker-ki-assistent-whatsapp/tests',
   'cloudflare-worker-kostenschaetzer/tests',
+  'berger-service-solutions/tests',
 ];
 
 function findeTestdateien(verzeichnis) {

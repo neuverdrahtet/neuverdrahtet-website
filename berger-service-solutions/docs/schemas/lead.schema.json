@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://www.berger-service-solutions.de/schemas/lead.schema.json",
+  "title": "BERGER SERVICE SOLUTIONS – Website-Lead (bss-lead/1)",
+  "description": "Payload, den die Online-Buchung an den Werkora-Lead-Endpunkt sendet. Erzeugt von public/assets/js/buchung-kern.mjs (baueLead). Dateien werden als multipart-Teile 'dateien' mitgesendet, der Lead selbst als Teil 'lead' (application/json).",
+  "type": "object",
+  "required": ["schemaVersion", "idempotenzSchluessel", "erstelltAm", "quelle", "vorgangsart", "leistung", "einsatzort", "kunde", "details", "termin", "einwilligungen", "dubletten", "spamSchutz"],
+  "properties": {
+    "schemaVersion": { "const": "bss-lead/1" },
+    "idempotenzSchluessel": { "type": "string", "description": "UUID je Formularsitzung; identischer Schlüssel = identischer Vorgang (Wiederholung nach Netzwerkfehler)." },
+    "erstelltAm": { "type": "string", "format": "date-time" },
+    "quelle": {
+      "type": "object", "required": ["kanal", "seite"],
+      "properties": { "kanal": { "enum": ["website", "whatsapp", "telefon", "email", "portal"] }, "seite": { "type": "string" }, "kampagne": { "type": ["object", "null"] } }
+    },
+    "vorgangsart": { "enum": ["buchung", "anfrage"], "description": "buchung = direkt buchbare Standardleistung mit vorläufigem Slot; anfrage = individuelles Projekt mit Besichtigung" },
+    "leistung": {
+      "type": "object", "required": ["slug", "name", "bereich", "prozess"],
+      "properties": { "slug": { "type": "string" }, "name": { "type": "string" }, "bereich": { "enum": ["elektro", "handwerk", "objekt", "rueckbau"] }, "prozess": { "enum": ["wartung", "service", "handwerk", "objekt", "rueckbau"] } }
+    },
+    "einsatzort": {
+      "type": "object", "required": ["strasse", "hausnummer", "plz", "ort", "einsatzgebiet"],
+      "properties": {
+        "strasse": { "type": "string" }, "hausnummer": { "type": "string" }, "plz": { "type": "string", "pattern": "^[0-9]{5}$" }, "ort": { "type": "string" }, "zusatz": { "type": ["string", "null"] },
+        "einsatzgebiet": { "type": "object", "properties": { "status": { "enum": ["im-gebiet", "ausserhalb", "manuell-pruefen", "ungueltig"] }, "zone": { "type": ["string", "null"] }, "luftlinieKm": { "type": ["number", "null"] }, "strasseKmGeschaetzt": { "type": ["number", "null"] }, "fahrzeitMinGeschaetzt": { "type": ["number", "null"] } } }
+      }
+    },
+    "rechnungsadresse": {
+      "type": ["object", "null"], "required": ["name", "strasse", "hausnummer", "plz", "ort"],
+      "properties": { "name": { "type": "string" }, "strasse": { "type": "string" }, "hausnummer": { "type": "string" }, "plz": { "type": "string" }, "ort": { "type": "string" } }
+    },
+    "kunde": {
+      "type": "object", "required": ["typ", "vorname", "nachname", "telefon", "email", "bevorzugterKontaktweg"],
+      "properties": { "typ": { "enum": ["privat", "vermieter", "hausverwaltung", "gewerbe"] }, "firma": { "type": ["string", "null"] }, "vorname": { "type": "string" }, "nachname": { "type": "string" }, "telefon": { "type": "string", "pattern": "^\\+[0-9]{8,15}$" }, "email": { "type": "string", "format": "email" }, "bevorzugterKontaktweg": { "enum": ["telefon", "email", "whatsapp"] } }
+    },
+    "details": {
+      "type": "object", "required": ["beschreibung"],
+      "properties": { "beschreibung": { "type": "string", "minLength": 15 }, "anzahlGeraete": { "type": ["integer", "null"] }, "anlage": { "type": ["string", "null"] }, "flaecheM2": { "type": ["number", "null"] } }
+    },
+    "termin": {
+      "type": "object", "required": ["art", "status"],
+      "properties": { "art": { "enum": ["slot", "wunsch"] }, "datum": { "type": ["string", "null"], "format": "date" }, "zeit": { "type": ["string", "null"] }, "zeitfenster": { "enum": ["egal", "vormittag", "nachmittag"] }, "dauerMinRichtwert": { "type": ["integer", "null"] }, "status": { "enum": ["vorlaeufig", "wunsch"] } }
+    },
+    "dateien": { "type": "array", "items": { "type": "object", "properties": { "name": { "type": "string" }, "typ": { "type": ["string", "null"] }, "groesseBytes": { "type": "integer" } } } },
+    "einwilligungen": {
+      "type": "object", "required": ["datenschutz", "whatsapp"],
+      "properties": { "datenschutz": { "type": "object" }, "whatsapp": { "type": "object" } }
+    },
+    "dubletten": {
+      "type": "object", "required": ["person", "email", "telefon", "adresse"],
+      "description": "SHA-256 der normalisierten Merkmale. Werkora gleicht serverseitig zusätzlich gegen Klartextwerte ab.",
+      "properties": { "person": { "type": "string" }, "email": { "type": ["string", "null"] }, "telefon": { "type": ["string", "null"] }, "adresse": { "type": ["string", "null"] } }
+    },
+    "spamSchutz": { "type": "object", "required": ["honeypot", "ausfuellzeitMs"], "properties": { "honeypot": { "type": "string" }, "ausfuellzeitMs": { "type": ["integer", "null"] } } }
+  }
+}
