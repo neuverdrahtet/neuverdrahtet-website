@@ -138,5 +138,55 @@
   "b": 1400,
   "h": 1050,
   "kb": 640
+ },
+ "bad-wanne-fenster": {
+  "b": 1024,
+  "h": 768,
+  "kb": 640
+ },
+ "dachgaube-einbaustrahler": {
+  "b": 600,
+  "h": 800,
+  "kb": 600
+ },
+ "bad-mosaik-doppelwaschtisch": {
+  "b": 800,
+  "h": 531,
+  "kb": 640
+ },
+ "bad-walk-in-dunkel": {
+  "b": 1080,
+  "h": 810,
+  "kb": 640
+ },
+ "bad-dachschraege": {
+  "b": 1080,
+  "h": 810,
+  "kb": 640
+ },
+ "neubau-fliesen-fensterfront": {
+  "b": 800,
+  "h": 518,
+  "kb": 640
+ },
+ "neubau-kuechenanschluesse": {
+  "b": 1080,
+  "h": 720,
+  "kb": 640
+ },
+ "neubau-fliesen-holzoptik": {
+  "b": 1080,
+  "h": 720,
+  "kb": 640
+ },
+ "boden-hell-zimmer": {
+  "b": 533,
+  "h": 800,
+  "kb": 533
+ },
+ "dachausbau-holzoptik": {
+  "b": 1080,
+  "h": 717,
+  "kb": 640
  }
 }

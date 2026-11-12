@@ -236,7 +236,7 @@ function leistungsseite(l) {
   </dl></aside>
 </div></section>
 <section class="abschnitt" id="leistungsumfang"><div class="huelle schmal"><h2>Leistungsumfang</h2>${liste(l.leistungen)}${unterseiten.length ? `<h3>Unsere Bodenbeläge im Detail</h3><div class="raster raster-2">${unterseiten.map(karte).join('')}</div>` : ''}</div></section>
-${galerie(fotosFuer([l.slug]), `${l.name}: Aus unseren Projekten`)}
+${galerie(fotosFuer([l.slug]).slice(0, 9), `${l.name}: Aus unseren Projekten`)}
 ${VORHER_NACHHER.leistungen.includes(l.slug) ? vorherNachherHtml() : ''}
 ${abschnitte}
 <section class="abschnitt abschnitt-hell"><div class="huelle schmal raster raster-2 ausgeglichen">
@@ -256,7 +256,7 @@ ${ctaBand(l.buchung === 'direkt' ? 'Wählen Sie einen Wunschtermin – wir best�
     url: absUrl(`${l.slug}.html`), provider: { '@id': ORG['@id'] },
     areaServed: { '@type': 'GeoCircle', geoMidpoint: { '@type': 'GeoCoordinates', latitude: CONFIG.einsatzgebiet.zentrum.lat, longitude: CONFIG.einsatzgebiet.zentrum.lon }, geoRadius: String(CONFIG.einsatzgebiet.radiusKm * 1000) },
     category: b.name,
-    ...(fotosFuer([l.slug]).length ? { image: fotosFuer([l.slug]).map((f) => absUrl(fotoPfad(f.id, 'gross'))) } : {}),
+    ...(fotosFuer([l.slug]).length ? { image: fotosFuer([l.slug]).slice(0, 9).map((f) => absUrl(fotoPfad(f.id, 'gross'))) } : {}),
     potentialAction: { '@type': 'ReserveAction', target: absUrl(buchungsLink(l)), name: l.buchung === 'direkt' ? 'Termin online buchen' : 'Angebot anfragen' },
   };
   seite({ pfad: `${l.slug}.html`, titel: l.title, beschreibung: l.description, inhalt, krumen, prioritaet: l.istHub ? 0.9 : 0.8, jsonld: [service, brotkrumenJsonLd(krumen), faqJsonLd(l.faq)] });
@@ -477,7 +477,7 @@ function ueberUns() {
 <h2>Referenzen</h2><p>Die Fotos auf dieser Website stammen von eigenen Baustellen. Ausführliche Projektberichte mit Ort und Umfang veröffentlichen wir nur mit Zustimmung der Auftraggeber; dieser Bereich wird ergänzt, sobald freigegebene Berichte vorliegen.</p>
 <h2>Qualifikationen</h2><p>Angaben zu Handwerksrolleneintragungen, Zertifizierungen und Versicherungen veröffentlichen wir hier nach Abschluss der Prüfung vollständig und mit Nachweis.</p>
 </div></section>
-${galerie(FOTOS, 'Fotos von unseren Baustellen', 'Elektroinstallation, Zählerschränke, Photovoltaik, Bad, Boden, Rückbau und Sanierung.')}
+${galerie([...GALERIE_START.map((id) => FOTO[id]), ...['bad-mosaik-doppelwaschtisch', 'dachgaube-einbaustrahler', 'dachausbau-holzoptik'].map((id) => FOTO[id])], 'Fotos von unseren Baustellen', 'Elektroinstallation, Zählerschränke, Photovoltaik, Bad, Boden, Rückbau und Sanierung.')}
 ${vorherNachherHtml()}
 ${ctaBand()}`;
   seite({ pfad: 'ueber-uns.html', titel: 'Über uns – Handwerk. Service. Lösungen.', beschreibung: 'BERGER SERVICE SOLUTIONS aus Essen verbindet Elektrotechnik, Renovierung, Objektservice und Entrümpelung – mit festen Abläufen und digitaler Dokumentation.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'AboutPage', name: 'Über BERGER SERVICE SOLUTIONS', about: { '@id': ORG['@id'] } }] });
