@@ -104,20 +104,17 @@
     function renderSummary() {
       if (!summaryBox) return;
       var data = new FormData(form);
+      var termin = [data.get('termin_datum'), data.get('termin_zeitfenster')].filter(Boolean).join(', ');
       var rows = [
         ['Leistung', data.get('service')],
         ['Adresse', [data.get('strasse'), data.get('plz'), data.get('ort')].filter(Boolean).join(', ')],
-        ['Wunschtermin', data.get('termin')],
+        ['Wunschtermin', termin],
         ['Beschreibung', data.get('message')],
-        ['Firma', data.get('firma')],
-        ['Ansprechpartner', data.get('name')],
+        ['Name', data.get('name')],
         ['Telefon', data.get('phone')],
         ['E-Mail', data.get('email')],
+        ['Firma', data.get('firma')],
       ];
-      var fileInput = form.querySelector('input[name="attachment"]');
-      if (fileInput && fileInput.files && fileInput.files.length) {
-        rows.push(['Dateien', fileInput.files.length + ' Datei(en) ausgewählt']);
-      }
       summaryBox.innerHTML = rows.filter(function (r) { return r[1]; }).map(function (r) {
         return '<div class="wizard-summary-row"><span>' + r[0] + '</span><strong></strong></div>'
           .replace('<strong></strong>', '<strong>' + String(r[1]).replace(/</g, '&lt;') + '</strong>');

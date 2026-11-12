@@ -634,8 +634,12 @@
     <div class="wrap" style="max-width:640px;">
       <div class="section-head">
         <p class="eyebrow">Anfrageformular</p>
-        <h2>Technischen Service anfragen.</h2>
-        <p>Grundangaben, Leistungsart, technische Zusatzangaben und optionaler Datei-Upload. Oder direkt <a href="tel:+4920189040405" style="color:var(--orange-2);">anrufen</a> oder <a href="https://wa.me/4920189040405" target="_blank" rel="noopener" style="color:#25D366;font-weight:600;">per WhatsApp schreiben</a> — Rückmeldung i.&nbsp;d.&nbsp;R. am nächsten Werktag.</p>
+        <h2>Jetzt anfragen.</h2>
+        <p>Grundangaben, Leistungsart und Wunschtermin in wenigen Schritten — Rückmeldung i.&nbsp;d.&nbsp;R. am nächsten Werktag. Oder direkt anrufen oder per WhatsApp schreiben.</p>
+        <div class="hero-actions" style="margin-top:18px;">
+          <a class="btn btn-outline" href="tel:+4920189040405">📞 Jetzt anrufen</a>
+          <a class="btn btn-whatsapp" href="https://wa.me/4920189040405" target="_blank" rel="noopener">Per WhatsApp schreiben</a>
+        </div>
       </div>
       <div class="wizard-progress" aria-hidden="true"></div>
       <form class="ajax-form wizard" action="https://formspree.io/f/mvzverea" method="POST" enctype="multipart/form-data" data-lead-source="homepage-kontaktformular" data-werkora-lead="true">
@@ -695,32 +699,33 @@
               </select>
             </div>
           </div>
-          <div class="field" data-service-group="waermepumpe" hidden>
-            <p class="field-hint" style="margin-top:0;">Falls vorhanden: Typenschildfoto unten hochladen — hilft bei der Einschätzung.</p>
-          </div>
-
           <div class="field"><label for="h-anlagenart">Anlagenart (optional)</label><input type="text" id="h-anlagenart" name="anlagenart" placeholder="z. B. Unterverteilung, Klimagerät ..."></div>
-          <div class="form-row">
-            <div class="field"><label for="h-termin">Gewünschter Termin</label><input type="text" id="h-termin" name="termin" placeholder="z. B. nächste 2 Wochen"></div>
-          </div>
-          <div class="field"><label for="h-beschreibung">Beschreibung</label><textarea id="h-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
 
-          <div class="upload-box">
-            📎 <b>Fotos, Typenschild, Prüfliste oder Dokumente</b> hochladen — hilft bei der ersten Einschätzung.
-            <div style="margin-top:8px;"><input type="file" name="attachment" multiple aria-label="Dateien hochladen" style="font-size:12.5px;"></div>
+          <h4 class="wizard-substep-title">Wunschtermin</h4>
+          <div class="form-row">
+            <div class="field"><label for="h-termin-datum">Wunschdatum</label><input type="date" id="h-termin-datum" name="termin_datum"></div>
+            <div class="field">
+              <label for="h-termin-zeitfenster">Zeitfenster</label>
+              <select id="h-termin-zeitfenster" name="termin_zeitfenster">
+                <option value="">Flexibel</option>
+                <option>Vormittags (8–12 Uhr)</option>
+                <option>Nachmittags (12–17 Uhr)</option>
+              </select>
+            </div>
           </div>
+          <p class="field-hint">Das ist ein Terminwunsch — die Bestätigung erfolgt nach Kalenderabgleich.</p>
+
+          <div class="field"><label for="h-beschreibung">Beschreibung</label><textarea id="h-beschreibung" name="message" rows="4" placeholder="Kurz beschreiben, worum es geht ..."></textarea></div>
         </div>
 
         <div class="wizard-step" data-step="4">
           <h3 class="wizard-step-title">4. Ihre Kontaktdaten</h3>
           <div class="form-row">
-            <div class="field"><label for="h-firma">Firma</label><input type="text" id="h-firma" name="firma"></div>
-            <div class="field"><label for="h-ansprechpartner">Ansprechpartner *</label><input type="text" id="h-ansprechpartner" name="name" required></div>
-          </div>
-          <div class="form-row">
+            <div class="field"><label for="h-ansprechpartner">Name *</label><input type="text" id="h-ansprechpartner" name="name" required></div>
             <div class="field"><label for="h-telefon">Telefon</label><input type="tel" id="h-telefon" name="phone"></div>
-            <div class="field"><label for="h-email">E-Mail *</label><input type="email" id="h-email" name="email" required></div>
           </div>
+          <div class="field"><label for="h-email">E-Mail *</label><input type="email" id="h-email" name="email" required></div>
+          <div class="field"><label for="h-firma">Firma <span class="field-hint-inline">(optional, nur bei gewerblichen Anfragen)</span></label><input type="text" id="h-firma" name="firma"></div>
         </div>
 
         <div class="wizard-step" data-step="5">
@@ -738,7 +743,7 @@
           <button type="button" class="btn btn-outline" data-wizard-back hidden>← Zurück</button>
           <span style="flex:1"></span>
           <button type="button" class="btn btn-primary" data-wizard-next>Weiter →</button>
-          <button type="submit" class="btn btn-primary" hidden>Service anfragen</button>
+          <button type="submit" class="btn btn-primary" hidden>Anfrage senden</button>
         </div>
       </form>
     </div>
