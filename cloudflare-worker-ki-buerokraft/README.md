@@ -301,6 +301,20 @@ täglich wiederholter Spam für dieselbe überfällige Rechnung).
   unter **Worker → Einstellungen → Trigger-Ereignisse → Cron-Trigger hinzufügen** manuell
   `0 6 * * *` eintragen.
 
+### Gesundheitscheck: fehlender/ungültiger API_KEY (seit 13.11.2026)
+
+Derselbe tägliche `0 6 * * *`-Lauf prüft zusätzlich, ob `API_KEY` überhaupt gesetzt und
+mind. 32 Zeichen lang ist (siehe Maßnahme 4/Token-Härtung). Dieser Cron-Lauf selbst
+braucht den `API_KEY` nicht (er läuft intern, nicht über den HTTP-Pfad) - genau deshalb
+blieb eine fehlende/zu kurze Konfiguration bisher tagelang unbemerkt, bis zufällig
+jemand versuchte, den Custom Connector oder die REST-API zu benutzen (passiert am
+13.11.2026, als der `API_KEY`-Secret versehentlich in Cloudflare gelöscht wurde).
+
+Jetzt wird bei fehlendem/zu kurzem `API_KEY` eine hochpriore Werkora-Aufgabe
+("🚨 KI-Bürokraft: API_KEY fehlt/ungültig") angelegt und eine Push-Benachrichtigung an
+alle Admin-/Büro-Rollen geschickt - einmal pro Kalendertag, solange das Problem besteht
+(kein Mehrfach-Spam am selben Tag, aber tägliche Erinnerung bis es behoben ist).
+
 ## Automatischer Büroablauf (Mo-Fr, 08/12/16 Uhr)
 
 Derselbe `scheduled()`-Handler übernimmt zusätzlich drei weitere, unabhängige

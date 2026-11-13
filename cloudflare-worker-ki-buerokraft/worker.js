@@ -3760,6 +3760,33 @@ export default {
       const ctx = { accessToken, projectId, ip: '' };
       const heute = todayISO();
 
+      // Gesundheitscheck: API_KEY (mind. 32 Zeichen, siehe Maßnahme 4) wird
+      // NUR auf dem HTTP-Pfad geprüft (errorResponse('SERVER_MISCONFIGURED', ...)
+      // weiter unten) - dieser interne Cron-Lauf braucht ihn gar nicht und würde
+      // eine fehlende/zu kurze Konfiguration sonst erst bemerken, wenn jemand
+      // zufällig versucht, den Custom Connector/die REST-API zu nutzen (genau
+      // das führte am 13.11.2026 zu einem tagelang unbemerkten Totalausfall).
+      // Eine Aufgabe pro Kalendertag, damit es bis zur Behebung täglich erinnert,
+      // aber nicht mehrfach am selben Tag spammt.
+      if (!env.API_KEY || env.API_KEY.length < 32) {
+        const healthId = `health-api-key-${heute}`;
+        const bereitsGemeldet = await firestoreGet({ accessToken, projectId, collection: 'aufgaben', id: healthId });
+        if (!bereitsGemeldet) {
+          await firestoreCreate({
+            accessToken, projectId, collection: 'aufgaben', id: healthId,
+            data: {
+              id: healthId, titel: '🚨 KI-Bürokraft: API_KEY fehlt/ungültig', prioritaet: 'hoch', status: 'offen',
+              beschreibung: 'Der KI-Bürokraft-Server (Custom Connector/REST-API) ist nicht erreichbar, weil API_KEY in Cloudflare fehlt oder zu kurz ist (mind. 32 Zeichen). Im Cloudflare Dashboard unter Workers & Pages → neuverdrahtet-ki-buerokraft → Settings → Variables and Secrets einen neuen API_KEY ALS SECRET setzen und denselben Wert im Custom Connector (Authorization: Bearer ...) hinterlegen.',
+              faelligAm: heute, kundeId: '', projektId: '', zugewiesenAn: '', createdAt: new Date().toISOString(), erledigtAm: '',
+            },
+          });
+          await sendBueroPush(serviceAccount, projectId, accessToken, {
+            title: '🚨 KI-Bürokraft nicht erreichbar',
+            body: 'API_KEY fehlt oder ist zu kurz - Custom Connector/REST-API funktionieren nicht. Details in der neuen Aufgabe.',
+          });
+        }
+      }
+
       const rechnungen = await firestoreList({ accessToken, projectId, collection: 'rechnungen' });
       for (const r of rechnungen) {
         const ueberfaellig = RECHNUNG_OFFEN_STATUS.includes(r.status) && r.faelligAm && r.faelligAm < heute;
