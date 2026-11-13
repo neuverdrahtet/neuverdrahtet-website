@@ -424,6 +424,24 @@ export async function trashMessage(id) {
   });
 }
 
+/** Archiviert eine Nachricht wie in Gmail (entfernt nur das INBOX-Label, Mail bleibt erhalten/weiter auffindbar). */
+export async function archiveMessage(id) {
+  return apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/modify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ removeLabelIds: ['INBOX'] }),
+  });
+}
+
+/** Holt eine archivierte Nachricht zurück in den Posteingang (setzt das INBOX-Label wieder). */
+export async function unarchiveMessage(id) {
+  return apiFetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(id)}/modify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ addLabelIds: ['INBOX'] }),
+  });
+}
+
 /** Liest die in Gmail hinterlegte Standard-Signatur der primären Absenderadresse aus (HTML). */
 export async function getSignature() {
   const data = await apiFetch('https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs');

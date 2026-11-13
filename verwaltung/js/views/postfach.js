@@ -51,6 +51,21 @@ async function loeschEmail(id) {
   await remove('emails', id);
 }
 
+// Archivieren entspricht Gmails "Archivieren" (nur das INBOX-Label wird
+// entfernt/gesetzt) - im Unterschied zu loeschEmail() bleibt die Mail dabei
+// vollständig erhalten, verschwindet nur aus der Inbox-Ansicht.
+async function archivEmail(message) {
+  await google.archiveMessage(message.id);
+  message.archiviert = true;
+  await put('emails', message);
+}
+
+async function unarchivEmail(message) {
+  await google.unarchiveMessage(message.id);
+  message.archiviert = false;
+  await put('emails', message);
+}
+
 function formatSize(bytes) {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -113,6 +128,7 @@ export async function render(container) {
     let query = '';
     let richtungFilter = 'alle';
     let kategorieFilter = 'alle';
+    let zeigeArchiv = false;
     let selectedId = null;
     const bulkSelect = createBulkSelect('emails', { label: 'E-Mails', deleteFn: loeschEmail });
 
@@ -120,6 +136,7 @@ export async function render(container) {
       <div class="view-header">
         <h1>📧 Postfach</h1>
         <div class="actions">
+          <button class="btn" id="btn-archiv-toggle">📥 Archiv</button>
           <button class="btn" id="btn-sync">🔄 Neue E-Mails holen</button>
           <button class="btn btn-primary" id="btn-compose">✏️ Neue E-Mail</button>
         </div>
@@ -153,7 +170,8 @@ export async function render(container) {
     function matchesFilters(m) {
       const richtungOk = richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter;
       const kategorieOk = kategorieFilter === 'alle' || m.kategorie === kategorieFilter;
-      return richtungOk && kategorieOk;
+      const archivOk = zeigeArchiv ? !!m.archiviert : !m.archiviert;
+      return richtungOk && kategorieOk && archivOk;
     }
 
     function filtered() {
@@ -179,22 +197,58 @@ export async function render(container) {
         `<label class="postfach-select-all-row"><input type="checkbox" class="bulk-select-all"> Alle auswählen</label>` +
         list.map((m) => {
         const kat = EMAIL_KATEGORIEN.find((k) => k.id === m.kategorie);
-        const katBadge = kat ? `<span class="badge ${kat.badge}" title="${escapeHtml(kat.titel)}">${kat.icon} ${escapeHtml(kat.titel)}</span>` : '';
+        const katBadge = kat ? `<span class="badge ${kat.badge} pf-row-badge" title="${escapeHtml(kat.titel)}">${kat.icon}</span>` : '';
         return `
         <div class="postfach-row ${m.unread ? 'unread' : ''} ${m.id === selectedId ? 'active' : ''}" data-id="${m.id}">
           <div class="postfach-row-top">
             <input type="checkbox" class="bulk-select-row" data-id="${m.id}" ${bulkSelect.selected.has(m.id) ? 'checked' : ''}>
-            <strong>${escapeHtml((m.from || '').split('<')[0].trim() || m.from)}</strong>
-            <span class="text-mute">${escapeHtml(formatDateTime(m.dateSort) || m.date)}</span>
+            <span class="${m.unread ? 'pf-unread-dot' : 'pf-unread-dot-spacer'}" title="${m.unread ? 'Ungelesen' : ''}"></span>
+            <strong class="postfach-row-sender">${escapeHtml((m.from || '').split('<')[0].trim() || m.from)}</strong>
+            <span class="pf-row-hover-actions">
+              <button type="button" class="pf-row-action" data-action="archiv" data-id="${m.id}" title="${zeigeArchiv ? 'Zurück in Posteingang' : 'Archivieren'}">${zeigeArchiv ? '📤' : '📥'}</button>
+              <button type="button" class="pf-row-action" data-action="loeschen" data-id="${m.id}" title="Löschen">🗑️</button>
+            </span>
+            <span class="text-mute pf-row-date">${escapeHtml(formatDateTime(m.dateSort) || m.date)}</span>
           </div>
-          <div class="postfach-row-subject">${escapeHtml(m.subject)}</div>
-          ${katBadge ? `<div class="postfach-row-kategorie">${katBadge}</div>` : ''}
-          <div class="text-mute postfach-row-snippet">${escapeHtml((m.text || '').slice(0, 140))}</div>
+          <div class="postfach-row-subject-line">
+            ${katBadge}
+            <span class="pf-row-subject">${escapeHtml(m.subject)}</span>
+            <span class="pf-row-sep">–</span>
+            <span class="pf-row-snippet">${escapeHtml((m.text || '').slice(0, 140))}</span>
+          </div>
         </div>
       `;
       }).join('') + (!query && gefiltertGesamt > LISTE_STANDARD_LIMIT ? `<p class="hint">Zeigt die neuesten ${LISTE_STANDARD_LIMIT} E-Mails – zum Durchsuchen des gesamten Postfachs oben suchen.</p>` : '');
       listHost.querySelectorAll('.postfach-row').forEach((row) => {
         row.addEventListener('click', () => openMessage(row.dataset.id));
+      });
+      listHost.querySelectorAll('.pf-row-action').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const m = allEmails.find((x) => x.id === btn.dataset.id);
+          if (!m) return;
+          if (btn.dataset.action === 'archiv') {
+            try {
+              await (zeigeArchiv ? unarchivEmail(m) : archivEmail(m));
+              if (selectedId === m.id) {
+                selectedId = null;
+                detailHost.innerHTML = `<div class="empty-state">Wähle links eine E-Mail aus.</div>`;
+              }
+              renderList();
+            } catch (err) {
+              toast(`Archivieren fehlgeschlagen: ${err.message}`, 'danger');
+            }
+          } else if (btn.dataset.action === 'loeschen') {
+            if (!confirmDelete('Diese E-Mail wirklich unwiderruflich löschen? Sie wandert dabei auch in den Gmail-Papierkorb.')) return;
+            try {
+              await loeschEmail(m.id);
+              bulkSelect.selected.delete(m.id);
+              onBulkDeleted([m.id]);
+            } catch (err) {
+              toast(`Löschen fehlgeschlagen: ${err.message}`, 'danger');
+            }
+          }
+        });
       });
       bulkSelect.wire(listHost, { onChange: renderList, onDeleted: onBulkDeleted });
     }
@@ -310,6 +364,7 @@ export async function render(container) {
             <button class="btn" id="pf-task-btn">✅ Als Aufgabe anlegen</button>
             ${zeigeKundeVorschlag ? `<button class="btn" id="pf-kunde-btn">👤 Als neuen Kunden/Projekt anlegen</button>` : ''}
             ${full.kundeAngelegtId ? `<span class="badge badge-success">✅ Kunde/Projekt angelegt</span>` : ''}
+            <button class="btn" id="pf-archiv-btn">${full.archiviert ? '📤 Zurück in Posteingang' : '📥 Archivieren'}</button>
             <button class="btn btn-danger" id="pf-delete-btn">🗑️ Löschen</button>
           </div>
           <div class="actions" style="margin-top:6px">
@@ -402,6 +457,18 @@ export async function render(container) {
           const idx = allEmails.findIndex((m) => m.id === full.id);
           if (idx !== -1) allEmails[idx] = full;
         },
+      });
+      detailHost.querySelector('#pf-archiv-btn').addEventListener('click', async () => {
+        const btn = detailHost.querySelector('#pf-archiv-btn');
+        btn.disabled = true;
+        try {
+          await (full.archiviert ? unarchivEmail(full) : archivEmail(full));
+          toast(full.archiviert ? 'E-Mail archiviert' : 'E-Mail zurück in den Posteingang verschoben', 'success');
+          openMessage(full.id);
+        } catch (err) {
+          toast(`Archivieren fehlgeschlagen: ${err.message}`, 'danger');
+          btn.disabled = false;
+        }
       });
       detailHost.querySelector('#pf-delete-btn').addEventListener('click', async () => {
         if (!confirmDelete('Diese E-Mail wirklich unwiderruflich löschen? Sie wandert dabei auch in den Gmail-Papierkorb.')) return;
@@ -751,6 +818,14 @@ export async function render(container) {
     }
 
     container.querySelector('#btn-compose').addEventListener('click', () => openCompose());
+    const archivToggleBtn = container.querySelector('#btn-archiv-toggle');
+    archivToggleBtn.addEventListener('click', () => {
+      zeigeArchiv = !zeigeArchiv;
+      archivToggleBtn.textContent = zeigeArchiv ? '📬 Posteingang' : '📥 Archiv';
+      selectedId = null;
+      detailHost.innerHTML = `<div class="empty-state">Wähle links eine E-Mail aus.</div>`;
+      renderList();
+    });
     container.querySelector('#btn-sync').addEventListener('click', async () => {
       const btn = container.querySelector('#btn-sync');
       btn.disabled = true;

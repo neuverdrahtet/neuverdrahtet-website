@@ -1891,14 +1891,30 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
 }
 .postfach-row:hover { border-color: #46464f; }
 .postfach-row.active { border-color: var(--accent); background: rgba(var(--accent-rgb), 0.08); }
-.postfach-row.unread strong, .postfach-row.unread .postfach-row-subject { font-weight: 700; }
-.postfach-row-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
-.postfach-row-top strong { flex: 1; }
+.postfach-row.unread { background: rgba(var(--accent-rgb), 0.05); }
+.postfach-row.unread .postfach-row-sender, .postfach-row.unread .pf-row-subject { font-weight: 700; }
+.postfach-row-top { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.postfach-row-sender { flex-shrink: 0; max-width: 42%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .postfach-select-all-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-mute); padding: 2px 4px 6px; }
-.postfach-row-subject { font-size: 13px; margin: 2px 0; }
-.postfach-row-kategorie { margin: 2px 0; }
-.postfach-row-kategorie .badge { font-size: 10.5px; padding: 1px 7px; }
-.postfach-row-snippet { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pf-unread-dot, .pf-unread-dot-spacer { width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; }
+.pf-unread-dot { background: var(--accent); }
+.pf-row-hover-actions { display: none; align-items: center; gap: 2px; flex-shrink: 0; margin-left: auto; }
+.postfach-row:hover .pf-row-hover-actions { display: flex; }
+.postfach-row:hover .pf-row-date { display: none; }
+.pf-row-date { flex-shrink: 0; margin-left: auto; }
+.pf-row-action {
+  background: none; border: none; cursor: pointer; font-size: 13px; padding: 2px 5px;
+  border-radius: 5px; line-height: 1;
+}
+.pf-row-action:hover { background: var(--border); }
+.postfach-row-subject-line {
+  display: flex; align-items: baseline; gap: 6px; margin: 3px 0 0;
+  overflow: hidden; white-space: nowrap;
+}
+.pf-row-badge { font-size: 11px; padding: 0 3px; flex-shrink: 0; }
+.pf-row-subject { font-size: 13px; flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; }
+.pf-row-sep { color: var(--text-mute); flex-shrink: 0; }
+.pf-row-snippet { font-size: 12px; color: var(--text-mute); overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .postfach-detail {
   background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
   padding: 18px; min-height: 200px;
