@@ -99,11 +99,12 @@ GOOGLE_APPLICATION_CREDENTIALS=/pfad/zum/staging-service-account.json \
 
 ## Schritt 6: Verwaltungs-Software gegen Staging zeigen lassen
 
-Für echte Browser-/Login-Integrationstests (siehe Phase-10-Bericht, Abschnitt "Echte Integrationstests") muss die Verwaltungs-Software (`verwaltung/`) vorübergehend gegen das Staging-Firebase-Projekt und den Staging-Worker zeigen:
-- `verwaltung/js/firebase-config.js`: Staging-Projekt-Werte (Web-API-Key, Projekt-ID usw. aus Schritt 1.6).
-- In den App-Einstellungen: `aiWorkerUrl` auf die Staging-Worker-URL, `aiAppSecret` auf das in Schritt 2.3 gesetzte Staging-`APP_SECRET`.
+Für echte Browser-/Login-Integrationstests (siehe Phase-10-Bericht, Abschnitt "Echte Integrationstests") muss die Verwaltungs-Software (`verwaltung/`) vorübergehend gegen das Staging-Firebase-Projekt und den Staging-Worker zeigen. Seit dem 13.11.2026 geht das OHNE Code-Änderung und ohne Risiko, versehentlich produktiv auf Staging-Daten zu zeigen (oder umgekehrt):
 
-Empfehlung: dafür einen eigenen Lesezweig/eine eigene Vorschau-Bereitstellung nutzen (z.B. GitHub Pages Preview, Cloudflare Pages Preview-Deployment), NICHT die echte `neuverdrahtet.com`-Domain – siehe `ALLOWED_ORIGINS` in Schritt 2.1.
+1. **Firebase-Projekt:** `verwaltung/js/firebase-config.js` enthält bereits ein `firebaseConfigStaging`-Objekt mit `<PLATZHALTER>`-Werten – diese einmalig durch die echten Werte aus der Firebase-Konsole des Staging-Projekts ersetzen (Web-App anlegen, siehe Schritt 1.6). Aktiviert wird es dann rein über die URL: `https://neuverdrahtet-staging.web.app/?staging=1` (bleibt per `localStorage` aktiv, bis `?staging=0` aufgerufen wird oder die Browser-Daten gelöscht werden). Auf den echten Produktionsdomains (`neuverdrahtet.com`/`www.neuverdrahtet.com`) greift das Flag absichtlich NIE, selbst wenn es versehentlich gesetzt ist (siehe `PRODUKTIONS_HOSTNAMEN`-Prüfung in der Datei) – dieselbe Sperrlisten-Logik wie beim Seed-Skript (Schritt 5).
+2. **Worker-URL/Secret:** in den App-Einstellungen (bereits bestehende UI, `einstellungen.js`) `aiWorkerUrl` auf die Staging-Worker-URL, `aiAppSecret` auf das in Schritt 2.3 gesetzte Staging-`APP_SECRET` setzen – keine Code-Änderung nötig, das war schon vorher über die UI konfigurierbar.
+
+Die Staging-Vorschau-Domain selbst (`https://neuverdrahtet-staging.web.app`, Firebase Hosting auf dem Staging-Projekt) ist bereits in Schritt 2.0 eingerichtet.
 
 ---
 
