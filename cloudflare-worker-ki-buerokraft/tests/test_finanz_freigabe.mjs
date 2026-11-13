@@ -205,4 +205,67 @@ await pruefe('F10 (REST): GET /approvals ohne gültigen API-Schlüssel wird abge
   assert(res.status === 401, `erwartet 401, war ${res.status}`);
 });
 
+// --- werkora_create_article / werkora_update_article (13.11.2026: Danny-
+// Vorgabe, Katalogpreise per KI pflegen - wie Rechnungen/Mahnungen über die
+// Freigabe-Engine abgesichert, keine sofortige Ausführung) ---
+
+await pruefe('F11: werkora_create_article legt nur eine Freigabe-Anfrage an, "katalog" bleibt LEER', async () => {
+  const res = await callWerkoraMcpTool('werkora_create_article', { name: 'Testkabel NYM-J 3x1,5', type: 'article', unit: 'm', purchase_price: 1.5, markup_percent: 20, sales_price: 1.8, trade: 'elektro' }, ctx);
+  const data = JSON.parse(res.content[0].text);
+  assert(data.approval_required === true, 'Antwort muss approval_required:true enthalten');
+  assert(typeof data.approval_id === 'string' && data.approval_id.length > 0, 'approval_id muss gesetzt sein');
+  const katalogVorher = [...firestoreDb.keys()].filter((k) => k.startsWith('katalog/'));
+  assert(katalogVorher.length === 0, 'vor Freigabe darf noch kein Katalogeintrag existieren');
+  global.__approvalIdF11 = data.approval_id;
+});
+
+await pruefe('F12: werkora_approve_action legt den Artikel aus F11 jetzt tatsächlich an, mit korrekten Feldern', async () => {
+  const res = await callWerkoraMcpTool('werkora_approve_action', { approval_id: global.__approvalIdF11 }, ctx);
+  assert(!res.isError, `Freigabe darf nicht fehlschlagen: ${res.content?.[0]?.text}`);
+  const katalogDanach = [...firestoreDb.keys()].filter((k) => k.startsWith('katalog/'));
+  assert(katalogDanach.length === 1, 'nach Freigabe muss genau ein Katalogeintrag existieren');
+  const eintrag = firestoreDb.get(katalogDanach[0]);
+  assert(feldWert(eintrag, 'typ') === 'artikel', 'typ muss "artikel" sein');
+  assert(feldWert(eintrag, 'bezeichnung') === 'Testkabel NYM-J 3x1,5', 'bezeichnung muss übernommen werden');
+  assert(feldWert(eintrag, 'einkaufspreis') === 1.5, 'einkaufspreis muss übernommen werden');
+  assert(feldWert(eintrag, 'preis') === 1.8, 'preis (Verkaufspreis) muss übernommen werden');
+  assert(feldWert(eintrag, 'gewerk') === 'elektro', 'gewerk muss übernommen werden');
+  assert(feldWert(eintrag, 'steuersatz') === 19, 'steuersatz muss auf Standard 19 fallen, wenn nicht angegeben');
+  global.__artikelIdF12 = katalogDanach[0].split('/')[1];
+});
+
+await pruefe('F13: werkora_create_article ohne "name" liefert sofort einen Fehler, OHNE Freigabe-Anfrage anzulegen', async () => {
+  const anzahlFreigabenVorher = [...firestoreDb.keys()].filter((k) => k.startsWith('mcpFinanzFreigaben/')).length;
+  const res = await callWerkoraMcpTool('werkora_create_article', { purchase_price: 5 }, ctx);
+  assert(res.isError === true, 'ohne "name" muss die Anfrage fehlschlagen');
+  const anzahlFreigabenNachher = [...firestoreDb.keys()].filter((k) => k.startsWith('mcpFinanzFreigaben/')).length;
+  assert(anzahlFreigabenNachher === anzahlFreigabenVorher, 'eine fehlgeschlagene Vorab-Prüfung darf keine Freigabe-Anfrage anlegen');
+});
+
+await pruefe('F14: werkora_update_article legt nur eine Freigabe-Anfrage an, der Katalogeintrag bleibt UNVERÄNDERT', async () => {
+  const res = await callWerkoraMcpTool('werkora_update_article', { article_id: global.__artikelIdF12, purchase_price: 2.0, sales_price: 2.4 }, ctx);
+  const data = JSON.parse(res.content[0].text);
+  assert(data.approval_required === true, 'Antwort muss approval_required:true enthalten');
+  const eintragVorher = firestoreDb.get(`katalog/${global.__artikelIdF12}`);
+  assert(feldWert(eintragVorher, 'einkaufspreis') === 1.5, 'einkaufspreis darf vor Freigabe nicht verändert sein');
+  global.__approvalIdF14 = data.approval_id;
+});
+
+await pruefe('F15: werkora_approve_action führt das Update aus F14 jetzt tatsächlich aus, unveränderte Felder bleiben erhalten', async () => {
+  const res = await callWerkoraMcpTool('werkora_approve_action', { approval_id: global.__approvalIdF14 }, ctx);
+  assert(!res.isError, `Freigabe darf nicht fehlschlagen: ${res.content?.[0]?.text}`);
+  const eintragDanach = firestoreDb.get(`katalog/${global.__artikelIdF12}`);
+  assert(feldWert(eintragDanach, 'einkaufspreis') === 2.0, 'einkaufspreis muss nach Freigabe aktualisiert sein');
+  assert(feldWert(eintragDanach, 'preis') === 2.4, 'preis muss nach Freigabe aktualisiert sein');
+  assert(feldWert(eintragDanach, 'bezeichnung') === 'Testkabel NYM-J 3x1,5', 'nicht übergebene Felder (bezeichnung) dürfen unverändert bleiben');
+});
+
+await pruefe('F16: werkora_update_article mit unbekannter article_id liefert einen Fehler, OHNE Freigabe-Anfrage anzulegen', async () => {
+  const anzahlFreigabenVorher = [...firestoreDb.keys()].filter((k) => k.startsWith('mcpFinanzFreigaben/')).length;
+  const res = await callWerkoraMcpTool('werkora_update_article', { article_id: 'existiert-nicht', purchase_price: 1 }, ctx);
+  assert(res.isError === true, 'unbekannte article_id muss fehlschlagen');
+  const anzahlFreigabenNachher = [...firestoreDb.keys()].filter((k) => k.startsWith('mcpFinanzFreigaben/')).length;
+  assert(anzahlFreigabenNachher === anzahlFreigabenVorher, 'eine fehlgeschlagene Vorab-Prüfung darf keine Freigabe-Anfrage anlegen');
+});
+
 console.log(`\n--- Ergebnis: ${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen ---`);

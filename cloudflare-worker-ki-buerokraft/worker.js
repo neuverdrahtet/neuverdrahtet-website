@@ -645,6 +645,8 @@ async function fuehreFinanzAktionAus(ctx, aktion, args) {
     case 'werkora_cancel_invoice': return fuehreCancelInvoiceAus(ctx, args);
     case 'werkora_create_mahnung': return fuehreCreateMahnungAus(ctx, args);
     case 'reminders.create': return fuehreCreateMahnungRestAus(ctx, args);
+    case 'werkora_create_article': return fuehreCreateArtikelAus(ctx, args);
+    case 'werkora_update_article': return fuehreUpdateArtikelAus(ctx, args);
     default: throw new Error(`Unbekannte freigabepflichtige Aktion: ${aktion}`);
   }
 }
@@ -754,6 +756,52 @@ async function fuehreCreateMahnungRestAus(ctx, args) {
   // anderen Aktionen über denselben Dispatch aufruft und .content[0].text
   // erwartet (siehe POST /approvals/{id}/approve weiter unten).
   return mcpToolSuccess(reminderToApi(created));
+}
+
+// Artikel-/Leistungskatalog ("katalog") anlegen/ändern wirkt sich auf
+// künftige Angebots-/Rechnungskalkulationen aus (Einkaufspreis, Aufschlag,
+// Verkaufspreis) - deshalb bewusst über dieselbe Freigabe-Engine wie die
+// Rechnungs-/Mahnungs-Aktionen abgesichert (Danny-Vorgabe 13.11.2026), nicht
+// direkt ausführend wie z.B. werkora_update_customer. Gleiche Feldabbildung
+// wie die bereits bestehende REST-Route POST/PATCH /articles weiter unten -
+// bewusst eine eigene Funktion statt Code-Teilung, da die REST-Route ohne
+// Freigabe direkt ausführt (siehe Kommentar dort) und beide Wege dadurch
+// ohnehin schon unterschiedliche Aufrufkontexte haben.
+async function fuehreCreateArtikelAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  if (!args.name) throw new Error('Feld "name" ist erforderlich.');
+  const typ = args.type === 'service' ? 'leistung' : 'artikel';
+  const id = crypto.randomUUID();
+  const data = {
+    id, typ, bezeichnung: args.name, beschreibung: args.description || '', einheit: args.unit || 'Stk.',
+    einkaufspreis: Number(args.purchase_price) || 0, aufschlagProzent: Number(args.markup_percent) || 0,
+    preis: Number(args.sales_price) || 0, steuersatz: args.vat_rate ?? 19, gewerk: args.trade || '',
+    bestandTracking: false, bestand: 0, mindestbestand: Number(args.min_stock) || 0, createdAt: new Date().toISOString(),
+  };
+  const created = await firestoreCreate({ accessToken, projectId, collection: 'katalog', id, data });
+  await logAction(ctx, { action: 'mcp.articles.create', entityType: 'katalog', entityId: id, newValue: created, status: 'success' });
+  return mcpToolSuccess(articleToApi(created));
+}
+
+async function fuehreUpdateArtikelAus(ctx, args) {
+  const { accessToken, projectId } = ctx;
+  if (!args.article_id) throw new Error('Feld "article_id" ist erforderlich.');
+  const existing = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: args.article_id });
+  if (!existing) throw new Error('Artikel/Leistung wurde nicht gefunden.');
+  const changes = {};
+  if (args.name !== undefined) changes.bezeichnung = args.name;
+  if (args.description !== undefined) changes.beschreibung = args.description;
+  if (args.unit !== undefined) changes.einheit = args.unit;
+  if (args.purchase_price !== undefined) changes.einkaufspreis = Number(args.purchase_price);
+  if (args.markup_percent !== undefined) changes.aufschlagProzent = Number(args.markup_percent);
+  if (args.sales_price !== undefined) changes.preis = Number(args.sales_price);
+  if (args.vat_rate !== undefined) changes.steuersatz = Number(args.vat_rate);
+  if (args.trade !== undefined) changes.gewerk = args.trade;
+  if (args.min_stock !== undefined) changes.mindestbestand = Number(args.min_stock);
+  if (Object.keys(changes).length === 0) throw new Error('Keine bekannten Felder zum Aktualisieren übergeben.');
+  const updated = await firestoreUpdate({ accessToken, projectId, collection: 'katalog', id: args.article_id, data: changes });
+  await logAction(ctx, { action: 'mcp.articles.update', entityType: 'katalog', entityId: args.article_id, oldValue: existing, newValue: changes, status: 'success' });
+  return mcpToolSuccess(articleToApi(updated));
 }
 
 async function fuehreCreateInvoiceAus(ctx, args) {
@@ -1756,6 +1804,48 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: 'werkora_create_article',
+    description: 'Legt einen neuen Artikel oder eine neue Leistung im Katalog an - wirkt sich auf künftige Angebots-/Rechnungskalkulationen aus, deshalb freigabepflichtig (wie Rechnungen/Mahnungen): legt nur einen Freigabe-Vorschlag an, erst werkora_approve_action führt die Anlage tatsächlich aus.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Bezeichnung des Artikels/der Leistung' },
+        type: { type: 'string', description: '"article" (Material) oder "service" (Arbeitszeit/Leistung), Standard "article"' },
+        description: { type: 'string' },
+        unit: { type: 'string', description: 'z.B. Stk., m, m², Std., pauschal - Standard "Stk."' },
+        purchase_price: { type: 'number', description: 'Einkaufspreis netto' },
+        markup_percent: { type: 'number', description: 'Aufschlag in Prozent' },
+        sales_price: { type: 'number', description: 'Verkaufspreis netto' },
+        vat_rate: { type: 'number', description: 'Prozent, Standard 19' },
+        trade: { type: 'string', description: 'Gewerk, z.B. elektro' },
+        min_stock: { type: 'number' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'werkora_update_article',
+    description: 'Ändert einen bestehenden Artikel/eine Leistung im Katalog (z.B. Preise nach einer Marktpreis-Recherche anpassen) - wie werkora_create_article freigabepflichtig: legt nur einen Freigabe-Vorschlag an, erst werkora_approve_action führt die Änderung tatsächlich aus.',
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        article_id: { type: 'string', description: 'ID des Artikels/der Leistung (aus werkora_search_articles)' },
+        name: { type: 'string' },
+        description: { type: 'string' },
+        unit: { type: 'string' },
+        purchase_price: { type: 'number', description: 'Einkaufspreis netto' },
+        markup_percent: { type: 'number', description: 'Aufschlag in Prozent' },
+        sales_price: { type: 'number', description: 'Verkaufspreis netto' },
+        vat_rate: { type: 'number' },
+        trade: { type: 'string' },
+        min_stock: { type: 'number' },
+      },
+      required: ['article_id'],
+    },
+  },
+  {
     name: 'werkora_get_dashboard',
     description: 'Liefert eine Kennzahlen-Übersicht: neue Leads, offene/überfällige Aufgaben, heutige Termine, offene Angebote (Anzahl+Wert), offene/überfällige Rechnungen (Anzahl+Wert).',
     annotations: { readOnlyHint: true, idempotentHint: true },
@@ -1961,7 +2051,7 @@ const MCP_TOOLS = [
   },
   {
     name: 'werkora_approve_action',
-    description: 'Gibt eine mit approval_id bezeichnete, noch offene Freigabe-Anfrage frei und führt die ursprünglich angefragte Aktion (Rechnung anlegen/als bezahlt markieren/stornieren, Mahnung anlegen) jetzt tatsächlich aus. Vor dem Freigeben unbedingt beim Nutzer nachfragen, ob die in der Freigabe-Anfrage genannte Zusammenfassung korrekt ist.',
+    description: 'Gibt eine mit approval_id bezeichnete, noch offene Freigabe-Anfrage frei und führt die ursprünglich angefragte Aktion (Rechnung anlegen/als bezahlt markieren/stornieren, Mahnung anlegen, Artikel/Leistung anlegen/aktualisieren) jetzt tatsächlich aus. Vor dem Freigeben unbedingt beim Nutzer nachfragen, ob die in der Freigabe-Anfrage genannte Zusammenfassung korrekt ist.',
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     inputSchema: {
       type: 'object',
@@ -2254,6 +2344,26 @@ async function callWerkoraMcpTool(name, args, ctx) {
       await logAction(ctx, { action: 'mcp.articles.search', status: 'success' });
       const limit = Math.min(Number(args.limit) || 100, 100);
       return mcpToolSuccess(katalog.slice(0, limit).map(articleToApi));
+    }
+    case 'werkora_create_article': {
+      // Freigabepflichtig (siehe fuehreCreateArtikelAus) - hier nur die
+      // leichte Vorab-Prüfung, bevor überhaupt eine Freigabe-Anfrage entsteht.
+      if (!args.name) return mcpToolError('Feld "name" ist erforderlich.');
+      const freigabe = await erstelleFinanzFreigabe(ctx, {
+        aktion: 'werkora_create_article', args,
+        zusammenfassung: `Neuen ${args.type === 'service' ? 'Leistungs' : 'Artikel'}-Eintrag "${args.name}" anlegen${args.sales_price !== undefined ? ` (VK ${args.sales_price} €)` : ''}.`,
+      });
+      return finanzFreigabeAntwort(freigabe);
+    }
+    case 'werkora_update_article': {
+      if (!args.article_id) return mcpToolError('Feld "article_id" ist erforderlich.');
+      const artikelVorab = await firestoreGet({ accessToken, projectId, collection: 'katalog', id: args.article_id });
+      if (!artikelVorab) return mcpToolError('Artikel/Leistung wurde nicht gefunden.');
+      const freigabe = await erstelleFinanzFreigabe(ctx, {
+        aktion: 'werkora_update_article', args,
+        zusammenfassung: `Artikel "${artikelVorab.bezeichnung || args.article_id}" aktualisieren${args.sales_price !== undefined ? ` (neuer VK ${args.sales_price} €)` : ''}.`,
+      });
+      return finanzFreigabeAntwort(freigabe);
     }
     case 'werkora_search_employees': {
       const [mitarbeiter, termine] = await Promise.all([

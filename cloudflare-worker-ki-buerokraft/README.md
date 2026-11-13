@@ -384,13 +384,17 @@ Entwurfs-Rechnungen ändern (`werkora_update_customer`,
 `werkora_update_invoice`).
 
 **Freigabe-Engine für finanzwirksame Aktionen (seit der P0-Sicherheits-
-korrektur, Oktober 2026):** `werkora_create_invoice`, `werkora_mark_invoice_paid`,
-`werkora_cancel_invoice` und `werkora_create_mahnung` führen die eigentliche
-Aktion NICHT mehr sofort aus. Da dieser Worker nur einen einzigen geteilten
+korrektur, Oktober 2026; um `werkora_create_article`/`werkora_update_article`
+erweitert, November 2026):** `werkora_create_invoice`, `werkora_mark_invoice_paid`,
+`werkora_cancel_invoice`, `werkora_create_mahnung`, `werkora_create_article`
+und `werkora_update_article` führen die eigentliche Aktion NICHT mehr sofort
+aus. Da dieser Worker nur einen einzigen geteilten
 `API_KEY` ohne Benutzerrollen kennt, hätte jeder, der den Schlüssel kennt
 (z.B. in einem kompromittierten Custom-GPT/Claude-Connector), sonst direkt
-Rechnungen anlegen, als bezahlt markieren oder stornieren können. Jeder
-dieser vier Aufrufe legt stattdessen nur eine Freigabe-Anfrage in der neuen
+Rechnungen anlegen, als bezahlt markieren oder stornieren können - bzw. bei
+den beiden Artikel-Aktionen Einkaufs-/Verkaufspreise im Katalog verändern,
+was sich auf jede künftige Angebots-/Rechnungskalkulation auswirkt. Jeder
+dieser sechs Aufrufe legt stattdessen nur eine Freigabe-Anfrage in der
 Firestore-Collection `mcpFinanzFreigaben` an und antwortet mit
 `{ approval_required: true, approval_id, action, summary, message,
 expires_at }`. Erst ein zweiter, separater Aufruf führt die Aktion
