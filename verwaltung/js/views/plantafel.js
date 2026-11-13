@@ -758,7 +758,7 @@ export async function render(container, route, { autoSync = true } = {}) {
       teamIds: prefill?.resType === 'team' ? [prefill.resId] : [],
       geraeteIds: prefill?.resType === 'geraet' ? [prefill.resId] : [],
       flottenIds: prefill?.resType === 'flotte' ? [prefill.resId] : [],
-      notizen: '', farbe: '', status: terminStatus[0]?.id || 'geplant',
+      notizen: prefill?.notizen || '', farbe: '', status: terminStatus[0]?.id || 'geplant',
     };
     const startDate = (data.start || '').slice(0, 10) || prefill?.date || todayStr;
     const startTime = (data.start || '').slice(11, 16) || '09:00';
@@ -1053,4 +1053,15 @@ export async function render(container, route, { autoSync = true } = {}) {
   renderTagView();
   renderMonatGrid();
   if (initialMode !== 'woche') setMode(initialMode);
+
+  // Übergabe aus dem Postfach ("📅 Termin erstellen" an einer E-Mail, siehe
+  // postfach.js) - einmaliger Prefill-Schlüssel, gleiches Muster wie
+  // nv-angebot-prefill zwischen postfach.js und angebote.js.
+  try {
+    const prefillRaw = sessionStorage.getItem('nv-termin-prefill');
+    if (prefillRaw) {
+      sessionStorage.removeItem('nv-termin-prefill');
+      openForm(null, JSON.parse(prefillRaw));
+    }
+  } catch { /* sessionStorage evtl. nicht verfügbar */ }
 }

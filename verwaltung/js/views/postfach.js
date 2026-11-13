@@ -1,5 +1,5 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
-import { uid, escapeHtml, toast, todayISO, formatDateTime, nextDailyNummer } from '../utils.js';
+import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, localDateStr, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
@@ -105,8 +105,8 @@ export async function render(container) {
   }
 
   async function renderMailbox() {
-    let [allEmails, kunden, projekte, angebote] = await Promise.all([
-      getAll('emails'), getAll('kunden'), getAll('projekte'), getAll('angebote'),
+    let [allEmails, kunden, projekte, angebote, termine] = await Promise.all([
+      getAll('emails'), getAll('kunden'), getAll('projekte'), getAll('angebote'), getAll('termine'),
     ]);
     allEmails.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
     const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
@@ -142,11 +142,13 @@ export async function render(container) {
         <div class="postfach-detail" id="pf-detail-host">
           <div class="empty-state">Wähle links eine E-Mail aus.</div>
         </div>
+        <div class="postfach-calendar" id="pf-cal-host"></div>
       </div>
     `;
 
     const listHost = container.querySelector('#pf-list-host');
     const detailHost = container.querySelector('#pf-detail-host');
+    const calHost = container.querySelector('#pf-cal-host');
 
     function matchesFilters(m) {
       const richtungOk = richtungFilter === 'alle' || (m.richtung || 'eingang') === richtungFilter;
@@ -197,6 +199,70 @@ export async function render(container) {
       bulkSelect.wire(listHost, { onChange: renderList, onDeleted: onBulkDeleted });
     }
 
+    // Unabhängig von der gerade geöffneten E-Mail (Gmail-Kalenderpanel-Vorbild):
+    // Monatsübersicht + die nächsten 5 Termine insgesamt, nicht auf den
+    // verknüpften Kunden/Projekt der offenen Mail eingeschränkt.
+    const calMonthCursor = (() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d; })();
+
+    function renderCalendarPanel() {
+      const year = calMonthCursor.getFullYear();
+      const month = calMonthCursor.getMonth();
+      const todayStr = localDateStr(new Date());
+      const terminTageSet = new Set(termine.map((t) => (t.start || '').slice(0, 10)).filter(Boolean));
+      const firstOfMonth = new Date(year, month, 1);
+      const startOffset = (firstOfMonth.getDay() + 6) % 7; // Woche beginnt Montag
+      const gridStart = new Date(year, month, 1 - startOffset);
+      const monatsName = new Intl.DateTimeFormat('de-DE', { month: 'long', year: 'numeric' }).format(firstOfMonth);
+      const wochentage = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+      const tage = [];
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(gridStart);
+        d.setDate(gridStart.getDate() + i);
+        const dStr = localDateStr(d);
+        tage.push({ dStr, inMonth: d.getMonth() === month, isToday: dStr === todayStr, hasTermin: terminTageSet.has(dStr) });
+      }
+      const anstehend = termine
+        .filter((t) => (t.start || '').slice(0, 10) >= todayStr)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
+        .slice(0, 5);
+
+      calHost.innerHTML = `
+        <h3>📅 Kalender</h3>
+        <div class="pf-cal-header">
+          <button type="button" id="pf-cal-prev">‹</button>
+          <strong>${escapeHtml(monatsName)}</strong>
+          <button type="button" id="pf-cal-next">›</button>
+        </div>
+        <div class="pf-cal-grid">
+          ${wochentage.map((w) => `<div class="pf-cal-weekday">${w}</div>`).join('')}
+          ${tage.map((t) => `<div class="pf-cal-day ${t.inMonth ? 'in-month' : ''} ${t.isToday ? 'today' : ''} ${t.hasTermin ? 'has-termin' : ''}" title="${t.dStr}">${Number(t.dStr.slice(8, 10))}</div>`).join('')}
+        </div>
+        ${anstehend.length ? `
+          <div class="pf-cal-upcoming">
+            ${anstehend.map((t) => `
+              <div class="pf-cal-upcoming-row" data-datum="${(t.start || '').slice(0, 10)}">
+                <span class="pf-lt-datum">${formatDate((t.start || '').slice(0, 10))}</span>
+                <span class="pf-lt-titel">${escapeHtml(t.titel)}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : `<p class="text-mute" style="font-size:12px;margin-top:10px">Keine anstehenden Termine.</p>`}
+      `;
+      calHost.querySelector('#pf-cal-prev').addEventListener('click', () => {
+        calMonthCursor.setMonth(calMonthCursor.getMonth() - 1);
+        renderCalendarPanel();
+      });
+      calHost.querySelector('#pf-cal-next').addEventListener('click', () => {
+        calMonthCursor.setMonth(calMonthCursor.getMonth() + 1);
+        renderCalendarPanel();
+      });
+      calHost.querySelectorAll('.pf-cal-upcoming-row').forEach((row) => {
+        row.addEventListener('click', () => {
+          window.location.hash = `#/plantafel/tag/${row.dataset.datum}`;
+        });
+      });
+    }
+
     function onBulkDeleted(ids) {
       allEmails = allEmails.filter((m) => !ids.includes(m.id));
       if (selectedId && ids.includes(selectedId)) {
@@ -229,6 +295,12 @@ export async function render(container) {
       }
 
       const zeigeKundeVorschlag = full.kategorie === 'kundenanfrage' && full.richtung !== 'ausgang' && !full.kundeAngelegtId;
+      const heuteStr = localDateStr(new Date());
+      const verknuepfteTermine = termine
+        .filter((t) => (full.projektId && t.projektId === full.projektId) || (full.kundeId && t.kundeId === full.kundeId))
+        .filter((t) => (t.start || '').slice(0, 10) >= heuteStr)
+        .sort((a, b) => (a.start || '').localeCompare(b.start || ''))
+        .slice(0, 3);
       detailHost.innerHTML = `
         <div class="postfach-detail-header">
           <h2>${escapeHtml(full.subject)}</h2>
@@ -244,6 +316,7 @@ export async function render(container) {
             <button class="btn" id="pf-angebot-btn">📋 Angebot erstellen</button>
             <button class="btn" id="pf-auftrag-btn">📁 Auftrag anlegen</button>
             <button class="btn" id="pf-anfrage-btn">🎯 Anfrage anlegen</button>
+            <button class="btn" id="pf-termin-btn">📅 Termin erstellen</button>
           </div>
         </div>
         <div class="card postfach-verknuepfung">
@@ -252,6 +325,18 @@ export async function render(container) {
             <div class="field"><label>Kunde</label><div id="pf-link-kunde-host"></div></div>
             <div class="field"><label>Projekt/Auftrag</label><div id="pf-link-projekt-host"></div></div>
             <div class="field"><label>Angebot</label><div id="pf-link-angebot-host"></div></div>
+            <div class="field col-span-2"><label>Anstehende Termine</label>
+              ${verknuepfteTermine.length ? `
+                <div class="postfach-link-termine">
+                  ${verknuepfteTermine.map((t) => `
+                    <div class="postfach-link-termin-row" data-datum="${(t.start || '').slice(0, 10)}">
+                      <span class="pf-lt-datum">${formatDate((t.start || '').slice(0, 10))}</span>
+                      <span class="pf-lt-titel">${escapeHtml(t.titel)}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : `<p class="text-mute" style="font-size:12px;margin:4px 0 0">– keine –</p>`}
+            </div>
           </div>
         </div>
         <div class="postfach-body-host">${bodyHtml}</div>
@@ -277,6 +362,10 @@ export async function render(container) {
       detailHost.querySelector('#pf-angebot-btn').addEventListener('click', () => starteAngebotAusMail(full));
       detailHost.querySelector('#pf-auftrag-btn').addEventListener('click', () => starteAuftragAusMail(full));
       detailHost.querySelector('#pf-anfrage-btn').addEventListener('click', () => starteAnfrageAusMail(full));
+      detailHost.querySelector('#pf-termin-btn').addEventListener('click', () => starteTerminAusMail(full));
+      detailHost.querySelectorAll('.postfach-link-termin-row').forEach((row) => {
+        row.addEventListener('click', () => { window.location.hash = `#/plantafel/tag/${row.dataset.datum}`; });
+      });
 
       // Manuelle Verknüpfung mit einem bestehenden Kunden/Projekt/Angebot -
       // unabhängig vom automatischen Adressabgleich (verknuepfeEmailsMitKundenUndProjekten)
@@ -556,6 +645,14 @@ export async function render(container) {
       }, '#/leadpipeline');
     }
 
+    function starteTerminAusMail(message) {
+      const kontakt = leiteKontaktAb(message);
+      navigiereMitPrefill('nv-termin-prefill', {
+        kundeId: kontakt.kundeId, projektId: message.projektId || '', titel: kontakt.anliegen,
+        notizen: `Aus E-Mail: ${message.subject}\n\n${(message.text || '').slice(0, 1000)}`,
+      }, '#/plantafel');
+    }
+
     async function openTaskFromMessage(message) {
       const aufgabenStatus = await getAll('aufgabenStatus');
       aufgabenStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
@@ -689,6 +786,7 @@ export async function render(container) {
     });
 
     renderList();
+    renderCalendarPanel();
 
     // Nur im Hintergrund synchronisieren, wenn bereits eine gültige Sitzung
     // besteht - sonst würde ensureToken() beim bloßen Öffnen der Seite
