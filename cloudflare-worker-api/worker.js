@@ -45,13 +45,54 @@
  *   GET    /kunden/{id}         Ein Kunde
  *   POST   /kunden              Neuen Kunden anlegen (Feld "id" optional, sonst automatisch)
  *   PATCH  /kunden/{id}         Kunde teilweise aktualisieren (nur gesendete Felder)
- *   GET    /projekte, /projekte/{id}, POST /projekte, PATCH /projekte/{id}  - analog
- *   GET    /termine,  /termine/{id},  POST /termine,  PATCH /termine/{id}   - analog
+ *   GET    /projekte, /projekte/{id}, POST /projekte, PATCH /projekte/{id}  - analog (volles CRUD)
+ *   GET    /termine,  /termine/{id},  POST /termine,  PATCH /termine/{id}   - analog (volles CRUD)
+ *
+ * Erweiterung (13.11.2026, "Werkora-Vereinfachung" Dashboard-Schritt "REST-API"):
+ *   GET    /ausgaben, /ausgaben/{id}, POST /ausgaben   - Lesen + Anlegen, KEIN PATCH (kein
+ *                        Foto-Upload über diesen Weg, nur die Datenfelder).
+ *   GET    /rechnungen, /rechnungen/{id}               - NUR Lesen (GoBD-Sperre, wie überall
+ *                        sonst im System - kein POST/PATCH, liefert 405).
+ *   GET    /angebote, /angebote/{id}, POST /angebote, PATCH /angebote/{id}
+ *                        - POST erzwingt serverseitig status "entwurf" (wird nie automatisch
+ *                        versendet). PATCH nur erlaubt, solange das Angebot noch im Status
+ *                        "entwurf" ist (409 sonst) - Versand/Freigabe bleibt Werkora
+ *                        vorbehalten, "status" selbst ist über PATCH nicht änderbar.
+ *   GET    /katalog, /katalog/{id}                     - normales, ungegatetes Lesen.
+ *   POST   /katalog, PATCH /katalog/{id}               - FREIGABEPFLICHTIG: schreibt NICHT
+ *                        direkt, sondern legt nur eine Freigabe-Anfrage an (Antwort 202 mit
+ *                        freigabe.id) - Katalogpreise wirken sich auf jede künftige Angebots-/
+ *                        Rechnungskalkulation aus, dieselbe Vorsicht wie beim KI-Bürokraft-
+ *                        MCP-Server (werkora_create_article/werkora_update_article, siehe
+ *                        dortiges README). Freigabe-Anfragen landen in derselben Firestore-
+ *                        Collection ("mcpFinanzFreigaben") wie die des KI-Bürokraft-Workers -
+ *                        bewusst KEIN separates Konzept, ein gemeinsamer Freigabe-Pool.
+ *   GET    /freigaben                                  - Liste aller noch OFFENEN Freigaben.
+ *   GET    /freigaben/{id}                             - Eine Freigabe-Anfrage.
+ *   POST   /freigaben/{id}/freigeben                   - führt die ursprünglich angefragte
+ *                        Anlage/Änderung jetzt tatsächlich aus (atomar, kein Doppel-Ausführen
+ *                        bei zwei gleichzeitigen Aufrufen).
+ *   POST   /freigaben/{id}/ablehnen                    - lehnt sie ab (optionaler JSON-Body
+ *                        {"grund": "..."}), führt NICHTS aus.
  *
  * Deployment: siehe README.md in diesem Ordner.
  */
 
-const ERLAUBTE_COLLECTIONS = ['kunden', 'projekte', 'termine'];
+// 'full'          - GET/POST/PATCH ungated, wie von Anfang an (kunden/projekte/termine).
+// 'lesen-anlegen' - GET + POST, kein PATCH (ausgaben).
+// 'nur-lesen'     - nur GET, POST/PATCH liefern 405 (rechnungen, GoBD-Sperre).
+// 'entwurf'       - GET/POST/PATCH, aber POST erzwingt status:"entwurf" und PATCH nur erlaubt
+//                   solange status==="entwurf" ist, "status" selbst über PATCH nicht änderbar
+//                   (angebote - Versand/Freigabe bleibt Werkora vorbehalten).
+// 'freigabe'      - GET ungated, POST/PATCH erzeugen nur eine Freigabe-Anfrage statt direkt
+//                   zu schreiben (katalog - siehe Freigabe-Engine weiter unten).
+const COLLECTION_MODUS = {
+  kunden: 'full', projekte: 'full', termine: 'full',
+  ausgaben: 'lesen-anlegen',
+  rechnungen: 'nur-lesen',
+  angebote: 'entwurf',
+  katalog: 'freigabe',
+};
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -257,6 +298,116 @@ async function pruefeRateLimit(env, ip) {
   }
 }
 
+// --- Freigabe-Engine für "katalog" (siehe COLLECTION_MODUS.katalog oben) ---
+//
+// Dieselbe Firestore-Collection wie beim KI-Bürokraft-MCP-Server
+// (mcpFinanzFreigaben, siehe dessen README) - bewusst ein gemeinsamer
+// Freigabe-Pool statt zweier getrennter Konzepte für dieselbe Art
+// Entscheidung (Katalogpreis anlegen/ändern). Atomare Ausführung über
+// Firestores optimistische Nebenläufigkeitskontrolle (currentDocument.
+// updateTime) - zwei gleichzeitige "freigeben"-Aufrufe für dieselbe
+// Freigabe führen sie garantiert nur einmal aus, nicht doppelt.
+const FINANZ_FREIGABE_COLLECTION = 'mcpFinanzFreigaben';
+const FINANZ_FREIGABE_ABLAUF_STUNDEN = 24;
+
+async function erstelleFreigabe({ ctx, aktion, collection, zielId, daten, zusammenfassung }) {
+  const id = crypto.randomUUID();
+  const jetzt = new Date();
+  const ablaufAm = new Date(jetzt.getTime() + FINANZ_FREIGABE_ABLAUF_STUNDEN * 3600 * 1000).toISOString();
+  const data = {
+    id, aktion, collection, zielId: zielId || '', daten: JSON.stringify(daten), zusammenfassung,
+    status: 'offen', quelle: 'rest-api', erstelltAm: jetzt.toISOString(), ablaufAm,
+  };
+  await firestoreCreate({ ...ctx, collection: FINANZ_FREIGABE_COLLECTION, id, data });
+  return { id, status: 'offen', zusammenfassung, ablauf_am: ablaufAm, freigeben_url: `/freigaben/${id}/freigeben`, ablehnen_url: `/freigaben/${id}/ablehnen` };
+}
+
+/** Wie firestoreUpdate, aber mit einer Statusbedingung (optimistische Nebenläufigkeitskontrolle) - schlägt mit 409 fehl, wenn der Status zwischenzeitlich bereits geändert wurde. */
+async function firestoreClaim({ ctx, collection, id, erwarteterStatus, neuerStatus, zusatzFelder = {} }) {
+  const docName = `projects/${ctx.projectId}/databases/(default)/documents/${collection}/${id}`;
+  const getRes = await fetch(`https://firestore.googleapis.com/v1/${docName}`, { headers: { Authorization: `Bearer ${ctx.accessToken}` } });
+  if (getRes.status === 404) { const err = new Error('Freigabe wurde nicht gefunden.'); err.status = 404; throw err; }
+  if (!getRes.ok) throw new Error(`Firestore-Fehler (${getRes.status}) beim Lesen von ${collection}/${id}.`);
+  const doc = await getRes.json();
+  const aktuellerStatus = doc.fields?.status?.stringValue;
+  if (aktuellerStatus !== erwarteterStatus) {
+    const err = new Error(`Freigabe hat bereits den Status "${aktuellerStatus}" - keine erneute Bearbeitung möglich.`);
+    err.status = 409;
+    throw err;
+  }
+  const geaenderteFelder = { status: { stringValue: neuerStatus }, ...toFirestoreFields(zusatzFelder) };
+  const commitRes = await fetch(`https://firestore.googleapis.com/v1/projects/${ctx.projectId}/databases/(default)/documents:commit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ctx.accessToken}` },
+    body: JSON.stringify({
+      writes: [{
+        update: { name: docName, fields: geaenderteFelder },
+        updateMask: { fieldPaths: Object.keys(geaenderteFelder) },
+        currentDocument: { updateTime: doc.updateTime },
+      }],
+    }),
+  });
+  if (!commitRes.ok) {
+    const err = new Error('Freigabe wurde gerade parallel bereits bearbeitet.');
+    err.status = 409;
+    throw err;
+  }
+  return docToPlain({ name: docName, fields: { ...doc.fields, ...geaenderteFelder } });
+}
+
+async function fuehreFreigabeAus({ ctx, id }) {
+  let geklaimt;
+  try {
+    geklaimt = await firestoreClaim({ ctx, collection: FINANZ_FREIGABE_COLLECTION, id, erwarteterStatus: 'offen', neuerStatus: 'wird_ausgefuehrt' });
+  } catch (err) {
+    return jsonResponse({ error: err.message }, err.status || 500);
+  }
+  const { collection, zielId, daten, aktion } = geklaimt;
+  const data = JSON.parse(daten);
+  try {
+    const ergebnis = aktion.startsWith('create_')
+      ? await firestoreCreate({ ...ctx, collection, id: data.id || crypto.randomUUID(), data: { ...data, id: undefined } })
+      : await firestoreUpdate({ ...ctx, collection, id: zielId, data });
+    await firestoreUpdate({ ...ctx, collection: FINANZ_FREIGABE_COLLECTION, id, data: { status: 'ausgefuehrt', abgeschlossenAm: new Date().toISOString() } });
+    return jsonResponse({ ok: true, data: ergebnis });
+  } catch (err) {
+    await firestoreUpdate({ ...ctx, collection: FINANZ_FREIGABE_COLLECTION, id, data: { status: 'fehlgeschlagen', fehler: err.message, abgeschlossenAm: new Date().toISOString() } });
+    return jsonResponse({ error: `Freigabe-Ausführung fehlgeschlagen: ${err.message}` }, 500);
+  }
+}
+
+async function lehneFreigabeAb({ ctx, id, grund }) {
+  try {
+    await firestoreClaim({
+      ctx, collection: FINANZ_FREIGABE_COLLECTION, id, erwarteterStatus: 'offen', neuerStatus: 'abgelehnt',
+      zusatzFelder: { ablehnungsgrund: grund || '', abgeschlossenAm: new Date().toISOString() },
+    });
+    return jsonResponse({ ok: true });
+  } catch (err) {
+    return jsonResponse({ error: err.message }, err.status || 500);
+  }
+}
+
+async function handleFreigaben({ ctx, teile, method, request }) {
+  const [, id, aktionTeil] = teile;
+  if (!id && method === 'GET') {
+    const alle = await firestoreList({ ...ctx, collection: FINANZ_FREIGABE_COLLECTION });
+    return jsonResponse({ ok: true, data: alle.filter((f) => f.status === 'offen') });
+  }
+  if (id && !aktionTeil && method === 'GET') {
+    const freigabe = await firestoreGet({ ...ctx, collection: FINANZ_FREIGABE_COLLECTION, id });
+    if (!freigabe) return jsonResponse({ error: 'Nicht gefunden.' }, 404);
+    return jsonResponse({ ok: true, data: freigabe });
+  }
+  if (id && aktionTeil === 'freigeben' && method === 'POST') return fuehreFreigabeAus({ ctx, id });
+  if (id && aktionTeil === 'ablehnen' && method === 'POST') {
+    let grund = '';
+    try { const body = await request.json(); grund = body.grund || ''; } catch { /* Body optional */ }
+    return lehneFreigabeAb({ ctx, id, grund });
+  }
+  return jsonResponse({ error: 'Unbekannter Freigaben-Endpunkt.' }, 404);
+}
+
 // Zusätzliche benannte Exporte rein für lokale Unit-Tests (reine Funktionen,
 // ohne Netzwerkzugriff) - der Cloudflare-Worker-Laufzeit stört das nicht,
 // die Plattform ruft ausschließlich den default-Export auf.
@@ -290,55 +441,113 @@ export default {
       return jsonResponse({ error: 'Dieser API-Schlüssel ist nur lesend (API_KEY_READONLY) - Schreibzugriff erfordert den vollen API_KEY.' }, 403);
     }
 
-    const url = new URL(request.url);
-    const teile = url.pathname.split('/').filter(Boolean);
-    const [collection, id] = teile;
-    if (!ERLAUBTE_COLLECTIONS.includes(collection)) {
-      return jsonResponse({ error: `Unbekannter Endpunkt. Erlaubt: ${ERLAUBTE_COLLECTIONS.map((c) => '/' + c).join(', ')}` }, 404);
-    }
-    // id landet unvalidiert direkt in der Firestore-REST-URL (siehe
-    // firestoreGet/firestoreCreate/firestoreUpdate oben) - nur das in Werkora
-    // tatsächlich verwendete ID-Format zulassen (crypto.randomUUID() oder der
-    // "id-<base36>-<base36>"-Fallback, siehe uid() in utils.js), damit kein
-    // ungültiger/manipulierter Pfadabschnitt an Firestore durchgereicht wird.
-    if (id !== undefined && !/^[A-Za-z0-9_-]{1,200}$/.test(id)) {
-      return jsonResponse({ error: 'Ungültige ID.' }, 400);
-    }
     if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
       return jsonResponse({ error: 'Worker ist nicht korrekt eingerichtet (FIREBASE_SERVICE_ACCOUNT_JSON fehlt).' }, 500);
     }
+
+    const url = new URL(request.url);
+    const teile = url.pathname.split('/').filter(Boolean);
 
     try {
       const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
       const accessToken = await getGoogleAccessToken(serviceAccount, 'https://www.googleapis.com/auth/datastore');
       const projectId = serviceAccount.project_id;
+      const ctx = { accessToken, projectId };
+
+      if (teile[0] === 'freigaben') {
+        return await handleFreigaben({ ctx, teile, method: request.method, request });
+      }
+
+      const [collection, id] = teile;
+      const modus = COLLECTION_MODUS[collection];
+      if (!modus) {
+        return jsonResponse({ error: `Unbekannter Endpunkt. Erlaubt: ${Object.keys(COLLECTION_MODUS).map((c) => '/' + c).join(', ')}, /freigaben` }, 404);
+      }
+      // id landet unvalidiert direkt in der Firestore-REST-URL (siehe
+      // firestoreGet/firestoreCreate/firestoreUpdate oben) - nur das in Werkora
+      // tatsächlich verwendete ID-Format zulassen (crypto.randomUUID() oder der
+      // "id-<base36>-<base36>"-Fallback, siehe uid() in utils.js), damit kein
+      // ungültiger/manipulierter Pfadabschnitt an Firestore durchgereicht wird.
+      if (id !== undefined && !/^[A-Za-z0-9_-]{1,200}$/.test(id)) {
+        return jsonResponse({ error: 'Ungültige ID.' }, 400);
+      }
 
       if (request.method === 'GET' && !id) {
-        const list = await firestoreList({ accessToken, projectId, collection });
+        const list = await firestoreList({ ...ctx, collection });
         return jsonResponse({ ok: true, data: list });
       }
       if (request.method === 'GET' && id) {
-        const doc = await firestoreGet({ accessToken, projectId, collection, id });
+        const doc = await firestoreGet({ ...ctx, collection, id });
         if (!doc) return jsonResponse({ error: 'Nicht gefunden.' }, 404);
         return jsonResponse({ ok: true, data: doc });
       }
+
+      if (modus === 'nur-lesen') {
+        return jsonResponse({ error: `"${collection}" ist nur lesend (gesetzlich gesperrt) - kein POST/PATCH möglich.` }, 405);
+      }
+
       if (request.method === 'POST' && !id) {
         let body;
         try { body = await request.json(); } catch { return jsonResponse({ error: 'Ungültiger JSON-Body.' }, 400); }
-        const neueId = body.id || crypto.randomUUID();
         const { id: _ignored, ...data } = body;
-        const doc = await firestoreCreate({ accessToken, projectId, collection, id: neueId, data });
+
+        if (modus === 'freigabe') {
+          const freigabe = await erstelleFreigabe({
+            ctx, aktion: `create_${collection}`, collection, zielId: null, daten: body,
+            zusammenfassung: `Neuen Eintrag in "${collection}" anlegen: ${body.bezeichnung || body.id || '(ohne Namen)'}.`,
+          });
+          return jsonResponse({ ok: true, freigabe_erforderlich: true, freigabe }, 202);
+        }
+
+        if (modus === 'entwurf') data.status = 'entwurf'; // server-seitig erzwungen, egal was im Body stand
+        const neueId = body.id || crypto.randomUUID();
+        const doc = await firestoreCreate({ ...ctx, collection, id: neueId, data });
         return jsonResponse({ ok: true, data: doc }, 201);
       }
+
       if (request.method === 'PATCH' && id) {
+        if (modus === 'lesen-anlegen') {
+          return jsonResponse({ error: `"${collection}" erlaubt nur Lesen/Anlegen, kein Aktualisieren.` }, 405);
+        }
+
+        if (modus === 'freigabe') {
+          const bestehend = await firestoreGet({ ...ctx, collection, id });
+          if (!bestehend) return jsonResponse({ error: 'Nicht gefunden.' }, 404);
+          let body;
+          try { body = await request.json(); } catch { return jsonResponse({ error: 'Ungültiger JSON-Body.' }, 400); }
+          const { id: _ignored, ...data } = body;
+          if (Object.keys(data).length === 0) return jsonResponse({ error: 'Keine Felder zum Aktualisieren übergeben.' }, 400);
+          const freigabe = await erstelleFreigabe({
+            ctx, aktion: `update_${collection}`, collection, zielId: id, daten: data,
+            zusammenfassung: `Eintrag "${bestehend.bezeichnung || id}" in "${collection}" ändern.`,
+          });
+          return jsonResponse({ ok: true, freigabe_erforderlich: true, freigabe }, 202);
+        }
+
+        if (modus === 'entwurf') {
+          const bestehend = await firestoreGet({ ...ctx, collection, id });
+          if (!bestehend) return jsonResponse({ error: 'Nicht gefunden.' }, 404);
+          if (bestehend.status !== 'entwurf') {
+            return jsonResponse({ error: 'Nur Angebote im Status "entwurf" können über die API geändert werden - Versand/Freigabe bleibt Werkora vorbehalten.' }, 409);
+          }
+          let body;
+          try { body = await request.json(); } catch { return jsonResponse({ error: 'Ungültiger JSON-Body.' }, 400); }
+          const { id: _ignored, status: _statusIgnored, ...data } = body; // status selbst bleibt über diesen Weg unveränderbar
+          if (Object.keys(data).length === 0) return jsonResponse({ error: 'Keine Felder zum Aktualisieren übergeben.' }, 400);
+          const doc = await firestoreUpdate({ ...ctx, collection, id, data });
+          return jsonResponse({ ok: true, data: doc });
+        }
+
+        // modus === 'full'
         let body;
         try { body = await request.json(); } catch { return jsonResponse({ error: 'Ungültiger JSON-Body.' }, 400); }
         const { id: _ignored, ...data } = body;
         if (Object.keys(data).length === 0) return jsonResponse({ error: 'Keine Felder zum Aktualisieren übergeben.' }, 400);
-        const doc = await firestoreUpdate({ accessToken, projectId, collection, id, data });
+        const doc = await firestoreUpdate({ ...ctx, collection, id, data });
         if (!doc) return jsonResponse({ error: 'Nicht gefunden.' }, 404);
         return jsonResponse({ ok: true, data: doc });
       }
+
       return jsonResponse({ error: 'Methode nicht unterstützt.' }, 405);
     } catch (err) {
       return jsonResponse({ error: err.message || 'Unbekannter Fehler' }, 500);
