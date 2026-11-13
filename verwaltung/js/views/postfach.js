@@ -9,8 +9,14 @@ import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as push from '../push.js';
 import * as journal from '../journal.js';
+import { openWhatsApp, toWhatsAppNumber } from '../whatsapp.js';
 
 const LISTE_STANDARD_LIMIT = 200;
+
+// Bleibt über einen erneuten render()-Aufruf hinweg erhalten (z.B. beim
+// Umschalten per Button), geht aber beim Neuladen der Seite wieder auf den
+// Standard zurück - reine Anzeigepräferenz, kein Datenverlust-Risiko.
+let postfachModus = 'email';
 
 function extractEmailAddress(fromHeader) {
   const match = /<([^>]+)>/.exec(fromHeader || '');
@@ -73,13 +79,22 @@ function formatSize(bytes) {
 }
 
 export async function render(container) {
+  if (postfachModus === 'whatsapp') {
+    await renderWhatsappModus(container);
+    return;
+  }
+
   let settings = await getSettings();
 
   if (!settings.googleClientId) {
     container.innerHTML = `
-      <div class="view-header"><h1>📧 Postfach</h1></div>
+      <div class="view-header">
+        <h1>📧 Postfach</h1>
+        <div class="actions"><button class="btn" id="btn-modus-toggle">📱 WhatsApp</button></div>
+      </div>
       <div class="empty-state">Google ist noch nicht verbunden.<br>Bitte zuerst in Einstellungen → Google-Verbindung einrichten.</div>
     `;
+    container.querySelector('#btn-modus-toggle').addEventListener('click', () => { postfachModus = 'whatsapp'; render(container); });
     return;
   }
 
@@ -92,7 +107,10 @@ export async function render(container) {
 
   function renderImportGate() {
     container.innerHTML = `
-      <div class="view-header"><h1>📧 Postfach</h1></div>
+      <div class="view-header">
+        <h1>📧 Postfach</h1>
+        <div class="actions"><button class="btn" id="btn-modus-toggle">📱 WhatsApp</button></div>
+      </div>
       <div class="card">
         <h2>Postfach importieren</h2>
         <p class="text-mute">Damit hier alle E-Mails aus Gmail auffindbar sind, wird das Postfach einmalig komplett in die Software übernommen. Je nach Größe des Postfachs kann das mehrere Minuten dauern. Danach werden neue E-Mails automatisch mit übernommen.</p>
@@ -100,6 +118,7 @@ export async function render(container) {
         <button class="btn btn-primary" id="btn-start-import">📥 Jetzt importieren</button>
       </div>
     `;
+    container.querySelector('#btn-modus-toggle').addEventListener('click', () => { postfachModus = 'whatsapp'; render(container); });
     container.querySelector('#btn-start-import').addEventListener('click', async (e) => {
       const btn = e.target;
       btn.disabled = true;
@@ -136,6 +155,7 @@ export async function render(container) {
       <div class="view-header">
         <h1>📧 Postfach</h1>
         <div class="actions">
+          <button class="btn" id="btn-modus-toggle">📱 WhatsApp</button>
           <button class="btn" id="btn-archiv-toggle">📥 Archiv</button>
           <button class="btn" id="btn-sync">🔄 Neue E-Mails holen</button>
           <button class="btn btn-primary" id="btn-compose">✏️ Neue E-Mail</button>
@@ -818,6 +838,7 @@ export async function render(container) {
     }
 
     container.querySelector('#btn-compose').addEventListener('click', () => openCompose());
+    container.querySelector('#btn-modus-toggle').addEventListener('click', () => { postfachModus = 'whatsapp'; render(container); });
     const archivToggleBtn = container.querySelector('#btn-archiv-toggle');
     archivToggleBtn.addEventListener('click', () => {
       zeigeArchiv = !zeigeArchiv;
@@ -949,4 +970,125 @@ export async function render(container) {
       autoUebernehmeLieferantenrechnungen();
     }
   }
+}
+
+// WhatsApp-KI-Anbindung (nur Anzeige): der separate WhatsApp-Worker
+// (cloudflare-worker-ki-assistent-whatsapp) beantwortet Kundenanfragen
+// bereits vollautomatisch per Claude und schreibt den Verlauf nach
+// "whatsapp_chats" - bisher ohne jede Oberfläche dafür in Werkora. Bewusst
+// eine komplett eigene, einfachere Ansicht statt Einmischung in die
+// E-Mail-Logik oben (andere Datenform: eine fortlaufende Unterhaltung pro
+// Kontakt statt einzelner Nachrichten mit Betreff/Anhängen) - Antworten
+// bleiben vorerst direkt in WhatsApp (siehe openWhatsApp), die KI
+// automatisiert weiter unverändert im Hintergrund.
+async function renderWhatsappModus(container) {
+  let [chats, kunden] = await Promise.all([getAll('whatsapp_chats'), getAll('kunden')]);
+  chats.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+  let query = '';
+  let selectedId = null;
+
+  function findeKunde(telefon) {
+    const nummer = toWhatsAppNumber(telefon);
+    if (!nummer) return null;
+    return kunden.find((k) => k.telefon && toWhatsAppNumber(k.telefon) === nummer) || null;
+  }
+
+  container.innerHTML = `
+    <div class="view-header">
+      <h1>📱 WhatsApp-KI</h1>
+      <div class="actions"><button class="btn" id="btn-modus-toggle">📧 E-Mail</button></div>
+    </div>
+    <p class="text-mute" style="margin:-4px 0 10px">${chats.length} Unterhaltung(en) - wird automatisch von der KI beantwortet, hier nur zur Übersicht. Antworten weiterhin direkt in WhatsApp.</p>
+    <div class="search-bar">
+      <input type="search" id="wa-search" placeholder="Suche nach Name, Nummer oder Text ...">
+    </div>
+    <div class="postfach-layout wa-layout">
+      <div class="postfach-list" id="wa-list-host"></div>
+      <div class="postfach-detail" id="wa-detail-host">
+        <div class="empty-state">Wähle links eine Unterhaltung aus.</div>
+      </div>
+    </div>
+  `;
+  container.querySelector('#btn-modus-toggle').addEventListener('click', () => { postfachModus = 'email'; render(container); });
+
+  const listHost = container.querySelector('#wa-list-host');
+  const detailHost = container.querySelector('#wa-detail-host');
+
+  function filtered() {
+    if (!query) return chats;
+    const q = query.toLowerCase();
+    return chats.filter((c) =>
+      (c.profilName || '').toLowerCase().includes(q) ||
+      (c.telefon || '').toLowerCase().includes(q) ||
+      (c.verlauf || []).some((m) => (m.content || '').toLowerCase().includes(q))
+    );
+  }
+
+  function renderList() {
+    const list = filtered();
+    if (list.length === 0) {
+      listHost.innerHTML = '<div class="empty-state">Keine Unterhaltungen gefunden.</div>';
+      return;
+    }
+    listHost.innerHTML = list.map((c) => {
+      const letzte = (c.verlauf || [])[c.verlauf.length - 1];
+      const ungelesen = !c.gelesenAm || (c.updatedAt || '') > c.gelesenAm;
+      const kunde = findeKunde(c.telefon);
+      return `
+        <div class="postfach-row ${ungelesen ? 'unread' : ''} ${c.id === selectedId ? 'active' : ''}" data-id="${c.id}">
+          <div class="postfach-row-top">
+            <span class="${ungelesen ? 'pf-unread-dot' : 'pf-unread-dot-spacer'}"></span>
+            <strong class="postfach-row-sender">${escapeHtml(c.profilName || c.telefon || 'Unbekannt')}</strong>
+            <span class="text-mute pf-row-date">${escapeHtml(formatDateTime(c.updatedAt) || '')}</span>
+          </div>
+          <div class="postfach-row-subject-line">
+            ${kunde ? `<span class="badge badge-success pf-row-badge" title="Kunde: ${escapeHtml(kunde.firma)}">👤</span>` : ''}
+            <span class="pf-row-snippet">${escapeHtml((letzte?.content || '').slice(0, 160))}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+    listHost.querySelectorAll('.postfach-row').forEach((row) => {
+      row.addEventListener('click', () => openChat(row.dataset.id));
+    });
+  }
+
+  async function openChat(id) {
+    selectedId = id;
+    renderList();
+    const chat = chats.find((c) => c.id === id);
+    if (!chat) return;
+
+    if (!chat.gelesenAm || (chat.updatedAt || '') > chat.gelesenAm) {
+      chat.gelesenAm = new Date().toISOString();
+      await put('whatsapp_chats', chat);
+      renderList();
+    }
+
+    const kunde = findeKunde(chat.telefon);
+    detailHost.innerHTML = `
+      <div class="postfach-detail-header">
+        <h2>${escapeHtml(chat.profilName || chat.telefon || 'Unbekannt')}</h2>
+        <p class="text-mute">${escapeHtml(chat.telefon || '')}${kunde ? ` · Kunde: ${escapeHtml(kunde.firma)}` : ' · kein Kunde zugeordnet'}</p>
+        <div class="actions">
+          <button class="btn" id="wa-reply-btn">📱 In WhatsApp antworten</button>
+        </div>
+      </div>
+      <div class="wa-transcript">
+        ${(chat.verlauf || []).map((m) => `
+          <div class="wa-bubble wa-bubble-${m.role === 'user' ? 'in' : 'out'}">
+            <div class="wa-bubble-text">${escapeHtml(m.content || '')}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    detailHost.querySelector('#wa-reply-btn').addEventListener('click', () => openWhatsApp(chat.telefon, ''));
+  }
+
+  container.querySelector('#wa-search').addEventListener('input', (e) => {
+    query = e.target.value.trim();
+    renderList();
+  });
+
+  renderList();
 }

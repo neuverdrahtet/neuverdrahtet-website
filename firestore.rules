@@ -95,7 +95,7 @@ service cloud.firestore {
       return collectionId in [
         'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'gutschriften',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
-        'lagerbewegungen', 'emails', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
+        'lagerbewegungen', 'emails', 'whatsapp_chats', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',
         'google_oauth_tokens', 'google_calendar_links', 'google_action_log', 'lieferanten', 'inventuren',
         'zahlungsabgleich', 'katalogVorschlaege', 'uploadLinks', 'teams',
