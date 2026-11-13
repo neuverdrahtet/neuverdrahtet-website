@@ -124,7 +124,7 @@ name = "neuverdrahtet-ki-angebote-staging"
 # Absichtlich NUR die Staging-Domain/einen lokalen Testserver erlauben, NIE
 # die echte Produktionsdomain - verhindert, dass die echte Webseite versehentlich
 # gegen den Staging-Worker statt den Produktions-Worker spricht.
-ALLOWED_ORIGINS = "http://localhost:8080,https://<STAGING-PREVIEW-DOMAIN>"
+ALLOWED_ORIGINS = "http://localhost:8080,https://neuverdrahtet-staging.web.app"
 # Günstigeres/kleineres Modell für Staging-Tests empfohlen (geringeres Testbudget).
 MODEL_ID = "claude-haiku-4-5"
 

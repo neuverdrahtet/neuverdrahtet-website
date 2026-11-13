@@ -49,11 +49,11 @@ Jeder Aufruf, der eine Google-Zugriffsberechtigung (OAuth-Scope) anfordert, wurd
 
 Die Vorlage ist bereits in den drei betroffenen `wrangler.toml`-Dateien als `[env.staging]`-Block hinterlegt (`cloudflare-worker/`, `cloudflare-worker-google-buero/`, `cloudflare-worker-ki-buerokraft/`) – inert, bis explizit mit `--env staging` deployt wird.
 
-1. `<PLATZHALTER>` in `cloudflare-worker/wrangler.toml` (`ALLOWED_ORIGINS`) durch die tatsächliche Staging-Vorschau-Domain ersetzen.
-2. Für jeden der drei Worker: `wrangler deploy --env staging`.
-3. Secrets setzen (**eigene** Werte, siehe Schritt 4/5): `wrangler secret put ANTHROPIC_API_KEY --env staging`, `wrangler secret put APP_SECRET --env staging`, `wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON --env staging` (Inhalt der in Schritt 1.5 erzeugten Datei) usw. für die beiden anderen Worker entsprechend ihrer eigenen Secret-Liste.
-4. Das `RATE_LIMITER`-Binding für `--env staging` wird von Cloudflare beim ersten `wrangler deploy --env staging` automatisch angelegt (wie in Produktion) – **Pflicht**, da die Routen seit der Phase-10-Sicherheitskorrektur sonst fail-closed sperren.
-5. **Phase 11.1:** `AI_WORKER_ORIGIN` in `cloudflare-worker-ki-buerokraft/wrangler.toml` (`[env.staging.vars]`) auf genau denselben Wert wie `ALLOWED_ORIGINS` im Haupt-Worker setzen (die Staging-Vorschau-Domain aus Schritt 2.1) – ohne diese Übereinstimmung scheitert jeder Beleg-Scan (bulkFixReceipts) in Staging mit „Origin nicht erlaubt" (403).
+0. **Staging-Vorschau-Domain (13.11.2026 erledigt):** `ALLOWED_ORIGINS` in `cloudflare-worker/wrangler.toml` und `AI_WORKER_ORIGIN` in `cloudflare-worker-ki-buerokraft/wrangler.toml` sind bereits auf `https://neuverdrahtet-staging.web.app` gesetzt – das ist Firebase Hosting auf dem in Schritt 1 angelegten Staging-Projekt (`neuverdrahtet-staging`), kein zusätzlicher Dienst nötig. `firebase.json` hat dafür jetzt einen `hosting`-Block (`public: "verwaltung"`). **Wichtig:** `firebase deploy --only hosting` IMMER mit `--project neuverdrahtet-staging` ausführen – ohne `--project`-Flag greift der Default-Alias aus `.firebaserc` (`neuverdrahtet-verwaltung`, also PRODUKTION). Deploy-Befehl: `firebase deploy --only hosting --project neuverdrahtet-staging`.
+1. Für jeden der drei Worker: `wrangler deploy --env staging`.
+2. Secrets setzen (**eigene** Werte, siehe Schritt 4/5): `wrangler secret put ANTHROPIC_API_KEY --env staging`, `wrangler secret put APP_SECRET --env staging`, `wrangler secret put FIREBASE_SERVICE_ACCOUNT_JSON --env staging` (Inhalt der in Schritt 1.5 erzeugten Datei) usw. für die beiden anderen Worker entsprechend ihrer eigenen Secret-Liste.
+3. Das `RATE_LIMITER`-Binding für `--env staging` wird von Cloudflare beim ersten `wrangler deploy --env staging` automatisch angelegt (wie in Produktion) – **Pflicht**, da die Routen seit der Phase-10-Sicherheitskorrektur sonst fail-closed sperren.
+4. `AI_WORKER_ORIGIN` in `cloudflare-worker-ki-buerokraft/wrangler.toml` (`[env.staging.vars]`) ist bereits auf denselben Wert wie `ALLOWED_ORIGINS` im Haupt-Worker gesetzt (siehe Punkt 0) – ohne diese Übereinstimmung scheitert jeder Beleg-Scan (bulkFixReceipts) in Staging mit „Origin nicht erlaubt" (403).
 
 ## Schritt 3: Dedizierte Gmail-/Google-Kalender-Testkonten ⏸ Wartet auf Danny
 

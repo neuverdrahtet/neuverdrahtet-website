@@ -51,7 +51,7 @@ name = "neuverdrahtet-ki-buerokraft-staging"
 # Produktions-Domain nicht in der Staging-ALLOWED_ORIGINS-Liste des
 # Haupt-Workers steht (siehe dessen [env.staging.vars] ALLOWED_ORIGINS).
 # MUSS exakt mit einem der dort gelisteten Werte übereinstimmen.
-AI_WORKER_ORIGIN = "<STAGING-PREVIEW-DOMAIN, identisch zu ALLOWED_ORIGINS im Haupt-Worker>"
+AI_WORKER_ORIGIN = "https://neuverdrahtet-staging.web.app"
 
 # Eigener, vom Produktions-RATE_LIMITER komplett unabhängiger Staging-Limiter.
 [[env.staging.unsafe.bindings]]
