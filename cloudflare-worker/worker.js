@@ -6858,6 +6858,90 @@ async function runKatalogAktualisierung(env) {
   }
 }
 
+// Zentraler Erreichbarkeits-Check für die anderen 9 Worker (Vorfall
+// 13.11.2026: der KI-Bürokraft-Worker war 2 Tage unbemerkt nicht
+// erreichbar, weil sein API_KEY-Secret in Cloudflare gelöscht wurde - der
+// KI-Bürokraft-Worker prüft seinen eigenen API_KEY inzwischen selbst,
+// siehe dortiges worker.js/README). JARVIS hat keine eigenen Secrets für
+// die meisten anderen Worker (nur KI_BUEROKRAFT_API_KEY/GOOGLE_BUERO_
+// API_KEY für die zwei, die JARVIS tatsächlich aufruft) - deshalb bewusst
+// nur ein einfacher, unauthentifizierter Erreichbarkeits-Ping statt eines
+// tiefen Funktionstests: meldet "nicht erreichbar" (Netzwerkfehler/Timeout)
+// oder "antwortet mit Serverfehler" (5xx - genau die Art Antwort, die der
+// Vorfall oben erzeugt hätte). Läuft bewusst UNGATED (kein eigener
+// Sicherheitsschalter wie die JARVIS-Automatisierungen unten) - reines
+// Lesen/Prüfen ohne Geschäftsdaten-Seiteneffekt, soll also immer laufen.
+const WORKER_HEALTHCHECK_URLS = {
+  'neuverdrahtet-api': 'https://neuverdrahtet-api.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-google-buero': 'https://neuverdrahtet-google-buero.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-ki-assistent': 'https://neuverdrahtet-ki-assistent.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-ki-assistent-whatsapp': 'https://neuverdrahtet-ki-assistent-whatsapp.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-ki-check': 'https://neuverdrahtet-ki-check.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-kostenschaetzer': 'https://neuverdrahtet-kostenschaetzer.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-qonto-sync': 'https://neuverdrahtet-qonto-sync.neuverdrahtetworkersdev.workers.dev',
+  'neuverdrahtet-social-publish': 'https://neuverdrahtet-social-publish.neuverdrahtetworkersdev.workers.dev',
+};
+
+async function pingWorker(url) {
+  try {
+    const res = await fetch(url, { method: 'GET', signal: AbortSignal.timeout(8000) });
+    if (res.status >= 500) return { ok: false, grund: `antwortet mit Serverfehler (${res.status})` };
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, grund: `nicht erreichbar (${err.message || 'Netzwerkfehler'})` };
+  }
+}
+
+async function runJarvisWorkerHealthCheck(env) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) return;
+  const serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  const heute = new Date().toISOString().slice(0, 10);
+  const jobId = `worker-health-check-${heute}`;
+  const job = await beanspracheTagesJob({ serviceAccount, jobId, typ: 'worker-health-check' });
+  if (!job) return;
+
+  const probleme = [];
+  if (!env.ANTHROPIC_API_KEY) probleme.push('JARVIS selbst: ANTHROPIC_API_KEY fehlt - JARVIS-Chat/Automatisierungen funktionieren nicht.');
+  if (!env.KI_BUEROKRAFT_API_KEY) probleme.push('JARVIS selbst: KI_BUEROKRAFT_API_KEY fehlt - Anbindung an den KI-Bürokraft-Worker funktioniert nicht.');
+  if (!env.GOOGLE_BUERO_API_KEY) probleme.push('JARVIS selbst: GOOGLE_BUERO_API_KEY fehlt - Anbindung an den Google-Büro-Worker funktioniert nicht.');
+
+  const ergebnisse = await Promise.all(
+    Object.entries(WORKER_HEALTHCHECK_URLS).map(async ([name, url]) => ({ name, ...(await pingWorker(url)) }))
+  );
+  for (const r of ergebnisse) {
+    if (!r.ok) probleme.push(`${r.name}: ${r.grund}`);
+  }
+
+  try {
+    if (probleme.length > 0) {
+      const titel = `🚨 ${probleme.length} Worker-Problem(e) gefunden`;
+      await firestoreSetDoc({
+        serviceAccount, collection: 'aufgaben', id: `worker-health-${heute}`,
+        data: {
+          id: `worker-health-${heute}`, titel, beschreibung: probleme.join('\n'),
+          status: 'offen', prioritaet: 'hoch', erstelltAm: new Date().toISOString(), aktualisiertAm: new Date().toISOString(), quelle: 'jarvis-worker-health',
+        },
+      });
+      const tokenDocs = await firestoreListDocuments({ serviceAccount, collection: 'pushTokens' });
+      const tokens = tokenDocs.filter((t) => ['admin', 'buero'].includes(t.role)).map((t) => t.id);
+      if (tokens.length > 0) {
+        await sendFcmMessages({
+          serviceAccount, tokens, title: titel,
+          body: `${probleme[0].slice(0, 160)}${probleme.length > 1 ? ` (+${probleme.length - 1} weitere)` : ''}`,
+          url: './index.html#/aufgaben',
+        });
+      }
+    }
+    await firestoreMergeFelder({
+      serviceAccount, collection: 'jarvisJobs', id: jobId,
+      felder: { status: 'done', abgeschlossenAm: new Date().toISOString(), ergebnisZusammenfassung: probleme.length > 0 ? `${probleme.length} Problem(e) gefunden` : 'Alle Worker erreichbar' },
+    });
+  } catch (err) {
+    await firestoreMergeFelder({ serviceAccount, collection: 'jarvisJobs', id: jobId, felder: { status: 'failed', fehler: err.message } });
+    await protokolliereJarvisFehler({ serviceAccount, quelle: 'worker-health-check', fehler: err, kontext: { jobId }, kritisch: true });
+  }
+}
+
 export default {
   /** Cloudflare Cron Trigger - siehe Dashboard -> dieser Worker -> Settings -> Triggers -> Cron Triggers. */
   async scheduled(event, env, ctx) {
@@ -6886,6 +6970,7 @@ export default {
     ctx.waitUntil(runJarvisProjektCheck(env)); // Phase 4 - überfällige Projektaufgaben
     ctx.waitUntil(runJarvisControlCheck(env)); // Phase 6 - JARVIS CONTROL proaktive Überwachung (Flag JARVIS_CONTROL_AKTIV, Standard aus)
     ctx.waitUntil(runJarvisDispatchCheck(env)); // Service-/Techniker-/Personalverwaltung Phase 2 - SmartDispatch (Flag JARVIS_DISPATCH_AKTIV, Standard aus)
+    ctx.waitUntil(runJarvisWorkerHealthCheck(env)); // zentraler Erreichbarkeits-Check für die anderen 9 Worker (kein Sicherheitsschalter, siehe dortiger Kommentar)
   },
 
   async fetch(request, env) {
@@ -7991,4 +8076,6 @@ export const __test__ = {
   PARTNER_QUELLEN, PARTNERIMPORT_FELDER,
   // P0 Phase 1, Maßnahme 3 - Backup/Restore (wöchentlicher Firestore-Export)
   runFirestoreBackup,
+  // Zentraler Erreichbarkeits-Check für die anderen 9 Worker (13.11.2026)
+  runJarvisWorkerHealthCheck, pingWorker, WORKER_HEALTHCHECK_URLS,
 };
