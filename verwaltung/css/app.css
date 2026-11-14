@@ -7,20 +7,35 @@
    HTML-Dateien (verwaltung/index.html, verwaltung/techniker/index.html,
    verwaltung/portal/index.html) mit hochzählen. */
 
-/* Hell (ToolTime-Vorbild) ist der Standard - Dunkel ist der Opt-in über den
-   Theme-Umschalter (siehe :root[data-theme="dark"] unten). */
+/* Glas-Design in echten Werkora-Markenfarben (Navy + Gold, siehe Logo/
+   Website), auf Dannys Wunsch (14.11.2026) über die GANZE Software gezogen -
+   vorher gab es diesen Glas-Look (durchscheinende Flächen + Blur) nur auf
+   der Dashboard-Startseite (in Blau-Violett), siehe Git-History. Hell ist
+   weiterhin der Standard, Dunkel der Opt-in über den Theme-Umschalter
+   (:root[data-theme="dark"] unten). --card/--card-2/--modal-bg/--border sind
+   jetzt durchscheinend (rgba) statt blickdicht - zusammen mit dem globalen
+   Blur-Block weiter unten ("Glas-Oberflächen") und dem Seiten-Hintergrund
+   --page-bg-image (auf <body>, siehe dort) ergibt das den Glas-Effekt. */
 :root {
   --navy: #16213e;
   --navy-2: #1c2b4a;
-  --sidebar-active: #4a7fd6;
-  --accent: #4a7fd6;
-  --accent-2: #3d6bc0;
-  --accent-rgb: 74, 127, 214;
-  --bg: #f5f6f8;
-  --card: #ffffff;
-  --card-2: #f7f8fa;
-  --modal-bg: #ffffff;
-  --border: #dfe3e8;
+  --gold: #f0a020;
+  --gold-2: #d98a0e;
+  --sidebar-active: #f0a020;
+  --accent: #f0a020;
+  --accent-2: #d98a0e;
+  --accent-rgb: 240, 160, 32;
+  /* Textfarbe AUF Gold-Flächen (Buttons/Badges/aktive Zustände) - Weiß auf
+     diesem hellen Gold hat nur ~2.1:1 Kontrast (WCAG verlangt 4.5:1 für
+     Normaltext), Navy auf Gold dagegen ~6:1. Gilt für beide Themes gleich,
+     da das Gold selbst themeunabhängig gleich hell bleibt. */
+  --accent-ink: #16213e;
+  --bg: #f4f6fa;
+  --card: rgba(255, 255, 255, 0.55);
+  --card-2: rgba(255, 255, 255, 0.38);
+  --modal-bg: rgba(255, 255, 255, 0.86);
+  --sidebar-bg: rgba(22, 33, 62, 0.82);
+  --border: rgba(22, 33, 62, 0.14);
   --text: #1b1c20;
   --text-mute: #6b6e78;
   --danger: #ef4444;
@@ -31,15 +46,23 @@
   --warn-bg: rgba(184, 134, 11, 0.12);
   --radius: 10px;
   --shadow: 0 1px 2px rgba(20, 20, 30, 0.06), 0 4px 14px rgba(20, 20, 30, 0.06);
+  /* Deutlich kräftiger als die erste Fassung - zu schwache Flecken (<10%
+     Deckkraft) waren hinter den halbtransparenten Karten praktisch
+     unsichtbar, der Glas-Effekt kam gar nicht zur Geltung (per Playwright-
+     Screenshot geprüft, 14.11.2026). */
+  --page-bg-image:
+    radial-gradient(ellipse 1100px 750px at 2% -10%, rgba(22, 33, 62, 0.16), transparent 55%),
+    radial-gradient(ellipse 950px 680px at 100% 100%, rgba(240, 160, 32, 0.22), transparent 55%);
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #0b0b0d;
-  --card: #1e1e24;
-  --card-2: #17171b;
-  --modal-bg: #1e1e24;
-  --border: #2c2c33;
+  --bg: #0c0f1c;
+  --card: rgba(255, 255, 255, 0.07);
+  --card-2: rgba(255, 255, 255, 0.04);
+  --modal-bg: rgba(22, 27, 46, 0.82);
+  --sidebar-bg: rgba(10, 14, 26, 0.6);
+  --border: rgba(255, 255, 255, 0.14);
   --text: #f1f1f3;
   --text-mute: #9497a1;
   --danger-bg: rgba(239, 68, 68, 0.15);
@@ -47,47 +70,44 @@
   --warn: #f59e0b;
   --warn-bg: rgba(245, 158, 11, 0.15);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 14px rgba(0, 0, 0, 0.35);
+  --page-bg-image:
+    radial-gradient(ellipse 1300px 850px at 8% -5%, rgba(240, 160, 32, 0.22), transparent 60%),
+    radial-gradient(ellipse 1100px 750px at 100% 105%, rgba(22, 33, 62, 0.55), transparent 62%),
+    linear-gradient(160deg, #0d1120 0%, #161d38 55%, #0d1120 100%);
   color-scheme: dark;
 }
 
-
-/* Dashboard-Startseite hat unabhängig vom gewählten Theme (Hell/Dunkel)
-   immer diesen blau-violetten Glas-Look - eigener CSS-Variablen-Scope auf
-   dem Routen-Container (siehe main.js router(), setzt #view[data-route]),
-   genau nach demselben Muster wie der :root[data-theme]-Block oben. */
-#view[data-route="dashboard"] {
-  --bg: #171b36;
-  --card: rgba(255, 255, 255, 0.07);
-  --card-2: rgba(255, 255, 255, 0.04);
-  --modal-bg: #1b1f3d;
-  --border: rgba(255, 255, 255, 0.14);
-  --text: #f3f4fb;
-  --text-mute: #b7bbd9;
-  --accent: #8b7bf7;
-  --accent-2: #6d5ce8;
-  --accent-rgb: 139, 123, 247;
-  --sidebar-active: #8b7bf7;
-  --danger: #ff6b8a;
-  --danger-bg: rgba(255, 107, 138, 0.18);
-  --success: #3ddc97;
-  --success-bg: rgba(61, 220, 151, 0.18);
-  --warn: #ffb648;
-  --warn-bg: rgba(255, 182, 72, 0.18);
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-  color-scheme: dark;
-  background:
-    radial-gradient(ellipse 1300px 850px at 8% -5%, rgba(99, 102, 241, 0.35), transparent 62%),
-    radial-gradient(ellipse 1100px 750px at 100% 105%, rgba(236, 72, 153, 0.2), transparent 62%),
-    linear-gradient(160deg, #161a30 0%, #201a3a 55%, #171d38 100%);
-  min-height: 100vh;
+/* Seiten-Hintergrund (Navy-/Gold-Verlauf hinter den durchscheinenden Glas-
+   Flächen) - gilt jetzt global statt nur auf der Dashboard-Route, deshalb
+   über <body> statt über #view[data-route="dashboard"] (das es vorher gab,
+   siehe Git-History) gesetzt. background-attachment: fixed verhindert, dass
+   der Verlauf beim Scrollen "mitwandert" (sähe sonst wie ein Flackern aus).*/
+body {
+  background-image: var(--page-bg-image);
+  background-attachment: fixed;
+  background-color: var(--bg);
 }
-#view[data-route="dashboard"] .card,
-#view[data-route="dashboard"] .kpi-card {
-  background: var(--card);
+
+/* Glas-Oberflächen: EIN zentraler Block statt in jeder einzelnen Regel
+   weiter unten "backdrop-filter" zu wiederholen - alle hier gelisteten
+   Selektoren setzen bereits "background: var(--card|--card-2|--modal-bg)"
+   (siehe jeweilige Regel weiter unten in dieser Datei), bekommen durch die
+   jetzt durchscheinenden Farben oben + den Blur hier den Glas-Look. Reine
+   Hover-Hintergründe (z.B. ":hover") und sehr kleine Elemente (Fortschritts-
+   balken, Statuspunkte) bekommen bewusst KEINEN Blur - das wäre unnötige
+   GPU-Last ohne sichtbaren Effekt. Zwei Blur-Stärken: stärker für große,
+   einzelne Flächen (Karten/Modals/Sidebar), schwächer für Elemente, die oft
+   wiederholt auf einer Seite vorkommen (Kanban-/Listen-Karten) - spart GPU-
+   Last bei langen Listen/Boards.*/
+.card, .kpi-card, .tt-card, .modal, .lock-box, table.data-table,
+.chip-picker, .settings-nav, .social-channel-card {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  border-color: var(--border);
-  box-shadow: var(--shadow);
+}
+.kanban-col, .kanban-card, .es-card, .es-day, .akte-projekt,
+.karte-list-item, .postfach-row, .postfach-detail, .dok-row {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 /* JARVIS-Dashboard-Tab: reine Layout-Klassen (Flex/Grid), kein eigenes
@@ -116,7 +136,10 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
+  /* NICHT die "background"-Kurzform verwenden: die würde die weiter oben
+     gesetzten background-image/-attachment (Navy-/Gold-Verlauf, siehe dort)
+     wieder zurücksetzen, da diese Regel später in der Kaskade steht. */
+  background-color: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-size: 14px;
@@ -156,7 +179,12 @@ select option {
 .lock-screen {
   position: fixed;
   inset: 0;
-  background: var(--navy);
+  /* Gleicher Navy-/Gold-Verlauf wie der App-Hintergrund (--page-bg-image),
+     nur auf einer soliden Navy-Basis statt --bg - der Login-Bildschirm
+     erscheint VOR dem Login, hat also noch kein Theme/keine Session, soll
+     aber trotzdem schon den neuen Glas-Look zeigen. */
+  background-image: var(--page-bg-image);
+  background-color: var(--navy);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -187,7 +215,7 @@ select option {
   border: none;
   border-radius: 8px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   font-weight: 600;
 }
 .lock-error { color: var(--danger); font-size: 12px; margin-top: 8px; }
@@ -206,14 +234,19 @@ select option {
 .sidebar {
   width: 230px;
   flex-shrink: 0;
-  background: var(--navy);
+  background: var(--sidebar-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: #dbe4ee;
   display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
   height: 100vh;
-  border-right: 1px solid var(--border);
+  /* Eigene, immer helle Trennlinie statt var(--border) - die Sidebar ist in
+     beiden Themes dunkles Navy-Glas (siehe --sidebar-bg), var(--border) wäre
+     im Hell-Theme (dunkler Navy-Ton) darauf praktisch unsichtbar. */
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
 }
 .sidebar-brand {
   display: flex;
@@ -257,7 +290,7 @@ select option {
   white-space: nowrap;
 }
 .sidebar-nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
-.sidebar-nav a.active { background: var(--sidebar-active); color: #fff; font-weight: 600; }
+.sidebar-nav a.active { background: var(--sidebar-active); color: var(--accent-ink); font-weight: 600; }
 .sidebar-nav-label {
   margin: 10px 0 0;
   padding: 0 12px;
@@ -421,7 +454,7 @@ select option {
   font-size: 13px;
 }
 .btn:hover { border-color: #46464f; }
-.btn-primary { background: var(--accent); border-color: var(--accent-2); color: #fff; }
+.btn-primary { background: var(--accent); border-color: var(--accent-2); color: var(--accent-ink); }
 .btn-primary:hover { background: var(--accent-2); }
 .btn-danger { background: var(--danger-bg); border-color: rgba(239, 68, 68, 0.4); color: var(--danger); }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
@@ -683,13 +716,13 @@ table.data-table th.col-select, table.data-table td.col-select {
 .badge-success { background: var(--success); color: #fff; }
 .badge-danger { background: var(--danger); color: #fff; }
 .badge-warn { background: var(--warn); color: #fff; }
-.badge-accent { background: var(--accent); color: #fff; }
+.badge-accent { background: var(--accent); color: var(--accent-ink); }
 .badge-purple { background: #a463f2; color: #fff; }
 /* Ausgaben-Kategorien - feste Farben statt einheitlichem Grau, damit die
    Kategorie in der Liste auf einen Blick erkennbar ist (nicht per Text lesen). */
 .badge-kat-material { background: #2b7fd6; color: #fff; }
 .badge-kat-werkzeug { background: #14b8a6; color: #fff; }
-.badge-kat-fahrzeug { background: #f0a020; color: #fff; }
+.badge-kat-fahrzeug { background: #f0a020; color: var(--accent-ink); }
 .badge-kat-miete { background: #8e44ad; color: #fff; }
 .badge-kat-versicherung { background: #6366f1; color: #fff; }
 .badge-kat-buero { background: #6b7280; color: #fff; }
@@ -816,7 +849,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   overflow-y: auto;
 }
 .address-search-item { padding: 8px 10px; font-size: 13px; cursor: pointer; }
-.address-search-item:hover { background: var(--accent); color: #fff; }
+.address-search-item:hover { background: var(--accent); color: var(--accent-ink); }
 .field-checkbox input { width: auto; }
 
 /* Toggle-Gruppe (z.B. Arbeitsort): einzeln wählbare Buttons in einer Reihe */
@@ -909,9 +942,9 @@ table.data-table th.col-select, table.data-table td.col-select {
   color: var(--text);
 }
 .folder-item:hover { background: var(--card-2); }
-.folder-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+.folder-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .folder-item .count { color: var(--text-mute); font-size: 11.5px; }
-.folder-item.active .count { color: #fff; }
+.folder-item.active .count { color: var(--accent-ink); }
 .projekte-main { flex: 1; min-width: 0; }
 
 @media (max-width: 880px) {
@@ -956,7 +989,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   color: var(--text);
 }
 .settings-nav-item:hover { background: var(--card-2); }
-.settings-nav-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+.settings-nav-item.active { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .settings-content { flex: 1; min-width: 0; }
 @media (max-width: 880px) {
   .settings-layout { flex-direction: column; }
@@ -970,7 +1003,7 @@ table.data-table th.col-select, table.data-table td.col-select {
 .theme-switch-group { display: inline-flex; gap: 4px; }
 .theme-opt[aria-pressed="true"] {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   border-color: var(--accent);
 }
 
@@ -1083,7 +1116,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   height: 20px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
   margin-bottom: 2px;
 }
 .cal-event {
@@ -1143,7 +1176,7 @@ table.data-table th.col-select, table.data-table td.col-select {
   height: 20px;
   border-radius: 50%;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-ink);
 }
 .plantafel-days-head {
   display: grid;
@@ -1417,7 +1450,7 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   color: var(--text);
 }
 .es-day.is-today { border-color: var(--accent); }
-.es-day.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.es-day.active { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .es-dow { font-size: 10.5px; color: inherit; opacity: 0.75; }
 .es-num { font-size: 15px; font-weight: 700; }
 .es-list { display: flex; flex-direction: column; gap: 12px; }
@@ -1585,8 +1618,8 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   padding-right: 4px;
 }
 .ka-msg { border-radius: 8px; padding: 8px 10px; max-width: 80%; }
-.ka-msg-user { background: var(--accent); color: #fff; align-self: flex-end; }
-.ka-msg-user .tc-msg-head, .ka-msg-user .text-mute { color: rgba(255,255,255,0.75); }
+.ka-msg-user { background: var(--accent); color: var(--accent-ink); align-self: flex-end; }
+.ka-msg-user .tc-msg-head, .ka-msg-user .text-mute { color: rgba(22, 33, 62, 0.65); }
 .ka-msg-assistant { background: var(--card-2); align-self: flex-start; }
 
 /* Kundenakte */
@@ -1678,9 +1711,16 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   gap: 8px;
   z-index: 900;
 }
+/* Vorbestehender Kontrastfehler korrigiert (beim Redesign aufgefallen,
+   14.11.2026): toast(msg) ohne zweites Argument (Standard-Typ "info", siehe
+   utils.js) ergab die Klasse "toast-info" - die es als eigene Regel nie gab,
+   damit griff diese Basisregel mit weißem Text auf var(--modal-bg), was im
+   Hell-Theme (vorher blickdicht weiß) bereits unlesbar war. Jetzt fest auf
+   Navy statt themeabhängigem --modal-bg, damit info-Toasts in JEDEM Theme
+   lesbar bleiben (wie ein klassischer dunkler "Snackbar"-Hinweis). */
 .toast {
-  background: var(--modal-bg);
-  border: 1px solid var(--border);
+  background: var(--navy);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   color: #fff;
   padding: 10px 16px;
   border-radius: 8px;
@@ -1936,7 +1976,7 @@ li.dash-row-link:hover { background: var(--card-2); border-color: var(--accent);
   padding: 8px 12px; border-radius: 12px; font-size: 13px; white-space: pre-wrap; word-break: break-word;
 }
 .wa-bubble-in .wa-bubble-text { background: var(--border); color: var(--text); border-bottom-left-radius: 2px; }
-.wa-bubble-out .wa-bubble-text { background: var(--accent); color: #fff; border-bottom-right-radius: 2px; }
+.wa-bubble-out .wa-bubble-text { background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 2px; }
 .postfach-attachments { margin-top: 16px; border-top: 1px solid var(--border); padding-top: 12px; }
 .postfach-attachment-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
 .postfach-link-termine { margin-top: 8px; display: flex; flex-direction: column; gap: 4px; }
