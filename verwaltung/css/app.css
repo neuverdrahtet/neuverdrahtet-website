@@ -681,6 +681,15 @@ table.data-table td select.inline-select {
      ausgaben.js). */
   border-radius: 999px;
   font-weight: 600;
+  /* Einheitliche Mindestgröße (14.11.2026, auf Dannys Wunsch "alle Buttons
+     gleich groß wie der Bezahlt-Button") - ohne das sieht z.B. "Offen"
+     spürbar kleiner aus als "Teilbezahlt", nur weil der Text kürzer ist.
+     min-width statt einer festen Breite, damit ein vom Nutzer selbst im
+     Status-Manager länger benannter Status (z.B. "Kunden Gewonnen") nicht
+     abgeschnitten wird. */
+  min-width: 104px;
+  text-align: center;
+  text-align-last: center;
 }
 tr.notiz-row { cursor: default; }
 tr.notiz-row:hover { background: inherit; }
@@ -732,6 +741,16 @@ table.data-table th.col-select, table.data-table td.col-select {
   background: #5b6472;
   color: #fff;
   white-space: nowrap;
+}
+/* Gleiche Mindestgröße wie die Status-/Kategorie-Auswahlfelder (siehe
+   table.data-table td select.inline-select oben) - innerhalb einer
+   Tabellenspalte sollen Badge (z.B. "Rechnung", "Storniert") und
+   Auswahlfeld (z.B. "Bezahlt") gleich groß wirken, nicht je nach Textlänge
+   unterschiedlich (14.11.2026, auf Dannys Wunsch). */
+table.data-table td .badge {
+  min-width: 104px;
+  text-align: center;
+  box-sizing: border-box;
 }
 .badge-success { background: var(--success); color: #fff; }
 .badge-danger { background: var(--danger); color: #fff; }
