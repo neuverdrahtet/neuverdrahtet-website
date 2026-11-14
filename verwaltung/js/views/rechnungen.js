@@ -18,6 +18,14 @@ import * as journal from '../journal.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
+// Dieselben Farben wie STATUS_BADGE oben, nur als Inline-Style für das
+// Status-Auswahlfeld (14.11.2026, auf Dannys Wunsch "farbiger Button statt
+// nur farbiger Text", siehe app.css .badge-warn/.badge-accent/.badge-success).
+const STATUS_SELECT_STYLE = {
+  offen: 'background-color:var(--warn);border-color:var(--warn);color:#fff',
+  teilbezahlt: 'background-color:var(--accent);border-color:var(--accent);color:var(--accent-ink)',
+  bezahlt: 'background-color:var(--success);border-color:var(--success);color:#fff',
+};
 const RECHNUNGSTYP_LABEL = { rechnung: 'Rechnung', abschlag: 'Abschlagsrechnung' };
 const MONATE = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
 const ZAHLUNGSARTEN = [
@@ -305,7 +313,7 @@ export async function render(container, route) {
                 ${r.status === 'storniert' ? `
                   <span class="badge ${STATUS_BADGE[r.status] || 'badge'}" ${r.stornoVonNummer && (r.stornoGrund || r.stornoGrundText) ? `title="${escapeHtml([GRUENDE_STORNO.find((g) => g.id === r.stornoGrund)?.titel, r.stornoGrundText].filter(Boolean).join(' – '))}"` : ''}>${STATUS_LABEL[r.status]}</span>
                 ` : `
-                  <select class="inline-select status-select" data-id="${r.id}" title="Status ändern">
+                  <select class="inline-select status-select" data-id="${r.id}" title="Status ändern" style="${STATUS_SELECT_STYLE[r.status] || ''}">
                     ${['offen', 'teilbezahlt', 'bezahlt'].map((s) => `<option value="${s}" ${s === r.status ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}
                   </select>
                 `}

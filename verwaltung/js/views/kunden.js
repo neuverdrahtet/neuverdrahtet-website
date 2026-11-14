@@ -1,5 +1,5 @@
 import { getAll, put, remove, clearStore, getSettings, setSettings, resolveMarkeSettings, BEREICHE } from '../db.js';
-import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText, offenerRestbetrag, offenerGutschriftBetrag } from '../utils.js';
+import { uid, escapeHtml, el, formatDate, formatCurrency, todayISO, addDays, toast, excelFileToCsvText, readTextAutoEncoding, toCsv, downloadTextFile, nextDailyNummer, navigationUrl, farbeAusText, offenerRestbetrag, offenerGutschriftBetrag, textColorForBg } from '../utils.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
@@ -255,6 +255,7 @@ export async function render(container, route) {
         </tr></thead>
         <tbody>
           ${filtered.map((k) => {
+            const statusFarbe = kundenStatusListe.find((s) => s.id === (k.status || 'kunde'))?.farbe || '#6b7280';
             return `
             <tr data-id="${k.id}">
               ${bulk.rowCell(k.id)}
@@ -262,7 +263,7 @@ export async function render(container, route) {
               <td>${escapeHtml(k.firma)}</td>
               <td>${escapeHtml(k.kundennummer || '')}</td>
               <td>
-                <select class="inline-select status-select" data-id="${k.id}" title="Status ändern">
+                <select class="inline-select status-select" data-id="${k.id}" title="Status ändern" style="background-color:${escapeHtml(statusFarbe)};border-color:${escapeHtml(statusFarbe)};color:${textColorForBg(statusFarbe)}">
                   ${kundenStatusListe.map((s) => `<option value="${s.id}" ${s.id === (k.status || 'kunde') ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
                 </select>
               </td>

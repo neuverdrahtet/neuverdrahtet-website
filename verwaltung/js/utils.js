@@ -19,6 +19,21 @@ export function farbeAusText(text, palette) {
   return palette[hash % palette.length];
 }
 
+// Für eine beliebige Hintergrundfarbe (z.B. eine vom Nutzer selbst im
+// Status-Manager vergebene Farbe) die besser lesbare Textfarbe (Weiß oder
+// Navy) bestimmen - einfache YIQ-Helligkeitsformel, reicht für diesen
+// UI-Zweck (farbig gefüllte Status-Auswahlfelder, 14.11.2026 auf Dannys
+// Wunsch "wie in der Seitenleiste" statt nur farbiger Text/Rand). Schwelle
+// 150 statt der oft genutzten 128, damit das Werkora-Gold (#f0a020, YIQ≈169)
+// konsistent mit --accent-ink (app.css) Navy-Text bekommt statt Weiß.
+export function textColorForBg(hex) {
+  const h = (hex || '').replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return '#fff';
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+  return yiq >= 150 ? '#16213e' : '#fff';
+}
+
 // Tatsächlich noch offener Betrag einer Rechnung - berücksichtigt eine
 // bereits erfasste Teilzahlung (teilzahlungBetrag, Status "teilbezahlt").
 // Zentrale Stelle, damit "offen"/"überfällig"-Anzeigen (Dashboard,

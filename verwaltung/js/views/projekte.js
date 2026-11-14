@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
-import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding } from '../utils.js';
+import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding, textColorForBg } from '../utils.js';
 import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
@@ -155,7 +155,7 @@ export async function render(container, opts = {}) {
               <td>${p.gewerk ? `<span class="badge" style="background:${escapeHtml(statusFarbe)}22;color:${escapeHtml(statusFarbe)}">${escapeHtml(GEWERKE.find((g) => g.id === p.gewerk)?.titel || '')}</span>` : ''}</td>
               <td style="color:${escapeHtml(statusFarbe)}">${escapeHtml(kategorienById[p.kategorieId]?.titel || BEREICHE.find((b) => b.id === effektiverBereich(p))?.titel || '')}</td>
               <td>
-                <select class="inline-select status-select" data-id="${p.id}" title="Status ändern" style="border-color:${escapeHtml(statusFarbe)};color:${escapeHtml(statusFarbe)}">
+                <select class="inline-select status-select" data-id="${p.id}" title="Status ändern" style="background-color:${escapeHtml(statusFarbe)};border-color:${escapeHtml(statusFarbe)};color:${textColorForBg(statusFarbe)}">
                   ${spalten.map((s) => `<option value="${s.id}" ${s.id === p.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
                 </select>
               </td>

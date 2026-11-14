@@ -1,5 +1,5 @@
 import { getAll, put, remove } from '../db.js';
-import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast } from '../utils.js';
+import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, textColorForBg } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { createBulkSelect } from '../bulkselect.js';
@@ -96,6 +96,7 @@ export async function render(container) {
         <tbody>
           ${filtered.map((a) => {
             const st = statusById[a.status];
+            const statusFarbe = st?.farbe || '#6b7280';
             return `
             <tr data-id="${a.id}">
               ${bulk.rowCell(a.id)}
@@ -105,7 +106,7 @@ export async function render(container) {
               <td>${formatDate(a.faelligAm)}</td>
               <td><span class="badge ${a.prioritaet === 'hoch' ? 'badge-danger' : a.prioritaet === 'niedrig' ? '' : 'badge-warn'}">${escapeHtml(PRIORITAETEN.find((p) => p.id === a.prioritaet)?.titel || 'Normal')}</span></td>
               <td>
-                <select class="inline-select status-select" data-id="${a.id}" title="Status ändern">
+                <select class="inline-select status-select" data-id="${a.id}" title="Status ändern" style="background-color:${escapeHtml(statusFarbe)};border-color:${escapeHtml(statusFarbe)};color:${textColorForBg(statusFarbe)}">
                   ${aufgabenStatus.map((s) => `<option value="${s.id}" ${s.id === a.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
                 </select>
               </td>
