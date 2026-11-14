@@ -2696,25 +2696,25 @@ export const ROUTE_ROLLEN = {
 
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
-  reisekosten: [], // Solo-Betrieb: eigene Reisekosten laufen nicht über Werkora.
-  performance: [], // Solo-Betrieb: Performance/Bonus ist für Angestellte gedacht.
-  benefits: [], // Solo-Betrieb: Mitarbeiter-Benefits sind für Angestellte gedacht.
+  reisekosten: ['admin', 'buero', 'mitarbeiter'],
+  performance: ['admin', 'buero'],
+  benefits: ['admin', 'buero'],
   service: [], // Solo-Betrieb: eigener Reiter für Bereich 'service' nicht mehr gebraucht - bereits bestehende Projekte mit diesem Bereich bleiben in Firestore erhalten, aber ohne eigene Route unsichtbar.
   wartung: ['admin', 'buero', 'mitarbeiter'],
   plantafel: ['admin', 'buero', 'mitarbeiter'],
   termine: ['admin', 'buero', 'mitarbeiter'],
   zeiterfassung: ['admin', 'buero', 'mitarbeiter'],
   aufgaben: ['admin', 'buero', 'mitarbeiter'],
-  urlaubsantraege: [], // Solo-Betrieb: Urlaub/Krankmeldung ist für Angestellte gedacht.
-  mitarbeiter: [], // Solo-Betrieb: Dannys eigener Mitarbeiter-Datensatz bleibt bestehen (für Zeiterfassung), nur die Verwaltungsseite ist zu.
-  subunternehmer: [], // Solo-Betrieb: aktuell keine Zusammenarbeit mit Subunternehmern.
+  urlaubsantraege: ['admin', 'buero', 'mitarbeiter'],
+  mitarbeiter: ['admin', 'buero'],
+  subunternehmer: ['admin', 'buero'],
   'ki-freigaben': ['admin'],
   'ki-aktivitaet': ['admin'],
   'ki-assistent': ['admin', 'buero'],
   jarvis: [], // Solo-Betrieb: autonome JARVIS-Funktionen werden nicht genutzt (Partner-Import bleibt als eigene Route).
   partnerimport: ['admin'],
-  geraete: [], // Solo-Betrieb: keine Flotte/mehrere Mitarbeitergeräte zu verwalten.
-  teams: [], // Solo-Betrieb: keine Kolonnen, da nur eine Person.
+  geraete: ['admin', 'buero', 'mitarbeiter'],
+  teams: ['admin', 'buero', 'mitarbeiter'],
   katalog: ['admin', 'buero'],
   'katalog-vorschlaege': ['admin', 'buero'],
   lieferanten: [], // Solo-Betrieb: Lieferanten-Verwaltungsseite zu - ACHTUNG: Katalog/Angebote können bestehende Lieferanten weiter als Auswahl anzeigen, aber ohne diese Route kann kein neuer Lieferant mehr angelegt werden.
