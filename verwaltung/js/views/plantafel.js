@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
-import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr } from '../utils.js';
+import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr, textColorForBg } from '../utils.js';
 import { confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
@@ -335,7 +335,7 @@ export async function render(container, route, { autoSync = true } = {}) {
               const status = statusInfo(it.termin.status);
               return `
                 <div class="plantafel-bar" data-id="${it.termin.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
-                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}33; border-color:${farbe}; color:${farbe}">
+                  style="left:calc(${it.startIdx}/7*100%); width:calc(${span}/7*100% - 4px); top:${it.lane * LANE_HEIGHT + 6}px; background:${farbe}; border-color:${farbe}; color:${textColorForBg(farbe)}">
                   <span class="plantafel-bar-label">${it.termin.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((it.termin.start || '').slice(11, 16))} ${escapeHtml(it.termin.titel)}</span>
                   <span class="plantafel-bar-status" style="background:${status.farbe}" title="${escapeHtml(status.titel || '')}"></span>
                   <span class="plantafel-bar-handle" data-id="${it.termin.id}"></span>
@@ -573,7 +573,7 @@ export async function render(container, route, { autoSync = true } = {}) {
             const farbe = e.farbe || typInfo(e.typ).farbe;
             const marke = markeFuerTermin(e);
             const titleAttr = [typInfo(e.typ).titel, marke ? `Marke: ${marke.name}` : ''].filter(Boolean).join(' · ');
-            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe}22;color:${farbe}" title="${escapeHtml(titleAttr)}">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((e.start || '').slice(11, 16))} ${escapeHtml(e.titel)}</div>`;
+            return `<div class="cal-event" data-id="${e.id}" style="background:${farbe};color:${textColorForBg(farbe)}" title="${escapeHtml(titleAttr)}">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml((e.start || '').slice(11, 16))} ${escapeHtml(e.titel)}</div>`;
           }).join('')}
           ${events.length > 3 ? `<div class="cal-event">+${events.length - 3} weitere</div>` : ''}
         </div>
@@ -687,7 +687,7 @@ export async function render(container, route, { autoSync = true } = {}) {
         const zeit = (e.start || '').slice(11, 16) || '--:--';
         return `
           <div class="tag-cal-bar" data-id="${e.id}" title="${marke ? `Marke: ${escapeHtml(marke.name)}` : ''}"
-            style="top:${top}px; height:${height}px; left:calc(${it.lane}/${laneCount}*100%); width:calc(100%/${laneCount} - 4px); background:${farbe}33; border-color:${farbe}; color:${farbe}">
+            style="top:${top}px; height:${height}px; left:calc(${it.lane}/${laneCount}*100%); width:calc(100%/${laneCount} - 4px); background:${farbe}; border-color:${farbe}; color:${textColorForBg(farbe)}">
             <span class="tag-cal-bar-status" style="background:${status.farbe}" title="${escapeHtml(status.titel || '')}"></span>
             <span class="tag-cal-bar-time">${escapeHtml(zeit)}</span>
             <span class="tag-cal-bar-title">${e.autoErstellt ? '🆕 ' : ''}${marke ? '🏷️ ' : ''}${escapeHtml(e.titel)}</span>

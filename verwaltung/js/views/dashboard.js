@@ -1,5 +1,5 @@
 import { getAll, put, getSettings, TERMIN_TYPEN } from '../db.js';
-import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText, offenerRestbetrag } from '../utils.js';
+import { uid, formatCurrency, formatDate, todayISO, addDays, escapeHtml, getCurrentMitarbeiterId, toast, localDateStr, farbeAusText, offenerRestbetrag, textColorForBg } from '../utils.js';
 import * as google from '../google.js';
 import { syncCalendar } from '../googlesync.js';
 import { istWidgetSichtbar, oeffneWidgetAuswahl } from '../dashboardWidgets.js';
@@ -422,7 +422,8 @@ export async function render(container, _route, { autoSync = true } = {}) {
           <div class="dash-pipeline">
             ${spalten.map((s) => {
               const count = projekte.filter((p) => p.status === s.id).length;
-              return `<a class="dash-pipeline-col" href="#/leadpipeline/pipeline"><span class="count">${count}</span><span class="label">${escapeHtml(s.titel)}</span></a>`;
+              const farbe = s.farbe || 'var(--card-2)';
+              return `<a class="dash-pipeline-col" href="#/leadpipeline/pipeline" style="background-color:${escapeHtml(farbe)};border-color:${escapeHtml(farbe)};color:${textColorForBg(s.farbe)}"><span class="count">${count}</span><span class="label">${escapeHtml(s.titel)}</span></a>`;
             }).join('')}
           </div>
         </div>

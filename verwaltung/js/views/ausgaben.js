@@ -1,5 +1,5 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
-import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile } from '../utils.js';
+import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile, textColorForBg } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
@@ -12,6 +12,14 @@ import { freigebenBelegVorschlag, ablehnenBelegVorschlag, freigebenBelegVorschla
 import { getSession } from '../auth.js';
 
 export const KATEGORIEN = ['Material', 'Werkzeug/Maschinen', 'Fahrzeug/Sprit', 'Miete', 'Versicherung', 'Büro/Verwaltung', 'Werbung/Marketing', 'Personal', 'Sonstiges'];
+// Dieselben Farben wie die bisher ungenutzten .badge-kat-*-Klassen in
+// app.css (14.11.2026, auf Dannys Wunsch "farbiger Button statt nur Text"
+// auch bei der Kategorie-Auswahl, nicht nur beim Status).
+const KATEGORIE_FARBE = {
+  'Material': '#2b7fd6', 'Werkzeug/Maschinen': '#14b8a6', 'Fahrzeug/Sprit': '#f0a020',
+  'Miete': '#8e44ad', 'Versicherung': '#6366f1', 'Büro/Verwaltung': '#6b7280',
+  'Werbung/Marketing': '#e91e8c', 'Personal': '#1f8a4c', 'Sonstiges': '#94a3b8',
+};
 const KALK_KATEGORIEN_AUSGABEN = KALK_KATEGORIEN.filter((k) => k.id !== 'lohn');
 
 function openBelegAnsicht(beleg) {
@@ -277,7 +285,7 @@ export async function render(container) {
               ${bulk.rowCell(a.id)}
               <td>${formatDate(a.datum)}</td>
               <td>
-                <select class="inline-select kategorie-select" data-id="${a.id}" title="Kategorie ändern">
+                <select class="inline-select kategorie-select" data-id="${a.id}" title="Kategorie ändern" style="background-color:${KATEGORIE_FARBE[a.kategorie] || '#6b7280'};border-color:${KATEGORIE_FARBE[a.kategorie] || '#6b7280'};color:${textColorForBg(KATEGORIE_FARBE[a.kategorie])}">
                   ${KATEGORIEN.map((k) => `<option value="${k}" ${k === a.kategorie ? 'selected' : ''}>${k}</option>`).join('')}
                 </select>
               </td>
