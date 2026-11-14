@@ -2683,6 +2683,17 @@ export const ROUTE_ROLLEN = {
   kunden: ['admin', 'buero'],
   leadpipeline: ['admin', 'buero'], // enthält jetzt auch den Pipeline-Reiter (Projekt-Status) und den Projekte-Reiter (Bereich 'projekt'), siehe leadpipeline.js
 
+  // Zusammengefasste Navigationspunkte (14.11.2026, siehe tabbedView.js) -
+  // jeweils die Vereinigung der Rollen ihrer Einzel-Reiter weiter unten, damit
+  // wer auch nur EINEN Reiter sehen darf, die Seite überhaupt öffnen kann;
+  // welche Reiter dann tatsächlich sichtbar sind, filtert tabbedView.js pro
+  // Reiter erneut gegen die jeweilige Einzel-Route.
+  'auftraege-service': ['admin', 'buero', 'mitarbeiter'],
+  planung: ['admin', 'buero', 'mitarbeiter'],
+  'vorlagen-katalog': ['admin', 'buero', 'mitarbeiter'],
+  'dokumente-uebersicht': ['admin', 'buero'],
+  finanzen: ['admin', 'buero'],
+
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],
   reisekosten: [], // Solo-Betrieb: eigene Reisekosten laufen nicht über Werkora.

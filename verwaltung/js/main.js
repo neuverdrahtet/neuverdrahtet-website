@@ -28,6 +28,16 @@ const routeLoaders = {
   // (Bereich 'projekt') sind jetzt Reiter innerhalb der Lead-Pipeline-
   // Ansicht (siehe leadpipeline.js), keine eigenen Routen mehr nötig.
   leadpipeline: () => import('./views/leadpipeline.js'),
+  // Zusammengefasste Navigationspunkte (14.11.2026, auf Dannys Wunsch, siehe
+  // tabbedView.js) - die darunterliegenden Einzel-Routen (auftraege,
+  // serviceauftraege, wartung, ...) bleiben bewusst zusätzlich bestehen
+  // (nicht entfernt), damit bestehende Querverweise (Schnellanlage-Buttons,
+  // Dashboard-Kacheln, "→ X erstellen") unverändert funktionieren.
+  'auftraege-service': () => import('./views/auftraegeService.js'),
+  planung: () => import('./views/planung.js'),
+  'vorlagen-katalog': () => import('./views/vorlagenKatalog.js'),
+  'dokumente-uebersicht': () => import('./views/dokumenteUebersicht.js'),
+  finanzen: () => import('./views/finanzen.js'),
   auftraege: () => import('./views/auftraege.js'),
   serviceauftraege: () => import('./views/serviceauftraege.js'),
   reisekosten: () => import('./views/reisekosten.js'),
