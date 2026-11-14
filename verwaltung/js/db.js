@@ -598,6 +598,110 @@ export async function importAll(data, { replace = false } = {}) {
   }
 }
 
+// Entwürfe vom 14.11.2026 (siehe docs/ für die Herkunft) - Zeilen, die mit
+// "## " beginnen, werden beim PDF-Anhängen (docpdf.js) als Zwischenüberschrift
+// gerendert. KEINE Rechtsberatung - vor dem ersten Einsatz mit echten Kunden
+// von der Handwerkskammer Düsseldorf oder einem Anwalt prüfen lassen.
+const AGB_TEXT_STANDARD = `## §1 Geltungsbereich
+1. Diese Allgemeinen Geschäftsbedingungen (AGB) gelten für alle Verträge über Elektroinstallations-, Prüf-, Wartungs- und sonstige handwerkliche Leistungen zwischen der neuverdrahtet UG (haftungsbeschränkt) (nachfolgend "Auftragnehmer") und ihren Auftraggebern (Verbraucher und Unternehmer).
+2. Verbraucher im Sinne dieser AGB ist jede natürliche Person, die den Auftrag zu einem überwiegend privaten Zweck abschließt (§ 13 BGB). Unternehmer ist, wer den Auftrag in Ausübung seiner gewerblichen oder selbständigen beruflichen Tätigkeit abschließt (§ 14 BGB).
+3. Abweichende, entgegenstehende oder ergänzende Bedingungen des Auftraggebers werden nicht Vertragsbestandteil, es sei denn, der Auftragnehmer stimmt ihrer Geltung ausdrücklich schriftlich zu.
+
+## §2 Angebot und Vertragsschluss
+1. Angebote des Auftragnehmers sind freibleibend und unverbindlich, sofern nicht ausdrücklich als verbindlich bezeichnet.
+2. Ein Vertrag kommt erst durch schriftliche Auftragsbestätigung des Auftragnehmers oder durch Beginn der Ausführung zustande.
+3. Der im Angebot beschriebene Leistungsumfang ist maßgeblich. Nachträgliche Änderungs- oder Erweiterungswünsche des Auftraggebers (Zusatz-/Nachtragsaufträge) bedürfen einer gesonderten, mindestens in Textform dokumentierten Vereinbarung über Leistung und Vergütung.
+
+## §3 Leistungsumfang und Material
+1. Der Auftragnehmer erbringt die im Angebot bzw. in der Auftragsbestätigung beschriebenen Leistungen nach den zum Zeitpunkt der Ausführung gültigen DIN-VDE-Normen und den anerkannten Regeln der Technik.
+2. Verwendetes Material und verbaute Komponenten entsprechen handelsüblicher Qualität, sofern im Angebot kein bestimmtes Fabrikat vereinbart wurde. Der Auftragnehmer ist berechtigt, bei Nichtverfügbarkeit eines vereinbarten Fabrikats ein gleichwertiges Ersatzprodukt zu verwenden, sofern dies dem Auftraggeber zumutbar ist.
+
+## §4 Preise
+1. Es gelten die im Angebot genannten Preise, jeweils zzgl. der gesetzlichen Umsatzsteuer.
+2. Bei Verträgen, deren Ausführung erst mehr als 4 Monate nach Vertragsschluss beginnt, ist der Auftragnehmer berechtigt, bei nachweislichen Material- oder Lohnkostensteigerungen eine angemessene Preisanpassung vorzunehmen; gegenüber Verbrauchern erfolgt dies nur im Rahmen der gesetzlichen Vorgaben (§ 309 Nr. 1 BGB).
+
+## §5 Zahlungsbedingungen
+1. Rechnungen des Auftragnehmers sind ab Rechnungsstellung sofort zur Zahlung fällig, ohne jeden Abzug, soweit nicht ausdrücklich eine andere Zahlungsfrist vereinbart wurde.
+2. Vor Beginn der Auftragsausführung ist eine Anzahlung in Höhe von 50% der vereinbarten Auftragssumme zu leisten. Der Auftragnehmer ist berechtigt, den Beginn der Arbeiten bis zum vollständigen Eingang dieser Anzahlung zurückzustellen.
+3. Die Bestellung des für den Auftrag benötigten Materials erfolgt erst nach Eingang der Anzahlung gemäß Abs. 2 auf dem Konto des Auftragnehmers. Hierdurch bedingte Verzögerungen bei der Ausführung gehen nicht zu Lasten des Auftragnehmers.
+4. Der Restbetrag ist nach Fertigstellung bzw. Abnahme der Leistung gemäß der Schlussrechnung sofort fällig.
+5. Bei Zahlungsverzug ist der Auftragnehmer berechtigt, die gesetzlichen Verzugszinsen sowie Mahnkosten zu berechnen; gegenüber Verbrauchern gelten die gesetzlichen Verzugsregelungen der §§ 286 ff. BGB.
+
+## §6 Ausführungstermine
+1. Angegebene Ausführungstermine sind, soweit nicht ausdrücklich als verbindlich (Fixtermin) vereinbart, voraussichtliche Termine.
+2. Verzögerungen durch höhere Gewalt, Lieferengpässe beim Material, behördliche Maßnahmen oder vom Auftraggeber zu vertretende Umstände (z.B. fehlender Baustellenzugang, verspätete Zahlung der Anzahlung gemäß §5 Abs. 2) verlängern die Ausführungsfrist entsprechend; der Auftragnehmer informiert den Auftraggeber hierüber zeitnah.
+
+## §7 Mitwirkungspflichten des Auftraggebers
+1. Der Auftraggeber stellt sicher, dass der Auftragnehmer zu den vereinbarten Terminen ungehinderten Zugang zum Einsatzort hat und die für die Ausführung notwendigen Vorleistungen anderer Gewerke (z.B. Putz-, Maurer- oder Trockenbauarbeiten) rechtzeitig fertiggestellt sind.
+2. Entstehen dem Auftragnehmer durch unterlassene oder verspätete Mitwirkung Mehraufwand oder Standzeiten, sind diese vom Auftraggeber zusätzlich zu vergüten.
+
+## §8 Abnahme
+1. Nach Fertigstellung der Leistung lädt der Auftragnehmer den Auftraggeber zur Abnahme ein.
+2. Nimmt der Auftraggeber eine mängelfreie oder nur unwesentlich mangelhafte Leistung nicht innerhalb einer ihm gesetzten angemessenen Frist ab, gilt die Leistung als abgenommen, wenn der Auftragnehmer den Auftraggeber zuvor auf diese Rechtsfolge hingewiesen hat (§ 640 Abs. 2 BGB, bei Verbraucherbauverträgen § 650g Abs. 4 BGB).
+3. Mit der Abnahme geht die Gefahr auf den Auftraggeber über.
+
+## §9 Eigentumsvorbehalt
+Das eingebaute und noch nicht vollständig bezahlte Material sowie sämtliche gelieferten Komponenten bleiben bis zur vollständigen Bezahlung der jeweiligen Rechnung Eigentum des Auftragnehmers, soweit dies nach den Vorschriften über wesentliche Bestandteile von Grundstücken und Gebäuden (§§ 93, 94 BGB) rechtlich möglich ist.
+
+## §10 Gewährleistung
+1. Die Gewährleistung richtet sich nach den gesetzlichen Vorschriften des Werkvertragsrechts (§§ 633 ff. BGB), bei Verbraucherbauverträgen nach §§ 650i ff. BGB.
+2. Gegenüber Verbrauchern verbleibt es bei den gesetzlichen Verjährungsfristen für Mängelansprüche (grundsätzlich 2 Jahre, bei Bauwerken 5 Jahre ab Abnahme); eine Verkürzung dieser Fristen erfolgt nicht.
+3. Gegenüber Unternehmern beträgt die Verjährungsfrist für Mängelansprüche abweichend 2 Jahre ab Abnahme, soweit gesetzlich zulässig.
+
+## §11 Haftung
+1. Der Auftragnehmer haftet unbeschränkt für Schäden aus der Verletzung des Lebens, des Körpers oder der Gesundheit sowie bei Vorsatz und grober Fahrlässigkeit.
+2. Bei einfacher Fahrlässigkeit haftet der Auftragnehmer nur bei Verletzung einer wesentlichen Vertragspflicht (Kardinalpflicht), deren Erfüllung die ordnungsgemäße Durchführung des Vertrags überhaupt erst ermöglicht und auf deren Einhaltung der Auftraggeber vertrauen durfte; in diesem Fall ist die Haftung auf den vorhersehbaren, vertragstypischen Schaden begrenzt.
+3. Die Haftung nach dem Produkthaftungsgesetz bleibt unberührt.
+
+## §12 Widerrufsrecht für Verbraucher
+Verbrauchern steht bei Vertragsschluss außerhalb der Geschäftsräume des Auftragnehmers oder im Fernabsatz ein gesetzliches Widerrufsrecht zu. Die Einzelheiten ergeben sich aus der gesonderten Widerrufsbelehrung, die dem Auftraggeber bei Vertragsschluss ausgehändigt wird. Für von Verbrauchern ausdrücklich angeforderte dringende Reparatur- oder Instandhaltungsarbeiten gilt § 312g Abs. 2 Nr. 11 BGB (kein Widerrufsrecht).
+
+## §13 Rücktritt/Kündigung durch Auftraggeber
+1. Tritt der Auftraggeber ohne vom Auftragnehmer zu vertretenden Grund vom Vertrag zurück oder kündigt er, kann der Auftragnehmer die vereinbarte Vergütung abzüglich ersparter Aufwendungen verlangen.
+2. Dem Auftraggeber bleibt es unbenommen, nachzuweisen, dass ein geringerer Aufwand erspart oder überhaupt kein Schaden entstanden ist; dem Auftragnehmer bleibt es unbenommen, einen höheren tatsächlichen Schaden nachzuweisen.
+
+## §14 Datenschutz
+Die Verarbeitung personenbezogener Daten des Auftraggebers erfolgt im Rahmen der Vertragsdurchführung gemäß der Datenschutzerklärung des Auftragnehmers unter neuverdrahtet.com/datenschutz.html.
+
+## §15 Schlussbestimmungen
+1. Es gilt das Recht der Bundesrepublik Deutschland.
+2. Ist der Auftraggeber Verbraucher, bleibt der gesetzliche Gerichtsstand unberührt. Ist der Auftraggeber Unternehmer, ist Gerichtsstand für alle Streitigkeiten aus diesem Vertrag Essen.
+3. Sollte eine Bestimmung dieser AGB unwirksam sein oder werden, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt. An die Stelle der unwirksamen Bestimmung tritt die dem wirtschaftlichen Zweck am nächsten kommende gesetzliche Regelung.`;
+
+const WIDERRUF_TEXT_STANDARD = `## Widerrufsrecht
+Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
+
+Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (neuverdrahtet UG (haftungsbeschränkt), Krayerstr. 245, 45307 Essen, Telefon +49 201 89040405, E-Mail neuverdrahtet@gmail.com) mittels einer eindeutigen Erklärung (z.B. ein mit der Post versandter Brief, Telefax oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.
+
+Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
+
+## Folgen des Widerrufs
+Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.
+
+Haben Sie verlangt, dass die Dienstleistung während der Widerrufsfrist beginnen soll, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.
+
+## Besonderheit bei vorzeitigem Beginn innerhalb der Widerrufsfrist
+Soll mit der Ausführung bereits vor Ablauf der 14-tägigen Widerrufsfrist begonnen werden, muss der Kunde dies ausdrücklich verlangen - ein bloßer Wunsch reicht nicht. Empfehlung: dieses Verlangen vor Arbeitsbeginn schriftlich dokumentieren (z.B. mit Unterschrift auf der Auftragsbestätigung). Ohne diese ausdrückliche, dokumentierte Erklärung besteht das Risiko, bei einem späteren Widerruf die bereits erbrachte Leistung nicht vergütet zu bekommen (§ 357a Abs. 2 BGB).
+
+## Muster-Widerrufsformular
+(Wenn Sie den Vertrag widerrufen wollen, dann füllen Sie bitte dieses Formular aus und senden Sie es zurück.)
+
+An neuverdrahtet UG (haftungsbeschränkt), Krayerstr. 245, 45307 Essen, E-Mail: neuverdrahtet@gmail.com
+
+Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung:
+
+Bestellt am (*): ______________________
+
+Name des/der Verbraucher(s): ______________________
+
+Anschrift des/der Verbraucher(s): ______________________
+
+Unterschrift des/der Verbraucher(s) (nur bei Mitteilung auf Papier): ______________________
+
+Datum: ______________________
+
+(*) Unzutreffendes streichen.`;
+
 const DEFAULT_SETTINGS = {
   firmenname: 'neuverdrahtet UG',
   strasse: 'Krayerstr. 245',
@@ -662,6 +766,13 @@ const DEFAULT_SETTINGS = {
   emailImportCount: 0,
   emailLastSyncAt: '',
   emailSignature: '',
+  // 14.11.2026: wird beim Versenden von Angeboten/Auftragsbestätigungen/
+  // Rechnungen optional als zusätzliche PDF-Seite(n) angehängt (siehe
+  // agbAnhang.js, emailsend.js) - Textarea unter Einstellungen > Vorlagen &
+  // Texte, "## " am Zeilenanfang wird als Zwischenüberschrift gerendert.
+  // Entwurf, keine Rechtsberatung - vor dem ersten Einsatz prüfen lassen.
+  agbText: AGB_TEXT_STANDARD,
+  widerrufText: WIDERRUF_TEXT_STANDARD,
   stundensatz: 60,
   lohnnebenkostenProzent: 25,
   jahresarbeitsstundenProMitarbeiter: 1720,

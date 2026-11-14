@@ -413,9 +413,43 @@ export async function buildDocPdfBlob(opts) {
     if (opts.zeigeZweiteUnterschrift) doc.text(opts.zweiteUnterschriftLabel || 'Unterschrift Mitarbeiter', col2X, y);
   }
 
+  // AGB/Widerrufsbelehrung als zusätzliche Seiten (14.11.2026, siehe
+  // agbAnhang.js) - VOR addFooter(), damit Fußzeile + Seitenzahl auch auf
+  // diesen Seiten automatisch mitlaufen (addFooter iteriert über alle
+  // Seiten des Dokuments).
+  for (const anhang of opts.anhaenge || []) {
+    renderAnhangSeite(doc, { marginX, rightX, baseFont, titel: anhang.titel, text: anhang.text });
+  }
+
   addFooter(doc, opts.settings, marginX, rightX);
 
   return doc.output('blob');
+}
+
+function renderAnhangSeite(doc, { marginX, rightX, baseFont, titel, text }) {
+  const maxY = 270;
+  doc.addPage();
+  let y = 20;
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(20);
+  doc.text(titel, marginX, y);
+  doc.setFont(undefined, 'normal');
+  y += 9;
+  for (const zeile of (text || '').split('\n')) {
+    if (!zeile.trim()) { y += 3; continue; }
+    const istUeberschrift = zeile.trim().startsWith('## ');
+    const inhalt = istUeberschrift ? zeile.trim().slice(3).trim() : zeile;
+    doc.setFontSize(istUeberschrift ? 11 : baseFont);
+    doc.setFont(undefined, istUeberschrift ? 'bold' : 'normal');
+    doc.setTextColor(istUeberschrift ? 20 : 50);
+    const zeilen = doc.splitTextToSize(inhalt, rightX - marginX);
+    if (y + zeilen.length * 4.6 > maxY) { doc.addPage(); y = 20; }
+    doc.text(zeilen, marginX, y);
+    y += zeilen.length * 4.6 + (istUeberschrift ? 2 : 2.5);
+  }
+  doc.setFont(undefined, 'normal');
+  doc.setTextColor(20);
 }
 
 /** Zeichnet ein zweispaltiges Label/Wert-Raster (z.B. Geräte-Steckbrief, Messwerte). */

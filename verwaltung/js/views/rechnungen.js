@@ -1183,7 +1183,9 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             subject: `Rechnung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
             bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Rechnung ${data.nummer}, fällig am ${formatDate(data.faelligAm)}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Rechnung-${data.nummer}.pdf`,
-            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+            zeigeAgbOptionen: true,
+            kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
           if (!locked) await markVersendetUndSperren();
         });

@@ -5,6 +5,7 @@ import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
+import { ermittleDokumentAnhaenge } from '../agbAnhang.js';
 import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { generateAngebotFromStichpunkte, extractAngebotFromFremdPdf, rechercherePreiseFuerPositionen, chatMitAssistent } from '../ai.js';
 import { mountTextbausteinPicker } from '../textbausteine.js';
@@ -950,7 +951,9 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             subject: `Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
             bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unser Angebot ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Angebot-${data.nummer}.pdf`,
-            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+            zeigeAgbOptionen: true,
+            kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
         });
       }
@@ -990,7 +993,9 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             subject: `Nachfrage zu unserem Angebot ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
             bodyText: entwurfText,
             filename: `Angebot-${data.nummer}.pdf`,
-            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+            zeigeAgbOptionen: true,
+            kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
             onSent: async () => {
               const nachfassGesendetAm = todayISO();
               await put('angebote', { ...data, nachfassGesendetAm });
@@ -1108,7 +1113,8 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
         const kunde = kundenById[updated.kundeId];
         if (kunde?.email) {
           try {
-            const blob = await buildDocPdfBlob(docOpts());
+            const anhaenge = await ermittleDokumentAnhaenge({ agb: true, widerruf: !!kunde?.istPrivatperson });
+            const blob = await buildDocPdfBlob({ ...docOpts(), anhaenge });
             await google.sendEmailWithAttachment({
               to: kunde.email,
               subject: `Angebot ${updated.nummer}${updated.betreff ? ' – ' + updated.betreff : ''}`,

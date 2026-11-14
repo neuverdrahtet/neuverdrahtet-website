@@ -398,7 +398,9 @@ export async function render(container, route) {
             subject: `Auftragsbestätigung ${data.nummer}${data.betreff ? ' – ' + data.betreff : ''}`,
             bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\nanbei erhalten Sie unsere Auftragsbestätigung ${data.nummer}.\n\nMit freundlichen Grüßen\n${getEffectiveSettings(data.projektId).firmenname}`,
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
-            buildPdfBlob: () => buildDocPdfBlob(docOpts()),
+            zeigeAgbOptionen: true,
+            kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
         });
       }

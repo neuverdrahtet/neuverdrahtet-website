@@ -394,6 +394,18 @@ export async function render(container) {
             <div class="field"><label>Text (leer = Standardtext)</label><textarea name="begruessungsmailText" rows="6" placeholder="Guten Tag,&#10;&#10;vielen Dank für Ihr Vertrauen ...">${escapeHtml(settings.begruessungsmailText || '')}</textarea></div>
             <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
           </form>
+
+          <div class="divider"></div>
+          <h2 style="font-size:14px">AGB &amp; Widerrufsbelehrung</h2>
+          <p class="hint">
+            Werden beim Versenden von Angeboten, Auftragsbestätigungen und Rechnungen optional als zusätzliche Seiten ans PDF angehängt (Checkbox im Versand-Dialog). Zeilen, die mit "## " beginnen, erscheinen als Zwischenüberschrift.
+            <strong>Entwurf, keine Rechtsberatung</strong> - vor dem ersten Einsatz mit echten Kunden von der Handwerkskammer Düsseldorf oder einem Anwalt prüfen lassen.
+          </p>
+          <form id="agb-form">
+            <div class="field"><label>AGB-Text</label><textarea name="agbText" rows="10">${escapeHtml(settings.agbText || '')}</textarea></div>
+            <div class="field"><label>Widerrufsbelehrung &amp; Muster-Widerrufsformular</label><textarea name="widerrufText" rows="10">${escapeHtml(settings.widerrufText || '')}</textarea></div>
+            <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
+          </form>
         </div>
 
         <div class="card settings-panel" data-panel="kibuerokraft" hidden>
@@ -971,6 +983,16 @@ export async function render(container) {
     const fd = new FormData(e.target);
     await setSettings({ emailSignature: (fd.get('emailSignature') || '').toString() });
     toast('Signatur gespeichert', 'success');
+  });
+
+  container.querySelector('#agb-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    await setSettings({
+      agbText: (fd.get('agbText') || '').toString(),
+      widerrufText: (fd.get('widerrufText') || '').toString(),
+    });
+    toast('AGB/Widerrufsbelehrung gespeichert', 'success');
   });
 
   container.querySelector('#begruessung-form').addEventListener('submit', async (e) => {
