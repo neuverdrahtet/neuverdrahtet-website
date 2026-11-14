@@ -246,6 +246,7 @@ export async function render(container, route) {
             ${isEdit ? '<button type="button" class="btn" id="btn-print">Drucken / PDF</button>' : ''}
             ${isEdit && data.kundeId ? '<button type="button" class="btn" id="btn-email">Per E-Mail senden</button>' : ''}
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
+            ${isEdit ? '<button type="button" class="btn" id="btn-to-lieferschein">→ Lieferschein erstellen</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -414,6 +415,17 @@ export async function render(container, route) {
             text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei unsere Auftragsbestätigung ${data.nummer}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettings(data.projektId).firmenname}`,
             pdfBlob: await buildDocPdfBlob(docOpts()),
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
+          });
+        });
+      }
+      const toLieferscheinBtn = body.querySelector('#btn-to-lieferschein');
+      if (toLieferscheinBtn) {
+        toLieferscheinBtn.addEventListener('click', () => {
+          close();
+          openDokumentMitVorbelegung('lieferscheine', {
+            kundeId: data.kundeId, projektId: data.projektId, auftragsbestaetigungId: data.id,
+            betreff: data.betreff,
+            positionen: editor.getPositionen().map((p) => ({ ...p, id: uid() })),
           });
         });
       }

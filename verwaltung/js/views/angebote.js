@@ -678,6 +678,7 @@ export async function render(container, route) {
             ${isEdit && kundenById[data.kundeId]?.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 WhatsApp</button>' : ''}
             ${isEdit && data.status === 'versendet' && data.kundeId ? '<button type="button" class="btn" id="btn-nachfassen" title="Erinnerungs-Mail an den Kunden, KI schlägt den Text vor">🔔 Jetzt nachfassen (KI)</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-ab">→ Auftragsbestätigung erstellen</button>' : ''}
+            ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-lieferschein">→ Lieferschein erstellen</button>' : ''}
             ${isEdit && data.status !== 'abgelehnt' ? '<button type="button" class="btn" id="btn-to-rechnung">→ Rechnung erstellen</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
@@ -1028,6 +1029,17 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
           toast('Auftragsbestätigung aus Angebot erstellt', 'success');
           close();
           window.location.hash = '#/auftragsbestaetigung';
+        });
+      }
+      const toLieferscheinBtn = body.querySelector('#btn-to-lieferschein');
+      if (toLieferscheinBtn) {
+        toLieferscheinBtn.addEventListener('click', () => {
+          close();
+          openDokumentMitVorbelegung('lieferscheine', {
+            kundeId: data.kundeId, projektId: data.projektId, angebotId: data.id,
+            betreff: data.betreff,
+            positionen: editor.getPositionen().map((p) => ({ ...p, id: uid() })),
+          });
         });
       }
       const toRechnungBtn = body.querySelector('#btn-to-rechnung');

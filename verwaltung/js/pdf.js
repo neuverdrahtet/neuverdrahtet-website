@@ -140,6 +140,7 @@ export function buildDocHtml({
   closingText,
   steuerHinweis,
   showPositions = true,
+  ohnePreise = false,
   abschlaege,
   skonto,
   leistungsdatum,
@@ -181,27 +182,34 @@ export function buildDocHtml({
       <tbody>${rows}</tbody>
     </table>`;
   } else if (showPositions && positionen && positionen.length) {
+    const spalten = ohnePreise ? 4 : 6;
     const rows = abschnittsZwischensummenEinfuegen(positionen).map((p, i) => {
       if (p.typ === 'zwischensumme') {
+        if (ohnePreise) return '';
         return `<tr><td colspan="5" style="text-align:right;font-weight:700;border-top:1px solid #ccc">Zwischensumme ${p.abschnittNr}.</td><td style="text-align:right;font-weight:700;border-top:1px solid #ccc">${formatCurrency(p.summe)}</td></tr>`;
       }
       if (p.typ === 'ueberschrift') {
-        return `<tr><td colspan="6" style="font-weight:700;padding-top:10px">${escapeHtml(p.bezeichnung || '')}</td></tr>`;
+        return `<tr><td colspan="${spalten}" style="font-weight:700;padding-top:10px">${escapeHtml(p.bezeichnung || '')}</td></tr>`;
       }
       const menge = Number(p.menge) || 0;
       const preis = Number(p.einzelpreis) || 0;
       const summe = menge * preis;
-      return `<tr>
+      const basisZellen = `
         <td>${escapeHtml(p.posNr || String(i + 1))}</td>
         <td>${escapeHtml(p.bezeichnung)}${p.beschreibung ? `<br><span style="color:#666;font-size:11px">${escapeHtml(p.beschreibung)}</span>` : ''}</td>
         <td>${menge}</td>
-        <td>${escapeHtml(p.einheit || '')}</td>
+        <td>${escapeHtml(p.einheit || '')}</td>`;
+      if (ohnePreise) return `<tr>${basisZellen}</tr>`;
+      return `<tr>${basisZellen}
         <td>${formatCurrency(preis)}</td>
         <td style="text-align:right">${formatCurrency(summe)}</td>
       </tr>`;
     }).join('');
+    const kopf = ohnePreise
+      ? '<tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Einheit</th></tr>'
+      : '<tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Einheit</th><th>Einzel €</th><th style="text-align:right">Gesamt €</th></tr>';
     positionsHtml = `<table>
-      <thead><tr><th>Pos.</th><th>Bezeichnung</th><th>Menge</th><th>Einheit</th><th>Einzel €</th><th style="text-align:right">Gesamt €</th></tr></thead>
+      <thead>${kopf}</thead>
       <tbody>${rows}</tbody>
     </table>`;
   }

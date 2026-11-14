@@ -93,7 +93,7 @@ service cloud.firestore {
 
     function isSensitiveCollection(collectionId) {
       return collectionId in [
-        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'gutschriften',
+        'kunden', 'mitarbeiter', 'katalog', 'angebote', 'auftragsbestaetigungen', 'gutschriften', 'lieferscheine',
         'mahnungen', 'ausgaben', 'vorlagen', 'textbausteine', 'kanbanSpalten',
         'lagerbewegungen', 'emails', 'whatsapp_chats', 'anlagen', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
         'kundenStatus', 'subunternehmer', 'ai_action_log', 'ki_freigaben', 'arbeitsberichte', 'socialPosts',

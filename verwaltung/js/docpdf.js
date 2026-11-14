@@ -241,17 +241,21 @@ export async function buildDocPdfBlob(opts) {
     });
     y = doc.lastAutoTable.finalY + 8;
   } else if (opts.positionen && opts.positionen.length) {
+    // ohnePreise (14.11.2026, Lieferscheine): nur Bezeichnung/Menge/Einheit,
+    // keine Preisspalten - ein Lieferschein weist aus, WAS geliefert wurde,
+    // nicht den Preis (der steht auf der Rechnung).
+    const spalten = opts.ohnePreise ? 4 : 6;
     doc.autoTable({
       startY: y,
       margin: { left: marginX, right: marginX, bottom: 24 },
-      head: [['Pos.', 'Bezeichnung', 'Menge', 'Einheit', 'Einzel €', 'Gesamt €']],
-      body: abschnittsZwischensummenEinfuegen(opts.positionen).map((p, i) => (p.typ === 'zwischensumme'
+      head: [opts.ohnePreise ? ['Pos.', 'Bezeichnung', 'Menge', 'Einheit'] : ['Pos.', 'Bezeichnung', 'Menge', 'Einheit', 'Einzel €', 'Gesamt €']],
+      body: abschnittsZwischensummenEinfuegen(opts.positionen).filter((p) => !(opts.ohnePreise && p.typ === 'zwischensumme')).map((p, i) => (p.typ === 'zwischensumme'
         ? [
           { content: `Zwischensumme ${p.abschnittNr}.`, colSpan: 5, styles: { fontStyle: 'bold', halign: 'right' } },
           { content: formatCurrency(p.summe), styles: { fontStyle: 'bold', halign: 'right' } },
         ]
         : p.typ === 'ueberschrift'
-        ? [{ content: p.bezeichnung || '', colSpan: 6, styles: { fontStyle: 'bold' } }]
+        ? [{ content: p.bezeichnung || '', colSpan: spalten, styles: { fontStyle: 'bold' } }]
         : [
           p.posNr || String(i + 1),
           // Die Detailbeschreibung einer Position (z.B. Leistungsumfang,
@@ -264,8 +268,10 @@ export async function buildDocPdfBlob(opts) {
           p.beschreibung ? `${p.bezeichnung || ''}\n${p.beschreibung}` : (p.bezeichnung || ''),
           String(p.menge ?? ''),
           p.einheit || '',
-          formatCurrency(p.einzelpreis),
-          formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
+          ...(opts.ohnePreise ? [] : [
+            formatCurrency(p.einzelpreis),
+            formatCurrency((Number(p.menge) || 0) * (Number(p.einzelpreis) || 0)),
+          ]),
         ])),
       styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
       headStyles: { fillColor: accentRgb },
