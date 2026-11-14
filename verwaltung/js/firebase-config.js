@@ -15,19 +15,18 @@ const firebaseConfigProduktion = {
   appId: '1:1007747718563:web:fbf274c25ae8cf9ccf0e16',
 };
 
-// Staging (siehe staging/README.md, Schritt 1.6) - <PLATZHALTER> durch die
-// Werte aus der Firebase-Konsole des SEPARATEN Staging-Projekts
-// ("neuverdrahtet-staging") ersetzen, sobald dort eine Web-App angelegt wurde.
-// Bis dahin bleiben die Platzhalter stehen - die Aktivierungsprüfung unten
-// lässt das ohnehin nur auf der Staging-Vorschau-Domain zu, niemals auf der
-// echten Produktionsdomain.
+// Staging (siehe staging/README.md, Schritt 1.6) - Werte aus der Firebase-
+// Konsole des SEPARATEN Staging-Projekts ("neuverdrahtet-staging"), Web-App
+// "Verwaltung Staging" (14.11.2026 von Danny angelegt). Die Aktivierungs-
+// prüfung unten lässt das ohnehin nur auf der Staging-Vorschau-Domain zu,
+// niemals auf der echten Produktionsdomain.
 const firebaseConfigStaging = {
-  apiKey: '<STAGING-API-KEY>',
+  apiKey: 'AIzaSyCyz-FNfxePTj_OASiU6bxBqnYb3VMR7Cg',
   authDomain: 'neuverdrahtet-staging.firebaseapp.com',
   projectId: 'neuverdrahtet-staging',
   storageBucket: 'neuverdrahtet-staging.firebasestorage.app',
-  messagingSenderId: '<STAGING-MESSAGING-SENDER-ID>',
-  appId: '<STAGING-APP-ID>',
+  messagingSenderId: '438316593462',
+  appId: '1:438316593462:web:6932434bcc78fec46d8397',
 };
 
 // Produktionsdomains, auf denen Staging-Modus NIEMALS aktiv werden darf -
