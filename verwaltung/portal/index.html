@@ -10,13 +10,17 @@
 <style>
   /* Portal ist bewusst eine eigenständige, schlanke Seite (nicht die
      verwaltung-SPA) - Kunden sehen nie die interne Sidebar/Navigation. */
-  body { background: var(--bg); min-height: 100vh; }
+  /* background-color statt der "background"-Kurzform - die würde sonst das
+     in app.css gesetzte Navy-/Gold-Verlaufsbild (background-image, siehe
+     dort) wieder zurücksetzen, da diese Regel hier später in der Kaskade
+     steht (gleiche Korrektur wie beim html,body-Block in app.css). */
+  body { background-color: var(--bg); min-height: 100vh; }
   .portal-shell { max-width: 900px; margin: 0 auto; padding: 24px 16px 60px; }
   .portal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 12px; flex-wrap: wrap; }
   .portal-header h1 { font-size: 19px; margin: 0; }
   .portal-tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
-  .portal-tabs button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 13.5px; }
-  .portal-tabs button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .portal-tabs button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--text); cursor: pointer; font-size: 13.5px; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+  .portal-tabs button.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 </style>
 </head>
 <body>
