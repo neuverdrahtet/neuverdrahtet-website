@@ -1185,6 +1185,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             filename: `Rechnung-${data.nummer}.pdf`,
             zeigeAgbOptionen: true,
             kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            projektId: data.projektId || '',
             buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
           if (!locked) await markVersendetUndSperren();

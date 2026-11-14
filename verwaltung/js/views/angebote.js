@@ -953,6 +953,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             filename: `Angebot-${data.nummer}.pdf`,
             zeigeAgbOptionen: true,
             kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            projektId: data.projektId || '',
             buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
         });
@@ -995,6 +996,7 @@ const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
             filename: `Angebot-${data.nummer}.pdf`,
             zeigeAgbOptionen: true,
             kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            projektId: data.projektId || '',
             buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
             onSent: async () => {
               const nachfassGesendetAm = todayISO();

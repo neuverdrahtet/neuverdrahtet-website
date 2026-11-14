@@ -418,7 +418,8 @@ export async function buildDocPdfBlob(opts) {
   // diesen Seiten automatisch mitlaufen (addFooter iteriert über alle
   // Seiten des Dokuments).
   for (const anhang of opts.anhaenge || []) {
-    renderAnhangSeite(doc, { marginX, rightX, baseFont, titel: anhang.titel, text: anhang.text });
+    if (anhang.tabelle) renderAnhangTabelle(doc, { marginX, rightX, baseFont, accentRgb, titel: anhang.titel, tabelle: anhang.tabelle });
+    else renderAnhangSeite(doc, { marginX, rightX, baseFont, titel: anhang.titel, text: anhang.text });
   }
 
   addFooter(doc, opts.settings, marginX, rightX);
@@ -450,6 +451,34 @@ function renderAnhangSeite(doc, { marginX, rightX, baseFont, titel, text }) {
   }
   doc.setFont(undefined, 'normal');
   doc.setTextColor(20);
+}
+
+/** Zeichnet einen Tabellen-Anhang (z.B. Stundennachweis) als eigene Seite(n). */
+function renderAnhangTabelle(doc, { marginX, rightX, baseFont, accentRgb, titel, tabelle }) {
+  doc.addPage();
+  let y = 20;
+  doc.setFontSize(14);
+  doc.setFont(undefined, 'bold');
+  doc.setTextColor(20);
+  doc.text(titel, marginX, y);
+  doc.setFont(undefined, 'normal');
+  y += 9;
+  doc.autoTable({
+    startY: y,
+    margin: { left: marginX, right: marginX, bottom: 24 },
+    head: [tabelle.spalten],
+    body: tabelle.rows,
+    styles: { fontSize: Math.max(7, baseFont - 1), cellPadding: 2.2 },
+    headStyles: { fillColor: accentRgb },
+  });
+  if (tabelle.summeText) {
+    const finalY = doc.lastAutoTable.finalY + 7;
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(20);
+    doc.text(tabelle.summeText, rightX, finalY, { align: 'right' });
+    doc.setFont(undefined, 'normal');
+  }
 }
 
 /** Zeichnet ein zweispaltiges Label/Wert-Raster (z.B. Geräte-Steckbrief, Messwerte). */

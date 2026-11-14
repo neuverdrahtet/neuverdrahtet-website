@@ -239,7 +239,18 @@ export async function sendEmailWithAttachment({
   to, subject, bodyText, attachmentName, attachmentBlob, mimeType = 'application/pdf',
   inReplyTo, referencesHeader, threadId,
 }) {
-  const attachmentBytes = new Uint8Array(await attachmentBlob.arrayBuffer());
+  return sendEmailWithAttachments({
+    to, subject, bodyText, inReplyTo, referencesHeader, threadId,
+    attachments: [{ name: attachmentName, blob: attachmentBlob, mimeType }],
+  });
+}
+
+// 14.11.2026: Mehrere Anhänge (z.B. Angebot + gewählte Berichte) in EINER
+// E-Mail statt nur einem - sendEmailWithAttachment() (ein Anhang) bleibt als
+// dünner Wrapper bestehen, damit bestehende Aufrufer unverändert bleiben.
+export async function sendEmailWithAttachments({
+  to, subject, bodyText, attachments, inReplyTo, referencesHeader, threadId,
+}) {
   const boundary = 'nvBoundary' + Date.now();
   let headerPart =
     `To: ${to}\r\n` +
@@ -253,21 +264,28 @@ export async function sendEmailWithAttachment({
     `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n` +
     `--${boundary}\r\n` +
     `Content-Type: text/plain; charset="UTF-8"\r\n\r\n` +
-    `${bodyText}\r\n\r\n` +
-    `--${boundary}\r\n` +
-    `Content-Type: ${mimeType}; name="${attachmentName}"\r\n` +
-    `Content-Disposition: attachment; filename="${attachmentName}"\r\n` +
-    `Content-Transfer-Encoding: base64\r\n\r\n`;
-  const footerPart = `\r\n--${boundary}--`;
+    `${bodyText}\r\n\r\n`;
 
   const headerBytes = new TextEncoder().encode(headerPart);
-  const attachmentB64 = base64UrlEncodeBytes(attachmentBytes).replace(/-/g, '+').replace(/_/g, '/');
-  const attachmentB64WithPadding = attachmentB64 + '='.repeat((4 - (attachmentB64.length % 4)) % 4);
-  const bodyBytes = new TextEncoder().encode(attachmentB64WithPadding + footerPart);
+  const parts = [headerBytes];
+  for (const att of attachments) {
+    const attachmentBytes = new Uint8Array(await att.blob.arrayBuffer());
+    const attachmentB64 = base64UrlEncodeBytes(attachmentBytes).replace(/-/g, '+').replace(/_/g, '/');
+    const attachmentB64WithPadding = attachmentB64 + '='.repeat((4 - (attachmentB64.length % 4)) % 4);
+    const partHeader =
+      `--${boundary}\r\n` +
+      `Content-Type: ${att.mimeType || 'application/pdf'}; name="${att.name}"\r\n` +
+      `Content-Disposition: attachment; filename="${att.name}"\r\n` +
+      `Content-Transfer-Encoding: base64\r\n\r\n` +
+      attachmentB64WithPadding + `\r\n`;
+    parts.push(new TextEncoder().encode(partHeader));
+  }
+  parts.push(new TextEncoder().encode(`--${boundary}--`));
 
-  const combined = new Uint8Array(headerBytes.length + bodyBytes.length);
-  combined.set(headerBytes, 0);
-  combined.set(bodyBytes, headerBytes.length);
+  const totalLength = parts.reduce((s, p) => s + p.length, 0);
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const p of parts) { combined.set(p, offset); offset += p.length; }
   const raw = base64UrlEncodeBytes(combined);
 
   const body = { raw };

@@ -400,6 +400,7 @@ export async function render(container, route) {
             filename: `Auftragsbestaetigung-${data.nummer}.pdf`,
             zeigeAgbOptionen: true,
             kundeIstPrivatperson: !!kunde?.istPrivatperson,
+            projektId: data.projektId || '',
             buildPdfBlob: (anhaenge) => buildDocPdfBlob({ ...docOpts(), anhaenge }),
           });
         });
