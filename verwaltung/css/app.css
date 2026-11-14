@@ -742,15 +742,23 @@ table.data-table th.col-select, table.data-table td.col-select {
   color: #fff;
   white-space: nowrap;
 }
-/* Gleiche Mindestgröße wie die Status-/Kategorie-Auswahlfelder (siehe
-   table.data-table td select.inline-select oben) - innerhalb einer
-   Tabellenspalte sollen Badge (z.B. "Rechnung", "Storniert") und
-   Auswahlfeld (z.B. "Bezahlt") gleich groß wirken, nicht je nach Textlänge
-   unterschiedlich (14.11.2026, auf Dannys Wunsch). */
-table.data-table td .badge {
+/* Einheitliche Mindestgröße für echte Status-Badges (14.11.2026, auf
+   Dannys Wunsch "in der ganzen Software einheitlich") - bewusst NICHT
+   global auf .badge gesetzt: .badge wird an etlichen Stellen auch als
+   kleiner Zähler/Symbol direkt neben einer Überschrift verwendet (z.B.
+   dashboard.js "<h2>Angebote ohne Rückmeldung <span class="badge">3</span>"),
+   wo eine erzwungene Mindestbreite falsch aussehen würde. Diese beiden
+   Selektoren decken stattdessen genau die Stellen ab, an denen ein Badge
+   tatsächlich einen eigenständigen Status darstellt (wie das Status-
+   Auswahlfeld daneben): jede Tabellenzelle (Kunden/Projekte/Aufgaben/
+   Rechnungen/Angebote/Lieferscheine/... inkl. Kundenportal, das ebenfalls
+   table.data-table nutzt) sowie die Serviceauftrags-/Reisekosten-Karten
+   der Techniker-App (.sa-card, nutzt keine Tabelle). */
+table.data-table td .badge,
+.sa-card .badge {
   min-width: 104px;
-  text-align: center;
   box-sizing: border-box;
+  text-align: center;
 }
 .badge-success { background: var(--success); color: #fff; }
 .badge-danger { background: var(--danger); color: #fff; }
