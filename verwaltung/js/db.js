@@ -2693,6 +2693,7 @@ export const ROUTE_ROLLEN = {
   'vorlagen-katalog': ['admin', 'buero', 'mitarbeiter'],
   'dokumente-uebersicht': ['admin', 'buero'],
   finanzen: ['admin', 'buero'],
+  team: ['admin', 'buero', 'mitarbeiter'],
 
   auftraege: ['admin', 'buero', 'mitarbeiter'],
   serviceauftraege: ['admin', 'buero'],

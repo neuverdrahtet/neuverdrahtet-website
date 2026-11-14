@@ -38,6 +38,7 @@ const routeLoaders = {
   'vorlagen-katalog': () => import('./views/vorlagenKatalog.js'),
   'dokumente-uebersicht': () => import('./views/dokumenteUebersicht.js'),
   finanzen: () => import('./views/finanzen.js'),
+  team: () => import('./views/team.js'),
   auftraege: () => import('./views/auftraege.js'),
   serviceauftraege: () => import('./views/serviceauftraege.js'),
   reisekosten: () => import('./views/reisekosten.js'),
