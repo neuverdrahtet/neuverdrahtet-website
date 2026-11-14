@@ -38,7 +38,7 @@ const MA_HEADER = [
   'Sozialversicherungsnr.', 'Krankenkasse', 'Notfallkontakt Name', 'Notfallkontakt Telefon', 'Notizen',
 ];
 
-function parseMitarbeiterCsv(text) {
+export function parseMitarbeiterCsv(text) {
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows = [];
   const errors = [];
@@ -56,7 +56,7 @@ function parseMitarbeiterCsv(text) {
   return { rows, errors };
 }
 
-function currentStatusFor(termine, mitarbeiterId) {
+export function currentStatusFor(termine, mitarbeiterId) {
   const todayStr = new Date().toISOString().slice(0, 10);
   const active = termine.find((t) => {
     if (!t.mitarbeiterIds?.includes(mitarbeiterId) || !STATUS_TYPEN.includes(t.typ)) return false;
@@ -82,13 +82,28 @@ const MA_DOKUMENT_KATEGORIEN = [
   { id: 'sonstiges', titel: 'Sonstiges' },
 ];
 
-function currentYearCount(termine, mitarbeiterId, typ) {
+export function currentYearCount(termine, mitarbeiterId, typ) {
   const year = new Date().getFullYear();
   return termine.filter((t) =>
     t.typ === typ &&
     t.mitarbeiterIds?.includes(mitarbeiterId) &&
     Number((t.start || '').slice(0, 4)) === year
   ).length;
+}
+
+// Reine Tageszählung für die Lohnvorbereitung (zählt, wie viele Tage eines
+// Termins vom angegebenen Typ in den Monat fallen) - bewusst auf Modulebene
+// statt wie bisher in openLohnvorbereitung() verschachtelt, damit sie ohne
+// Umweg über die ganze render()-Funktion testbar ist (reine Funktion, nutzt
+// keine Closure-Variablen).
+export function tageImMonat(termin, typ, monatStart, monatEnde) {
+  if (termin.typ !== typ) return 0;
+  const start = (termin.start || '').slice(0, 10);
+  const ende = (termin.ende || '').slice(0, 10) || start;
+  const von = start < monatStart ? monatStart : start;
+  const bis = ende > monatEnde ? monatEnde : ende;
+  if (von > bis) return 0;
+  return Math.round((new Date(bis) - new Date(von)) / 86400000) + 1;
 }
 
 export async function render(container) {
@@ -190,15 +205,6 @@ export async function render(container) {
   // Monat benötigten Stammdaten + Ist-Stunden (aus Zeiterfassung) + Urlaubs-/
   // Krankheitstage (aus dem Kalender) zusammen, damit sie an Steuerberater/
   // Lohnbüro/externen Abrechnungsdienst übergeben werden können.
-  function tageImMonat(termin, typ, monatStart, monatEnde) {
-    if (termin.typ !== typ) return 0;
-    const start = (termin.start || '').slice(0, 10);
-    const ende = (termin.ende || '').slice(0, 10) || start;
-    const von = start < monatStart ? monatStart : start;
-    const bis = ende > monatEnde ? monatEnde : ende;
-    if (von > bis) return 0;
-    return Math.round((new Date(bis) - new Date(von)) / 86400000) + 1;
-  }
   function openLohnvorbereitung() {
     const heute = new Date();
     const { body, close } = openModal({

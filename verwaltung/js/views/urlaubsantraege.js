@@ -14,6 +14,25 @@ const TYP_LABEL = { urlaub: 'Urlaub', krankmeldung: 'Krankmeldung' };
 const STATUS_LABEL = { offen: 'Offen', genehmigt: 'Genehmigt', abgelehnt: 'Abgelehnt' };
 const STATUS_BADGE = { offen: 'badge-warn', genehmigt: 'badge-success', abgelehnt: 'badge-danger' };
 
+// Reine Funktion für den bei Genehmigung automatisch angelegten Termin - auf
+// Modulebene ausgelagert (bisher Teil der genehmigen()-Closure), damit sie
+// isoliert testbar ist. Enthält bewusst die Uhrzeit-Fixierung aus dem
+// 28.10.2026-Bugfix (siehe Kommentar unten): "ende" braucht eine Uhrzeit,
+// sonst erkennt terminUeberlappt()/findeTerminKonflikte() (serviceauftraege.js)
+// am letzten Abwesenheitstag keinen Konflikt mehr (reiner String-Vergleich,
+// ein Datum ohne Uhrzeit ist als String immer "kleiner" als jeder Zeitstempel
+// desselben Tages).
+export function baueTerminAusAntrag(antrag, mitarbeiterName) {
+  return {
+    titel: `${TYP_LABEL[antrag.typ]}: ${mitarbeiterName}`,
+    typ: antrag.typ === 'urlaub' ? 'urlaub' : 'krank',
+    start: `${antrag.von}T00:00`,
+    ende: `${antrag.bis}T23:59`,
+    mitarbeiterIds: [antrag.mitarbeiterId],
+    beschreibung: antrag.kommentar || '',
+  };
+}
+
 export async function render(container) {
   let [antraege, mitarbeiter] = await Promise.all([getAll('urlaubsantraege'), getAll('mitarbeiter')]);
   antraege.sort((a, b) => (b.erstelltAm || '').localeCompare(a.erstelltAm || ''));
@@ -143,22 +162,7 @@ export async function render(container) {
     if (!antrag) return;
     const mitarbeiterName = mitarbeiterById[antrag.mitarbeiterId]?.name || 'Unbekannt';
     const terminId = uid();
-    await put('termine', {
-      id: terminId,
-      titel: `${TYP_LABEL[antrag.typ]}: ${mitarbeiterName}`,
-      typ: antrag.typ === 'urlaub' ? 'urlaub' : 'krank',
-      start: `${antrag.von}T00:00`,
-      // Bug gefunden 28.10.2026: "ende" stand bisher als reines Datum ohne
-      // Uhrzeit ("YYYY-MM-DD"), während terminUeberlappt()/findeTerminKonflikte()
-      // (serviceauftraege.js) start/ende konsequent als "YYYY-MM-DDTHH:MM"
-      // per String-Vergleich behandeln. Ein reines Datum ist als String immer
-      // "kleiner" als jeder Zeitstempel desselben Tages, wodurch ein Konflikt
-      // am LETZTEN Urlaubs-/Krankheitstag nie erkannt wurde (z.B. Serviceauftrag
-      // am letzten Urlaubstag ab 09:00 Uhr für denselben Techniker).
-      ende: `${antrag.bis}T23:59`,
-      mitarbeiterIds: [antrag.mitarbeiterId],
-      beschreibung: antrag.kommentar || '',
-    });
+    await put('termine', { id: terminId, ...baueTerminAusAntrag(antrag, mitarbeiterName) });
     const updated = { ...antrag, status: 'genehmigt', bearbeitetVon: session.name || session.role || '', bearbeitetAm: new Date().toISOString(), terminId };
     await put('urlaubsantraege', updated);
     Object.assign(antrag, updated);

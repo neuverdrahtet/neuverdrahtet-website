@@ -8,17 +8,17 @@ import { createBulkSelect } from '../bulkselect.js';
 // daten, die gebraucht werden, um sie einem Projekt zuzuordnen).
 const FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
-function gewerkTitel(id) {
+export function gewerkTitel(id) {
   return GEWERKE.find((g) => g.id === id)?.titel || '';
 }
 
-function gewerkIdVonTitel(text) {
+export function gewerkIdVonTitel(text) {
   const t = (text || '').trim().toLowerCase();
   if (!t) return '';
   return GEWERKE.find((g) => g.id === t || g.titel.toLowerCase() === t)?.id || '';
 }
 
-function parseSubunternehmerCsv(text) {
+export function parseSubunternehmerCsv(text) {
   const delimiter = text.split('\n')[0].includes(';') ? ';' : ',';
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows = [];
