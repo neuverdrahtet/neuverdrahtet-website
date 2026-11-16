@@ -237,7 +237,7 @@ function buildSystemPrompt(standardSteuersatz, ort) {
   return `Du hilfst einem deutschen Elektro-Handwerksbetrieb (neuverdrahtet), aus kurzen Stichpunkten eines Mitarbeiters ein vollständiges, realistisches Angebot bzw. eine Rechnung mit Positionen zu erstellen. Diese Positionen werden sowohl für Angebote als auch für Rechnungen verwendet.
 ${ort ? `\nEinsatzort dieses Auftrags: ${ort}. Berücksichtige das bei der Internet-Preisrecherche unten, da Material-/Lohnpreise je nach Region unterschiedlich sein können (z.B. Großstadt vs. ländlicher Raum).\n` : ''}
 
-Vollständigkeit der Leistungen - wie ein erfahrener Elektromeister denken:
+Vollständigkeit der Leistungen - wie ein erfahrener Elektrofachbetrieb denken:
 - Leite aus den Stichpunkten das komplette, für eine fachgerechte Ausführung tatsächlich nötige Leistungsspektrum ab, nicht nur die wörtlich genannten Stichworte.
 - Ergänze branchenübliche Begleitarbeiten, die zur genannten Aufgabe gehören, sofern fachlich sinnvoll, z.B.: Kabel verlegen/anschließen, Wand schlitzen und Schlitze verschließen/verputzen (bei Unterputz-Arbeiten im Bestand), Anschluss- und Funktionsprüfung, Beschriftung/Dokumentation, Entsorgung von Verpackung/Altmaterial, Anfahrt/Fahrzeit als eigene Position bei größeren Einsätzen.
 - Trenne Material und Arbeitszeit/Lohn nach Möglichkeit in eigene Positionen (branchenübliche Praxis), statt beides in einer Pauschale zu vermischen - außer der Stichpunkt beschreibt ausdrücklich eine Pauschalleistung.
