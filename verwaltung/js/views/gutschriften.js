@@ -11,7 +11,7 @@
 // Buchung, siehe Kommentar dort.
 import { getAll, put, remove, getSettings, setSettings, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, nextDailyNummer, toast, calcTotals, offenerGutschriftBetrag } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -30,8 +30,8 @@ const GRUENDE_GUTSCHRIFT = [
 ];
 
 export async function render(container, route) {
-  let [gutschriften, kunden, settings] = await Promise.all([
-    getAll('gutschriften'), getAll('kunden'), getSettings(),
+  let [gutschriften, kunden, projekte, settings] = await Promise.all([
+    getAll('gutschriften'), getAll('kunden'), getAll('projekte'), getSettings(),
   ]);
   const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   gutschriften.sort((a, b) => (b.nummer || '').localeCompare(a.nummer || ''));
@@ -221,7 +221,7 @@ export async function render(container, route) {
   function openForm(g, prefill) {
     const isEdit = !!g;
     const data = g || {
-      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', datum: todayISO(),
+      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
       grund: 'kulanz', grundText: '', betreff: '', steuersatz: settings.kleinunternehmer ? 0 : settings.standardSteuersatz,
       steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
       netto: 0, steuer: 0, brutto: 0, notizen: '', status: 'offen', verwendungen: [],
@@ -251,6 +251,7 @@ export async function render(container, route) {
           <div class="form-grid">
             <div class="field"><label>Nummer</label><input name="nummer" value="${escapeHtml(data.nummer || suggestedNummer)}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Kunde *</label><div id="f-kunde-host"></div></div>
+            <div class="field"><label>Projekt (optional)</label><div id="f-projekt-host"></div></div>
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}" ${locked ? 'disabled' : ''}></div>
             <div class="field"><label>Grund</label>
               <select name="grund" ${locked ? 'disabled' : ''}>${GRUENDE_GUTSCHRIFT.map((r) => `<option value="${r.id}" ${r.id === data.grund ? 'selected' : ''}>${escapeHtml(r.titel)}</option>`).join('')}</select>
@@ -289,6 +290,18 @@ export async function render(container, route) {
       }),
     });
 
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
+      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
+      items: projekte, selectedId: data.projektId, disabled: locked,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
+        });
+      }),
+    });
+
     function liveTotals() {
       const brutto = Number(body.querySelector('[name="betragBrutto"]')?.value) || 0;
       const steuersatz = Number(body.querySelector('[name="steuersatz"]')?.value) || 0;
@@ -309,6 +322,7 @@ export async function render(container, route) {
       return {
         ...data,
         kundeId: kundePicker.getValue() || data.kundeId,
+        projektId: projektPicker.getValue() || data.projektId || '',
         datum: body.querySelector('[name="datum"]')?.value || data.datum,
         grund: body.querySelector('[name="grund"]')?.value || data.grund,
         grundText: body.querySelector('[name="grundText"]')?.value ?? data.grundText ?? '',
@@ -420,7 +434,7 @@ export async function render(container, route) {
         const totals = liveTotals();
 
         const updated = {
-          ...data, kundeId: kundeIdValue, datum: fd.get('datum') || todayISO(),
+          ...data, kundeId: kundeIdValue, projektId: projektPicker.getValue() || '', datum: fd.get('datum') || todayISO(),
           grund: fd.get('grund') || 'sonstiges', grundText: (fd.get('grundText') || '').toString().trim(),
           betreff: (fd.get('betreff') || '').toString().trim(), notizen: (fd.get('notizen') || '').toString().trim(),
           steuersatz, steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
