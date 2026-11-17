@@ -9,7 +9,7 @@
 // mehr Aufwand gewesen, als der Nutzen dafür rechtfertigt.
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatDate, todayISO, nextDailyNummer, toast, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -263,6 +263,12 @@ export async function render(container, route) {
       name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
       items: projekte, selectedId: data.projektId,
       itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
+        });
+      }),
     });
 
     const editor = createPositionsEditor({
