@@ -48,7 +48,7 @@
       });
     }
 
-    function showStep(n) {
+    function showStep(n, scroll) {
       current = n;
       steps.forEach(function (step) {
         step.hidden = parseInt(step.dataset.step, 10) !== current;
@@ -58,7 +58,7 @@
       if (btnNext) btnNext.hidden = current === total;
       if (btnSubmit) btnSubmit.hidden = current !== total;
       if (current === total) renderSummary();
-      form.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (scroll) form.closest('section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function currentStepEl() {
@@ -122,7 +122,7 @@
     }
 
     buildProgress();
-    showStep(1);
+    showStep(1, false);
     updateServiceGroups();
 
     if (serviceSelect) serviceSelect.addEventListener('change', updateServiceGroups);
@@ -131,10 +131,10 @@
 
     if (btnNext) btnNext.addEventListener('click', function () {
       if (!validateCurrentStep()) return;
-      if (current < total) showStep(current + 1);
+      if (current < total) showStep(current + 1, true);
     });
     if (btnBack) btnBack.addEventListener('click', function () {
-      if (current > 1) showStep(current - 1);
+      if (current > 1) showStep(current - 1, true);
     });
 
     form.addEventListener('submit', function (e) {
