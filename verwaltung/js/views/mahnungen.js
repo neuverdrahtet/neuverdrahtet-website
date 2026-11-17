@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals, offenerRestbetrag } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -61,8 +61,28 @@ export async function render(container) {
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
   const markenById = Object.fromEntries(marken.map((m) => [m.id, m]));
   function getEffectiveSettingsForMahnung(m) {
-    const projekt = projekteById[rechnungenById[m.rechnungId]?.projektId];
+    const projekt = m.rechnungId ? projekteById[rechnungenById[m.rechnungId]?.projektId] : projekteById[m.projektId];
     return resolveMarkeSettings(settings, markenById[projekt?.markeId]);
+  }
+  // Mahnungen entstehen normalerweise automatisch aus einer bereits
+  // bestehenden, überfälligen Rechnung (rechnungId gesetzt) - diese drei
+  // Hilfsfunktionen lösen ZUSÄTZLICH den Fall einer MANUELLEN Mahnung ohne
+  // Rechnung auf (14.11.2026, auf Dannys Wunsch, z.B. für alte Forderungen,
+  // die nie als Rechnung in Werkora standen): dort trägt die Mahnung selbst
+  // kundeId/projektId/manuelleBezeichnung/betrag statt sie von der
+  // verknüpften Rechnung abzuleiten. Zentrale Stellen statt an jeder der
+  // bisherigen "rechnungenById[m.rechnungId]"-Stellen den Fallback zu
+  // wiederholen.
+  function kundeFuerMahnung(m) {
+    return m.rechnungId ? kundenById[rechnungenById[m.rechnungId]?.kundeId] : kundenById[m.kundeId];
+  }
+  function bezeichnungFuerMahnung(m) {
+    const rech = rechnungenById[m.rechnungId];
+    return rech ? `Rechnung ${rech.nummer}` : (m.manuelleBezeichnung || 'Manuelle Mahnung');
+  }
+  function betragFuerMahnung(m) {
+    const rech = rechnungenById[m.rechnungId];
+    return rech ? offenerRestbetrag(rech) : Number(m.betrag) || 0;
   }
   const today = todayISO();
 
@@ -103,8 +123,7 @@ export async function render(container) {
     if (items.length === 0) { toast('Keine Mahnungen zum Exportieren', 'info'); return; }
     const rows = [['Rechnung', 'Kunde', 'Stufe', 'Datum', 'Neue Zahlungsfrist', 'Mahngebühr', 'Rechnungsbetrag']];
     for (const m of items) {
-      const rech = rechnungenById[m.rechnungId];
-      rows.push([rech?.nummer || '', kundenById[rech?.kundeId]?.firma || '', m.stufe, formatDate(m.datum), formatDate(m.neueFrist), m.gebuehr, rech?.brutto || '']);
+      rows.push([bezeichnungFuerMahnung(m), kundeFuerMahnung(m)?.firma || '', m.stufe, formatDate(m.datum), formatDate(m.neueFrist), m.gebuehr, betragFuerMahnung(m)]);
     }
     downloadCsv(rows, 'Mahnungen-Export.csv');
   }
@@ -118,14 +137,18 @@ export async function render(container) {
   });
 
   const summeUeberfaellig = overdue.reduce((s, o) => s + offenerRestbetrag(o.r), 0);
+  // Manuelle Mahnungen (kein rechnungId) haben keine Rechnung mit einem
+  // Zahlungsstatus, den man hier abfragen könnte - zählen deshalb immer als
+  // "offen", bis sie gelöscht/in den Papierkorb verschoben werden.
   const offeneMahngebuehren = mahnungen
-    .filter((m) => ['offen', 'teilbezahlt'].includes(rechnungenById[m.rechnungId]?.status))
+    .filter((m) => !m.rechnungId || ['offen', 'teilbezahlt'].includes(rechnungenById[m.rechnungId]?.status))
     .reduce((s, m) => s + (m.gebuehr || 0), 0);
 
   container.innerHTML = `
     <div class="view-header">
       <h1>Mahnungen</h1>
       <div class="actions">
+        <button class="btn btn-primary" id="btn-manuelle-mahnung">+ Manuelle Mahnung (ohne Rechnung)</button>
         <button class="btn" id="btn-export-pdf-alle">📄 Alle als PDF</button>
         <button class="btn" id="btn-export-csv-alle">📊 Alle als CSV</button>
       </div>
@@ -217,6 +240,7 @@ export async function render(container) {
       openForm(rechnung, Number(btn.dataset.stufe));
     });
   });
+  container.querySelector('#btn-manuelle-mahnung').addEventListener('click', () => openManuelleMahnungForm());
 
   const mahnungenTableHost = container.querySelector('#mahnungen-table-host');
 
@@ -231,20 +255,20 @@ export async function render(container) {
         <thead><tr>${bulk.headerCell()}<th>Rechnung</th><th>Kunde</th><th>Stufe</th><th>Datum</th><th class="text-right">Mahngebühr</th><th></th></tr></thead>
         <tbody>
           ${mahnungen.map((m) => {
-            const rech = rechnungenById[m.rechnungId];
+            const kunde = kundeFuerMahnung(m);
             return `
             <tr data-id="${m.id}">
               ${bulk.rowCell(m.id)}
-              <td>${escapeHtml(rech?.nummer || '–')}</td>
-              <td>${escapeHtml(kundenById[rech?.kundeId]?.firma || '')}</td>
+              <td>${escapeHtml(bezeichnungFuerMahnung(m))}${!m.rechnungId ? ' <span class="badge">manuell</span>' : ''}</td>
+              <td>${escapeHtml(kunde?.firma || '')}</td>
               <td><span class="badge badge-warn">Stufe ${m.stufe}</span></td>
               <td>${formatDate(m.datum)}</td>
               <td class="text-right">${formatCurrency(m.gebuehr)}</td>
               <td>
                 <button class="btn btn-sm btn-edit-mahnung" data-id="${m.id}">Bearbeiten</button>
                 <button class="btn btn-sm btn-print-mahnung" data-id="${m.id}">Drucken</button>
-                ${kundenById[rech?.kundeId]?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
-                ${kundenById[rech?.kundeId]?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
+                ${kunde?.email ? `<button class="btn btn-sm btn-email-mahnung" data-id="${m.id}">E-Mail</button>` : ''}
+                ${kunde?.telefon ? `<button class="btn btn-sm btn-whatsapp-mahnung" data-id="${m.id}">WhatsApp</button>` : ''}
                 <button class="btn btn-sm btn-danger btn-del-mahnung" data-id="${m.id}">Löschen</button>
               </td>
             </tr>
@@ -288,16 +312,17 @@ export async function render(container) {
   renderMahnungenTable();
 
   function mahnungDocOpts(m) {
+    const kunde = kundeFuerMahnung(m);
+    const bezeichnung = bezeichnungFuerMahnung(m);
     const rech = rechnungenById[m.rechnungId];
-    const kunde = kundenById[rech?.kundeId];
     const positionen = [
-      { bezeichnung: `Offener Betrag Rechnung ${rech?.nummer || ''}`, menge: 1, einheit: '', einzelpreis: offenerRestbetrag(rech), steuersatz: 0 },
+      { bezeichnung: `Offener Betrag ${bezeichnung}`, menge: 1, einheit: '', einzelpreis: betragFuerMahnung(m), steuersatz: 0 },
       { bezeichnung: 'Mahngebühr', menge: 1, einheit: '', einzelpreis: m.gebuehr || 0, steuersatz: 0 },
     ];
     return {
       settings: getEffectiveSettingsForMahnung(m), art: `${m.stufe}. Mahnung`, nummer: rech?.nummer || '', datum: m.datum,
       refLabel: 'Neue Zahlungsfrist', refValue: formatDate(m.neueFrist),
-      kunde, betreff: `Zahlungserinnerung zu Rechnung ${rech?.nummer || ''} vom ${formatDate(rech?.datum)}`,
+      kunde, betreff: rech ? `Zahlungserinnerung zu Rechnung ${rech.nummer} vom ${formatDate(rech.datum)}` : `Zahlungserinnerung zu ${bezeichnung}`,
       introText: m.text,
       positionen, totals: calcTotals(positionen),
       closingText: '',
@@ -311,26 +336,26 @@ export async function render(container) {
 
   function emailMahnung(m) {
     if (!m) return;
-    const rech = rechnungenById[m.rechnungId];
-    const kunde = kundenById[rech?.kundeId];
+    const kunde = kundeFuerMahnung(m);
+    const bezeichnung = bezeichnungFuerMahnung(m);
     openEmailComposer({
       to: kunde?.email || '',
-      subject: `${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}`,
+      subject: `${m.stufe}. Mahnung zu ${bezeichnung}`,
       bodyText: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''},\n\n${m.text}\n\nMit freundlichen Grüßen\n${getEffectiveSettingsForMahnung(m).firmenname}`,
-      filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
+      filename: `Mahnung-${m.stufe}-${(bezeichnung || m.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`,
       buildPdfBlob: () => buildDocPdfBlob(mahnungDocOpts(m)),
     });
   }
 
   async function whatsappMahnung(m) {
     if (!m) return;
-    const rech = rechnungenById[m.rechnungId];
-    const kunde = kundenById[rech?.kundeId];
+    const kunde = kundeFuerMahnung(m);
+    const bezeichnung = bezeichnungFuerMahnung(m);
     sendDocumentViaWhatsApp({
       phone: kunde?.telefon,
-      text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu Rechnung ${rech?.nummer || ''}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettingsForMahnung(m).firmenname}`,
+      text: `Hallo${kunde?.ansprechpartner ? ' ' + kunde.ansprechpartner : ''}, anbei die ${m.stufe}. Mahnung zu ${bezeichnung}. Die PDF-Datei wurde gerade heruntergeladen – bitte hier im Chat anhängen. Viele Grüße, ${getEffectiveSettingsForMahnung(m).firmenname}`,
       pdfBlob: await buildDocPdfBlob(mahnungDocOpts(m)),
-      filename: `Mahnung-${m.stufe}-${rech?.nummer || ''}.pdf`,
+      filename: `Mahnung-${m.stufe}-${(bezeichnung || m.id).replace(/[\\/:*?"<>|]/g, '_')}.pdf`,
     });
   }
 
@@ -417,14 +442,104 @@ export async function render(container) {
     });
   }
 
-  function openEditForm(m) {
-    const rech = rechnungenById[m.rechnungId];
+  // Manuelle Mahnung OHNE verknüpfte Rechnung (14.11.2026, auf Dannys
+  // Wunsch) - z.B. für eine alte Forderung, die nie als Rechnung in Werkora
+  // angelegt wurde. rechnungId bleibt leer; Kunde/Projekt/Bezeichnung/
+  // Betrag werden stattdessen direkt an der Mahnung selbst gespeichert
+  // (siehe kundeFuerMahnung/bezeichnungFuerMahnung/betragFuerMahnung oben).
+  function openManuelleMahnungForm() {
+    const frist = settings.mahnfristTage || 10;
+    const stufe = 1;
     const { body, close } = openModal({
-      title: `Mahnung Stufe ${m.stufe} bearbeiten – ${rech?.nummer || ''}`,
+      title: 'Manuelle Mahnung (ohne Rechnung)',
+      wide: true,
+      bodyHtml: `
+        <form id="mahn-manuell-form">
+          <p class="hint">Für Forderungen, die nicht als Rechnung in Werkora stehen (z.B. Altfälle). Kunde ist Pflicht, Projekt optional - beide lassen sich direkt hier neu anlegen, falls sie noch fehlen.</p>
+          <div class="form-grid">
+            <div class="field"><label>Kunde *</label><div id="f-mahn-kunde-host"></div></div>
+            <div class="field"><label>Projekt (optional)</label><div id="f-mahn-projekt-host"></div></div>
+            <div class="field col-span-2"><label>Bezeichnung der Forderung *</label><input name="bezeichnung" required placeholder="z.B. Rechnung Nr. 2024-0012 (alt, nicht in Werkora erfasst)"></div>
+            <div class="field"><label>Offener Betrag (€) *</label><input type="number" step="0.01" min="0.01" name="betrag" required></div>
+            <div class="field"><label>Mahnstufe</label>
+              <select name="stufe">
+                <option value="1">1. Mahnung</option>
+                <option value="2">2. Mahnung</option>
+                <option value="3">3. Mahnung</option>
+              </select>
+            </div>
+            <div class="field"><label>Datum</label><input type="date" name="datum" value="${today}"></div>
+            <div class="field"><label>Neue Zahlungsfrist</label><input type="date" name="neueFrist" value="${addDays(today, frist)}"></div>
+            <div class="field"><label>Mahngebühr (€)</label><input type="number" step="0.01" min="0" name="gebuehr" value="${settings.mahnGebuehr?.[stufe] ?? 0}"></div>
+            <div class="field col-span-2"><label>Text</label><textarea name="text" rows="6">${escapeHtml(STUFE_TEXT[stufe] ? STUFE_TEXT[stufe](settings, frist) : '')}</textarea></div>
+          </div>
+          <div class="modal-actions">
+            <span class="spacer"></span>
+            <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
+            <button type="submit" class="btn btn-primary">Speichern &amp; Drucken</button>
+          </div>
+        </form>
+      `,
+    });
+    const kundePicker = mountChipPicker(body.querySelector('#f-mahn-kunde-host'), {
+      name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
+      items: kunden, selectedId: '',
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onCreateNew: () => new Promise((resolve) => {
+        openKundeSchnellanlage({
+          onCreated: (neuerKunde) => { kunden.push(neuerKunde); kundenById[neuerKunde.id] = neuerKunde; resolve(neuerKunde); },
+        });
+      }),
+    });
+    const projektPicker = mountChipPicker(body.querySelector('#f-mahn-projekt-host'), {
+      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
+      items: projekte, selectedId: '',
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); projekteById[neuesProjekt.id] = neuesProjekt; resolve(neuesProjekt); },
+        });
+      }),
+    });
+    body.querySelector('select[name="stufe"]').addEventListener('change', (e) => {
+      const neueStufe = Number(e.target.value);
+      body.querySelector('[name="gebuehr"]').value = settings.mahnGebuehr?.[neueStufe] ?? 0;
+      body.querySelector('[name="text"]').value = STUFE_TEXT[neueStufe] ? STUFE_TEXT[neueStufe](settings, frist) : '';
+    });
+    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#mahn-manuell-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const kundeId = kundePicker.getValue();
+      if (!kundeId) { toast('Bitte einen Kunden wählen', 'danger'); return; }
+      const fd = new FormData(e.target);
+      const betrag = Number(fd.get('betrag'));
+      if (!(betrag > 0)) { toast('Bitte einen Betrag größer 0 angeben', 'danger'); return; }
+      const neueMahnung = {
+        id: uid(), rechnungId: '', kundeId, projektId: projektPicker.getValue() || '',
+        manuelleBezeichnung: (fd.get('bezeichnung') || '').toString().trim(),
+        betrag, stufe: Number(fd.get('stufe')) || 1,
+        datum: fd.get('datum') || today, neueFrist: fd.get('neueFrist') || addDays(today, frist),
+        gebuehr: Number(fd.get('gebuehr')) || 0, text: (fd.get('text') || '').toString(),
+        createdAt: new Date().toISOString(),
+      };
+      await put('mahnungen', neueMahnung);
+      toast('Manuelle Mahnung erstellt', 'success');
+      close();
+      mahnungen.push(neueMahnung);
+      printMahnung(neueMahnung);
+      render(container);
+    });
+  }
+
+  function openEditForm(m) {
+    const kunde = kundeFuerMahnung(m);
+    const { body, close } = openModal({
+      title: `Mahnung Stufe ${m.stufe} bearbeiten – ${escapeHtml(bezeichnungFuerMahnung(m))}`,
       wide: true,
       bodyHtml: `
         <form id="mahn-edit-form">
-          <p class="text-mute">Rechnung ${escapeHtml(rech?.nummer || '')} · ${escapeHtml(kundenById[rech?.kundeId]?.firma || '')} · Betrag ${formatCurrency(rech?.brutto)}</p>
+          <p class="text-mute">${escapeHtml(bezeichnungFuerMahnung(m))} · ${escapeHtml(kunde?.firma || '')} · Betrag ${formatCurrency(betragFuerMahnung(m))}</p>
           <div class="form-grid">
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${m.datum}"></div>
             <div class="field"><label>Neue Zahlungsfrist</label><input type="date" name="neueFrist" value="${m.neueFrist}"></div>
