@@ -559,6 +559,36 @@ function technischeDateien() {
   const heute = new Date().toISOString().slice(0, 10);
   const indexierbare = seiten.filter((s) => !s.noindex);
   writeFileSync(path.join(PUBLIC, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${indexierbare.map((s) => `  <url><loc>${absUrl(s.pfad)}</loc><lastmod>${heute}</lastmod><priority>${s.prioritaet.toFixed(1)}</priority></url>`).join('\n')}\n</urlset>\n`);
+  // Apache-Konfiguration für klassisches Webhosting (z. B. IONOS). Wichtig: .mjs als
+  // JavaScript ausliefern, sonst laden die Buchungs-Skripte im Browser nicht.
+  writeFileSync(path.join(PUBLIC, '.htaccess'), `# BERGER SERVICE SOLUTIONS – erzeugt von src/build.mjs
+DirectoryIndex index.html
+ErrorDocument 404 /404.html
+
+AddType text/javascript .js .mjs
+AddType image/webp .webp
+AddType font/woff2 .woff2
+AddDefaultCharset utf-8
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTPS} off
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+<IfModule mod_headers.c>
+  Header always set X-Content-Type-Options "nosniff"
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+  Header always set X-Frame-Options "SAMEORIGIN"
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=()"
+${CONFIG.website.indexierbar ? '' : '  # Prototyp: Suchmaschinen ausschließen, bis website.indexierbar = true\n  Header always set X-Robots-Tag "noindex, nofollow"\n'}  <FilesMatch "\\.(webp|png|jpg|ico|woff2)$">
+    Header set Cache-Control "public, max-age=2592000"
+  </FilesMatch>
+  <FilesMatch "\\.(css|js|mjs)$">
+    Header set Cache-Control "public, max-age=86400"
+  </FilesMatch>
+</IfModule>
+`);
   writeFileSync(path.join(PUBLIC, 'robots.txt'), CONFIG.website.indexierbar
     ? `User-agent: *\nAllow: /\n\nSitemap: ${absUrl('sitemap.xml')}\n`
     : `# Prototyp: Indexierung gesperrt, bis CONFIG.website.indexierbar = true\nUser-agent: *\nDisallow: /\n`);

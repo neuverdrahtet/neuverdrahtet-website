@@ -12,6 +12,7 @@ npm run build:bss         # Seiten aus src/daten erzeugen → public/
 npm run start:bss         # lokal ansehen: http://127.0.0.1:4173
 npm run test:bss          # Logik- und Seitenqualitätstests
 npm run test:bss-browser  # End-to-End-Test der Online-Buchung (Chromium)
+npm run paket:bss         # Upload-Paket (ZIP) für IONOS u. a., siehe docs/12-hosting-ionos.md
 ```
 
 ## Aufbau
