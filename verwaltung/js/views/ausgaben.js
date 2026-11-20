@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
 import { downloadBlob } from '../docexport.js';
@@ -882,12 +882,8 @@ export async function render(container) {
                 ${USTSAETZE.map((s) => `<option value="${s.wert}" ${Number(data.steuersatz) === s.wert ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}
               </select>
             </div>
-            <div class="field"><label>Kunde</label>
-              <select name="kundeId" id="ausgabe-kunde"><option value="">– keinem Kunden zugeordnet –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>Projekt / Auftrag (für Nachkalkulation)</label>
-              <select name="projektId" id="ausgabe-projekt"><option value="">– keinem Projekt zugeordnet –</option>${projekte.map((p) => `<option value="${p.id}" data-kunde="${p.kundeId || ''}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
+            <div class="field"><label>Kunde</label><div id="f-kunde-host"></div></div>
+            <div class="field"><label>Projekt / Auftrag (für Nachkalkulation)</label><div id="f-projekt-host"></div></div>
             <div class="field"><label>Kalkulations-Kategorie</label>
               <select name="kalkKategorie" id="ausgabe-kalkkategorie" ${data.projektId ? '' : 'disabled'}>
                 <option value="">–</option>
@@ -924,6 +920,37 @@ export async function render(container) {
           </div>
         </form>
       `,
+    });
+
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
+      icon: '👤', title: 'Kunde wählen', placeholder: '– keinem Kunden zugeordnet –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onCreateNew: () => new Promise((resolve) => {
+        openKundeSchnellanlage({
+          onCreated: (neuerKunde) => {
+            kunden.push(neuerKunde);
+            kundenById[neuerKunde.id] = neuerKunde;
+            resolve(neuerKunde);
+          },
+        });
+      }),
+    });
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
+      icon: '📁', title: 'Projekt wählen', placeholder: '– keinem Projekt zugeordnet –',
+      items: projekte, selectedId: data.projektId,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onChange: (projektId) => {
+        body.querySelector('#ausgabe-kalkkategorie').disabled = !projektId;
+        const projekt = projekte.find((p) => p.id === projektId);
+        if (projekt?.kundeId && !kundePicker.getValue()) kundePicker.setValue(projekt.kundeId);
+      },
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
+        });
+      }),
     });
 
     if (!istOffeneKreditorenRechnung) {
@@ -975,13 +1002,6 @@ export async function render(container) {
     betragInput.addEventListener('input', updateBetragHint);
     steuersatzSelect.addEventListener('change', updateBetragHint);
     updateBetragHint();
-
-    body.querySelector('#ausgabe-projekt').addEventListener('change', (e) => {
-      body.querySelector('#ausgabe-kalkkategorie').disabled = !e.target.value;
-      const kundeSelect = body.querySelector('#ausgabe-kunde');
-      const projektKundeId = e.target.selectedOptions[0]?.dataset.kunde || '';
-      if (projektKundeId && !kundeSelect.value) kundeSelect.value = projektKundeId;
-    });
 
     // Kategorie automatisch aus Lieferant/Beschreibung vorschlagen (gleiche
     // Erkennung wie beim Belege-Import) - nur solange der Nutzer die

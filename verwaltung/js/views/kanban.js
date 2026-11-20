@@ -1,6 +1,6 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, toast, openTerminMitVorbelegung, farbeAusText, formatDate, openDokumentMitVorbelegung } from '../utils.js';
-import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { verschiebeProjektReferenzen } from '../projektMerge.js';
 
@@ -262,10 +262,9 @@ export async function render(container) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Kunde</label>
-              <div class="flex-row" style="gap:6px">
-                <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+              <div class="flex-row" style="gap:6px;align-items:flex-start">
+                <div id="f-kunde-host" style="flex:1"></div>
                 <button type="button" class="btn btn-sm" id="btn-card-kunde-bearbeiten" title="Daten des ausgewählten Kunden ergänzen (z.B. Adresse)" ${data.kundeId ? '' : 'hidden'}>✏️</button>
-                <button type="button" class="btn btn-sm" id="btn-card-neuer-kunde" title="Neuen Kunden anlegen">+ Neu</button>
               </div>
             </div>
             <div class="field"><label>Status</label>
@@ -288,21 +287,24 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    const kundeSelect = body.querySelector('select[name="kundeId"]');
     const bearbeitenBtn = body.querySelector('#btn-card-kunde-bearbeiten');
-    kundeSelect.addEventListener('change', () => { bearbeitenBtn.hidden = !kundeSelect.value; });
-    body.querySelector('#btn-card-neuer-kunde').addEventListener('click', () => {
-      openKundeSchnellanlage({
-        onCreated: (neuerKunde) => {
-          kunden.push(neuerKunde);
-          kundenById[neuerKunde.id] = neuerKunde;
-          kundeSelect.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
-          bearbeitenBtn.hidden = false;
-        },
-      });
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
+      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onChange: (kundeId) => { bearbeitenBtn.hidden = !kundeId; },
+      onCreateNew: () => new Promise((resolve) => {
+        openKundeSchnellanlage({
+          onCreated: (neuerKunde) => {
+            kunden.push(neuerKunde);
+            kundenById[neuerKunde.id] = neuerKunde;
+            resolve(neuerKunde);
+          },
+        });
+      }),
     });
     bearbeitenBtn.addEventListener('click', () => {
-      const bestehenderKunde = kundenById[kundeSelect.value];
+      const bestehenderKunde = kundenById[kundePicker.getValue()];
       if (!bestehenderKunde) return;
       openKundeSchnellanlage({
         kunde: bestehenderKunde,
@@ -310,8 +312,7 @@ export async function render(container) {
           const idx = kunden.findIndex((k) => k.id === aktualisierterKunde.id);
           if (idx !== -1) kunden[idx] = aktualisierterKunde;
           kundenById[aktualisierterKunde.id] = aktualisierterKunde;
-          const option = Array.from(kundeSelect.options).find((o) => o.value === aktualisierterKunde.id);
-          if (option) option.textContent = aktualisierterKunde.firma;
+          kundePicker.setValue(kundePicker.getValue());
         },
       });
     });
@@ -324,7 +325,7 @@ export async function render(container) {
         render(container);
       });
       body.querySelector('#btn-neuer-termin').addEventListener('click', () => {
-        const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
+        const kunde = kundenById[kundePicker.getValue()];
         const prefill = {
           titel: data.titel, kundeId: kunde?.id || '', projektId: data.id,
           ort: kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '',
@@ -332,7 +333,7 @@ export async function render(container) {
         close();
         openTerminMitVorbelegung(prefill);
       });
-      const dokumentPrefill = () => ({ kundeId: body.querySelector('select[name="kundeId"]').value || '', projektId: data.id });
+      const dokumentPrefill = () => ({ kundeId: kundePicker.getValue() || '', projektId: data.id });
       body.querySelector('#btn-neues-angebot').addEventListener('click', () => { close(); openDokumentMitVorbelegung('angebote', dokumentPrefill()); });
       body.querySelector('#btn-neue-rechnung').addEventListener('click', () => { close(); openDokumentMitVorbelegung('rechnungen', dokumentPrefill()); });
       body.querySelector('#btn-neue-ab').addEventListener('click', () => { close(); openDokumentMitVorbelegung('auftragsbestaetigung', dokumentPrefill()); });

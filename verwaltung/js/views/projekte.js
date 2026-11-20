@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, openKundeSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderAufmassSection } from '../aufmass.js';
@@ -679,10 +679,9 @@ export async function render(container, opts = {}) {
           <div class="form-grid">
             <div class="field col-span-2"><label>Titel *</label><input name="titel" required value="${escapeHtml(data.titel)}"></div>
             <div class="field"><label>Kunde</label>
-              <div class="flex-row" style="gap:6px">
-                <select name="kundeId" style="flex:1"><option value="">– kein Kunde –</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
+              <div class="flex-row" style="gap:6px;align-items:flex-start">
+                <div id="f-kunde-host" style="flex:1"></div>
                 <button type="button" class="btn btn-sm" id="btn-proj-kunde-bearbeiten" title="Daten des ausgewählten Kunden ergänzen (z.B. Adresse)" ${data.kundeId ? '' : 'hidden'}>✏️</button>
-                <button type="button" class="btn btn-sm" id="btn-proj-neuer-kunde" title="Neuen Kunden anlegen">+ Neu</button>
                 <button type="button" class="btn btn-sm" id="btn-proj-navi" title="Zur Kundenadresse navigieren">🧭</button>
               </div>
             </div>
@@ -778,7 +777,7 @@ export async function render(container, opts = {}) {
               if (result.beschreibung) form.beschreibung.value = result.beschreibung;
               if (result.start) form.start.value = result.start;
               if (result.ende) form.ende.value = result.ende;
-              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) kundePicker.setValue(result.kundeId);
               if (result.gewerk) form.gewerk.value = result.gewerk;
               toast('Projektdaten von der KI übernommen - bitte prüfen', 'success');
             } catch (err) {
@@ -790,37 +789,37 @@ export async function render(container, opts = {}) {
         });
       });
     }
-    {
-      const kundeSelect = body.querySelector('select[name="kundeId"]');
-      const bearbeitenBtn = body.querySelector('#btn-proj-kunde-bearbeiten');
-      kundeSelect.addEventListener('change', () => { bearbeitenBtn.hidden = !kundeSelect.value; });
-      body.querySelector('#btn-proj-neuer-kunde').addEventListener('click', () => {
+    const bearbeitenBtn = body.querySelector('#btn-proj-kunde-bearbeiten');
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
+      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onChange: (kundeId) => { bearbeitenBtn.hidden = !kundeId; },
+      onCreateNew: () => new Promise((resolve) => {
         openKundeSchnellanlage({
           onCreated: (neuerKunde) => {
             kunden.push(neuerKunde);
             kundenById[neuerKunde.id] = neuerKunde;
-            kundeSelect.appendChild(new Option(neuerKunde.firma, neuerKunde.id, false, true));
-            bearbeitenBtn.hidden = false;
+            resolve(neuerKunde);
           },
         });
+      }),
+    });
+    bearbeitenBtn.addEventListener('click', () => {
+      const bestehenderKunde = kundenById[kundePicker.getValue()];
+      if (!bestehenderKunde) return;
+      openKundeSchnellanlage({
+        kunde: bestehenderKunde,
+        onUpdated: (aktualisierterKunde) => {
+          const idx = kunden.findIndex((k) => k.id === aktualisierterKunde.id);
+          if (idx !== -1) kunden[idx] = aktualisierterKunde;
+          kundenById[aktualisierterKunde.id] = aktualisierterKunde;
+          kundePicker.setValue(kundePicker.getValue());
+        },
       });
-      bearbeitenBtn.addEventListener('click', () => {
-        const bestehenderKunde = kundenById[kundeSelect.value];
-        if (!bestehenderKunde) return;
-        openKundeSchnellanlage({
-          kunde: bestehenderKunde,
-          onUpdated: (aktualisierterKunde) => {
-            const idx = kunden.findIndex((k) => k.id === aktualisierterKunde.id);
-            if (idx !== -1) kunden[idx] = aktualisierterKunde;
-            kundenById[aktualisierterKunde.id] = aktualisierterKunde;
-            const option = Array.from(kundeSelect.options).find((o) => o.value === aktualisierterKunde.id);
-            if (option) option.textContent = aktualisierterKunde.firma;
-          },
-        });
-      });
-    }
+    });
     body.querySelector('#btn-proj-navi').addEventListener('click', () => {
-      const kunde = kundenById[body.querySelector('select[name="kundeId"]').value];
+      const kunde = kundenById[kundePicker.getValue()];
       const adresse = kunde ? [kunde.strasse, kunde.plz, kunde.ort].filter((s) => s && s.trim()).join(', ') : '';
       if (!adresse) { toast('Kein Kunde mit Adresse ausgewählt', 'danger'); return; }
       window.open(navigationUrl(adresse), '_blank', 'noopener');
