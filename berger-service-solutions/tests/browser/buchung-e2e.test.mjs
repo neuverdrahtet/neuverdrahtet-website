@@ -165,6 +165,18 @@ try {
     await page.close();
   });
 
+  await test('Ablauf-Kacheln: kein Text läuft über den Rand (Desktop, Tablet, Handy)', async () => {
+    for (const w of [1366, 1024, 768, 390]) {
+      const page = await neueSeite({ viewport: { width: w, height: 900 } });
+      for (const f of ['ablauf.html', 'badsanierung.html', 'dguv-v3-pruefung.html']) {
+        await page.goto(`${basis}/${f}`);
+        const ueber = await page.evaluate(() => [...document.querySelectorAll('.ablauf li, .karte, .infokasten')].filter((el) => el.scrollWidth > el.clientWidth + 1 || [...el.querySelectorAll('h3,p,dd')].some((e) => e.scrollWidth > e.clientWidth + 1)).length);
+        assert.equal(ueber, 0, `${f} bei ${w}px`);
+      }
+      await page.close();
+    }
+  });
+
   await test('keine JavaScript-Fehler auf allen besuchten Seiten', async () => { assert.deepEqual(jsFehler, []); });
 } finally {
   await browser.close();

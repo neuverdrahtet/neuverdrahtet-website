@@ -80,7 +80,7 @@ function liste(items, klasse = 'hakenliste') {
 
 function ablaufHtml(prozessId, titel) {
   const p = PROZESSE[prozessId];
-  return `<section class="abschnitt abschnitt-hell" aria-labelledby="ablauf-${prozessId}"><div class="huelle"><h2 id="ablauf-${prozessId}">${esc(titel || 'So läuft Ihr Auftrag ab')}</h2><p class="unterzeile">Prozess „${esc(p.name)}“</p><ol class="ablauf">${p.schritte.map(([t, d], i) => `<li><span class="ablauf-nr">${i + 1}</span><div><h3>${esc(t)}</h3><p>${esc(d)}</p></div></li>`).join('')}</ol></div></section>`;
+  return `<section class="abschnitt abschnitt-hell" aria-labelledby="ablauf-${prozessId}"><div class="huelle"><h2 id="ablauf-${prozessId}">${esc(titel || 'So läuft Ihr Auftrag ab')}</h2><p class="unterzeile">Prozess „${esc(p.name)}“</p><ol class="ablauf" style="--spalten: ${({ 5: 5, 6: 3, 7: 4, 8: 4 })[p.schritte.length] || Math.min(p.schritte.length, 4)}">${p.schritte.map(([t, d], i) => `<li><span class="ablauf-nr">${i + 1}</span><div><h3>${esc(t)}</h3><p>${esc(d)}</p></div></li>`).join('')}</ol></div></section>`;
 }
 
 function ctaBand(text = 'Beschreiben Sie Ihr Vorhaben – wir melden uns mit einem Termin- oder Angebotsvorschlag.', l = null) {
@@ -469,11 +469,17 @@ ${ctaBand()}`;
   seite({ pfad, titel, beschreibung, inhalt, krumen, prioritaet: 0.8, jsonld: [brotkrumenJsonLd(krumen), faqJsonLd(faq)] });
 }
 
+function ansprechpartnerKarte() {
+  const name = CONFIG.firma.inhaber;
+  return `<div class="ansprechpartner"><img src="assets/img/ansprechpartner.webp" width="306" height="472" alt="${esc(name ? `${name}, Inhaber von ${CONFIG.firma.name}` : `Ihr Ansprechpartner bei ${CONFIG.firma.name}`)}" loading="lazy"><div><p class="ansprechpartner-rolle">Ihr Ansprechpartner</p>${name ? `<p class="ansprechpartner-name">${esc(name)}</p><p>Inhaber</p>` : ''}<p>Persönlich erreichbar für Anfragen, Besichtigungen und Rückfragen zu laufenden Aufträgen – von der ersten Anfrage bis zur Übergabe.</p><a class="knopf knopf-akzent" href="buchen.html">${icon('kalender')}Anfrage stellen</a></div></div>`;
+}
+
 function ueberUns() {
   const krumen = [['Über uns', 'ueber-uns.html']];
   const inhalt = `
 <section class="seitenkopf"><div class="huelle"><h1>Über BERGER SERVICE SOLUTIONS</h1><p class="lead">${esc(CONFIG.firma.slogan)} – drei Worte, die beschreiben, wie wir arbeiten: handwerklich sauber, serviceorientiert und mit Lösungen, die über ein einzelnes Gewerk hinausgehen.</p></div></section>
 <section class="abschnitt"><div class="huelle schmal">
+${ansprechpartnerKarte()}
 <h2>Wer wir sind</h2><p>BERGER SERVICE SOLUTIONS ist ein Dienstleistungsunternehmen aus Essen. Wir verbinden Elektrotechnik mit Renovierung, Objektbetreuung und Entrümpelung. Für unsere Kunden bedeutet das: weniger Abstimmungsaufwand, weniger Schnittstellen und ein Ansprechpartner, der das ganze Objekt im Blick hat.</p>
 <h2>Wie wir arbeiten</h2>${liste(['Feste Abläufe für jeden Leistungsbereich', 'Schriftliche Angebote nach Besichtigung und Aufmaß', 'Digitale Dokumentation mit Fotos, Protokollen und Leistungsnachweisen', 'Arbeiten in zulassungspflichtigen Gewerken nur mit entsprechender Berechtigung oder eingetragenen Partnerbetrieben', 'Keine Versprechen, die wir nicht belegen können'])}
 <h2>Referenzen</h2><p>Die Fotos auf dieser Website stammen von eigenen Baustellen. Ausführliche Projektberichte mit Ort und Umfang veröffentlichen wir nur mit Zustimmung der Auftraggeber; dieser Bereich wird ergänzt, sobald freigegebene Berichte vorliegen.</p>
@@ -506,7 +512,8 @@ function kontaktSeite() {
   <div class="kontakt-karte">${icon('pin', 'icon icon-gross')}<h2>Standort</h2><p>${k.strasse ? `${esc(k.strasse)}<br>${esc(k.plz)} ${esc(k.ort)}` : `${esc(k.ort)}, ${esc(k.region)}`}</p><p class="klein">Einsatzgebiet: rund ${CONFIG.einsatzgebiet.radiusKm} km um Essen</p></div>
   <div class="kontakt-karte">${icon('telefon', 'icon icon-gross')}<h2>Telefon & WhatsApp</h2>${k.telefon ? `<p><a href="tel:${esc(k.telefon.replace(/\s/g, ''))}">${esc(k.telefon)}</a></p>` : '<p>Die Telefonnummer wird in Kürze veröffentlicht.</p>'}${k.whatsapp ? `<p><a href="https://wa.me/${esc(k.whatsapp)}" rel="noopener">WhatsApp-Nachricht senden</a></p>` : ''}</div>
   <div class="kontakt-karte">${icon('kalender', 'icon icon-gross')}<h2>Erreichbarkeit</h2><ul class="einfach">${zeiten}</ul>${k.email ? `<p><a href="mailto:${esc(k.email)}">${esc(k.email)}</a></p>` : ''}</div>
-</div></section>`;
+</div></section>
+<section class="abschnitt abschnitt-hell"><div class="huelle schmal">${ansprechpartnerKarte()}</div></section>`;
   seite({ pfad: 'kontakt.html', titel: 'Kontakt – BERGER SERVICE SOLUTIONS Essen', beschreibung: 'Kontakt zu BERGER SERVICE SOLUTIONS in Essen: Online-Buchung, Telefon, WhatsApp und Erreichbarkeit für Elektro, Sanierung, Objektservice und Entrümpelung.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'ContactPage', name: 'Kontakt', about: { '@id': ORG['@id'] } }] });
 }
 

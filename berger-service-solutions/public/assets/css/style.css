@@ -168,11 +168,13 @@ p { margin: 0 0 1em; }
 .orte-hinweis { margin-top: 22px; }
 
 /* Ablauf */
-.ablauf { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; counter-reset: none; }
-@media (min-width: 900px) { .ablauf { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); } }
-.ablauf li { display: flex; gap: 14px; background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius); padding: 18px; }
-.ablauf h3 { font-size: 1.02rem; margin-bottom: .3em; }
-.ablauf p { margin: 0; font-size: .95rem; color: #3c4f61; }
+.ablauf { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .ablauf { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .ablauf { grid-template-columns: repeat(var(--spalten, 4), minmax(0, 1fr)); } }
+.ablauf li { display: flex; flex-direction: column; gap: 10px; min-width: 0; background: var(--weiss); border: 1px solid var(--linie); border-top: 3px solid var(--akzent); border-radius: var(--radius); padding: 18px; }
+.ablauf li > div { min-width: 0; }
+.ablauf h3 { font-size: 1.02rem; margin-bottom: .35em; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+.ablauf p { margin: 0; font-size: .95rem; color: #3c4f61; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
 .ablauf-nr { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--marke); color: var(--akzent); font-weight: 800; box-shadow: 0 0 0 3px rgba(30,200,245,.25); }
 .mini-ablauf { padding-left: 1.2em; margin: 0; display: grid; gap: 8px; font-size: .95rem; }
 
@@ -288,6 +290,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--marke-3); outlin
 .vorher-nachher img { aspect-ratio: auto; }
 .vn-etikett { position: absolute; top: 12px; left: 12px; z-index: 1; background: var(--marke); color: #fff; font-weight: 800; font-size: .85rem; letter-spacing: .06em; text-transform: uppercase; padding: 6px 12px; border-radius: 999px; }
 .vn-nachher { background: var(--akzent); color: var(--marke); }
+
+/* Ansprechpartner */
+.ansprechpartner { display: flex; gap: 20px; align-items: center; background: var(--weiss); border: 1px solid var(--linie); border-left: 5px solid var(--akzent); border-radius: var(--radius); padding: 18px; margin-bottom: 32px; box-shadow: var(--schatten); }
+.ansprechpartner img { flex: none; width: 120px; height: auto; border-radius: var(--radius-klein); }
+.ansprechpartner p { margin: 0 0 8px; }
+.ansprechpartner-rolle { font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--marke-3); }
+.ansprechpartner-name { font-size: 1.25rem; font-weight: 800; color: var(--marke); margin-bottom: 0 !important; }
+.ansprechpartner .knopf { margin-top: 6px; }
+@media (max-width: 520px) { .ansprechpartner { flex-direction: column; align-items: flex-start; } }
 
 /* Kontakt, Rechtstexte */
 .kontakt-karte { background: var(--weiss); border: 1px solid var(--linie); border-radius: var(--radius); padding: 22px; }
