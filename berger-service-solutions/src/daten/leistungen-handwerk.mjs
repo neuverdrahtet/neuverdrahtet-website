@@ -20,7 +20,7 @@ export const LEISTUNGEN_HANDWERK = [
     ],
     leistungen: ['Bestandsaufnahme, Aufmaß und Sanierungskonzept', 'Rückbau und Entkernung', 'Elektroinstallation als eigenes Kerngewerk', 'Trockenbau und Innenausbau', 'Bad, Fliesen und Bodenbeläge', 'Maler- und Tapezierarbeiten', 'Gewerkeübergreifende Projektkoordination und Bauzeitenplan', 'Abnahme mit Protokoll'],
     abschnitte: [
-      { h2: 'Gewerkeübergreifende Projektkoordination', p: ['Für jedes Projekt legen wir in Werkora eine Projektakte an: Angebot, Bauzeitenplan, Fotos, Materialbestellungen und Abnahmeprotokoll an einem Ort. Sie erhalten auf Wunsch regelmäßige Statusmeldungen – künftig auch per WhatsApp.'] },
+      { h2: 'Gewerkeübergreifende Projektkoordination', p: ['Für jedes Projekt führen wir eine digitale Projektakte: Angebot, Bauzeitenplan, Fotos, Materialbestellungen und Abnahmeprotokoll an einem Ort. Auf Wunsch informieren wir Sie regelmäßig über den Baufortschritt.'] },
       { h2: 'Was nicht zu unserem Leistungsumfang gehört', p: ['Statische Eingriffe, Arbeiten an tragenden Bauteilen und genehmigungspflichtige Umbauten erfordern Planung durch Architekten oder Tragwerksplaner. Wir arbeiten in solchen Fällen nach deren Vorgaben.'] },
     ],
     zielgruppen: ['Käufer von Bestandsimmobilien', 'Eigentümer und Erben', 'Vermieter und Investoren'],
@@ -192,7 +192,7 @@ export const LEISTUNGEN_HANDWERK = [
     ],
     leistungen: ['Besichtigung bei oder nach Auszug', 'Entrümpelung zurückgelassener Gegenstände', 'Malerarbeiten und Spachtelarbeiten', 'Bodenbeläge erneuern', 'Elektrische Sicherheitsprüfung', 'Kleinreparaturen an Türen, Fenstern und Beschlägen', 'Endreinigung und Übergabe'],
     abschnitte: [
-      { h2: 'Für Hausverwaltungen', p: ['Für Verwaltungen mit regelmäßigen Mieterwechseln bieten wir abgestimmte Leistungspakete und eine einheitliche Dokumentation je Wohnung. Die Beauftragung kann künftig direkt über die Objektakte in Werkora erfolgen.'] },
+      { h2: 'Für Hausverwaltungen', p: ['Für Verwaltungen mit regelmäßigen Mieterwechseln bieten wir abgestimmte Leistungspakete und eine einheitliche Dokumentation je Wohnung. Jede Wohnung erhält eine eigene Dokumentation mit Fotos, die Sie für die Übergabe an neue Mieter nutzen können.'] },
     ],
     zielgruppen: ['Hausverwaltungen', 'Private Vermieter', 'Wohnungsunternehmen'],
     kostenfaktoren: ['Zustand der Wohnung', 'Umfang der Leistungen', 'Termindruck'],

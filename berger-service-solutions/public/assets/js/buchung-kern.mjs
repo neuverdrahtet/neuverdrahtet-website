@@ -6,7 +6,7 @@ import {
 } from './einsatzgebiet-logik.mjs';
 
 export const SCHEMA_VERSION = 'bss-lead/1';
-export const DATENSCHUTZ_TEXTVERSION = 'ds-entwurf-2026-11';
+export const DATENSCHUTZ_TEXTVERSION = 'ds-2026-11';
 
 /** Zusatzfelder je Leistung (nur anzeigen, wenn fachlich sinnvoll). */
 export function zusatzfelder(leistungSlug) {

@@ -109,7 +109,7 @@ export function fuss(leistungenNachBereich, orteSeiten, ortName) {
     </div>
     <div><p class="fuss-titel">Leistungsbereiche</p><ul class="fuss-liste">${bereiche}<li><a href="bodenlegearbeiten.html">Bodenlegearbeiten</a></li><li><a href="leistungen.html">Alle Leistungen</a></li></ul></div>
     <div><p class="fuss-titel">Einsatzgebiet</p><ul class="fuss-liste fuss-orte">${orte}<li><a href="einsatzgebiet.html">Alle Orte im 50-km-Radius</a></li></ul></div>
-    <div><p class="fuss-titel">Unternehmen</p><ul class="fuss-liste"><li><a href="ueber-uns.html">Über uns</a></li><li><a href="ablauf.html">So arbeiten wir</a></li><li><a href="hausverwaltungen.html">Für Hausverwaltungen</a></li><li><a href="gewerbekunden.html">Für Gewerbekunden</a></li><li><a href="faq.html">Häufige Fragen</a></li><li><a href="kontakt.html">Kontakt</a></li><li><a href="impressum.html">Impressum</a></li><li><a href="datenschutz.html">Datenschutz</a></li></ul></div>
+    <div><p class="fuss-titel">Unternehmen</p><ul class="fuss-liste"><li><a href="ueber-uns.html">Über uns</a></li><li><a href="ablauf.html">So arbeiten wir</a></li><li><a href="hausverwaltungen.html">Für Hausverwaltungen</a></li><li><a href="gewerbekunden.html">Für Gewerbekunden</a></li><li><a href="faq.html">Häufige Fragen</a></li><li><a href="kontakt.html">Kontakt</a></li><li><a href="impressum.html">Impressum</a></li><li><a href="datenschutz.html">Datenschutz</a></li><li><a href="agb.html">AGB</a></li><li><a href="widerruf.html">Widerrufsbelehrung</a></li></ul></div>
   </div>
   <div class="huelle fuss-unten"><p>© ${new Date().getFullYear()} ${esc(CONFIG.firma.name)} · Essen · Einsatzgebiet rund 50 km um Essen</p></div>
 </footer>

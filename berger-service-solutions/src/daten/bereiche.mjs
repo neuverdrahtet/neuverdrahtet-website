@@ -72,7 +72,7 @@ export const PROZESSE = {
     name: 'Wartung und Prüfung',
     schritte: [
       ['Online-Buchung', 'Sie wählen Leistung, Einsatzadresse und einen Wunschtermin. Das Einsatzgebiet wird sofort geprüft.'],
-      ['Terminbestätigung', 'Nach dem Abgleich mit unserem Kalender bestätigen wir den Termin per E-Mail und auf Wunsch per WhatsApp.'],
+      ['Terminbestätigung', 'Nach dem Abgleich mit unserem Kalender bestätigen wir den Termin per E-Mail oder telefonisch.'],
       ['Durchführung', 'Prüfung oder Wartung vor Ort nach Checkliste, mit kalibrierten Messgeräten bzw. nach Herstellervorgaben.'],
       ['Dokumentation und Prüfbericht', 'Messwerte, Mängel und Fotos werden digital erfasst. Sie erhalten einen Prüf- bzw. Wartungsbericht.'],
       ['Rechnung', 'Die Rechnung wird auf Basis der dokumentierten Leistung erstellt.'],

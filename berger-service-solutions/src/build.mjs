@@ -423,7 +423,8 @@ function buchungsseite() {
   <fieldset class="schritt" data-schritt="5" hidden>
     <legend>5. Angaben prüfen und absenden</legend>
     <div class="zusammenfassung" data-zusammenfassung></div>
-    <div class="feld"><label class="checkbox"><input type="checkbox" name="datenschutz" required> Ich habe die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzhinweise</a> gelesen und bin einverstanden, dass meine Angaben zur Bearbeitung der Anfrage gespeichert und verarbeitet werden.</label><p class="feld-fehler" data-fehler="datenschutz"></p></div>
+    <div class="feld"><label class="checkbox"><input type="checkbox" name="datenschutz" required> Ich habe die <a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden, dass meine Angaben zur Bearbeitung der Anfrage gespeichert und verarbeitet werden.</label><p class="feld-fehler" data-fehler="datenschutz"></p></div>
+    <p class="klein">Ihre Anfrage ist unverbindlich. Ein Vertrag kommt erst mit unserer Bestätigung bzw. Ihrer Annahme unseres Angebots zustande. Es gelten unsere <a href="agb.html" target="_blank" rel="noopener">AGB</a>; Verbraucher beachten bitte die <a href="widerruf.html" target="_blank" rel="noopener">Widerrufsbelehrung</a>.</p>
     <div class="feld" data-whatsapp-einwilligung hidden><label class="checkbox"><input type="checkbox" name="whatsappEinwilligung"> Ich bin einverstanden, Terminbestätigungen und Rückfragen zu dieser Anfrage per WhatsApp zu erhalten. Widerruf jederzeit möglich.</label></div>
   </fieldset>
 
@@ -452,7 +453,7 @@ function ablaufseite() {
   const inhalt = `
 <section class="seitenkopf"><div class="huelle"><h1>So arbeiten wir: klare Abläufe für jeden Auftrag</h1><p class="lead">Jeder Leistungsbereich hat einen eigenen, festen Ablauf – von der Anfrage bis zur Rechnung. Jeder Vorgang erhält eine eindeutige Vorgangsnummer, jeder Statuswechsel wird dokumentiert.</p></div></section>
 ${Object.keys(PROZESSE).map((id) => ablaufHtml(id, zuordnung[id])).join('')}
-<section class="abschnitt"><div class="huelle schmal"><h2>Dokumentation und Transparenz</h2><p>Fotos, Prüfprotokolle, Leistungsnachweise und Entsorgungsbelege werden digital der jeweiligen Auftrags- bzw. Objektakte zugeordnet. So ist jederzeit nachvollziehbar, was wann von wem erledigt wurde.</p><p>Wir arbeiten an weiteren digitalen Funktionen – etwa Statusmeldungen per WhatsApp und einem Kundenportal. Diese Funktionen kündigen wir erst an, wenn sie zuverlässig getestet sind.</p></div></section>
+<section class="abschnitt"><div class="huelle schmal"><h2>Dokumentation und Transparenz</h2><p>Fotos, Prüfprotokolle, Leistungsnachweise und Entsorgungsbelege werden digital der jeweiligen Auftrags- bzw. Objektakte zugeordnet. So ist jederzeit nachvollziehbar, was wann von wem erledigt wurde.</p><p>Weitere digitale Funktionen, etwa Statusmeldungen per Nachricht oder ein Kundenportal für Hausverwaltungen, kündigen wir erst an, wenn sie zuverlässig getestet sind.</p></div></section>
 ${ctaBand()}`;
   seite({ pfad: 'ablauf.html', titel: 'So arbeiten wir – Abläufe von Anfrage bis Rechnung', beschreibung: 'Feste Abläufe für Wartung und Prüfung, Sanierung, Objektservice und Entrümpelung – von der Anfrage über Angebot und Ausführung bis zur Dokumentation.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen)] });
 }
@@ -510,11 +511,11 @@ function kontaktSeite() {
 <section class="seitenkopf"><div class="huelle"><h1>Kontakt</h1><p class="lead">Am schnellsten erreichen Sie uns über die Online-Buchung: Dort erfassen Sie alle Angaben, die wir für eine fundierte Rückmeldung brauchen.</p><div class="knopf-gruppe"><a class="knopf knopf-akzent" href="buchen.html">${icon('kalender')}Zur Online-Buchung</a></div></div></section>
 <section class="abschnitt"><div class="huelle raster raster-3">
   <div class="kontakt-karte">${icon('pin', 'icon icon-gross')}<h2>Standort</h2><p>${k.strasse ? `${esc(k.strasse)}<br>${esc(k.plz)} ${esc(k.ort)}` : `${esc(k.ort)}, ${esc(k.region)}`}</p><p class="klein">Einsatzgebiet: rund ${CONFIG.einsatzgebiet.radiusKm} km um Essen</p></div>
-  <div class="kontakt-karte">${icon('telefon', 'icon icon-gross')}<h2>Telefon & WhatsApp</h2>${k.telefon ? `<p><a href="tel:${esc(k.telefon.replace(/\s/g, ''))}">${esc(k.telefon)}</a></p>` : '<p>Die Telefonnummer wird in Kürze veröffentlicht.</p>'}${k.whatsapp ? `<p><a href="https://wa.me/${esc(k.whatsapp)}" rel="noopener">WhatsApp-Nachricht senden</a></p>` : ''}</div>
+  <div class="kontakt-karte">${icon('telefon', 'icon icon-gross')}<h2>${k.whatsapp ? 'Telefon & WhatsApp' : 'Telefon & E-Mail'}</h2>${k.telefon ? `<p><a href="tel:${esc(k.telefon.replace(/\s/g, ''))}">${esc(k.telefon)}</a></p>` : '<p>Die Telefonnummer wird in Kürze veröffentlicht.</p>'}${k.whatsapp ? `<p><a href="https://wa.me/${esc(k.whatsapp)}" rel="noopener">WhatsApp-Nachricht senden</a></p>` : ''}</div>
   <div class="kontakt-karte">${icon('kalender', 'icon icon-gross')}<h2>Erreichbarkeit</h2><ul class="einfach">${zeiten}</ul>${k.email ? `<p><a href="mailto:${esc(k.email)}">${esc(k.email)}</a></p>` : ''}</div>
 </div></section>
 <section class="abschnitt abschnitt-hell"><div class="huelle schmal">${ansprechpartnerKarte()}</div></section>`;
-  seite({ pfad: 'kontakt.html', titel: 'Kontakt – BERGER SERVICE SOLUTIONS Essen', beschreibung: 'Kontakt zu BERGER SERVICE SOLUTIONS in Essen: Online-Buchung, Telefon, WhatsApp und Erreichbarkeit für Elektro, Sanierung, Objektservice und Entrümpelung.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'ContactPage', name: 'Kontakt', about: { '@id': ORG['@id'] } }] });
+  seite({ pfad: 'kontakt.html', titel: 'Kontakt – BERGER SERVICE SOLUTIONS Essen', beschreibung: 'Kontakt zu BERGER SERVICE SOLUTIONS in Essen: Online-Buchung, Telefon, E-Mail und Erreichbarkeit für Elektro, Sanierung, Objektservice und Entrümpelung.', inhalt, krumen, jsonld: [brotkrumenJsonLd(krumen), { '@type': 'ContactPage', name: 'Kontakt', about: { '@id': ORG['@id'] } }] });
 }
 
 const fehlt = (wert, label) => wert ? esc(wert) : `<span class="platzhalter">[${esc(label)} wird ergänzt]</span>`;
@@ -524,36 +525,100 @@ function impressum() {
   const inhalt = `
 <section class="seitenkopf seitenkopf-kompakt"><div class="huelle"><h1>Impressum</h1></div></section>
 <section class="abschnitt"><div class="huelle schmal rechtstext">
-<div class="hinweis" role="note">${icon('dokument')}<div><p class="hinweis-titel">Entwurf</p><p>Dieses Impressum ist ein Entwurf und vor der Veröffentlichung vollständig auszufüllen und rechtlich zu prüfen.</p></div></div>
 <h2>Angaben gemäß § 5 DDG</h2>
 <p>${esc(f.name)}<br>Inhaber: ${fehlt(f.inhaber, 'Inhaber')}<br>Rechtsform: ${fehlt(f.rechtsform, 'Rechtsform')}<br>${fehlt(k.strasse, 'Straße und Hausnummer')}<br>${fehlt(k.plz, 'PLZ')} ${esc(k.ort)}</p>
 <h2>Kontakt</h2><p>Telefon: ${fehlt(k.telefon, 'Telefon')}<br>E-Mail: ${fehlt(k.email, 'E-Mail')}</p>
 <h2>Umsatzsteuer-ID</h2><p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: ${fehlt(f.ustId, 'USt-IdNr., falls vorhanden')}</p>
 <h2>Angaben zur Handwerksrolle und Berufsrecht</h2><p>Zuständige Kammer: ${fehlt(f.kammer, 'Handwerkskammer')}<br>Eingetragene Handwerke / Berufsbezeichnung: ${fehlt(f.handwerksrolle, 'Handwerke laut Handwerkskarte')}<br>Berufsbezeichnung verliehen in: Deutschland<br>Berufsrechtliche Regelungen: Handwerksordnung (HwO), abrufbar unter <a href="https://www.gesetze-im-internet.de/hwo/" rel="noopener">gesetze-im-internet.de/hwo</a></p>
-<h2>Verbraucherstreitbeilegung</h2><p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen. <span class="platzhalter">[Vor Veröffentlichung bestätigen]</span></p>
+<h2>Verbraucherstreitbeilegung</h2><p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.</p>
 </div></section>`;
   seite({ pfad: 'impressum.html', titel: 'Impressum', beschreibung: 'Impressum von BERGER SERVICE SOLUTIONS, Essen – Anbieterkennzeichnung, Kontakt und Angaben zur Handwerksrolle.', inhalt, krumen: [['Impressum', 'impressum.html']], noindex: true });
 }
 
+function anbieterBlock() {
+  const k = CONFIG.kontakt; const f = CONFIG.firma;
+  return `${esc(f.name)}<br>Inhaber: ${fehlt(f.inhaber, 'Inhaber')}<br>${fehlt(k.strasse, 'Straße und Hausnummer')}<br>${fehlt(k.plz, 'PLZ')} ${esc(k.ort)}<br>${k.telefon ? `Telefon: ${esc(k.telefon)}<br>` : ''}E-Mail: ${fehlt(k.email, 'E-Mail')}`;
+}
+const STAND = 'November 2026';
+
 function datenschutz() {
   const inhalt = `
-<section class="seitenkopf seitenkopf-kompakt"><div class="huelle"><h1>Datenschutzhinweise</h1></div></section>
+<section class="seitenkopf seitenkopf-kompakt"><div class="huelle"><h1>Datenschutzerklärung</h1></div></section>
 <section class="abschnitt"><div class="huelle schmal rechtstext">
-<div class="hinweis" role="note">${icon('dokument')}<div><p class="hinweis-titel">Entwurf</p><p>Diese Datenschutzhinweise sind ein strukturierter Entwurf. Sie müssen vor der Veröffentlichung an die tatsächlich eingesetzten Dienste (Hosting, Werkora-Server, WhatsApp-Anbieter, E-Mail) angepasst und rechtlich geprüft werden.</p></div></div>
-<h2>1. Verantwortlicher</h2><p>${esc(CONFIG.firma.name)}, ${fehlt(CONFIG.kontakt.strasse, 'Anschrift')}, ${esc(CONFIG.kontakt.ort)}, E-Mail: ${fehlt(CONFIG.kontakt.email, 'E-Mail')}</p>
-<h2>2. Hosting und Server-Logfiles</h2><p>Beim Aufruf der Website verarbeitet der Hosting-Anbieter technisch notwendige Daten (IP-Adresse, Zeitpunkt, aufgerufene Seite, Browserinformationen) zur Auslieferung und Absicherung der Website. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. <span class="platzhalter">[Anbieter, Speicherdauer, ggf. Auftragsverarbeitungsvertrag ergänzen]</span></p>
-<h2>3. Keine Tracking-Cookies</h2><p>Diese Website setzt derzeit keine Analyse- oder Marketing-Cookies und bindet keine externen Schriftarten, Karten oder Videos ein. Sollte künftig eine Reichweitenmessung eingesetzt werden, erfolgt dies nur nach Ihrer Einwilligung bzw. cookielos und datensparsam; diese Hinweise werden dann ergänzt.</p>
-<h2>4. Online-Buchung und Anfragen</h2><p>Wenn Sie das Buchungsformular nutzen, verarbeiten wir Name, Einsatzadresse, ggf. Rechnungsadresse, Telefonnummer, E-Mail-Adresse, Leistungswunsch, Beschreibung, Wunschtermin sowie hochgeladene Fotos und Dokumente. Zweck ist die Bearbeitung Ihrer Anfrage, die Terminplanung und ggf. die Durchführung des Auftrags. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (vorvertragliche Maßnahmen bzw. Vertragserfüllung).</p>
-<p>Ihre Anfrage wird verschlüsselt an unseren Webserver übertragen und von dort per E-Mail an uns weitergeleitet; Sie erhalten eine Eingangsbestätigung per E-Mail. Auf dem Webserver selbst werden keine Anfragen gespeichert. Zum Schutz vor Missbrauch wird Ihre IP-Adresse für höchstens 10 Minuten in gekürzter, gehashter Form verarbeitet.</p>
-<p>Die Prüfung, ob Ihre Adresse im Einsatzgebiet liegt, erfolgt ausschließlich lokal in Ihrem Browser. Ihre Adresse wird dafür nicht an Kartendienste übermittelt.</p>
-<p>Zur Vermeidung doppelter Kundendatensätze werden E-Mail-Adresse, Telefonnummer und Adresse in normalisierter, gehashter Form mit bestehenden Datensätzen abgeglichen (Art. 6 Abs. 1 lit. f DSGVO, berechtigtes Interesse an einer korrekten Kundendatenhaltung).</p>
-<h2>5. Betriebssoftware (Werkora)</h2><p>Anfragen werden in unserer cloudbasierten Betriebssoftware gespeichert, in der Kundenakten, Aufträge, Termine und Dokumentationen geführt werden. <span class="platzhalter">[Serverstandort, Anbieter, Auftragsverarbeitung ergänzen]</span></p>
-<h2>6. Kommunikation per WhatsApp</h2><p>Wenn Sie ausdrücklich einwilligen, senden wir Terminbestätigungen und Rückfragen zu Ihrem Auftrag per WhatsApp über die offizielle WhatsApp Business Platform der Meta Platforms Ireland Ltd. Dabei können Daten in Drittländer übermittelt werden. Rechtsgrundlage ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die Sie jederzeit widerrufen können. <span class="platzhalter">[Anbieter/Business Solution Provider und Drittlandübermittlung ergänzen]</span></p>
-<h2>7. Speicherdauer</h2><p>Anfragen, die nicht zu einem Auftrag führen, löschen wir spätestens <span class="platzhalter">[Frist festlegen, z. B. 12 Monate]</span> nach Abschluss der Kommunikation. Auftragsbezogene Unterlagen bewahren wir entsprechend den handels- und steuerrechtlichen Aufbewahrungsfristen auf (in der Regel 6 bzw. 8 Jahre für Buchungsbelege, 10 Jahre für Bücher und Jahresabschlüsse).</p>
-<h2>8. Ihre Rechte</h2><p>Sie haben das Recht auf Auskunft, Berichtigung, Löschung, Einschränkung der Verarbeitung, Datenübertragbarkeit und Widerspruch sowie das Recht, eine erteilte Einwilligung zu widerrufen. Sie können sich zudem bei einer Datenschutzaufsichtsbehörde beschweren, in Nordrhein-Westfalen bei der Landesbeauftragten für Datenschutz und Informationsfreiheit NRW.</p>
-<h2>9. Sicherheit</h2><p>Die Übertragung erfolgt verschlüsselt per TLS. Zugriffe auf Kundendaten sind rollenbasiert beschränkt und werden protokolliert.</p>
+<h2>1. Verantwortlicher</h2><p>${anbieterBlock()}</p>
+<p>Ein Datenschutzbeauftragter ist nicht benannt, da die gesetzlichen Voraussetzungen dafür nicht vorliegen. Bei Fragen zum Datenschutz wenden Sie sich bitte an die oben genannte E-Mail-Adresse.</p>
+
+<h2>2. Hosting</h2><p>Diese Website wird bei der IONOS SE, Elgendorfer Str. 57, 56410 Montabaur, betrieben. Beim Aufruf der Website verarbeitet IONOS technisch notwendige Daten (IP-Adresse, Datum und Uhrzeit, aufgerufene Seite, übertragene Datenmenge, Browser und Betriebssystem), um die Website auszuliefern und vor Angriffen zu schützen. Rechtsgrundlage ist unser berechtigtes Interesse an einem sicheren und stabilen Betrieb (Art. 6 Abs. 1 lit. f DSGVO). Mit IONOS besteht ein Vertrag zur Auftragsverarbeitung nach Art. 28 DSGVO. Die Speicherdauer der Server-Logfiles richtet sich nach den Vorgaben des Hosters.</p>
+
+<h2>3. Verschlüsselung, Cookies und externe Inhalte</h2><p>Die Übertragung erfolgt verschlüsselt (TLS/HTTPS). Diese Website setzt keine Cookies zu Analyse- oder Werbezwecken, verwendet keine Tracking- oder Analysedienste und bindet keine externen Inhalte wie Schriftarten, Karten oder Videos ein; die Schrift wird von unserem eigenen Server geladen. Die Prüfung, ob Ihre Postleitzahl im Einsatzgebiet liegt, findet ausschließlich in Ihrem Browser statt.</p>
+<p>Für die Verwaltung der Website nutzen wir WordPress. Cookies der Verwaltungsoberfläche werden nur beim Login von Administratoren gesetzt, nicht für Besucher der Website.</p>
+
+<h2>4. Online-Anfrage und Terminbuchung</h2><p>Wenn Sie über unser Formular eine Anfrage senden oder einen Termin buchen, verarbeiten wir die von Ihnen eingegebenen Daten: Name, gegebenenfalls Firma, Einsatzadresse, gegebenenfalls abweichende Rechnungsadresse, Telefonnummer, E-Mail-Adresse, gewünschte Leistung, Beschreibung, Wunschtermin, bevorzugter Kontaktweg sowie hochgeladene Fotos und Dokumente. Zweck ist die Bearbeitung Ihrer Anfrage, die Terminplanung und gegebenenfalls die Durchführung des Auftrags. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (vorvertragliche Maßnahmen bzw. Vertragserfüllung).</p>
+<p>Ihre Angaben werden verschlüsselt an unseren Webserver übertragen, dort geprüft und per E-Mail über den E-Mail-Dienst von IONOS an uns weitergeleitet. Sie erhalten eine automatische Eingangsbestätigung an die angegebene E-Mail-Adresse. Auf dem Webserver selbst werden Ihre Anfragedaten nicht gespeichert.</p>
+<p>Zum Schutz vor Missbrauch (z. B. automatisierten Massenanfragen) speichern wir Ihre IP-Adresse ausschließlich in gehashter, nicht rückrechenbarer Form für höchstens 10 Minuten sowie eine zufällige Kennung der Anfrage für 24 Stunden, um versehentlich doppelt gesendete Anfragen zu erkennen. Zur Vermeidung doppelter Kundendatensätze werden E-Mail-Adresse, Telefonnummer und Adresse zusätzlich als Prüfwert (Hash) übermittelt. Rechtsgrundlage ist jeweils unser berechtigtes Interesse an einem sicheren Formular und einer korrekten Kundendatenhaltung (Art. 6 Abs. 1 lit. f DSGVO).</p>
+
+<h2>5. Kontakt per E-Mail oder Telefon</h2><p>Wenn Sie uns per E-Mail oder telefonisch kontaktieren, verarbeiten wir Ihre Angaben zur Bearbeitung Ihres Anliegens (Art. 6 Abs. 1 lit. b DSGVO bei Bezug zu einem Auftrag, sonst Art. 6 Abs. 1 lit. f DSGVO). Unser E-Mail-Postfach wird bei IONOS betrieben.</p>
+
+<h2>6. Kommunikation per WhatsApp</h2><p>Nur wenn Sie im Formular WhatsApp als bevorzugten Kontaktweg wählen und ausdrücklich einwilligen, kontaktieren wir Sie zu Ihrer Anfrage über WhatsApp. Anbieter ist die WhatsApp Ireland Limited (Meta). Dabei können Daten, insbesondere Metadaten, auch in die USA übermittelt werden; Meta ist nach dem EU-US Data Privacy Framework zertifiziert. Rechtsgrundlage ist Ihre Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), die Sie jederzeit mit Wirkung für die Zukunft widerrufen können, z. B. per E-Mail.</p>
+
+<h2>7. Auftragsabwicklung und Aufbewahrung</h2><p>Kommt ein Auftrag zustande, speichern wir die für Angebot, Durchführung, Dokumentation und Abrechnung erforderlichen Daten. Anfragen, aus denen kein Auftrag entsteht, löschen wir spätestens zwölf Monate nach dem letzten Kontakt. Auftragsbezogene Unterlagen bewahren wir entsprechend den gesetzlichen Aufbewahrungspflichten auf (§ 147 AO, § 257 HGB: in der Regel sechs Jahre für Geschäftsbriefe, acht Jahre für Buchungsbelege und zehn Jahre für Bücher und Jahresabschlüsse) und löschen sie danach.</p>
+
+<h2>8. Ihre Rechte</h2><p>Sie haben das Recht auf Auskunft (Art. 15 DSGVO), Berichtigung (Art. 16), Löschung (Art. 17), Einschränkung der Verarbeitung (Art. 18), Datenübertragbarkeit (Art. 20) sowie das Recht, einer Verarbeitung auf Grundlage berechtigter Interessen aus Gründen Ihrer besonderen Situation zu widersprechen (Art. 21). Eine erteilte Einwilligung können Sie jederzeit widerrufen. Eine automatisierte Entscheidungsfindung findet nicht statt.</p>
+<p>Sie haben außerdem das Recht, sich bei einer Datenschutz-Aufsichtsbehörde zu beschweren. Für uns zuständig ist die Landesbeauftragte für Datenschutz und Informationsfreiheit Nordrhein-Westfalen, Kavalleriestraße 2–4, 40213 Düsseldorf.</p>
+<p class="klein">Stand: ${STAND}</p>
 </div></section>`;
-  seite({ pfad: 'datenschutz.html', titel: 'Datenschutzhinweise', beschreibung: 'Datenschutzhinweise von BERGER SERVICE SOLUTIONS zu Website, Online-Buchung, Betriebssoftware und WhatsApp-Kommunikation.', inhalt, krumen: [['Datenschutz', 'datenschutz.html']], noindex: true });
+  seite({ pfad: 'datenschutz.html', titel: 'Datenschutzerklärung', beschreibung: 'Datenschutzerklärung von BERGER SERVICE SOLUTIONS zu Website, Hosting bei IONOS, Online-Anfrage, E-Mail und WhatsApp-Kommunikation.', inhalt, krumen: [['Datenschutz', 'datenschutz.html']], noindex: true });
+}
+
+function widerruf() {
+  const inhalt = `
+<section class="seitenkopf seitenkopf-kompakt"><div class="huelle"><h1>Widerrufsbelehrung</h1></div></section>
+<section class="abschnitt"><div class="huelle schmal rechtstext">
+<p>Die folgende Belehrung gilt für Verbraucher, die einen Vertrag mit uns ausschließlich über Fernkommunikationsmittel (z. B. über die Online-Buchung, per E-Mail oder Telefon) oder außerhalb unserer Geschäftsräume schließen.</p>
+<h2>Widerrufsrecht</h2>
+<p>Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.</p>
+<p>Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (${anbieterBlock().replace(/<br>/g, ', ')}) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder eine E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.</p>
+<p>Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.</p>
+<h2>Folgen des Widerrufs</h2>
+<p>Wenn Sie diesen Vertrag widerrufen, haben wir Ihnen alle Zahlungen, die wir von Ihnen erhalten haben, unverzüglich und spätestens binnen vierzehn Tagen ab dem Tag zurückzuzahlen, an dem die Mitteilung über Ihren Widerruf dieses Vertrags bei uns eingegangen ist. Für diese Rückzahlung verwenden wir dasselbe Zahlungsmittel, das Sie bei der ursprünglichen Transaktion eingesetzt haben, es sei denn, mit Ihnen wurde ausdrücklich etwas anderes vereinbart; in keinem Fall werden Ihnen wegen dieser Rückzahlung Entgelte berechnet.</p>
+<p>Haben Sie verlangt, dass die Dienstleistungen während der Widerrufsfrist beginnen sollen, so haben Sie uns einen angemessenen Betrag zu zahlen, der dem Anteil der bis zu dem Zeitpunkt, zu dem Sie uns von der Ausübung des Widerrufsrechts hinsichtlich dieses Vertrags unterrichten, bereits erbrachten Dienstleistungen im Vergleich zum Gesamtumfang der im Vertrag vorgesehenen Dienstleistungen entspricht.</p>
+<h2>Besondere Hinweise</h2>
+<p>Ihr Widerrufsrecht erlischt bei einem Vertrag über die Erbringung von Dienstleistungen, wenn wir die Dienstleistung vollständig erbracht haben und mit der Ausführung erst begonnen haben, nachdem Sie dazu Ihre ausdrückliche Zustimmung gegeben und gleichzeitig Ihre Kenntnis davon bestätigt haben, dass Sie Ihr Widerrufsrecht bei vollständiger Vertragserfüllung durch uns verlieren.</p>
+<p>Ein Widerrufsrecht besteht nicht bei Verträgen, bei denen Sie uns ausdrücklich aufgefordert haben, Sie aufzusuchen, um dringende Reparatur- oder Instandhaltungsarbeiten vorzunehmen (§ 312g Abs. 2 Nr. 11 BGB). Dies gilt nicht für weitere Leistungen, die Sie bei diesem Besuch zusätzlich verlangen.</p>
+<h2>Muster-Widerrufsformular</h2>
+<p>(Wenn Sie den Vertrag widerrufen wollen, dann füllen Sie bitte dieses Formular aus und senden Sie es zurück.)</p>
+<p>An: ${anbieterBlock()}</p>
+<p>Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung (*)<br>_____________________________________<br>Bestellt am (*) / erhalten am (*): ______________<br>Name des/der Verbraucher(s): ______________<br>Anschrift des/der Verbraucher(s): ______________<br>Unterschrift des/der Verbraucher(s) (nur bei Mitteilung auf Papier): ______________<br>Datum: ______________</p>
+<p class="klein">(*) Unzutreffendes streichen.</p>
+<p class="klein">Stand: ${STAND}</p>
+</div></section>`;
+  seite({ pfad: 'widerruf.html', titel: 'Widerrufsbelehrung', beschreibung: 'Widerrufsbelehrung und Muster-Widerrufsformular für Verbraucher bei Aufträgen an BERGER SERVICE SOLUTIONS über die Online-Buchung, per E-Mail oder Telefon.', inhalt, krumen: [['Widerrufsbelehrung', 'widerruf.html']], noindex: true });
+}
+
+function agb() {
+  const p = (t) => `<p>${t}</p>`;
+  const abschnitte = [
+    ['1. Geltungsbereich', [`Diese Allgemeinen Geschäftsbedingungen gelten für alle Verträge zwischen ${esc(CONFIG.firma.name)}, Inhaber ${esc(CONFIG.firma.inhaber || '')}, (nachfolgend „wir“) und unseren Kunden über Leistungen aus den Bereichen Elektrotechnik, Prüfung und Wartung, Handwerk und Sanierung, Hausmeister- und Objektservice sowie Entrümpelung und Rückbau. Abweichende Bedingungen des Kunden gelten nur, wenn wir ihnen ausdrücklich zustimmen.`, 'Verbraucher ist jede natürliche Person, die einen Vertrag zu Zwecken abschließt, die überwiegend weder ihrer gewerblichen noch ihrer selbständigen beruflichen Tätigkeit zugerechnet werden können (§ 13 BGB).']],
+    ['2. Vertragsschluss', ['Anfragen und Terminbuchungen über unsere Website, per E-Mail oder Telefon sind unverbindliche Anfragen des Kunden. Ein online gewählter Termin ist zunächst vorläufig.', 'Der Vertrag kommt zustande, wenn wir einen Termin oder Auftrag ausdrücklich bestätigen (z. B. per E-Mail) oder der Kunde ein schriftliches Angebot von uns annimmt. Angebote sind, soweit nicht anders angegeben, 30 Tage gültig.']],
+    ['3. Leistungsumfang', ['Der Leistungsumfang ergibt sich aus der Auftragsbestätigung bzw. dem angenommenen Angebot. Zusätzliche oder geänderte Leistungen, die sich erst bei der Ausführung als notwendig herausstellen, stimmen wir vor ihrer Ausführung mit dem Kunden ab; das gilt nicht, wenn zur Abwendung einer unmittelbaren Gefahr sofortiges Handeln erforderlich ist.', 'Arbeiten in zulassungspflichtigen Handwerken führen wir im Rahmen unserer Eintragungen in die Handwerksrolle aus oder lassen sie durch eingetragene Fachbetriebe ausführen.']],
+    ['4. Preise und Zahlung', ['Es gelten die im Angebot bzw. in der Auftragsbestätigung genannten Preise. Gegenüber Verbrauchern sind alle Preise Endpreise einschließlich der gesetzlichen Umsatzsteuer. Ist kein Festpreis vereinbart, wird nach tatsächlichem Aufwand (Arbeitszeit, Material, Anfahrt, Entsorgung) zu den vereinbarten Sätzen abgerechnet.', 'Rechnungen sind innerhalb von 14 Tagen nach Zugang ohne Abzug zahlbar. Bei größeren Aufträgen können Abschlagszahlungen entsprechend dem Baufortschritt vereinbart werden (§ 632a BGB).']],
+    ['5. Termine und Mitwirkung des Kunden', ['Bitte sagen Sie vereinbarte Termine, die Sie nicht wahrnehmen können, möglichst frühzeitig ab.', 'Der Kunde ermöglicht den Zugang zum Einsatzort, stellt – soweit für die Arbeiten erforderlich – Strom und Wasser zur Verfügung und weist uns vor Beginn auf ihm bekannte verdeckte Leitungen, Schäden oder Schadstoffe (z. B. Asbest) hin.']],
+    ['6. Abnahme', ['Werkleistungen werden nach Fertigstellung abgenommen; auf Wunsch fertigen wir ein Abnahmeprotokoll. Wegen unwesentlicher Mängel kann die Abnahme nicht verweigert werden.']],
+    ['7. Eigentumsvorbehalt', ['Gelieferte und noch nicht fest eingebaute Materialien bleiben bis zur vollständigen Bezahlung unser Eigentum.']],
+    ['8. Entsorgung', ['Die Entsorgung erfolgt im Umfang des Angebots über zugelassene Entsorgungsbetriebe. Gefährliche Abfälle (z. B. asbesthaltige Materialien, Chemikalien) übernehmen wir nur nach gesonderter Vereinbarung.']],
+    ['9. Mängelrechte', ['Es gelten die gesetzlichen Mängelrechte.']],
+    ['10. Haftung', ['Wir haften unbeschränkt bei Vorsatz und grober Fahrlässigkeit, bei Verletzung von Leben, Körper oder Gesundheit sowie nach dem Produkthaftungsgesetz. Bei leicht fahrlässiger Verletzung wesentlicher Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt. Im Übrigen ist die Haftung für leichte Fahrlässigkeit ausgeschlossen.']],
+    ['11. Widerrufsrecht', ['Verbrauchern steht unter den gesetzlichen Voraussetzungen ein Widerrufsrecht zu. Einzelheiten ergeben sich aus unserer <a href="widerruf.html">Widerrufsbelehrung</a>.']],
+    ['12. Streitbeilegung', ['Wir sind nicht bereit und nicht verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.']],
+    ['13. Schlussbestimmungen', ['Es gilt das Recht der Bundesrepublik Deutschland. Gegenüber Verbrauchern gilt diese Rechtswahl nur, soweit dadurch nicht zwingende Schutzvorschriften des Staates ihres gewöhnlichen Aufenthalts entzogen werden. Ist der Kunde Kaufmann, ist Gerichtsstand Essen. Sollten einzelne Bestimmungen unwirksam sein, bleibt die Wirksamkeit der übrigen Bestimmungen unberührt.']],
+  ];
+  const inhalt = `
+<section class="seitenkopf seitenkopf-kompakt"><div class="huelle"><h1>Allgemeine Geschäftsbedingungen</h1></div></section>
+<section class="abschnitt"><div class="huelle schmal rechtstext">
+${abschnitte.map(([h, ps]) => `<h2>${h}</h2>${ps.map(p).join('')}`).join('\n')}
+<p class="klein">Stand: ${STAND}</p>
+</div></section>`;
+  seite({ pfad: 'agb.html', titel: 'Allgemeine Geschäftsbedingungen (AGB)', beschreibung: 'Allgemeine Geschäftsbedingungen von BERGER SERVICE SOLUTIONS für Elektrotechnik, Sanierung, Objektservice und Entrümpelung: Vertragsschluss, Preise, Termine, Haftung.', inhalt, krumen: [['AGB', 'agb.html']], noindex: true });
 }
 
 function fehlerseite() {
@@ -711,7 +776,7 @@ export function bauen() {
     intro: ['Hausverwaltungen koordinieren für jedes Objekt eine Vielzahl von Dienstleistern. Wir bündeln Hausmeisterservice, Reinigung, Grünpflege, Winterdienst, Elektroprüfungen, Renovierungen und Entrümpelungen – mit einer Objektakte pro Liegenschaft und digitalen Leistungsnachweisen.'],
     punkte: [['Objektakte je Liegenschaft', 'Stammdaten, Zugänge, Checklisten, Prüffristen und Historie an einem Ort.'], ['Wiederkehrende Einsätze', 'Intervalle werden automatisch geplant, Abweichungen dokumentiert.'], ['Mängel mit Foto', 'Auffälligkeiten melden wir mit Foto und Einordnung – und beheben sie nach Freigabe häufig selbst.'], ['Abrechnung nach Objekt', 'Umlagefähige und nicht umlagefähige Leistungen werden getrennt ausgewiesen.']],
     leistungen: ['hausmeisterservice', 'treppenhausreinigung', 'winterdienst', 'wohnungsuebergabe-mieterwechsel', 'renovierung-mieterwechsel', 'e-check'],
-    faq: [['Können wir mehrere Objekte über einen Rahmenvertrag betreuen lassen?', 'Ja. Leistungen, Intervalle und Preise werden je Objekt in einem Leistungsverzeichnis festgelegt.'], ['Wie erhalten wir Leistungsnachweise?', 'Digital je Einsatz mit Datum, Uhrzeit, Checkliste und Fotos; gesammelt mit der Abrechnung. Ein Portalzugang ist geplant.'], ['Wie werden Mängel gemeldet?', 'Mit Foto, Beschreibung und Dringlichkeit an den vereinbarten Ansprechpartner; Reparaturen erfolgen nach Ihrer Freigabe.']],
+    faq: [['Können wir mehrere Objekte über einen Rahmenvertrag betreuen lassen?', 'Ja. Leistungen, Intervalle und Preise werden je Objekt in einem Leistungsverzeichnis festgelegt.'], ['Wie erhalten wir Leistungsnachweise?', 'Digital je Einsatz mit Datum, Uhrzeit, Checkliste und Fotos; gesammelt mit der Abrechnung.'], ['Wie werden Mängel gemeldet?', 'Mit Foto, Beschreibung und Dringlichkeit an den vereinbarten Ansprechpartner; Reparaturen erfolgen nach Ihrer Freigabe.']],
   });
   zielgruppenseite({
     pfad: 'gewerbekunden.html', krumenName: 'Für Gewerbekunden',
@@ -729,6 +794,8 @@ export function bauen() {
   kontaktSeite();
   impressum();
   datenschutz();
+  agb();
+  widerruf();
   fehlerseite();
   technischeDateien();
   return { seiten: [...seiten], leistungen: LEISTUNGEN };
