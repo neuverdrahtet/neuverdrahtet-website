@@ -117,22 +117,20 @@ function startseite() {
     ['Arbeiten Sie auch für Hausverwaltungen und Gewerbe?', 'Ja. Für Hausverwaltungen, Vermieter und Unternehmen bieten wir wiederkehrende Leistungen mit festen Intervallen, Checklisten und digitalen Leistungsnachweisen.'],
   ];
   const inhalt = `
-<section class="held">
-  <div class="huelle held-raster">
-    <div>
+<section class="held held-banner">
+  <img class="held-hintergrund" src="assets/img/held-haus-560.webp" srcset="assets/img/held-haus-560.webp 560w, assets/img/held-haus-982.webp 982w" sizes="(min-width: 960px) 60vw, 100vw" width="982" height="705" fetchpriority="high" decoding="async" alt="Haus im Querschnitt: Photovoltaik, Klimaanlage, Malerarbeiten, Bad, Elektroverteilung, Trockenbau, Wärmepumpenwartung und Gartenpflege – Arbeiten von BERGER SERVICE SOLUTIONS">
+  <div class="huelle held-inhalt">
+    <div class="held-textblock">
       <p class="dachzeile">${esc(CONFIG.firma.slogan)}</p>
       <h1>Elektrotechnik, Sanierung, Objektservice und Entrümpelung – in Essen und 50 km Umkreis</h1>
       <p class="held-text">Ein Betrieb, ein Ansprechpartner, klare Abläufe: Wir prüfen und warten elektrische Anlagen, sanieren Wohnungen und Bäder, verlegen Böden, betreuen Objekte und räumen Wohnungen besenrein.</p>
       <div class="knopf-gruppe"><a class="knopf knopf-akzent knopf-gross" href="buchen.html">${icon('kalender')}Termin online buchen</a><a class="knopf knopf-hell knopf-gross" href="buchen.html?art=anfrage">${icon('dokument')}Projekt anfragen</a></div>
       <ul class="held-punkte"><li>${icon('haken')}Prüf- und Wartungstermine direkt buchbar</li><li>${icon('haken')}Schriftliche Angebote nach Besichtigung</li><li>${icon('haken')}Digitale Dokumentation jedes Einsatzes</li></ul>
     </div>
-    <div class="held-seite"><div class="held-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div>
   </div>
 </section>
-<section class="abschnitt banner-abschnitt" aria-labelledby="banner-titel"><div class="huelle">
-  <h2 id="banner-titel" class="nur-sr">Alle Leistungen aus einer Hand</h2>
-  <a class="leistungsbanner" href="leistungen.html"><img src="assets/img/banner-leistungen-900.webp" srcset="assets/img/banner-leistungen-900.webp 900w, assets/img/banner-leistungen-1672.webp 1672w" sizes="(min-width: 1200px) 1168px, calc(100vw - 32px)" width="1672" height="941" loading="lazy" decoding="async" alt="Haus im Querschnitt mit den Leistungen von BERGER SERVICE SOLUTIONS: Elektrotechnik, Prüfung und Wartung, Fliesen und Böden, Malerarbeiten, Sanitär und Bad, Trockenbau, Hausmeisterservice, Gartenpflege, Glas- und Gebäudereinigung, Photovoltaik, Wallbox und Klimaanlagen"></a>
-</div></section>
+<section class="kachel-band" aria-label="Unsere Leistungen im Überblick"><div class="huelle"><a class="kachel-leiste" href="leistungen.html"><img src="assets/img/leistungs-kacheln-814.webp" srcset="assets/img/leistungs-kacheln-814.webp 814w, assets/img/leistungs-kacheln-1628.webp 1628w" sizes="(min-width: 1200px) 1168px, 814px" width="1628" height="200" loading="lazy" decoding="async" alt="Leistungen: Elektrotechnik, Prüfung und Wartung, Fliesen und Böden, Malerarbeiten, Sanitär und Bad, Trockenbau, Hausmeister, Gartenpflege, Glas- und Gebäudereinigung, Photovoltaik, Wallbox, Klimaanlagen"></a></div></section>
+<section class="eg-leiste" aria-label="Einsatzgebiet prüfen"><div class="huelle"><div class="held-karte eg-leiste-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div></section>
 <section class="abschnitt" aria-labelledby="bereiche-titel"><div class="huelle">
   <h2 id="bereiche-titel">Unsere vier Leistungsbereiche</h2>
   <p class="unterzeile">Von der Elektroprüfung bis zur besenreinen Übergabe – abgestimmt und aus einer Hand.</p>

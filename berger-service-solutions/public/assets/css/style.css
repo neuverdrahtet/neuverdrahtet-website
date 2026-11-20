@@ -125,8 +125,6 @@ p { margin: 0 0 1em; }
 /* Hero und Seitenköpfe */
 .held { background: radial-gradient(900px 420px at 80% 10%, rgba(30,200,245,.22) 0, transparent 60%), radial-gradient(700px 360px at 0% 100%, rgba(255,205,0,.10) 0, transparent 60%), linear-gradient(160deg, var(--nacht) 0%, var(--marke) 100%); color: #e6eefb; padding: 44px 0 52px; border-bottom: 4px solid var(--akzent); }
 .held-seite { display: grid; gap: 18px; }
-.held-logo { display: none; width: 100%; height: auto; border-radius: var(--radius); border: 1px solid rgba(30,200,245,.35); box-shadow: 0 0 40px rgba(30,200,245,.18); }
-@media (min-width: 960px) { .held-logo { display: block; } }
 .held h1 { color: #fff; }
 .held .knopf-hell { color: #fff; }
 .held .knopf-hell:hover { background: rgba(255,255,255,.08); }
@@ -305,11 +303,30 @@ input:focus, select:focus, textarea:focus { border-color: var(--marke-3); outlin
 .bestaetigung .icon-gross { color: var(--ok); width: 3rem; height: 3rem; }
 .vorgang { font-family: ui-monospace, 'IBM Plex Mono', monospace; background: var(--hell); padding: 2px 8px; border-radius: 6px; }
 
-/* Leistungsbanner Startseite */
-.banner-abschnitt { padding-bottom: 0; }
-.leistungsbanner { display: block; border-radius: var(--radius); overflow: hidden; box-shadow: 0 16px 40px rgba(2,11,30,.25); border: 1px solid rgba(30,200,245,.35); }
-.leistungsbanner img { display: block; width: 100%; height: auto; }
-.leistungsbanner:hover { box-shadow: 0 18px 46px rgba(2,11,30,.35); }
+/* Startbereich: Haus aus dem Leistungsbanner als Hintergrund */
+.held-banner { position: relative; padding: 0 0 40px; overflow: hidden; background: radial-gradient(800px 500px at 85% 20%, rgba(30,200,245,.18), transparent 60%), linear-gradient(160deg, #020b1e 0%, #06204a 100%); }
+.held-hintergrund { display: block; width: 100%; height: auto; }
+.held-banner .held-inhalt { position: relative; z-index: 2; padding-top: 24px; }
+@media (min-width: 960px) {
+  .held-banner { padding: 0; min-height: clamp(560px, 46vw, 760px); display: flex; align-items: center; }
+  .held-hintergrund { position: absolute; top: 0; right: 0; bottom: 0; width: auto; height: 100%; max-width: 64%; object-fit: cover; object-position: left center;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 22%); mask-image: linear-gradient(90deg, transparent 0%, #000 22%); }
+  .held-banner .held-inhalt { width: 100%; padding-top: 56px; padding-bottom: 64px; }
+  .held-textblock { max-width: min(560px, 46%); }
+  .held-banner h1 { font-size: clamp(2rem, 1.1rem + 1.8vw, 2.7rem); }
+}
+@media (min-width: 960px) and (max-width: 1199px) { .held-textblock { max-width: 48%; } .held-banner .held-text { font-size: 1.02rem; } }
+.kachel-band { background: #020b1e; padding: 14px 0 18px; border-top: 1px solid rgba(30,200,245,.35); }
+.kachel-leiste { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.kachel-leiste img { display: block; height: auto; width: 100%; }
+@media (max-width: 839px) { .kachel-leiste img { width: 814px; max-width: none; height: 100px; } }
+.eg-leiste { background: var(--hell); padding: 24px 0; border-bottom: 1px solid var(--linie); }
+.eg-leiste-karte { max-width: 760px; margin: 0 auto; }
+@media (min-width: 760px) {
+  .eg-leiste-karte { display: grid; grid-template-columns: 1.4fr 1fr; gap: 6px 28px; align-items: center; }
+  .eg-leiste-karte .eg-pruefer label { margin-bottom: 8px; }
+  .eg-leiste-karte > .klein { margin: 0; }
+}
 
 /* Projektfotos */
 .galerie { display: grid; gap: 14px; grid-template-columns: 1fr; }
