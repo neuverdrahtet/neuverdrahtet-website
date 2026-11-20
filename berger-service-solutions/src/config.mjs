@@ -37,7 +37,7 @@ export const CONFIG = {
 
   website: {
     // OFFEN: endgültige Domain. Wird für canonical, Sitemap und JSON-LD genutzt.
-    url: 'https://www.berger-service-solutions.de',
+    url: 'https://www.berger-servicesolution.de',
     sprache: 'de-DE',
     // Solange false: jede Seite trägt "noindex", robots.txt sperrt Crawler.
     // Erst auf true setzen, wenn Impressum, Datenschutz und Kontaktdaten
