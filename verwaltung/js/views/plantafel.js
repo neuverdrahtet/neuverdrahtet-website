@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr, textColorForBg } from '../utils.js';
-import { confirmDelete, attachAddressSearch, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
+import { confirmDelete, attachAddressSearch, mountKundePicker, mountProjektPicker } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -878,34 +878,17 @@ export async function render(container, route, { autoSync = true } = {}) {
         </label>
       `).join('') || '<span class="text-mute">Keine Mitarbeiter verfügbar.</span>';
     }
-    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
-      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
-      items: kunden, selectedId: data.kundeId,
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => {
-            kunden.push(neuerKunde);
-            kundenById[neuerKunde.id] = neuerKunde;
-            resolve(neuerKunde);
-          },
-        });
-      }),
+    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
+      kunden, kundenById, selectedId: data.kundeId,
     });
-    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
-      icon: '📁', title: 'Projekt wählen', placeholder: '– kein Projekt –',
-      items: projekte, selectedId: data.projektId,
-      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
+      projekte, kundenById, selectedId: data.projektId,
+      getKundeId: () => kundePicker.getValue(),
+      onCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
       onChange: () => {
         const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
         updateProjektBereichHint(checkedIds);
       },
-      onCreateNew: () => new Promise((resolve) => {
-        openProjektSchnellanlage({
-          kundeId: kundePicker.getValue(),
-          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); projekteById[neuesProjekt.id] = neuesProjekt; resolve(neuesProjekt); },
-        });
-      }),
     });
     function updateProjektBereichHint(checkedIds) {
       const projekt = projekteById[projektPicker.getValue()];

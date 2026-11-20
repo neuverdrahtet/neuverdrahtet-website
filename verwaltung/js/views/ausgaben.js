@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
 import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
 import { downloadBlob } from '../docexport.js';
@@ -922,35 +922,17 @@ export async function render(container) {
       `,
     });
 
-    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
-      icon: '👤', title: 'Kunde wählen', placeholder: '– keinem Kunden zugeordnet –',
-      items: kunden, selectedId: data.kundeId,
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => {
-            kunden.push(neuerKunde);
-            kundenById[neuerKunde.id] = neuerKunde;
-            resolve(neuerKunde);
-          },
-        });
-      }),
+    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
+      kunden, kundenById, placeholder: '– keinem Kunden zugeordnet –', selectedId: data.kundeId,
     });
-    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
-      icon: '📁', title: 'Projekt wählen', placeholder: '– keinem Projekt zugeordnet –',
-      items: projekte, selectedId: data.projektId,
-      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
+      projekte, kundenById, placeholder: '– keinem Projekt zugeordnet –', selectedId: data.projektId,
+      getKundeId: () => kundePicker.getValue(),
       onChange: (projektId) => {
         body.querySelector('#ausgabe-kalkkategorie').disabled = !projektId;
         const projekt = projekte.find((p) => p.id === projektId);
         if (projekt?.kundeId && !kundePicker.getValue()) kundePicker.setValue(projekt.kundeId);
       },
-      onCreateNew: () => new Promise((resolve) => {
-        openProjektSchnellanlage({
-          kundeId: kundePicker.getValue(),
-          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
-        });
-      }),
     });
 
     if (!istOffeneKreditorenRechnung) {

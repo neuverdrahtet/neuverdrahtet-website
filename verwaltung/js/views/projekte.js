@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, BEREICHE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatDate, formatCurrency, toast, navigationUrl, getCurrentMitarbeiterId, openTerminMitVorbelegung, openDokumentMitVorbelegung, todayISO, katalogOptionsHtml, toCsv, downloadTextFile, excelFileToCsvText, readTextAutoEncoding, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountKundePicker, openKundeSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { renderFotoSection } from '../fotos.js';
 import { renderAufmassSection } from '../aufmass.js';
@@ -790,20 +790,9 @@ export async function render(container, opts = {}) {
       });
     }
     const bearbeitenBtn = body.querySelector('#btn-proj-kunde-bearbeiten');
-    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
-      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
-      items: kunden, selectedId: data.kundeId,
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
+      kunden, kundenById, selectedId: data.kundeId,
       onChange: (kundeId) => { bearbeitenBtn.hidden = !kundeId; },
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => {
-            kunden.push(neuerKunde);
-            kundenById[neuerKunde.id] = neuerKunde;
-            resolve(neuerKunde);
-          },
-        });
-      }),
     });
     bearbeitenBtn.addEventListener('click', () => {
       const bestehenderKunde = kundenById[kundePicker.getValue()];

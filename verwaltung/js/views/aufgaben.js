@@ -1,6 +1,6 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
@@ -207,30 +207,12 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
-      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
-      items: kunden, selectedId: data.kundeId,
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => {
-            kunden.push(neuerKunde);
-            kundenById[neuerKunde.id] = neuerKunde;
-            resolve(neuerKunde);
-          },
-        });
-      }),
+    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
+      kunden, kundenById, selectedId: data.kundeId,
     });
-    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
-      icon: '📁', title: 'Projekt wählen', placeholder: '– kein Projekt –',
-      items: projekte, selectedId: data.projektId,
-      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
-      onCreateNew: () => new Promise((resolve) => {
-        openProjektSchnellanlage({
-          kundeId: kundePicker.getValue(),
-          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
-        });
-      }),
+    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
+      projekte, kundenById, selectedId: data.projektId,
+      getKundeId: () => kundePicker.getValue(),
     });
     if (!isEdit) {
       body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
