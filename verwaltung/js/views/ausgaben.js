@@ -289,7 +289,7 @@ export async function render(container) {
                   ${KATEGORIEN.map((k) => `<option value="${k}" ${k === a.kategorie ? 'selected' : ''}>${k}</option>`).join('')}
                 </select>
               </td>
-              <td>${escapeHtml(a.beschreibung || '')}</td>
+              <td>${a.mahnungErhaltenAm ? `<span class="badge badge-danger" title="Mahnung vom Lieferanten erhalten am ${formatDate(a.mahnungErhaltenAm)}">⚠️ Mahnung</span> ` : ''}${escapeHtml(a.beschreibung || '')}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
               <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
@@ -438,6 +438,19 @@ export async function render(container) {
     const ohneZuordnung = ausgaben.filter((a) => Number(a.betragBrutto) > 0 && !a.kundeId && !a.projektId);
     const OHNE_ZUORDNUNG_LIMIT = 30;
 
+    // Ausgaben, die bereits einen Betrag haben (also nicht in der obigen
+    // "ohne Betrag"-Prüfung auftauchen), aber trotzdem kein Beleg-Foto/PDF
+    // hinterlegt ist - z.B. von Hand ohne Foto erfasst. Steuerlich "nicht
+    // belegbar", wenn das so bleibt - deshalb hier nur zur Prüfung aufgeführt
+    // (nicht automatisch löschbar, siehe Dannys Entscheidung vom 20.11.2026:
+    // echte, bereits gebuchte Kosten sollen nicht blind entfernt werden).
+    const nichtBelegbar = ausgaben.filter((a) => Number(a.betragBrutto) > 0 && !a.beleg?.url && !(a.beleg instanceof Blob));
+
+    // Lieferantenrechnungen, zu denen eine empfangene Mahnung erkannt und
+    // zugeordnet wurde (siehe mahnungAbgleich.js/postfach.js) und die noch
+    // nicht als geklärt markiert wurden.
+    const mahnungenErhalten = ausgaben.filter((a) => a.mahnungErhaltenAm);
+
     // Ausgaben, die direkt per put() angelegt wurden statt über das normale
     // Formular (v.a. der ZIP-Belegimport und die "Anhang als Beleg
     // übernehmen"-Funktion im Postfach, siehe belegimport.js/postfach.js),
@@ -560,6 +573,22 @@ export async function render(container) {
           <p class="hint">Kein Fehler an sich – allgemeine Kosten (Miete, Versicherung, Büromaterial) brauchen keine Zuordnung. Zur gezielten Prüfung, ob einzelne davon eigentlich einem Projekt zugeordnet gehören (z.B. für die Nachkalkulation). Anklicken zum Zuordnen.${ohneZuordnung.length > OHNE_ZUORDNUNG_LIMIT ? ` Zeigt die ersten ${OHNE_ZUORDNUNG_LIMIT} von ${ohneZuordnung.length}.` : ''}</p>
           <ul class="cal-event-list">
             ${ohneZuordnung.slice(0, OHNE_ZUORDNUNG_LIMIT).map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.kategorie)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span>${formatCurrency(a.betragBrutto)} ${a.beleg ? `<button type="button" class="btn btn-sm ausg-beleg-ansehen" data-id="${a.id}" title="Beleg ansehen">📎</button>` : ''}</span></li>`).join('')}
+          </ul>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Mahnung vom Lieferanten erhalten – noch nicht geklärt (${mahnungenErhalten.length})</h2>
+        ${mahnungenErhalten.length === 0 ? '<p class="text-mute">Keine offenen Mahnungen von Lieferanten.</p>' : `
+          <p class="hint">Diese Lieferantenrechnungen haben laut einer per Postfach erkannten Mahnung noch keine Zahlung erhalten – zeitnah prüfen. Anklicken zum Öffnen, dort auch "Als geklärt markieren".</p>
+          <ul class="cal-event-list">
+            ${mahnungenErhalten.map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>⚠️ ${formatDate(a.mahnungErhaltenAm)} · ${escapeHtml(a.lieferant || a.beschreibung || '(ohne Angaben)')}</span><span class="text-mute">${formatCurrency(a.betragBrutto)}</span></li>`).join('')}
+          </ul>
+        `}
+        <div class="divider"></div>
+        <h2 style="font-size:14px;margin:0 0 8px">Ausgaben mit Betrag, aber ohne Beleg – nicht belegbar (${nichtBelegbar.length})</h2>
+        ${nichtBelegbar.length === 0 ? '<p class="text-mute">Zu allen Ausgaben mit Betrag ist ein Beleg-Foto/PDF hinterlegt.</p>' : `
+          <p class="hint">Diese Ausgaben haben bereits einen Betrag, aber kein Beleg-Foto/PDF – bei einer Steuerprüfung sonst nicht nachweisbar. Bewusst nur zur Prüfung aufgeführt statt automatisch gelöscht (eine echte, bereits gebuchte Kosten sollte nicht einfach verschwinden) – entweder nachträglich einen Beleg hinterlegen oder bewusst so lassen. Anklicken zum Ergänzen.${nichtBelegbar.length > OHNE_ZUORDNUNG_LIMIT ? ` Zeigt die ersten ${OHNE_ZUORDNUNG_LIMIT} von ${nichtBelegbar.length}.` : ''}</p>
+          <ul class="cal-event-list">
+            ${nichtBelegbar.slice(0, OHNE_ZUORDNUNG_LIMIT).map((a) => `<li class="ausg-unvollst-row" data-id="${a.id}" style="cursor:pointer"><span>${formatDate(a.datum)} · ${escapeHtml(a.kategorie)} · ${escapeHtml(a.lieferant || a.beschreibung || '')}</span><span class="text-mute">${formatCurrency(a.betragBrutto)}</span></li>`).join('')}
           </ul>
         `}
         <div class="divider"></div>
@@ -759,7 +788,7 @@ export async function render(container) {
     body.querySelectorAll('.ausg-unvollst-row').forEach((row) => {
       row.addEventListener('click', () => {
         close();
-        openForm(unvollstaendig.find((a) => a.id === row.dataset.id) || ohneZuordnung.find((a) => a.id === row.dataset.id));
+        openForm(unvollstaendig.find((a) => a.id === row.dataset.id) || ohneZuordnung.find((a) => a.id === row.dataset.id) || nichtBelegbar.find((a) => a.id === row.dataset.id) || mahnungenErhalten.find((a) => a.id === row.dataset.id));
       });
     });
     body.querySelectorAll('.ausg-beleg-ansehen').forEach((btn) => {
@@ -841,10 +870,10 @@ export async function render(container) {
   function openForm(a, { prefill } = {}) {
     const isEdit = !!a;
     const data = a || {
-      id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '',
+      id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '', rechnungsnummer: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
       projektId: '', kundeId: '', kalkKategorie: '',
-      bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false,
+      bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false, mahnungErhaltenAm: '',
       ...prefill,
     };
     const istOffeneKreditorenRechnung = isEdit && data.bezahlstatus === 'offen';
@@ -852,6 +881,14 @@ export async function render(container) {
       title: isEdit ? 'Ausgabe bearbeiten' : 'Neue Ausgabe',
       bodyHtml: `
         <form id="ausgabe-form">
+          ${data.mahnungErhaltenAm ? `
+            <div class="card card-hinweis" style="margin-bottom:10px">
+              <div class="flex-row" style="justify-content:space-between;align-items:center">
+                <p class="mb-0">⚠️ Mahnung vom Lieferanten erhalten am ${formatDate(data.mahnungErhaltenAm)} – bitte zeitnah zahlen.</p>
+                <button type="button" class="btn btn-sm" id="btn-mahnung-geklaert">Als geklärt markieren</button>
+              </div>
+            </div>
+          ` : ''}
           <div class="form-grid">
             <div class="field"><label>Datum</label><input type="date" name="datum" value="${data.datum}"></div>
             <div class="field"><label>Kategorie</label>
@@ -859,6 +896,7 @@ export async function render(container) {
             </div>
             <div class="field col-span-2"><label>Beschreibung</label><input name="beschreibung" id="ausgabe-beschreibung" value="${escapeHtml(data.beschreibung || '')}"></div>
             <div class="field"><label>Lieferant</label><input name="lieferant" id="ausgabe-lieferant" value="${escapeHtml(data.lieferant || '')}"></div>
+            <div class="field"><label>Rechnungsnummer (optional)</label><input name="rechnungsnummer" value="${escapeHtml(data.rechnungsnummer || '')}"></div>
             <div class="field"><label>Bezahlt mit</label>
               <select name="bezahltMit">
                 <option value="überweisung" ${data.bezahltMit === 'überweisung' ? 'selected' : ''}>Überweisung</option>
@@ -1022,6 +1060,14 @@ export async function render(container) {
     });
 
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-mahnung-geklaert')?.addEventListener('click', async () => {
+      const aktualisiert = { ...data, mahnungErhaltenAm: '' };
+      await put('ausgaben', aktualisiert);
+      Object.assign(data, aktualisiert);
+      toast('Mahnung als geklärt markiert', 'success');
+      close();
+      openForm(data);
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete('Ausgabe in den Papierkorb verschieben?')) return;
@@ -1040,6 +1086,7 @@ export async function render(container) {
       updated.kategorie = fd.get('kategorie') || KATEGORIEN[0];
       updated.beschreibung = (fd.get('beschreibung') || '').toString().trim();
       updated.lieferant = (fd.get('lieferant') || '').toString().trim();
+      updated.rechnungsnummer = (fd.get('rechnungsnummer') || '').toString().trim();
       updated.bezahltMit = fd.get('bezahltMit') || 'überweisung';
       const betragEingegeben = Number(fd.get('betrag')) || 0;
       updated.steuersatz = Number(fd.get('steuersatz')) || 0;

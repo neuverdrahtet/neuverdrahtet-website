@@ -649,6 +649,8 @@ const BELEG_SCHEMA = {
   properties: {
     dokumenttyp: { type: 'string', enum: ['eingangsrechnung', 'ausgangsrechnung', 'mahnung', 'sonstiges'] },
     haendler: { type: 'string' },
+    rechnungsnummer: { type: 'string' },
+    mahnungRichtung: { type: 'string', enum: ['empfangen', 'gesendet', 'unklar'] },
     datum: { type: 'string' },
     betragNetto: { type: 'number' },
     betragBrutto: { type: 'number' },
@@ -658,7 +660,7 @@ const BELEG_SCHEMA = {
     beschreibung: { type: 'string' },
     lesbar: { type: 'boolean' },
   },
-  required: ['dokumenttyp', 'haendler', 'datum', 'betragNetto', 'betragBrutto', 'steuersatz', 'kategorie', 'kategorieSicher', 'beschreibung', 'lesbar'],
+  required: ['dokumenttyp', 'haendler', 'rechnungsnummer', 'mahnungRichtung', 'datum', 'betragNetto', 'betragBrutto', 'steuersatz', 'kategorie', 'kategorieSicher', 'beschreibung', 'lesbar'],
   additionalProperties: false,
 };
 
@@ -669,13 +671,15 @@ function buildBelegSystemPrompt(kategorien) {
 WICHTIG - nicht jedes hochgeladene Dokument ist tatsächlich eine Eingangsrechnung (ein eigener Einkauf/eine Ausgabe). Bestimme deshalb IMMER zuerst "dokumenttyp", bevor du die übrigen Felder befüllst:
 - "eingangsrechnung": eine Rechnung/ein Kassenbon/Beleg, den der Betrieb selbst als Käufer/Kunde von einem Lieferanten/Dienstleister erhalten hat (ein echter eigener Einkauf/Kosten). NUR in diesem Fall sind Betrag/Kategorie für die Ausgaben-Erfassung wirklich gemeint.
 - "ausgangsrechnung": eine vom Betrieb SELBST an einen eigenen Kunden gestellte Rechnung (z.B. eine Kopie/ein Anhang der eigenen Rechnung, erkennbar am eigenen Firmennamen als Rechnungssteller/Absender) - das ist eine EINNAHME, kein Einkauf, gehört NICHT in die Ausgaben.
-- "mahnung": eine Zahlungserinnerung/Mahnung (egal ob der Betrieb selbst gemahnt wird, weil er eine Rechnung nicht bezahlt hat, oder eine Kopie einer eigenen Mahnung an einen Kunden) - das ist selbst KEIN neuer Einkauf/keine neue Ausgabe, sondern bezieht sich auf eine bereits an anderer Stelle erfasste Rechnung.
+- "mahnung": eine Zahlungserinnerung/Mahnung (egal ob der Betrieb selbst gemahnt wird, weil er eine Rechnung nicht bezahlt hat, oder eine Kopie einer eigenen Mahnung an einen Kunden) - das ist selbst KEIN neuer Einkauf/keine neue Ausgabe, sondern bezieht sich auf eine bereits an anderer Stelle erfasste Rechnung. Bestimme zusätzlich "mahnungRichtung".
 - "sonstiges": alles andere, das keinen Bezug zur Buchhaltung hat oder keine abrechenbare Ausgabe darstellt - z.B. AGB, Verträge, Datenblätter, Werbung, allgemeine Korrespondenz, Lieferscheine ohne Preisangabe, Angebote (noch keine Rechnung).
 Sei bei "eingangsrechnung" nicht übervorsichtig (ein normaler Kassenbon/eine normale Lieferantenrechnung ist der Normalfall), aber wähle "ausgangsrechnung"/"mahnung"/"sonstiges" bewusst, wenn das Dokument eindeutig danach aussieht - lieber einmal zu vorsichtig einsortieren als eine AGB oder die eigene Ausgangsrechnung als Ausgabe verbuchen.
 
 Regeln für die übrigen Felder (bei "dokumenttyp" ungleich "eingangsrechnung" nur so gut wie möglich ausfüllen, wird von der aufrufenden Software ohnehin nicht als Ausgabe übernommen):
 - Antworte ausschließlich auf Deutsch.
-- "haendler": bei "eingangsrechnung" der Name des Lieferanten/Geschäfts (z.B. "Hornbach", "Esso"); bei anderen Typen der erkennbare Absender/Aussteller des Dokuments.
+- "haendler": bei "eingangsrechnung" der Name des Lieferanten/Geschäfts (z.B. "Hornbach", "Esso"); bei "mahnung" der Name des Ausstellers der Mahnung (bei "mahnungRichtung"="empfangen" also der Lieferant, von dem die Mahnung kommt - NICHT der eigene Betrieb); bei anderen Typen der erkennbare Absender/Aussteller des Dokuments.
+- "rechnungsnummer": die auf dem Dokument genannte Rechnungs-/Belegnummer (bei "eingangsrechnung" die Nummer dieser Rechnung, bei "mahnung" die Nummer der Rechnung, auf die sich die Mahnung bezieht). Leer lassen, wenn keine Nummer erkennbar ist.
+- "mahnungRichtung": NUR bei "dokumenttyp"="mahnung" relevant (sonst "unklar"): "empfangen", wenn der Betrieb selbst der Empfänger/Adressat der Mahnung ist (ein Lieferant/Dienstleister mahnt den Betrieb, weil eine eigene Eingangsrechnung noch nicht bezahlt wurde); "gesendet", wenn es sich um eine Kopie einer vom Betrieb selbst erstellten/versendeten Mahnung an einen eigenen Kunden handelt (z.B. erkennbar am eigenen Firmennamen/Logo als Aussteller); "unklar", wenn sich das nicht sicher bestimmen lässt.
 - "datum": Belegdatum im Format JJJJ-MM-TT. Wenn nicht lesbar, leer lassen.
 - "betragBrutto": Gesamtbetrag (inkl. USt.) als Zahl, ohne Währungssymbol.
 - "steuersatz": erkannter USt.-Satz in Prozent als Zahl (meist 19 oder 7). Wenn nicht erkennbar, 19 annehmen.

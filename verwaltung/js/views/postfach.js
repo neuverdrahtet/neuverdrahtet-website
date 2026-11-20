@@ -1,10 +1,11 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
-import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, localDateStr, nextDailyNummer } from '../utils.js';
+import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, formatCurrency, localDateStr, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, mountKundeProjektPicker } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
+import { findeAusgabeFuerMahnung } from '../mahnungAbgleich.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as push from '../push.js';
@@ -548,7 +549,7 @@ export async function render(container) {
         lieferant: extractEmailAddress(message.from), betragNetto: 0, steuersatz: settings.standardSteuersatz || 19, betragBrutto: 0,
         bezahltMit: 'überweisung',
         beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${belegId}`, blob) : blob,
-        projektId: '', kundeId: '', kalkKategorie: '',
+        projektId: '', kundeId: '', kalkKategorie: '', rechnungsnummer: '',
       };
       const istXml = istXmlAnhang(attachment);
       if (istXml || attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf') {
@@ -563,6 +564,29 @@ export async function render(container) {
           // Statt es mit Betrag 0 als "unsicher" abzulegen (müsste später von
           // Hand wieder gelöscht werden), wird es dann gar nicht erst
           // gespeichert.
+          if (result.dokumenttyp === 'mahnung' && result.mahnungRichtung !== 'gesendet') {
+            // Eine EMPFANGENE Mahnung (vom Lieferanten, zu einer unbezahlten
+            // Eingangsrechnung) wird nicht als neue Ausgabe gespeichert,
+            // sondern - falls zuordenbar - an der betroffenen Ausgabe
+            // vermerkt, damit Danny sieht, dass er zeitnah zahlen muss.
+            // Eigener try/catch, damit ein Fehler hier (z.B. Firestore kurz
+            // nicht erreichbar) NICHT in den äußeren catch durchfällt und
+            // der Anhang dann versehentlich doch noch als neue, unbelegte
+            // Ausgabe gespeichert würde.
+            try {
+              const ausgaben = await getAll('ausgaben');
+              const treffer = findeAusgabeFuerMahnung({ haendler: result.haendler, rechnungsnummer: result.rechnungsnummer, betragBrutto: Number(result.betragBrutto) || 0 }, ausgaben);
+              if (treffer) {
+                await put('ausgaben', { ...treffer, mahnungErhaltenAm: todayISO() });
+                toast(`Mahnung erkannt und mit bestehender Ausgabe "${treffer.lieferant || treffer.beschreibung}" (${formatCurrency(treffer.betragBrutto)}) verknüpft – bitte zeitnah zahlen.`, 'danger');
+                return { gespeichert: false, dokumenttyp: result.dokumenttyp, verknuepftMitAusgabeId: treffer.id };
+              }
+              toast('Mahnung erkannt, aber keine passende Ausgabe gefunden – bitte in Ausgaben manuell prüfen/verknüpfen.', 'info');
+            } catch (mahnungErr) {
+              toast(`Mahnung erkannt, Zuordnung fehlgeschlagen: ${mahnungErr.message}`, 'danger');
+            }
+            return { gespeichert: false, dokumenttyp: result.dokumenttyp };
+          }
           if (result.dokumenttyp && result.dokumenttyp !== 'eingangsrechnung') {
             const label = { ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme)', mahnung: 'Mahnung', sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)' }[result.dokumenttyp] || result.dokumenttyp;
             toast(`Anhang wurde NICHT als Ausgabe gespeichert – von der KI erkannt als: ${label}.`, 'info');
@@ -577,6 +601,7 @@ export async function render(container) {
             datum, kategorie, steuersatz,
             beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || prefill.beschreibung}`.trim(),
             lieferant: result.haendler || prefill.lieferant,
+            rechnungsnummer: result.rechnungsnummer || '',
             betragNetto: Number(result.betragNetto) || 0,
             betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
             kiAnalyseUnsicher: unsicher,
