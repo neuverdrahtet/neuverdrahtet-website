@@ -46,10 +46,10 @@
 .hero .pill{ background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); color:#fff; }
 .hero .btn-outline{ border-color: rgba(255,255,255,0.35); color:#fff; }
 
-.hero-split-grid{ padding-bottom: 12px; }
-.hero-visual{ display:flex; align-items:flex-end; justify-content:center; }
-.hero-visual img{ width:100%; max-width:420px; height:auto; border-radius: var(--radius); display:block; box-shadow: 0 30px 60px -30px rgba(0,0,0,0.65); }
-@media (max-width:900px){ .hero-visual img{ max-width:320px; margin:0 auto; } }
+.hero .hero-split-grid{ align-items:stretch; padding-bottom: 0; }
+.hero-visual{ align-self:stretch; min-height:420px; }
+.hero-visual img{ width:100%; height:100%; object-fit:cover; display:block; }
+@media (max-width:900px){ .hero-visual{ min-height:280px; } }
 
 .hero-services{ display:grid; grid-template-columns:repeat(6,1fr); gap:16px; padding:24px 0 56px; border-top:1px solid rgba(255,255,255,0.1); }
 .hero-service{ display:flex; flex-direction:column; align-items:center; gap:10px; text-decoration:none; text-align:center; }
