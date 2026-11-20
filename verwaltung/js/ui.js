@@ -465,6 +465,67 @@ export async function openProjektSchnellanlage({ kundeId = '', onCreated } = {})
   });
 }
 
+// Schlankes "Neuer Lieferant"-Formular für die Schnellanlage aus anderen
+// Dialogen heraus (14.11.2026, auf Dannys Wunsch - bisher ließ sich ein
+// fehlender Lieferant im Katalog-Formular gar nicht anlegen, da die eigene
+// Lieferanten-Verwaltungsseite im Solo-Betrieb ausgeblendet ist, siehe
+// db.js ROUTE_ROLLEN.lieferanten) - analog zu openKundeSchnellanlage/
+// openProjektSchnellanlage oben. Legt nur die Kernfelder an; alles Weitere
+// (Kundennummer beim Lieferanten, Zahlungsziel, IDS-Connect-Zugang, ...)
+// lässt sich danach in der - zwar ausgeblendeten, aber weiterhin
+// funktionierenden - vollen Lieferanten-Ansicht ergänzen (Route bei Bedarf
+// in ROUTE_ROLLEN wieder freischalten).
+const LIEFERANT_SCHNELL_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
+export function openLieferantSchnellanlage({ onCreated } = {}) {
+  const { body, close } = openModal({
+    title: 'Neuer Lieferant',
+    bodyHtml: `
+      <form id="lieferant-schnell-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>Firma *</label><input name="firma" required autofocus></div>
+          <div class="field"><label>Ansprechpartner</label><input name="ansprechpartner"></div>
+          <div class="field"><label>Telefon</label><input type="tel" name="telefon"></div>
+          <div class="field col-span-2"><label>E-Mail</label><input type="email" name="email"></div>
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="lf-schnell-cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Anlegen</button>
+        </div>
+      </form>
+    `,
+  });
+  body.querySelector('#lf-schnell-cancel').addEventListener('click', close);
+  body.querySelector('#lieferant-schnell-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const firma = (fd.get('firma') || '').toString().trim();
+    if (!firma) return;
+    const submitBtn = body.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const neuerId = uid();
+    const neuerLieferant = {
+      id: neuerId, firma,
+      ansprechpartner: (fd.get('ansprechpartner') || '').toString().trim(),
+      telefon: (fd.get('telefon') || '').toString().trim(),
+      email: (fd.get('email') || '').toString().trim(),
+      strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '', notizen: '',
+      idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
+      farbe: farbeAusText(neuerId, LIEFERANT_SCHNELL_FARBEN),
+    };
+    try {
+      await put('lieferanten', neuerLieferant);
+    } catch (err) {
+      toast(`Lieferant anlegen fehlgeschlagen: ${err.message}`, 'danger');
+      submitBtn.disabled = false;
+      return;
+    }
+    toast('Lieferant angelegt', 'success');
+    close();
+    if (onCreated) onCreated(neuerLieferant);
+  });
+}
+
 export function optionList(items, { value = 'id', label = 'name', selected = '', placeholder = '' } = {}) {
   const labelFn = typeof label === 'function' ? label : (item) => escapeHtml(item[label] ?? '');
   let html = placeholder !== null ? `<option value="">${placeholder}</option>` : '';

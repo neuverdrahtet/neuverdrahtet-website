@@ -1,6 +1,6 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, localDateStr, nextDailyNummer } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
@@ -445,7 +445,7 @@ export async function render(container) {
       // Manuelle Verknüpfung mit einem bestehenden Kunden/Projekt/Angebot -
       // unabhängig vom automatischen Adressabgleich (verknuepfeEmailsMitKundenUndProjekten)
       // und von den Schnellaktions-Buttons oben, die stattdessen NEUE Datensätze anlegen.
-      mountChipPicker(detailHost.querySelector('#pf-link-kunde-host'), {
+      const linkKundePicker = mountChipPicker(detailHost.querySelector('#pf-link-kunde-host'), {
         icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde verknüpft –',
         items: kunden, selectedId: full.kundeId || '',
         itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
@@ -455,6 +455,15 @@ export async function render(container) {
           const idx = allEmails.findIndex((m) => m.id === full.id);
           if (idx !== -1) allEmails[idx] = full;
         },
+        onCreateNew: () => new Promise((resolve) => {
+          openKundeSchnellanlage({
+            onCreated: (neuerKunde) => {
+              kunden.push(neuerKunde);
+              kundenById[neuerKunde.id] = neuerKunde;
+              resolve(neuerKunde);
+            },
+          });
+        }),
       });
       mountChipPicker(detailHost.querySelector('#pf-link-projekt-host'), {
         icon: '📁', title: 'Projekt/Auftrag wählen', placeholder: '– kein Projekt verknüpft –',
@@ -466,6 +475,12 @@ export async function render(container) {
           const idx = allEmails.findIndex((m) => m.id === full.id);
           if (idx !== -1) allEmails[idx] = full;
         },
+        onCreateNew: () => new Promise((resolve) => {
+          openProjektSchnellanlage({
+            kundeId: linkKundePicker.getValue(),
+            onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
+          });
+        }),
       });
       mountChipPicker(detailHost.querySelector('#pf-link-angebot-host'), {
         icon: '📋', title: 'Angebot wählen', placeholder: '– kein Angebot verknüpft –',

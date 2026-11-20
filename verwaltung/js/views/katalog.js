@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, syncKatalogOeffentlich, USTSAETZE, GEWERKE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, toast, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
-import { openModal, confirmDelete, mountProgressBar } from '../ui.js';
+import { openModal, confirmDelete, mountProgressBar, mountChipPicker, openLieferantSchnellanlage } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import * as lexoffice from '../lexoffice.js';
 import { parseDatanorm, readDatanormFile } from '../datanorm.js';
@@ -841,7 +841,7 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           <input type="hidden" name="zeitStunden" id="f-zeit-stunden" value="${data.zeitStunden || ''}">
           <div class="form-grid">
             <div class="field"><label>Bevorzugter Lieferant</label>
-              <select name="bevorzugterLieferantId"><option value="">– keiner –</option>${lieferanten.map((l) => `<option value="${l.id}" ${l.id === data.bevorzugterLieferantId ? 'selected' : ''}>${escapeHtml(l.firma)}</option>`).join('')}</select>
+              <div id="f-lieferant-host"></div>
             </div>
             <div class="field"><label>Einkaufspreis EK (€, optional)</label><input type="number" step="0.01" min="0" name="einkaufspreis" id="f-ek" value="${data.einkaufspreis || ''}"></div>
             <div class="field"><label>Zuschlag (%)</label><input type="number" step="1" min="0" name="aufschlagProzent" id="f-zuschlag" value="${data.aufschlagProzent ?? 20}"></div>
@@ -861,6 +861,23 @@ Leistung;Steckdose montieren;Std.;65;19"></textarea>
           </div>
         </form>
       `,
+    });
+    const lieferantPicker = mountChipPicker(body.querySelector('#f-lieferant-host'), {
+      name: 'bevorzugterLieferantId',
+      icon: '🚚',
+      title: 'Bevorzugter Lieferant',
+      placeholder: '– keiner –',
+      items: lieferanten, selectedId: data.bevorzugterLieferantId || '',
+      itemLabel: (l) => l.firma, itemSub: (l) => l.ansprechpartner || '',
+      onCreateNew: () => new Promise((resolve) => {
+        openLieferantSchnellanlage({
+          onCreated: (neuerLieferant) => {
+            lieferanten.push(neuerLieferant);
+            lieferantenById[neuerLieferant.id] = neuerLieferant;
+            resolve(neuerLieferant);
+          },
+        });
+      }),
     });
     function recalcVk() {
       const ek = Number(body.querySelector('#f-ek').value) || 0;
