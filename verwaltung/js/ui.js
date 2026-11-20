@@ -614,7 +614,7 @@ export function mountProjektPicker(host, { projekte, items, kundenById, name = '
 export function mountKundeProjektPicker({
   kundeHost, projektHost, kunden, projekte, kundenById,
   kundeSelectedId = '', projektSelectedId = '',
-  kundeIcon, projektIcon, kundePlaceholder, projektPlaceholder,
+  kundeIcon, projektIcon, kundeTitle, projektTitle, kundePlaceholder, projektPlaceholder,
   kundeDisabled = false, projektDisabled = false,
   onKundeChange, onProjektChange, onKundeCreated, onProjektCreated,
 } = {}) {
@@ -622,7 +622,7 @@ export function mountKundeProjektPicker({
     return kundeId ? projekte.filter((p) => p.kundeId === kundeId) : projekte;
   }
   const kundePicker = mountKundePicker(kundeHost, {
-    kunden, kundenById, selectedId: kundeSelectedId, icon: kundeIcon, placeholder: kundePlaceholder, disabled: kundeDisabled,
+    kunden, kundenById, selectedId: kundeSelectedId, icon: kundeIcon, title: kundeTitle, placeholder: kundePlaceholder, disabled: kundeDisabled,
     onCreated: onKundeCreated,
     onChange: (kundeId) => {
       const gefiltert = projekteFuerKunde(kundeId);
@@ -633,7 +633,7 @@ export function mountKundeProjektPicker({
   });
   const projektPicker = mountProjektPicker(projektHost, {
     projekte, items: projekteFuerKunde(kundeSelectedId), kundenById, selectedId: projektSelectedId,
-    icon: projektIcon, placeholder: projektPlaceholder, disabled: projektDisabled,
+    icon: projektIcon, title: projektTitle, placeholder: projektPlaceholder, disabled: projektDisabled,
     getKundeId: () => kundePicker.getValue(),
     onCreated: onProjektCreated,
     onChange: (projektId) => {

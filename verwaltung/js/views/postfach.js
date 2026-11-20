@@ -450,6 +450,7 @@ export async function render(container) {
         kundeHost: detailHost.querySelector('#pf-link-kunde-host'), projektHost: detailHost.querySelector('#pf-link-projekt-host'),
         kunden, projekte, kundenById,
         kundeSelectedId: full.kundeId || '', projektSelectedId: full.projektId || '',
+        projektTitle: 'Projekt/Auftrag wählen',
         kundePlaceholder: '– kein Kunde verknüpft –', projektPlaceholder: '– kein Projekt verknüpft –',
         onKundeChange: async (kundeId) => {
           full.kundeId = kundeId || '';
@@ -540,7 +541,7 @@ export async function render(container) {
       });
     }
 
-    async function uebernehmeAlsBeleg(message, attachment) {
+    async function uebernehmeAlsBeleg(message, attachment, { ausgabenCache } = {}) {
       const bytes = await google.getAttachmentData(message.id, attachment.attachmentId);
       const blob = bytesToBlob(bytes, attachment.mimeType);
       const belegId = uid();
@@ -574,10 +575,15 @@ export async function render(container) {
             // der Anhang dann versehentlich doch noch als neue, unbelegte
             // Ausgabe gespeichert würde.
             try {
-              const ausgaben = await getAll('ausgaben');
+              const ausgaben = ausgabenCache || await getAll('ausgaben');
               const treffer = findeAusgabeFuerMahnung({ haendler: result.haendler, rechnungsnummer: result.rechnungsnummer, betragBrutto: Number(result.betragBrutto) || 0 }, ausgaben);
               if (treffer) {
-                await put('ausgaben', { ...treffer, mahnungErhaltenAm: todayISO() });
+                const aktualisiert = { ...treffer, mahnungErhaltenAm: todayISO() };
+                await put('ausgaben', aktualisiert);
+                if (ausgabenCache) {
+                  const idx = ausgabenCache.findIndex((x) => x.id === treffer.id);
+                  if (idx !== -1) ausgabenCache[idx] = aktualisiert;
+                }
                 toast(`Mahnung erkannt und mit bestehender Ausgabe "${treffer.lieferant || treffer.beschreibung}" (${formatCurrency(treffer.betragBrutto)}) verknüpft – bitte zeitnah zahlen.`, 'danger');
                 return { gespeichert: false, dokumenttyp: result.dokumenttyp, verknuepftMitAusgabeId: treffer.id };
               }
@@ -610,6 +616,7 @@ export async function render(container) {
         } catch { /* KI-Erkennung ist optional – Anhang wird trotzdem als Beleg gespeichert */ }
       }
       await put('ausgaben', prefill);
+      if (ausgabenCache) ausgabenCache.push(prefill);
       try { await journal.syncBuchungFuerAusgabe(prefill, settings); } catch { /* Verbuchung ist ein Komfort-Feature, darf das Speichern nicht blockieren */ }
       toast('Anhang als Ausgabe/Beleg gespeichert – bitte in Ausgaben prüfen', 'success');
       return { gespeichert: true };
@@ -964,6 +971,13 @@ export async function render(container) {
     async function autoUebernehmeLieferantenrechnungen() {
       const kandidaten = allEmails.filter((m) => m.kategorie === 'rechnung-lieferant' && !m.belegUebernommen && (m.attachments || []).length > 0);
       if (kandidaten.length === 0) return;
+      // Einmal vorab geladen und an jeden Aufruf weitergegeben, statt bei
+      // jeder einzelnen Mahnung im Batch die komplette Ausgaben-Liste erneut
+      // zu laden (z.B. nach einer längeren Abwesenheit mit vielen offenen
+      // Mails) - uebernehmeAlsBeleg() hält die Kopie bei einem Treffer selbst
+      // aktuell, damit eine zweite Mahnung zur selben Rechnung im gleichen
+      // Durchlauf trotzdem den schon aktualisierten Stand sieht.
+      const ausgabenCache = await getAll('ausgaben');
       let erledigt = 0;
       let aussortiert = 0;
       for (const m of kandidaten) {
@@ -972,7 +986,7 @@ export async function render(container) {
           || (m.attachments || []).find((a) => (a.mimeType || '').startsWith('image/'));
         if (!anhang) { await put('emails', { ...m, belegUebernommen: true }); continue; }
         try {
-          const ergebnis = await uebernehmeAlsBeleg(m, anhang);
+          const ergebnis = await uebernehmeAlsBeleg(m, anhang, { ausgabenCache });
           await put('emails', { ...m, belegUebernommen: true });
           if (ergebnis?.gespeichert === false) aussortiert++;
           else erledigt++;
