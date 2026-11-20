@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, resolveMarkeSettings, STEUERARTEN, vergibRechnungsnummerAtomisch } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung, excelFileToCsvText, offenerRestbetrag, offenerGutschriftBetrag } from '../utils.js';
-import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountKundeProjektPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -774,12 +774,12 @@ export async function render(container, route) {
       `,
     });
 
-const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
-      kunden, kundenById, icon: '🏢', placeholder: '– Kunde wählen –', selectedId: data.kundeId, disabled: locked,
-    });
-    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
-      projekte, kundenById, icon: '🔧', placeholder: '– Projekt wählen –', selectedId: data.projektId, disabled: locked,
-      getKundeId: () => kundePicker.getValue(),
+const { kundePicker, projektPicker } = mountKundeProjektPicker({
+      kundeHost: body.querySelector('#f-kunde-host'), projektHost: body.querySelector('#f-projekt-host'),
+      kunden, projekte, kundenById,
+      kundeSelectedId: data.kundeId, projektSelectedId: data.projektId,
+      kundeIcon: '🏢', projektIcon: '🔧', kundePlaceholder: '– Kunde wählen –', projektPlaceholder: '– Projekt wählen –',
+      kundeDisabled: locked, projektDisabled: locked,
     });
 
     let editor = createPositionsEditor({

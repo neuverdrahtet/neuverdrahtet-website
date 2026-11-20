@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals, offenerRestbetrag } from '../utils.js';
-import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountKundeProjektPicker } from '../ui.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -481,13 +481,11 @@ export async function render(container) {
         </form>
       `,
     });
-    const kundePicker = mountKundePicker(body.querySelector('#f-mahn-kunde-host'), {
-      kunden, kundenById, icon: '🏢', placeholder: '– Kunde wählen –', selectedId: '',
-    });
-    const projektPicker = mountProjektPicker(body.querySelector('#f-mahn-projekt-host'), {
-      projekte, kundenById, icon: '🔧', placeholder: '– Projekt wählen –', selectedId: '',
-      getKundeId: () => kundePicker.getValue(),
-      onCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
+    const { kundePicker, projektPicker } = mountKundeProjektPicker({
+      kundeHost: body.querySelector('#f-mahn-kunde-host'), projektHost: body.querySelector('#f-mahn-projekt-host'),
+      kunden, projekte, kundenById,
+      kundeIcon: '🏢', projektIcon: '🔧', kundePlaceholder: '– Kunde wählen –', projektPlaceholder: '– Projekt wählen –',
+      onProjektCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
     });
     body.querySelector('select[name="stufe"]').addEventListener('change', (e) => {
       const neueStufe = Number(e.target.value);

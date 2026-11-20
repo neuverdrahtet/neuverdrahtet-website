@@ -601,6 +601,50 @@ export function mountProjektPicker(host, { projekte, items, kundenById, name = '
   });
 }
 
+// Kunde+Projekt-Picker-Paar mit automatischer Filterung (20.11.2026, auf
+// Dannys Wunsch): sobald ein Kunde gewählt ist, zeigt der Projekt-Picker nur
+// noch dessen Projekte/Aufträge statt aller Projekte - z.B. beim Belege
+// verbuchen (Ausgaben) weniger Scrollen/Suchen in der Projektliste. Wird
+// stattdessen zuerst ein Projekt gewählt (Kunde noch leer), füllt sich der
+// Kunde wie bisher automatisch nach; das löst dann selbst wieder die
+// Filterung aus, zeigt aber wegen des bereits passenden Projekts keine
+// Überraschung. Ändert sich der Kunde nachträglich und das bisher gewählte
+// Projekt gehört nicht mehr dazu, wird die Projekt-Auswahl geleert (wie
+// schon zuvor in der Zeiterfassung so gelöst).
+export function mountKundeProjektPicker({
+  kundeHost, projektHost, kunden, projekte, kundenById,
+  kundeSelectedId = '', projektSelectedId = '',
+  kundeIcon, projektIcon, kundePlaceholder, projektPlaceholder,
+  kundeDisabled = false, projektDisabled = false,
+  onKundeChange, onProjektChange, onKundeCreated, onProjektCreated,
+} = {}) {
+  function projekteFuerKunde(kundeId) {
+    return kundeId ? projekte.filter((p) => p.kundeId === kundeId) : projekte;
+  }
+  const kundePicker = mountKundePicker(kundeHost, {
+    kunden, kundenById, selectedId: kundeSelectedId, icon: kundeIcon, placeholder: kundePlaceholder, disabled: kundeDisabled,
+    onCreated: onKundeCreated,
+    onChange: (kundeId) => {
+      const gefiltert = projekteFuerKunde(kundeId);
+      if (projektPicker.getValue() && !gefiltert.some((p) => p.id === projektPicker.getValue())) projektPicker.setValue('');
+      projektPicker.setItems(gefiltert);
+      if (onKundeChange) onKundeChange(kundeId);
+    },
+  });
+  const projektPicker = mountProjektPicker(projektHost, {
+    projekte, items: projekteFuerKunde(kundeSelectedId), kundenById, selectedId: projektSelectedId,
+    icon: projektIcon, placeholder: projektPlaceholder, disabled: projektDisabled,
+    getKundeId: () => kundePicker.getValue(),
+    onCreated: onProjektCreated,
+    onChange: (projektId) => {
+      const projekt = projekte.find((p) => p.id === projektId);
+      if (projekt?.kundeId && kundePicker.getValue() !== projekt.kundeId) kundePicker.setValue(projekt.kundeId);
+      if (onProjektChange) onProjektChange(projektId);
+    },
+  });
+  return { kundePicker, projektPicker };
+}
+
 export function optionList(items, { value = 'id', label = 'name', selected = '', placeholder = '' } = {}) {
   const labelFn = typeof label === 'function' ? label : (item) => escapeHtml(item[label] ?? '');
   let html = placeholder !== null ? `<option value="">${placeholder}</option>` : '';

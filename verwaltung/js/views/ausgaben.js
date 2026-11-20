@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountKundeProjektPicker } from '../ui.js';
 import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
 import { downloadBlob } from '../docexport.js';
@@ -922,17 +922,12 @@ export async function render(container) {
       `,
     });
 
-    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
-      kunden, kundenById, placeholder: '– keinem Kunden zugeordnet –', selectedId: data.kundeId,
-    });
-    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
-      projekte, kundenById, placeholder: '– keinem Projekt zugeordnet –', selectedId: data.projektId,
-      getKundeId: () => kundePicker.getValue(),
-      onChange: (projektId) => {
-        body.querySelector('#ausgabe-kalkkategorie').disabled = !projektId;
-        const projekt = projekte.find((p) => p.id === projektId);
-        if (projekt?.kundeId && !kundePicker.getValue()) kundePicker.setValue(projekt.kundeId);
-      },
+    const { kundePicker, projektPicker } = mountKundeProjektPicker({
+      kundeHost: body.querySelector('#f-kunde-host'), projektHost: body.querySelector('#f-projekt-host'),
+      kunden, projekte, kundenById,
+      kundeSelectedId: data.kundeId, projektSelectedId: data.projektId,
+      kundePlaceholder: '– keinem Kunden zugeordnet –', projektPlaceholder: '– keinem Projekt zugeordnet –',
+      onProjektChange: (projektId) => { body.querySelector('#ausgabe-kalkkategorie').disabled = !projektId; },
     });
 
     if (!istOffeneKreditorenRechnung) {
