@@ -1,6 +1,6 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
@@ -26,6 +26,7 @@ export async function render(container) {
   mitarbeiter.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   aufgabenStatus.sort((a, b) => (a.reihenfolge ?? 0) - (b.reihenfolge ?? 0));
   const mitarbeiterById = Object.fromEntries(mitarbeiter.map((m) => [m.id, m]));
+  const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
   const statusById = Object.fromEntries(aufgabenStatus.map((s) => [s.id, s]));
   const offenStatus = aufgabenStatus.find((s) => !s.geschlossen) || aufgabenStatus[0];
   const erledigtStatus = aufgabenStatus.find((s) => s.geschlossen) || aufgabenStatus[aufgabenStatus.length - 1];
@@ -192,12 +193,8 @@ export async function render(container) {
             <div class="field"><label>Status</label>
               <select name="status">${aufgabenStatus.map((s) => `<option value="${s.id}" ${s.id === data.status ? 'selected' : ''}>${escapeHtml(s.titel)}</option>`).join('')}</select>
             </div>
-            <div class="field"><label>Projekt</label>
-              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
-            <div class="field"><label>Kunde</label>
-              <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
-            </div>
+            <div class="field"><label>Projekt</label><div id="f-projekt-host"></div></div>
+            <div class="field"><label>Kunde</label><div id="f-kunde-host"></div></div>
             <div class="field col-span-2"><label>Beschreibung</label><textarea name="beschreibung">${escapeHtml(data.beschreibung || '')}</textarea></div>
           </div>
           <div class="modal-actions">
@@ -210,6 +207,31 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
+      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onCreateNew: () => new Promise((resolve) => {
+        openKundeSchnellanlage({
+          onCreated: (neuerKunde) => {
+            kunden.push(neuerKunde);
+            kundenById[neuerKunde.id] = neuerKunde;
+            resolve(neuerKunde);
+          },
+        });
+      }),
+    });
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
+      icon: '📁', title: 'Projekt wählen', placeholder: '– kein Projekt –',
+      items: projekte, selectedId: data.projektId,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
+        });
+      }),
+    });
     if (!isEdit) {
       body.querySelector('#btn-ki-sprache').addEventListener('click', () => {
         openStichpunkteSprachModal({
@@ -235,8 +257,8 @@ export async function render(container) {
               if (result.faelligAm) form.faelligAm.value = result.faelligAm;
               if (result.prioritaet) form.prioritaet.value = result.prioritaet;
               if (result.zugewiesenAn && mitarbeiter.some((m) => m.id === result.zugewiesenAn)) form.zugewiesenAn.value = result.zugewiesenAn;
-              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
-              if (result.projektId && projekte.some((p) => p.id === result.projektId)) form.projektId.value = result.projektId;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) kundePicker.setValue(result.kundeId);
+              if (result.projektId && projekte.some((p) => p.id === result.projektId)) projektPicker.setValue(result.projektId);
               toast('Aufgabendaten von der KI übernommen - bitte prüfen', 'success');
             } catch (err) {
               toast(err.message, 'danger');

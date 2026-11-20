@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr, textColorForBg } from '../utils.js';
-import { confirmDelete, attachAddressSearch } from '../ui.js';
+import { confirmDelete, attachAddressSearch, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -818,12 +818,8 @@ export async function render(container, route, { autoSync = true } = {}) {
               </div>
             </div>
             <div class="field"><label>Farbe (optional, überschreibt Art-Farbe)</label><input type="color" name="farbe" value="${escapeHtml(data.farbe || typInfo(data.typ || 'termin').farbe)}"></div>
-            <div class="field"><label>Kunde</label>
-              <select name="kundeId"><option value="">–</option>${kunden.map((k) => `<option value="${k.id}" ${k.id === data.kundeId ? 'selected' : ''}>${escapeHtml(k.firma)}</option>`).join('')}</select>
-            </div>
-            <div class="field col-span-2"><label>Projekt <span class="text-mute" id="f-projekt-bereich"></span></label>
-              <select name="projektId"><option value="">–</option>${projekte.map((p) => `<option value="${p.id}" data-bereich="${p.bereich || ''}" ${p.id === data.projektId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}</select>
-            </div>
+            <div class="field"><label>Kunde</label><div id="f-kunde-host"></div></div>
+            <div class="field col-span-2"><label>Projekt <span class="text-mute" id="f-projekt-bereich"></span></label><div id="f-projekt-host"></div></div>
             <div class="field col-span-2"><label>Mitarbeiter</label>
               <div class="tag-list" id="mitarbeiter-checklist"></div>
               <button type="button" class="btn btn-sm" id="btn-vorschlag" style="margin-top:6px;align-self:flex-start">🤖 Nächsten freien Termin vorschlagen</button>
@@ -882,20 +878,44 @@ export async function render(container, route, { autoSync = true } = {}) {
         </label>
       `).join('') || '<span class="text-mute">Keine Mitarbeiter verfügbar.</span>';
     }
+    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
+      icon: '👤', title: 'Kunde wählen', placeholder: '– kein Kunde –',
+      items: kunden, selectedId: data.kundeId,
+      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+      onCreateNew: () => new Promise((resolve) => {
+        openKundeSchnellanlage({
+          onCreated: (neuerKunde) => {
+            kunden.push(neuerKunde);
+            kundenById[neuerKunde.id] = neuerKunde;
+            resolve(neuerKunde);
+          },
+        });
+      }),
+    });
+    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
+      icon: '📁', title: 'Projekt wählen', placeholder: '– kein Projekt –',
+      items: projekte, selectedId: data.projektId,
+      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
+      onChange: () => {
+        const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
+        updateProjektBereichHint(checkedIds);
+      },
+      onCreateNew: () => new Promise((resolve) => {
+        openProjektSchnellanlage({
+          kundeId: kundePicker.getValue(),
+          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); projekteById[neuesProjekt.id] = neuesProjekt; resolve(neuesProjekt); },
+        });
+      }),
+    });
     function updateProjektBereichHint(checkedIds) {
-      const select = body.querySelector('select[name="projektId"]');
-      const bereichId = select.selectedOptions[0]?.dataset.bereich;
-      const bereich = BEREICHE.find((b) => b.id === bereichId);
-      const marke = markeFuerTermin({ projektId: select.value });
+      const projekt = projekteById[projektPicker.getValue()];
+      const bereich = BEREICHE.find((b) => b.id === projekt?.bereich);
+      const marke = markeFuerTermin({ projektId: projektPicker.getValue() });
       const teile = [bereich ? bereich.titel : '', marke ? `🏷️ ${marke.name}` : ''].filter(Boolean);
       body.querySelector('#f-projekt-bereich').textContent = teile.length ? `(${teile.join(' · ')})` : '';
       renderMitarbeiterChecklist(marke?.id || '', checkedIds);
     }
     updateProjektBereichHint(data.mitarbeiterIds || []);
-    body.querySelector('select[name="projektId"]').addEventListener('change', () => {
-      const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
-      updateProjektBereichHint(checkedIds);
-    });
 
     let farbeCustom = !!data.farbe;
     body.querySelector('input[name="farbe"]').addEventListener('input', () => { farbeCustom = true; });
@@ -938,7 +958,7 @@ export async function render(container, route, { autoSync = true } = {}) {
               if (result.uhrzeit) form.uhrzeit.value = result.uhrzeit;
               if (result.ort) form.ort.value = result.ort;
               if (result.notizen) form.notizen.value = result.notizen;
-              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) form.kundeId.value = result.kundeId;
+              if (result.kundeId && kunden.some((k) => k.id === result.kundeId)) kundePicker.setValue(result.kundeId);
               if (result.typ) {
                 form.typ.value = result.typ;
                 form.typ.dispatchEvent(new Event('change'));
