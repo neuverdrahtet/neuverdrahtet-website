@@ -14,8 +14,11 @@ export const CONFIG = {
     // OFFEN: Rechtsform/Inhaber für Impressum (z. B. Einzelunternehmen, Inhaber …)
     inhaber: null,
     rechtsform: null,
-    ustId: null, // OFFEN
-    handwerksrolle: null, // OFFEN: Eintragung(en) bei der Handwerkskammer Düsseldorf
+    ustId: 'DE456245279',
+    // Steuernummer bewusst NICHT hier: gehört nicht ins Impressum (Missbrauchsrisiko).
+    kammer: 'Handwerkskammer Düsseldorf, Georg-Schulhoff-Platz 1, 40221 Düsseldorf',
+    // OFFEN: eingetragene Handwerke/Berufsbezeichnung laut Handwerkskarte, z. B. 'Elektrotechniker-Handwerk (Meister)'
+    handwerksrolle: null,
   },
 
   kontakt: {
@@ -28,7 +31,7 @@ export const CONFIG = {
     land: 'DE',
     telefon: null, // OFFEN, Format "+49 201 …"
     whatsapp: null, // OFFEN, nur Ziffern inkl. Ländervorwahl, z. B. "49201…"
-    email: null, // OFFEN
+    email: 'info@berger-servicesolution.de',
     oeffnungszeiten: [
       // Vorschlag, OFFEN zur Bestätigung
       { tage: ['Mo', 'Di', 'Mi', 'Do', 'Fr'], von: '07:30', bis: '17:00' },
@@ -72,8 +75,8 @@ export const CONFIG = {
     // Später: URL des Werkora-Lead-Endpunkts.
     endpunkt: null,
     email: {
-      empfaenger: null, // OFFEN: Adresse, an die Anfragen gehen
-      absender: null, // OFFEN: Postfach der eigenen Domain (IONOS verlangt eigene Domain als Absender)
+      empfaenger: 'info@berger-servicesolution.de',
+      absender: 'info@berger-servicesolution.de', // Postfach der eigenen Domain (IONOS verlangt eigene Domain als Absender)
       kundenbestaetigung: true,
     },
     maxGesamtMB: 20,
@@ -99,7 +102,7 @@ export function offeneKonfigurationspunkte(cfg = CONFIG) {
   pruefe(cfg.firma.inhaber, 'Inhaber (Impressum)');
   pruefe(cfg.firma.rechtsform, 'Rechtsform (Impressum)');
   pruefe(cfg.firma.ustId, 'USt-IdNr. (Impressum, falls vorhanden)');
-  pruefe(cfg.firma.handwerksrolle, 'Handwerksrolle/Verzeichnis-Eintragungen (Impressum, Leistungsumfang)');
+  pruefe(cfg.firma.handwerksrolle, 'Eingetragene Handwerke/Berufsbezeichnung laut Handwerkskarte (Impressum)');
   pruefe(cfg.kontakt.strasse, 'Geschäftsadresse: Straße');
   pruefe(cfg.kontakt.plz, 'Geschäftsadresse: PLZ');
   pruefe(cfg.kontakt.telefon, 'Telefonnummer');

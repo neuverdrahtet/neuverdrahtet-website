@@ -16,7 +16,9 @@ export function starteServer(port = 0) {
       const datei = path.join(PUBLIC, path.normalize(p));
       if (!datei.startsWith(PUBLIC)) { res.writeHead(403).end(); return; }
       try {
-        const inhalt = await readFile(datei);
+        let inhalt = await readFile(datei);
+        // Dieser Node-Server kann kein PHP ausführen: Online-Buchung hier immer im Demo-Modus.
+        if (datei.endsWith('.html')) inhalt = Buffer.from(inhalt.toString('utf8').replace('"endpunkt":"api/anfrage.php"', '"endpunkt":null'));
         res.writeHead(200, { 'Content-Type': TYPEN[path.extname(datei)] || 'application/octet-stream' }).end(inhalt);
       } catch {
         res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' }).end(await readFile(path.join(PUBLIC, '404.html')));

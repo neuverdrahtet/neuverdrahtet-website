@@ -529,7 +529,7 @@ function impressum() {
 <p>${esc(f.name)}<br>Inhaber: ${fehlt(f.inhaber, 'Inhaber')}<br>Rechtsform: ${fehlt(f.rechtsform, 'Rechtsform')}<br>${fehlt(k.strasse, 'Straße und Hausnummer')}<br>${fehlt(k.plz, 'PLZ')} ${esc(k.ort)}</p>
 <h2>Kontakt</h2><p>Telefon: ${fehlt(k.telefon, 'Telefon')}<br>E-Mail: ${fehlt(k.email, 'E-Mail')}</p>
 <h2>Umsatzsteuer-ID</h2><p>Umsatzsteuer-Identifikationsnummer gemäß § 27a UStG: ${fehlt(f.ustId, 'USt-IdNr., falls vorhanden')}</p>
-<h2>Angaben zur Handwerksrolle und Berufsrecht</h2><p>${fehlt(f.handwerksrolle, 'Eintragungen in die Handwerksrolle bzw. das Verzeichnis zulassungsfreier Handwerke, zuständige Handwerkskammer, Berufsbezeichnung')}</p>
+<h2>Angaben zur Handwerksrolle und Berufsrecht</h2><p>Zuständige Kammer: ${fehlt(f.kammer, 'Handwerkskammer')}<br>Eingetragene Handwerke / Berufsbezeichnung: ${fehlt(f.handwerksrolle, 'Handwerke laut Handwerkskarte')}<br>Berufsbezeichnung verliehen in: Deutschland<br>Berufsrechtliche Regelungen: Handwerksordnung (HwO), abrufbar unter <a href="https://www.gesetze-im-internet.de/hwo/" rel="noopener">gesetze-im-internet.de/hwo</a></p>
 <h2>Verbraucherstreitbeilegung</h2><p>Wir sind nicht bereit oder verpflichtet, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen. <span class="platzhalter">[Vor Veröffentlichung bestätigen]</span></p>
 </div></section>`;
   seite({ pfad: 'impressum.html', titel: 'Impressum', beschreibung: 'Impressum von BERGER SERVICE SOLUTIONS, Essen – Anbieterkennzeichnung, Kontakt und Angaben zur Handwerksrolle.', inhalt, krumen: [['Impressum', 'impressum.html']], noindex: true });

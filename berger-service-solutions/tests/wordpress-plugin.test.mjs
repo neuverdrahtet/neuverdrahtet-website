@@ -29,8 +29,8 @@ writeFileSync(sendmail, `#!/bin/sh\ncat > "${POST}/mail-$(date +%s%N).eml"\n`);
 chmodSync(sendmail, 0o755);
 const einstellungen = path.join(tmp, 'einstellungen.php');
 writeFileSync(einstellungen, readFileSync(path.join(wpVerzeichnis, 'bss-website', 'api', 'einstellungen.php'), 'utf8')
-  .replace("'empfaenger' => null", "'empfaenger' => 'buero@example.org'")
-  .replace("'absender' => null", "'absender' => 'website@example.org'")
+  .replace(/'empfaenger' => [^,\n]+/, "'empfaenger' => 'buero@example.org'")
+  .replace(/'absender' => [^,\n]+/, "'absender' => 'website@example.org'")
   .replace('return [', `return [\n  'datenVerzeichnis' => '${path.join(tmp, 'daten')}',`));
 const router = path.join(tmp, 'router.php');
 writeFileSync(router, `<?php

@@ -1,8 +1,8 @@
 <?php
 // Erzeugt von src/build.mjs aus src/config.mjs – nicht von Hand ändern.
 return [
-  'empfaenger' => null,
-  'absender' => null,
+  'empfaenger' => 'info@berger-servicesolution.de',
+  'absender' => 'info@berger-servicesolution.de',
   'kundenbestaetigung' => true,
   'firma' => 'BERGER SERVICE SOLUTIONS',
   'telefon' => null,

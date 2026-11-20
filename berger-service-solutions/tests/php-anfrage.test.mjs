@@ -33,8 +33,8 @@ chmodSync(sendmail, 0o755);
 const einstellungen = path.join(tmp, 'einstellungen.php');
 function schreibeEinstellungen(extra = '', limit = 50) {
   const basis = readFileSync(path.join(PUBLIC, 'api', 'einstellungen.php'), 'utf8')
-    .replace("'empfaenger' => null", "'empfaenger' => 'buero@example.org'")
-    .replace("'absender' => null", "'absender' => 'website@example.org'")
+    .replace(/'empfaenger' => [^,\n]+/, "'empfaenger' => 'buero@example.org'")
+    .replace(/'absender' => [^,\n]+/, "'absender' => 'website@example.org'")
     .replace("'ratenLimit' => 5", `'ratenLimit' => ${limit}`)
     .replace('return [', `return [\n  'datenVerzeichnis' => '${DATEN}',${extra}`);
   writeFileSync(einstellungen, basis);

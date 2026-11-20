@@ -153,7 +153,7 @@ test('Leistungsseiten haben ausreichend eigenen Inhalt (≥ 350 Wörter)', () =>
   }
 });
 test('keine internen Prüfvermerke, Garantien oder Ranking-Versprechen im Seitentext', () => {
-  const verboten = [/\bOFFEN\b/, /\(intern\)/i, /garantiert/i, /platz 1/i, /\bnr\.\s?1\b/i, /bester? (elektriker|handwerker|anbieter)/i, /\d+\s?(\+\s?)?zufriedene kunden/i, /\bseit \d{4}\b/i, /sterne?-bewertung/i];
+  const verboten = [/\bOFFEN\b/, /\(intern\)/i, /garantiert/i, /\b(auf |nummer )?platz (1|eins)\b(?!,? ?\d{5})/i, /\bnr\.\s?1\b/i, /bester? (elektriker|handwerker|anbieter)/i, /\d+\s?(\+\s?)?zufriedene kunden/i, /\bseit \d{4}\b/i, /sterne?-bewertung/i];
   for (const [f, s] of Object.entries(html)) for (const re of verboten) assert.ok(!re.test(text(s)), `${f}: ${re}`);
 });
 test('Barrierefreiheit: lang, Viewport, Sprungmarke, Labels für Formularfelder', () => {
