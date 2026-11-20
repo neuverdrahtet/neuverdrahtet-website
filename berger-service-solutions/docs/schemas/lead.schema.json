@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.berger-servicesolution.de/schemas/lead.schema.json",
+  "$id": "https://berger-servicesolution.de/schemas/lead.schema.json",
   "title": "BERGER SERVICE SOLUTIONS – Website-Lead (bss-lead/1)",
   "description": "Payload, den die Online-Buchung an den Werkora-Lead-Endpunkt sendet. Erzeugt von public/assets/js/buchung-kern.mjs (baueLead). Dateien werden als multipart-Teile 'dateien' mitgesendet, der Lead selbst als Teil 'lead' (application/json).",
   "type": "object",

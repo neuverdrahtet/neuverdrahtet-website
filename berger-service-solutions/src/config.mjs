@@ -37,12 +37,14 @@ export const CONFIG = {
 
   website: {
     // OFFEN: endgültige Domain. Wird für canonical, Sitemap und JSON-LD genutzt.
-    url: 'https://www.berger-servicesolution.de',
+    url: 'https://berger-servicesolution.de',
     sprache: 'de-DE',
     // Solange false: jede Seite trägt "noindex", robots.txt sperrt Crawler.
     // Erst auf true setzen, wenn Impressum, Datenschutz und Kontaktdaten
     // vollständig und geprüft sind (siehe docs/11-umsetzungsplan-qualitaetssicherung.md).
     indexierbar: false,
+    // Gelbes Hinweisband „Prototyp“ oben auf jeder Seite (unabhängig von der Google-Sperre).
+    prototypHinweis: false,
   },
 
   // Mittelpunkt des Einsatzgebiets: Essen (Innenstadt, ungefähr Hbf).

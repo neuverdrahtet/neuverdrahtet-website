@@ -200,7 +200,7 @@ export function layout({ pfad, titel, beschreibung, inhalt, krumen = [], jsonld 
 </head>
 <body>
 <a class="sprungmarke" href="#inhalt">Zum Inhalt springen</a>
-${CONFIG.website.indexierbar ? '' : '<div class="status-band" role="note">Prototyp – Inhalte und Kontaktdaten werden vor der Veröffentlichung final geprüft.</div>'}
+${!CONFIG.website.prototypHinweis ? '' : '<div class="status-band" role="note">Prototyp – Inhalte und Kontaktdaten werden vor der Veröffentlichung final geprüft.</div>'}
 ${kopf}
 ${brotkrumen(krumen)}
 <main id="inhalt">

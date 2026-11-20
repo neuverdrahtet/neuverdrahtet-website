@@ -10,66 +10,66 @@ Wichtige Fakten:
 - Es werden keine Pauschalpreise, Garantien oder Platzierungen versprochen.
 
 ## Leistungsbereiche
-- [Elektrotechnik, Prüfung & Wartung](https://www.berger-servicesolution.de/elektrotechnik.html): Installation, Sanierung, Reparatur, Prüfungen nach DGUV V3 und DIN VDE, Wartung von Wärmepumpen und Klimaanlagen, PV, Wallbox, Smart Home.
-- [Handwerk, Renovierung & Sanierung](https://www.berger-servicesolution.de/handwerk-sanierung.html): Komplett- und Wohnungssanierung, Bad, Fliesen, Maler- und Trockenbauarbeiten, Innenausbau, Renovierung bei Mieterwechsel und Bodenlegearbeiten.
-- [Hausmeister- & Objektservice](https://www.berger-servicesolution.de/hausmeisterservice-objektservice.html): Hausmeisterservice, technische Objektbetreuung, Reinigung, Gartenpflege, Winterdienst, Wohnungsübergaben und regelmäßige Betreuungsverträge.
-- [Rückbau, Entrümpelung & Haushaltsauflösung](https://www.berger-servicesolution.de/entruempelung-rueckbau.html): Entrümpelungen, Haushalts- und Wohnungsauflösungen, Rückbau, Demontage und Entkernung – mit fachgerechter Entsorgung und dokumentierter Übergabe.
+- [Elektrotechnik, Prüfung & Wartung](https://berger-servicesolution.de/elektrotechnik.html): Installation, Sanierung, Reparatur, Prüfungen nach DGUV V3 und DIN VDE, Wartung von Wärmepumpen und Klimaanlagen, PV, Wallbox, Smart Home.
+- [Handwerk, Renovierung & Sanierung](https://berger-servicesolution.de/handwerk-sanierung.html): Komplett- und Wohnungssanierung, Bad, Fliesen, Maler- und Trockenbauarbeiten, Innenausbau, Renovierung bei Mieterwechsel und Bodenlegearbeiten.
+- [Hausmeister- & Objektservice](https://berger-servicesolution.de/hausmeisterservice-objektservice.html): Hausmeisterservice, technische Objektbetreuung, Reinigung, Gartenpflege, Winterdienst, Wohnungsübergaben und regelmäßige Betreuungsverträge.
+- [Rückbau, Entrümpelung & Haushaltsauflösung](https://berger-servicesolution.de/entruempelung-rueckbau.html): Entrümpelungen, Haushalts- und Wohnungsauflösungen, Rückbau, Demontage und Entkernung – mit fachgerechter Entsorgung und dokumentierter Übergabe.
 
 ## Leistungen
-- [Elektroinstallation](https://www.berger-servicesolution.de/elektroinstallation.html): Neue Elektroinstallation für Neubau, Anbau, Umbau und Erweiterung – geplant, normgerecht ausgeführt und dokumentiert.
-- [Elektrosanierung](https://www.berger-servicesolution.de/elektrosanierung.html): Alte Leitungen, fehlende FI-Schutzschalter, überlastete Stromkreise: Wir modernisieren bestehende Elektroanlagen schrittweise oder komplett.
-- [Elektroreparatur & Störungsbeseitigung](https://www.berger-servicesolution.de/elektro-reparatur-stoerung.html): Sicherung löst aus, Steckdose ohne Strom, Licht flackert: systematische Fehlersuche und Reparatur – Termin direkt online buchbar.
-- [Zählerschrank & Unterverteilung](https://www.berger-servicesolution.de/zaehlerschrank-unterverteilung.html): Neuer Zählerplatz nach den technischen Anschlussbedingungen, Unterverteilungen mit ausreichend Platz für Wallbox, PV und Wärmepumpe.
-- [DGUV-V3-Prüfung](https://www.berger-servicesolution.de/dguv-v3-pruefung.html): Prüfung ortsveränderlicher Betriebsmittel und ortsfester Anlagen mit Prüfprotokoll, Prüfplakette und automatischer Erinnerung an die nächste Prüfung.
-- [E-Check & Elektroprüfung nach DIN VDE](https://www.berger-servicesolution.de/e-check.html): Elektrische Sicherheitsprüfung für Wohnungen, Häuser und Gewerbe nach DIN VDE – mit Messprotokoll und verständlichem Mängelbericht.
-- [Wärmepumpenwartung](https://www.berger-servicesolution.de/waermepumpenwartung.html): Regelmäßige Wartung nach Herstellervorgaben: Elektrik, Außeneinheit, Filter, Kondensat, Betriebsdaten – mit Protokoll und Erinnerung.
-- [Klimaanlagenwartung](https://www.berger-servicesolution.de/klimaanlagenwartung.html): Reinigung, Hygiene und Funktionsprüfung von Split- und Multisplit-Klimageräten mit Wartungsprotokoll.
-- [Photovoltaik & Batteriespeicher](https://www.berger-servicesolution.de/photovoltaik-batteriespeicher.html): PV-Anlage und Stromspeicher: Planung, elektrischer Anschluss, Zählerplatz, Anmeldung beim Netzbetreiber – auch Nachrüstung von Speichern.
-- [Wallbox & Ladeinfrastruktur](https://www.berger-servicesolution.de/wallbox-ladeinfrastruktur.html): Wallbox für Garage, Carport oder Tiefgarage: Prüfung der Anlage, Installation, Anmeldung beim Netzbetreiber, Lastmanagement für mehrere Ladepunkte.
-- [Smart Home & Gebäudeautomation](https://www.berger-servicesolution.de/smart-home-gebaeudeautomation.html): Licht, Rollläden, Heizung und Energieflüsse intelligent steuern – kabelgebunden (z. B. KNX) oder funkbasiert, passend zum Gebäude.
-- [Beleuchtungstechnik](https://www.berger-servicesolution.de/beleuchtungstechnik.html): LED-Umrüstung, Beleuchtung für Wohnräume, Treppenhäuser, Büros und Außenanlagen – mit Präsenzmeldern und Lichtsteuerung.
-- [Netzwerk- & Datentechnik](https://www.berger-servicesolution.de/netzwerk-datentechnik.html): Strukturierte Verkabelung, Netzwerkdosen, Patchfelder, Netzwerkschränke und WLAN-Ausleuchtung für Wohnung, Haus und Büro.
-- [Sprechanlagen](https://www.berger-servicesolution.de/sprechanlagen.html): Neue oder modernisierte Sprech- und Videosprechanlagen für Ein- und Mehrfamilienhäuser, inklusive Türöffner und App-Anbindung.
-- [Komplettsanierung](https://www.berger-servicesolution.de/komplettsanierung.html): Gewerkeübergreifende Sanierung von Häusern und Wohnungen: ein Ansprechpartner, abgestimmte Gewerkefolge, dokumentierter Baufortschritt.
-- [Wohnungssanierung](https://www.berger-servicesolution.de/wohnungssanierung.html): Sanierung einzelner Wohnungen: Elektrik, Wände, Böden, Bad und Anstrich – planbar und mit Blick auf die schnelle Wiedervermietung.
-- [Badsanierung & Badmodernisierung](https://www.berger-servicesolution.de/badsanierung.html): Vom Rückbau bis zur Montage: Badsanierung mit Elektro, Trockenbau, Abdichtung und Fliesen – koordiniert aus einer Hand.
-- [Fliesen- & Plattenarbeiten](https://www.berger-servicesolution.de/fliesenarbeiten.html): Wand- und Bodenfliesen für Bad, Küche und Flur – mit Untergrundvorbereitung, Abdichtung und sauberer Verfugung.
-- [Maler- & Tapezierarbeiten](https://www.berger-servicesolution.de/maler-tapezierarbeiten.html): Streichen, tapezieren, spachteln: Wände und Decken in Wohnungen, Treppenhäusern und Gewerberäumen – sauber abgedeckt und termingerecht.
-- [Trockenbau & Innenausbau](https://www.berger-servicesolution.de/trockenbau-innenausbau.html): Ständerwände, abgehängte Decken, Vorsatzschalen, Dachgeschossausbau sowie Decken- und Wandgestaltung – inklusive Elektro aus einer Hand.
-- [Renovierung bei Mieterwechsel](https://www.berger-servicesolution.de/renovierung-mieterwechsel.html): Alles für die schnelle Wiedervermietung: Malerarbeiten, Böden, Elektroprüfung, Kleinreparaturen, Entrümpelung und Endreinigung in einem Ablauf.
-- [Bodenlegearbeiten](https://www.berger-servicesolution.de/bodenlegearbeiten.html): Vinyl, Designboden, Laminat, PVC, Teppich, Parkett – inklusive Entfernung alter Beläge, Untergrundvorbereitung, Ausgleich und Sockelleisten.
-- [Vinyl- & Designboden verlegen](https://www.berger-servicesolution.de/vinyl-designboden-verlegen.html): Klickvinyl oder vollflächig verklebter Designboden – mit ebenem Untergrund, sauberen Anschlüssen und passenden Sockelleisten.
-- [Laminat verlegen](https://www.berger-servicesolution.de/laminat-verlegen.html): Laminat mit passender Trittschalldämmung, sauberen Dehnungsfugen, gekürzten Türzargen und Sockelleisten.
-- [Teppichboden & PVC verlegen](https://www.berger-servicesolution.de/teppichboden-pvc-verlegen.html): Teppichboden für Wohn- und Büroräume, PVC für Mietwohnungen und Nebenräume – vollflächig verklebt oder verspannt.
-- [Parkettverlegung](https://www.berger-servicesolution.de/parkett-verlegen.html): Fertigparkett schwimmend oder verklebt – ausgeführt im Rahmen der handwerksrechtlichen Berechtigung bzw. über eingetragene Partnerbetriebe.
-- [Hausmeisterservice & technische Objektbetreuung](https://www.berger-servicesolution.de/hausmeisterservice.html): Regelmäßige Objektkontrollen, Kleinreparaturen, technische Betreuung und Mängelmeldungen mit Foto – mit digitalem Leistungsnachweis.
-- [Gebäudereinigung](https://www.berger-servicesolution.de/gebaeudereinigung.html): Unterhaltsreinigung für Büros, Praxen und Gewerbe, Grund- und Bauendreinigung – nach Leistungsverzeichnis und mit Nachweis.
-- [Treppenhausreinigung](https://www.berger-servicesolution.de/treppenhausreinigung.html): Regelmäßige Reinigung von Treppenhäusern, Fluren und Kellergängen – mit digitalem Nachweis statt Aushangzettel.
-- [Gartenpflege & Grünflächenpflege](https://www.berger-servicesolution.de/gartenpflege.html): Rasen, Hecken, Sträucher und Laub: saisonale Grünpflege für Wohnanlagen, Gewerbeflächen und Privatgärten.
-- [Winterdienst & Gehwegreinigung](https://www.berger-servicesolution.de/winterdienst.html): Schneeräumen und Streuen nach den Vorgaben der jeweiligen Ortssatzung – mit Einsatzprotokoll als Nachweis.
-- [Wohnungsübergaben & Mieterwechsel](https://www.berger-servicesolution.de/wohnungsuebergabe-mieterwechsel.html): Übergabeprotokoll mit Fotos, Zählerstände, Schlüssel – und direkte Koordination der Renovierungs- und Reinigungsarbeiten.
-- [Entrümpelung](https://www.berger-servicesolution.de/entruempelung.html): Wohnung, Keller, Dachboden, Garage oder Gewerbefläche: räumen, sortieren, fachgerecht entsorgen, besenrein übergeben.
-- [Haushaltsauflösung & Wohnungsauflösung](https://www.berger-servicesolution.de/haushaltsaufloesung.html): Diskrete Haushalts- und Wohnungsauflösung, z. B. nach Umzug ins Pflegeheim oder im Erbfall – bis zur besenreinen Übergabe.
-- [Rückbau, Demontage & Entkernung](https://www.berger-servicesolution.de/rueckbau-entkernung.html): Küchen, Einbauten, Bodenbeläge, nichttragende Wände und alte Installationen zurückbauen – sortenrein entsorgt, bereit für die Sanierung.
+- [Elektroinstallation](https://berger-servicesolution.de/elektroinstallation.html): Neue Elektroinstallation für Neubau, Anbau, Umbau und Erweiterung – geplant, normgerecht ausgeführt und dokumentiert.
+- [Elektrosanierung](https://berger-servicesolution.de/elektrosanierung.html): Alte Leitungen, fehlende FI-Schutzschalter, überlastete Stromkreise: Wir modernisieren bestehende Elektroanlagen schrittweise oder komplett.
+- [Elektroreparatur & Störungsbeseitigung](https://berger-servicesolution.de/elektro-reparatur-stoerung.html): Sicherung löst aus, Steckdose ohne Strom, Licht flackert: systematische Fehlersuche und Reparatur – Termin direkt online buchbar.
+- [Zählerschrank & Unterverteilung](https://berger-servicesolution.de/zaehlerschrank-unterverteilung.html): Neuer Zählerplatz nach den technischen Anschlussbedingungen, Unterverteilungen mit ausreichend Platz für Wallbox, PV und Wärmepumpe.
+- [DGUV-V3-Prüfung](https://berger-servicesolution.de/dguv-v3-pruefung.html): Prüfung ortsveränderlicher Betriebsmittel und ortsfester Anlagen mit Prüfprotokoll, Prüfplakette und automatischer Erinnerung an die nächste Prüfung.
+- [E-Check & Elektroprüfung nach DIN VDE](https://berger-servicesolution.de/e-check.html): Elektrische Sicherheitsprüfung für Wohnungen, Häuser und Gewerbe nach DIN VDE – mit Messprotokoll und verständlichem Mängelbericht.
+- [Wärmepumpenwartung](https://berger-servicesolution.de/waermepumpenwartung.html): Regelmäßige Wartung nach Herstellervorgaben: Elektrik, Außeneinheit, Filter, Kondensat, Betriebsdaten – mit Protokoll und Erinnerung.
+- [Klimaanlagenwartung](https://berger-servicesolution.de/klimaanlagenwartung.html): Reinigung, Hygiene und Funktionsprüfung von Split- und Multisplit-Klimageräten mit Wartungsprotokoll.
+- [Photovoltaik & Batteriespeicher](https://berger-servicesolution.de/photovoltaik-batteriespeicher.html): PV-Anlage und Stromspeicher: Planung, elektrischer Anschluss, Zählerplatz, Anmeldung beim Netzbetreiber – auch Nachrüstung von Speichern.
+- [Wallbox & Ladeinfrastruktur](https://berger-servicesolution.de/wallbox-ladeinfrastruktur.html): Wallbox für Garage, Carport oder Tiefgarage: Prüfung der Anlage, Installation, Anmeldung beim Netzbetreiber, Lastmanagement für mehrere Ladepunkte.
+- [Smart Home & Gebäudeautomation](https://berger-servicesolution.de/smart-home-gebaeudeautomation.html): Licht, Rollläden, Heizung und Energieflüsse intelligent steuern – kabelgebunden (z. B. KNX) oder funkbasiert, passend zum Gebäude.
+- [Beleuchtungstechnik](https://berger-servicesolution.de/beleuchtungstechnik.html): LED-Umrüstung, Beleuchtung für Wohnräume, Treppenhäuser, Büros und Außenanlagen – mit Präsenzmeldern und Lichtsteuerung.
+- [Netzwerk- & Datentechnik](https://berger-servicesolution.de/netzwerk-datentechnik.html): Strukturierte Verkabelung, Netzwerkdosen, Patchfelder, Netzwerkschränke und WLAN-Ausleuchtung für Wohnung, Haus und Büro.
+- [Sprechanlagen](https://berger-servicesolution.de/sprechanlagen.html): Neue oder modernisierte Sprech- und Videosprechanlagen für Ein- und Mehrfamilienhäuser, inklusive Türöffner und App-Anbindung.
+- [Komplettsanierung](https://berger-servicesolution.de/komplettsanierung.html): Gewerkeübergreifende Sanierung von Häusern und Wohnungen: ein Ansprechpartner, abgestimmte Gewerkefolge, dokumentierter Baufortschritt.
+- [Wohnungssanierung](https://berger-servicesolution.de/wohnungssanierung.html): Sanierung einzelner Wohnungen: Elektrik, Wände, Böden, Bad und Anstrich – planbar und mit Blick auf die schnelle Wiedervermietung.
+- [Badsanierung & Badmodernisierung](https://berger-servicesolution.de/badsanierung.html): Vom Rückbau bis zur Montage: Badsanierung mit Elektro, Trockenbau, Abdichtung und Fliesen – koordiniert aus einer Hand.
+- [Fliesen- & Plattenarbeiten](https://berger-servicesolution.de/fliesenarbeiten.html): Wand- und Bodenfliesen für Bad, Küche und Flur – mit Untergrundvorbereitung, Abdichtung und sauberer Verfugung.
+- [Maler- & Tapezierarbeiten](https://berger-servicesolution.de/maler-tapezierarbeiten.html): Streichen, tapezieren, spachteln: Wände und Decken in Wohnungen, Treppenhäusern und Gewerberäumen – sauber abgedeckt und termingerecht.
+- [Trockenbau & Innenausbau](https://berger-servicesolution.de/trockenbau-innenausbau.html): Ständerwände, abgehängte Decken, Vorsatzschalen, Dachgeschossausbau sowie Decken- und Wandgestaltung – inklusive Elektro aus einer Hand.
+- [Renovierung bei Mieterwechsel](https://berger-servicesolution.de/renovierung-mieterwechsel.html): Alles für die schnelle Wiedervermietung: Malerarbeiten, Böden, Elektroprüfung, Kleinreparaturen, Entrümpelung und Endreinigung in einem Ablauf.
+- [Bodenlegearbeiten](https://berger-servicesolution.de/bodenlegearbeiten.html): Vinyl, Designboden, Laminat, PVC, Teppich, Parkett – inklusive Entfernung alter Beläge, Untergrundvorbereitung, Ausgleich und Sockelleisten.
+- [Vinyl- & Designboden verlegen](https://berger-servicesolution.de/vinyl-designboden-verlegen.html): Klickvinyl oder vollflächig verklebter Designboden – mit ebenem Untergrund, sauberen Anschlüssen und passenden Sockelleisten.
+- [Laminat verlegen](https://berger-servicesolution.de/laminat-verlegen.html): Laminat mit passender Trittschalldämmung, sauberen Dehnungsfugen, gekürzten Türzargen und Sockelleisten.
+- [Teppichboden & PVC verlegen](https://berger-servicesolution.de/teppichboden-pvc-verlegen.html): Teppichboden für Wohn- und Büroräume, PVC für Mietwohnungen und Nebenräume – vollflächig verklebt oder verspannt.
+- [Parkettverlegung](https://berger-servicesolution.de/parkett-verlegen.html): Fertigparkett schwimmend oder verklebt – ausgeführt im Rahmen der handwerksrechtlichen Berechtigung bzw. über eingetragene Partnerbetriebe.
+- [Hausmeisterservice & technische Objektbetreuung](https://berger-servicesolution.de/hausmeisterservice.html): Regelmäßige Objektkontrollen, Kleinreparaturen, technische Betreuung und Mängelmeldungen mit Foto – mit digitalem Leistungsnachweis.
+- [Gebäudereinigung](https://berger-servicesolution.de/gebaeudereinigung.html): Unterhaltsreinigung für Büros, Praxen und Gewerbe, Grund- und Bauendreinigung – nach Leistungsverzeichnis und mit Nachweis.
+- [Treppenhausreinigung](https://berger-servicesolution.de/treppenhausreinigung.html): Regelmäßige Reinigung von Treppenhäusern, Fluren und Kellergängen – mit digitalem Nachweis statt Aushangzettel.
+- [Gartenpflege & Grünflächenpflege](https://berger-servicesolution.de/gartenpflege.html): Rasen, Hecken, Sträucher und Laub: saisonale Grünpflege für Wohnanlagen, Gewerbeflächen und Privatgärten.
+- [Winterdienst & Gehwegreinigung](https://berger-servicesolution.de/winterdienst.html): Schneeräumen und Streuen nach den Vorgaben der jeweiligen Ortssatzung – mit Einsatzprotokoll als Nachweis.
+- [Wohnungsübergaben & Mieterwechsel](https://berger-servicesolution.de/wohnungsuebergabe-mieterwechsel.html): Übergabeprotokoll mit Fotos, Zählerstände, Schlüssel – und direkte Koordination der Renovierungs- und Reinigungsarbeiten.
+- [Entrümpelung](https://berger-servicesolution.de/entruempelung.html): Wohnung, Keller, Dachboden, Garage oder Gewerbefläche: räumen, sortieren, fachgerecht entsorgen, besenrein übergeben.
+- [Haushaltsauflösung & Wohnungsauflösung](https://berger-servicesolution.de/haushaltsaufloesung.html): Diskrete Haushalts- und Wohnungsauflösung, z. B. nach Umzug ins Pflegeheim oder im Erbfall – bis zur besenreinen Übergabe.
+- [Rückbau, Demontage & Entkernung](https://berger-servicesolution.de/rueckbau-entkernung.html): Küchen, Einbauten, Bodenbeläge, nichttragende Wände und alte Installationen zurückbauen – sortenrein entsorgt, bereit für die Sanierung.
 
 ## Einsatzgebiet
-- [Übersicht aller Orte und Anfahrtszonen](https://www.berger-servicesolution.de/einsatzgebiet.html)
-- [Essen](https://www.berger-servicesolution.de/einsatzgebiet-essen.html)
-- [Mülheim an der Ruhr](https://www.berger-servicesolution.de/einsatzgebiet-muelheim-an-der-ruhr.html)
-- [Oberhausen](https://www.berger-servicesolution.de/einsatzgebiet-oberhausen.html)
-- [Gelsenkirchen](https://www.berger-servicesolution.de/einsatzgebiet-gelsenkirchen.html)
-- [Bottrop](https://www.berger-servicesolution.de/einsatzgebiet-bottrop.html)
-- [Duisburg](https://www.berger-servicesolution.de/einsatzgebiet-duisburg.html)
-- [Bochum](https://www.berger-servicesolution.de/einsatzgebiet-bochum.html)
-- [Gladbeck](https://www.berger-servicesolution.de/einsatzgebiet-gladbeck.html)
-- [Recklinghausen](https://www.berger-servicesolution.de/einsatzgebiet-recklinghausen.html)
-- [Herne](https://www.berger-servicesolution.de/einsatzgebiet-herne.html)
-- [Castrop-Rauxel](https://www.berger-servicesolution.de/einsatzgebiet-castrop-rauxel.html)
-- [Velbert](https://www.berger-servicesolution.de/einsatzgebiet-velbert.html)
-- [Hattingen](https://www.berger-servicesolution.de/einsatzgebiet-hattingen.html)
+- [Übersicht aller Orte und Anfahrtszonen](https://berger-servicesolution.de/einsatzgebiet.html)
+- [Essen](https://berger-servicesolution.de/einsatzgebiet-essen.html)
+- [Mülheim an der Ruhr](https://berger-servicesolution.de/einsatzgebiet-muelheim-an-der-ruhr.html)
+- [Oberhausen](https://berger-servicesolution.de/einsatzgebiet-oberhausen.html)
+- [Gelsenkirchen](https://berger-servicesolution.de/einsatzgebiet-gelsenkirchen.html)
+- [Bottrop](https://berger-servicesolution.de/einsatzgebiet-bottrop.html)
+- [Duisburg](https://berger-servicesolution.de/einsatzgebiet-duisburg.html)
+- [Bochum](https://berger-servicesolution.de/einsatzgebiet-bochum.html)
+- [Gladbeck](https://berger-servicesolution.de/einsatzgebiet-gladbeck.html)
+- [Recklinghausen](https://berger-servicesolution.de/einsatzgebiet-recklinghausen.html)
+- [Herne](https://berger-servicesolution.de/einsatzgebiet-herne.html)
+- [Castrop-Rauxel](https://berger-servicesolution.de/einsatzgebiet-castrop-rauxel.html)
+- [Velbert](https://berger-servicesolution.de/einsatzgebiet-velbert.html)
+- [Hattingen](https://berger-servicesolution.de/einsatzgebiet-hattingen.html)
 
 ## Service
-- [Online buchen oder anfragen](https://www.berger-servicesolution.de/buchen.html)
-- [Abläufe](https://www.berger-servicesolution.de/ablauf.html)
-- [Häufige Fragen](https://www.berger-servicesolution.de/faq.html)
-- [Kontakt](https://www.berger-servicesolution.de/kontakt.html)
+- [Online buchen oder anfragen](https://berger-servicesolution.de/buchen.html)
+- [Abläufe](https://berger-servicesolution.de/ablauf.html)
+- [Häufige Fragen](https://berger-servicesolution.de/faq.html)
+- [Kontakt](https://berger-servicesolution.de/kontakt.html)
