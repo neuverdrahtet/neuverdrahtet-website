@@ -46,6 +46,19 @@
 .hero .pill{ background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.16); color:#fff; }
 .hero .btn-outline{ border-color: rgba(255,255,255,0.35); color:#fff; }
 
+.hero-split-grid{ padding-bottom: 12px; }
+.hero-visual{ display:flex; align-items:flex-end; justify-content:center; }
+.hero-visual img{ width:100%; max-width:420px; height:auto; border-radius: var(--radius); display:block; box-shadow: 0 30px 60px -30px rgba(0,0,0,0.65); }
+@media (max-width:900px){ .hero-visual img{ max-width:320px; margin:0 auto; } }
+
+.hero-services{ display:grid; grid-template-columns:repeat(6,1fr); gap:16px; padding:24px 0 56px; border-top:1px solid rgba(255,255,255,0.1); }
+.hero-service{ display:flex; flex-direction:column; align-items:center; gap:10px; text-decoration:none; text-align:center; }
+.hero-service span:last-child{ font-size:12.5px; font-weight:600; color:rgba(255,255,255,0.85); line-height:1.3; }
+.hero-service .icon-badge{ width:48px; height:48px; border-radius:12px; background:rgba(255,255,255,0.08); color:var(--orange-2); display:flex; align-items:center; justify-content:center; transition:background 0.15s, transform 0.15s; }
+.hero-service:hover .icon-badge{ background:rgba(255,255,255,0.16); transform:translateY(-2px); }
+@media (max-width:860px){ .hero-services{ grid-template-columns:repeat(3,1fr); gap:20px 14px; } }
+@media (max-width:480px){ .hero-services{ grid-template-columns:repeat(2,1fr); } }
+
 /* Unterseiten-Hero (.page-hero) bekommt nur einen leichten, hellen
    Verlauf statt des dunklen Homepage-Bands — Spezifität sticht .hero. */
 .page-hero.hero{
@@ -159,9 +172,6 @@
 .premium-card ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 5px; }
 .premium-card li { font-size: 13.5px; color: var(--ink-soft); }
 .premium-card .more { margin-top: auto; font-size: 13px; font-weight: 600; color: var(--orange); padding-top: 6px; }
-
-.markenbanner { padding: 28px 0 0; }
-.markenbanner img { width: 100%; height: auto; display: block; border-radius: var(--radius); }
 
 .plz-check { margin-top: 26px; padding: 18px 20px; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); max-width: 440px; box-shadow: 0 20px 44px -24px rgba(0,0,0,0.5); }
 .plz-check p.plz-check-label { font-size: 13.5px; font-weight: 600; margin: 0 0 10px; color: var(--ink); }
