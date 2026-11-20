@@ -227,6 +227,7 @@ async function analysiereBeleg({ ausgabe, accessToken, projectId, env }) {
     ok: true,
     detected: {
       supplier: analyse.haendler || '',
+      invoice_number: analyse.rechnungsnummer || '',
       date: analyse.datum || '',
       amount_net: analyse.betragNetto ?? null,
       amount_gross: analyse.betragBrutto ?? null,
