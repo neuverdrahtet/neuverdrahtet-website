@@ -109,13 +109,13 @@ p { margin: 0 0 1em; }
 @media (min-width: 1080px) { .nav-liste > li > a, .mega-schalter { white-space: nowrap; } .nav-cta { white-space: nowrap; } }
 .whatsapp-schwebend { display: none; }
 @media (min-width: 900px) {
-  .whatsapp-schwebend { display: inline-flex; position: fixed; right: 22px; bottom: 22px; z-index: 55; align-items: center; gap: 10px; height: 58px; padding: 0 16px; border-radius: 999px; background: #25d366; color: #fff; text-decoration: none; font-weight: 750; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
+  .whatsapp-schwebend { display: inline-flex; position: fixed; right: 22px; bottom: 22px; z-index: 55; align-items: center; gap: 10px; height: 58px; padding: 0 16px; border-radius: 999px; background: #15803d; color: #fff; text-decoration: none; font-weight: 750; box-shadow: 0 8px 24px rgba(0,0,0,.18); }
   .whatsapp-schwebend .icon { width: 30px; height: 30px; }
   .whatsapp-schwebend span { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width .25s; }
-  .whatsapp-schwebend:hover, .whatsapp-schwebend:focus-visible { background: #1ebe5b; color: #fff; }
+  .whatsapp-schwebend:hover, .whatsapp-schwebend:focus-visible { background: #116b33; color: #fff; }
   .whatsapp-schwebend:hover span, .whatsapp-schwebend:focus-visible span { max-width: 220px; }
 }
-.mobil-leiste a.mobil-whatsapp { background: #25d366; color: #fff; }
+.mobil-leiste a.mobil-whatsapp { background: #15803d; color: #fff; }
 
 /* Brotkrumen */
 .brotkrumen ol { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; padding: 12px 0 0; margin: 0; font-size: .85rem; color: var(--text-leise); }

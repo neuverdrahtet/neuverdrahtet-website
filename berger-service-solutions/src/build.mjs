@@ -118,7 +118,7 @@ function startseite() {
   ];
   const inhalt = `
 <section class="held held-banner">
-  <img class="held-hintergrund" src="assets/img/held-haus-560.webp" srcset="assets/img/held-haus-560.webp 560w, assets/img/held-haus-982.webp 982w" sizes="(min-width: 960px) 60vw, 100vw" width="982" height="705" fetchpriority="high" decoding="async" alt="Haus im Querschnitt: Photovoltaik, Klimaanlage, Malerarbeiten, Bad, Elektroverteilung, Trockenbau, Wärmepumpenwartung und Gartenpflege – Arbeiten von BERGER SERVICE SOLUTIONS">
+  <img class="held-hintergrund" src="assets/img/held-haus-560.webp" srcset="assets/img/held-haus-560.webp 560w, assets/img/held-haus-780.webp 780w, assets/img/held-haus-982.webp 982w" sizes="(min-width: 960px) 60vw, 100vw" width="982" height="705" fetchpriority="high" decoding="async" alt="Haus im Querschnitt: Photovoltaik, Klimaanlage, Malerarbeiten, Bad, Elektroverteilung, Trockenbau, Wärmepumpenwartung und Gartenpflege – Arbeiten von BERGER SERVICE SOLUTIONS">
   <div class="huelle held-inhalt">
     <div class="held-textblock">
       <p class="dachzeile">${esc(CONFIG.firma.slogan)}</p>
@@ -129,7 +129,7 @@ function startseite() {
     </div>
   </div>
 </section>
-<section class="kachel-band" aria-label="Unsere Leistungen im Überblick"><div class="huelle"><a class="kachel-leiste" href="leistungen.html"><img src="assets/img/leistungs-kacheln-814.webp" srcset="assets/img/leistungs-kacheln-814.webp 814w, assets/img/leistungs-kacheln-1628.webp 1628w" sizes="(min-width: 1200px) 1168px, 814px" width="1628" height="200" loading="lazy" decoding="async" alt="Leistungen: Elektrotechnik, Prüfung und Wartung, Fliesen und Böden, Malerarbeiten, Sanitär und Bad, Trockenbau, Hausmeister, Gartenpflege, Glas- und Gebäudereinigung, Photovoltaik, Wallbox, Klimaanlagen"></a></div></section>
+<section class="kachel-band" aria-label="Unsere Leistungen im Überblick"><div class="huelle"><a class="kachel-leiste" href="leistungen.html"><img src="assets/img/leistungs-kacheln-814.webp" srcset="assets/img/leistungs-kacheln-814.webp 814w, assets/img/leistungs-kacheln-1440.webp 1440w, assets/img/leistungs-kacheln-1628.webp 1628w" sizes="(min-width: 1200px) 1168px, 814px" width="1628" height="200" loading="lazy" decoding="async" alt="Leistungen: Elektrotechnik, Prüfung und Wartung, Fliesen und Böden, Malerarbeiten, Sanitär und Bad, Trockenbau, Hausmeister, Gartenpflege, Glas- und Gebäudereinigung, Photovoltaik, Wallbox, Klimaanlagen"></a></div></section>
 <section class="eg-leiste" aria-label="Einsatzgebiet prüfen"><div class="huelle"><div class="held-karte eg-leiste-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div></section>
 <section class="abschnitt" aria-labelledby="bereiche-titel"><div class="huelle">
   <h2 id="bereiche-titel">Unsere vier Leistungsbereiche</h2>
