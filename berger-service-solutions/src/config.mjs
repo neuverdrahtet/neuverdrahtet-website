@@ -12,8 +12,8 @@ export const CONFIG = {
     kurzname: 'Berger Service Solutions',
     slogan: 'Handwerk. Service. Lösungen.',
     // OFFEN: Rechtsform/Inhaber für Impressum (z. B. Einzelunternehmen, Inhaber …)
-    inhaber: null,
-    rechtsform: null,
+    inhaber: 'Danny Berger',
+    rechtsform: 'Einzelunternehmen',
     ustId: 'DE456245279',
     // Steuernummer bewusst NICHT hier: gehört nicht ins Impressum (Missbrauchsrisiko).
     kammer: 'Handwerkskammer Düsseldorf, Georg-Schulhoff-Platz 1, 40221 Düsseldorf',
