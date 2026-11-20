@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, KALK_KATEGORIEN, USTSAETZE } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, compressImage, toast, toCsv, downloadTextFile, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountKundeProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountKundeProjektPicker, ermittleOderErstelleLieferant } from '../ui.js';
 import { openBelegImport, guessAusgabenKategorie } from '../belegimport.js';
 import { buildZipBlob } from '../zipwriter.js';
 import { downloadBlob } from '../docexport.js';
@@ -74,9 +74,10 @@ export async function render(container) {
   // beschränkt) - für büro/mitarbeiter würde ein Lesezugriff mit
   // PERMISSION_DENIED fehlschlagen, deshalb hier gar nicht erst anfragen.
   const istAdmin = getSession().role === 'admin';
-  let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen, belegVorschlaege] = await Promise.all([
+  let [ausgaben, settings, projekte, kunden, buchungen, rechnungen, mahnungen, belegVorschlaege, lieferanten] = await Promise.all([
     getAll('ausgaben'), getSettings(), getAll('projekte'), getAll('kunden'), getAll('buchungen'), getAll('rechnungen'), getAll('mahnungen'),
     istAdmin ? getAll('belegVorschlaege') : Promise.resolve([]),
+    getAll('lieferanten'),
   ]);
   let offeneVorschlaege = belegVorschlaege.filter((v) => v.status === 'offen');
   const projekteById = Object.fromEntries(projekte.map((p) => [p.id, p]));
@@ -289,7 +290,7 @@ export async function render(container) {
                   ${KATEGORIEN.map((k) => `<option value="${k}" ${k === a.kategorie ? 'selected' : ''}>${k}</option>`).join('')}
                 </select>
               </td>
-              <td>${a.mahnungErhaltenAm ? `<span class="badge badge-danger" title="Mahnung vom Lieferanten erhalten am ${formatDate(a.mahnungErhaltenAm)}">⚠️ Mahnung</span> ` : ''}${escapeHtml(a.beschreibung || '')}</td>
+              <td>${a.mahnungErhaltenAm ? `<span class="badge badge-danger" title="Mahnung vom Lieferanten erhalten am ${formatDate(a.mahnungErhaltenAm)}">⚠️ Mahnung</span> ` : ''}${a.lieferscheinErhaltenAm ? `<span class="badge" title="Lieferschein erhalten am ${formatDate(a.lieferscheinErhaltenAm)}">📦 Lieferschein</span> ` : ''}${escapeHtml(a.beschreibung || '')}</td>
               <td>${escapeHtml(kundenById[a.kundeId]?.firma || '')}</td>
               <td>${escapeHtml(projekteById[a.projektId]?.titel || '')}</td>
               <td class="text-right">${formatCurrency(a.betragBrutto)}</td>
@@ -870,10 +871,10 @@ export async function render(container) {
   function openForm(a, { prefill } = {}) {
     const isEdit = !!a;
     const data = a || {
-      id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '', rechnungsnummer: '',
+      id: uid(), datum: todayISO(), kategorie: KATEGORIEN[0], beschreibung: '', lieferant: '', lieferantId: '', rechnungsnummer: '',
       betragNetto: 0, steuersatz: settings.standardSteuersatz, betragBrutto: 0, bezahltMit: 'überweisung', beleg: null,
       projektId: '', kundeId: '', kalkKategorie: '',
-      bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false, mahnungErhaltenAm: '',
+      bezahlstatus: '', faelligAm: '', bezahltAm: '', istInvestition: false, mahnungErhaltenAm: '', lieferscheinErhaltenAm: '',
       ...prefill,
     };
     const istOffeneKreditorenRechnung = isEdit && data.bezahlstatus === 'offen';
@@ -1086,6 +1087,14 @@ export async function render(container) {
       updated.kategorie = fd.get('kategorie') || KATEGORIEN[0];
       updated.beschreibung = (fd.get('beschreibung') || '').toString().trim();
       updated.lieferant = (fd.get('lieferant') || '').toString().trim();
+      if (updated.lieferant !== data.lieferant) {
+        // Lieferant automatisch erstellen/verknüpfen, nur wenn sich der Name
+        // tatsächlich geändert hat - sonst bei jedem Speichern unnötig neu
+        // nachschlagen bzw. eine bewusst manuell gelöste Verknüpfung nicht
+        // versehentlich überschreiben.
+        const lieferant = updated.lieferant ? await ermittleOderErstelleLieferant(updated.lieferant, lieferanten) : null;
+        updated.lieferantId = lieferant?.id || '';
+      }
       updated.rechnungsnummer = (fd.get('rechnungsnummer') || '').toString().trim();
       updated.bezahltMit = fd.get('bezahltMit') || 'überweisung';
       const betragEingegeben = Number(fd.get('betrag')) || 0;

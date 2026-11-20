@@ -1,11 +1,11 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, formatCurrency, localDateStr, nextDailyNummer } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, mountKundeProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, mountKundeProjektPicker, ermittleOderErstelleLieferant } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
 import { KATEGORIEN as AUSGABEN_KATEGORIEN } from './ausgaben.js';
-import { findeAusgabeFuerMahnung } from '../mahnungAbgleich.js';
+import { findeAusgabeFuerMahnung, findeAusgabeFuerLieferschein } from '../mahnungAbgleich.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as push from '../push.js';
@@ -140,8 +140,8 @@ export async function render(container) {
   }
 
   async function renderMailbox() {
-    let [allEmails, kunden, projekte, angebote, termine] = await Promise.all([
-      getAll('emails'), getAll('kunden'), getAll('projekte'), getAll('angebote'), getAll('termine'),
+    let [allEmails, kunden, projekte, angebote, termine, lieferanten] = await Promise.all([
+      getAll('emails'), getAll('kunden'), getAll('projekte'), getAll('angebote'), getAll('termine'), getAll('lieferanten'),
     ]);
     allEmails.sort((a, b) => (b.dateSort || '').localeCompare(a.dateSort || ''));
     const kundenById = Object.fromEntries(kunden.map((k) => [k.id, k]));
@@ -541,6 +541,16 @@ export async function render(container) {
       });
     }
 
+    // Lieferant automatisch erstellen (20.11.2026, auf Dannys Wunsch): statt
+    // des freien Textfelds "lieferant" wird ein erkannter Händler jetzt mit
+    // einem echten Lieferanten-Datensatz verknüpft - vorhanden? verwenden,
+    // sonst mit nur dem Namen neu anlegen (lässt sich später in der
+    // Lieferanten-Verwaltung ergänzen, z.B. Ansprechpartner/Kontaktdaten).
+    async function ermittleLieferantId(haendler) {
+      const lieferant = await ermittleOderErstelleLieferant(haendler, lieferanten);
+      return lieferant?.id || '';
+    }
+
     async function uebernehmeAlsBeleg(message, attachment, { ausgabenCache } = {}) {
       const bytes = await google.getAttachmentData(message.id, attachment.attachmentId);
       const blob = bytesToBlob(bytes, attachment.mimeType);
@@ -550,7 +560,7 @@ export async function render(container) {
         lieferant: extractEmailAddress(message.from), betragNetto: 0, steuersatz: settings.standardSteuersatz || 19, betragBrutto: 0,
         bezahltMit: 'überweisung',
         beleg: FIREBASE_ENABLED ? await uploadBlobToStorage(`ausgaben/${belegId}`, blob) : blob,
-        projektId: '', kundeId: '', kalkKategorie: '', rechnungsnummer: '',
+        projektId: '', kundeId: '', kalkKategorie: '', rechnungsnummer: '', lieferantId: '',
       };
       const istXml = istXmlAnhang(attachment);
       if (istXml || attachment.mimeType.startsWith('image/') || attachment.mimeType === 'application/pdf') {
@@ -579,6 +589,7 @@ export async function render(container) {
               const treffer = findeAusgabeFuerMahnung({ haendler: result.haendler, rechnungsnummer: result.rechnungsnummer, betragBrutto: Number(result.betragBrutto) || 0 }, ausgaben);
               if (treffer) {
                 const aktualisiert = { ...treffer, mahnungErhaltenAm: todayISO() };
+                if (!aktualisiert.lieferantId) aktualisiert.lieferantId = await ermittleLieferantId(result.haendler);
                 await put('ausgaben', aktualisiert);
                 if (ausgabenCache) {
                   const idx = ausgabenCache.findIndex((x) => x.id === treffer.id);
@@ -593,8 +604,35 @@ export async function render(container) {
             }
             return { gespeichert: false, dokumenttyp: result.dokumenttyp };
           }
+          if (result.dokumenttyp === 'lieferschein') {
+            // Ein eingehender Lieferschein hat keinen eigenen Betrag und wird
+            // deshalb nie als neue Ausgabe gespeichert - nur verknüpft, wenn
+            // sich eindeutig eine passende, bereits erfasste Ausgabe
+            // (Eingangsrechnung desselben Lieferanten) finden lässt (Dannys
+            // Entscheidung vom 20.11.2026: lieber kein Treffer als ein
+            // falscher). Gleicher Fehler-Isolations-Grund wie bei Mahnungen.
+            try {
+              const ausgaben = ausgabenCache || await getAll('ausgaben');
+              const treffer = findeAusgabeFuerLieferschein({ haendler: result.haendler, rechnungsnummer: result.rechnungsnummer }, ausgaben);
+              if (treffer) {
+                const aktualisiert = { ...treffer, lieferscheinErhaltenAm: todayISO() };
+                if (!aktualisiert.lieferantId) aktualisiert.lieferantId = await ermittleLieferantId(result.haendler);
+                await put('ausgaben', aktualisiert);
+                if (ausgabenCache) {
+                  const idx = ausgabenCache.findIndex((x) => x.id === treffer.id);
+                  if (idx !== -1) ausgabenCache[idx] = aktualisiert;
+                }
+                toast(`Lieferschein erkannt und mit bestehender Ausgabe "${treffer.lieferant || treffer.beschreibung}" verknüpft.`, 'success');
+                return { gespeichert: false, dokumenttyp: result.dokumenttyp, verknuepftMitAusgabeId: treffer.id };
+              }
+              toast('Lieferschein erkannt, aber keine eindeutig passende Ausgabe gefunden – bitte in Ausgaben manuell prüfen/verknüpfen.', 'info');
+            } catch (lieferscheinErr) {
+              toast(`Lieferschein erkannt, Zuordnung fehlgeschlagen: ${lieferscheinErr.message}`, 'danger');
+            }
+            return { gespeichert: false, dokumenttyp: result.dokumenttyp };
+          }
           if (result.dokumenttyp && result.dokumenttyp !== 'eingangsrechnung') {
-            const label = { ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme)', mahnung: 'Mahnung', sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)' }[result.dokumenttyp] || result.dokumenttyp;
+            const label = { ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme)', mahnung: 'Mahnung', lieferschein: 'Lieferschein', sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)' }[result.dokumenttyp] || result.dokumenttyp;
             toast(`Anhang wurde NICHT als Ausgabe gespeichert – von der KI erkannt als: ${label}.`, 'info');
             return { gespeichert: false, dokumenttyp: result.dokumenttyp };
           }
@@ -602,11 +640,13 @@ export async function render(container) {
           const steuersatz = [0, 7, 19].includes(Number(result.steuersatz)) ? Number(result.steuersatz) : prefill.steuersatz;
           const datum = /^\d{4}-\d{2}-\d{2}$/.test(result.datum || '') ? result.datum : prefill.datum;
           const unsicher = !result.lesbar || !result.kategorieSicher;
+          const lieferantId = result.haendler ? await ermittleLieferantId(result.haendler) : '';
           prefill = {
             ...prefill,
             datum, kategorie, steuersatz,
             beschreibung: `${unsicher ? '⚠️ Bitte prüfen: ' : ''}${result.beschreibung || prefill.beschreibung}`.trim(),
             lieferant: result.haendler || prefill.lieferant,
+            lieferantId: lieferantId || prefill.lieferantId,
             rechnungsnummer: result.rechnungsnummer || '',
             betragNetto: Number(result.betragNetto) || 0,
             betragBrutto: calcBrutto(Number(result.betragNetto) || 0, steuersatz),
