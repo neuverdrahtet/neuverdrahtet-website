@@ -5,7 +5,7 @@ return [
   'absender' => 'info@berger-servicesolution.de',
   'kundenbestaetigung' => true,
   'firma' => 'BERGER SERVICE SOLUTIONS',
-  'telefon' => null,
+  'telefon' => '+49 201 89040405',
   'website' => 'https://berger-servicesolution.de',
   'erlaubteHosts' => ['berger-servicesolution.de'],
   'maxDateien' => 6,

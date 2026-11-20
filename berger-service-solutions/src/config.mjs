@@ -29,8 +29,8 @@ export const CONFIG = {
     ort: 'Essen',
     region: 'Nordrhein-Westfalen',
     land: 'DE',
-    telefon: null, // OFFEN, Format "+49 201 …"
-    whatsapp: null, // OFFEN, nur Ziffern inkl. Ländervorwahl, z. B. "49201…"
+    telefon: '+49 201 89040405',
+    whatsapp: '4920189040405',
     email: 'info@berger-servicesolution.de',
     oeffnungszeiten: [
       // Vorschlag, OFFEN zur Bestätigung

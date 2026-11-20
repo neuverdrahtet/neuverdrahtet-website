@@ -9,6 +9,11 @@ export const absUrl = (pfad) => `${CONFIG.website.url.replace(/\/$/, '')}/${pfad
 
 export const MARKE = 'Berger Service Solutions';
 
+const WA_TEXT = 'Hallo, ich habe eine Anfrage an BERGER SERVICE SOLUTIONS: ';
+export const telLink = () => (CONFIG.kontakt.telefon ? `tel:${CONFIG.kontakt.telefon.replace(/[^\d+]/g, '')}` : null);
+export const telAnzeige = () => (CONFIG.kontakt.telefon || '').replace(/^\+49\s?/, '0');
+export const waLink = () => (CONFIG.kontakt.whatsapp ? `https://wa.me/${CONFIG.kontakt.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(WA_TEXT)}` : null);
+
 export function seitenTitel(titel) {
   const mitMarke = `${titel} | ${MARKE}`;
   return mitMarke.length <= 70 ? mitMarke : titel;
@@ -33,7 +38,7 @@ const PFADE = {
   schliessen: '<path d="M6 6l12 12M18 6 6 18"/>',
   schild: '<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>',
   personen: '<circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15 20a5 5 0 0 1 6-4.8"/>',
-  whatsapp: '<path d="M4 20l1.3-4A8 8 0 1 1 8 18.7z"/><path d="M9 9c0 3 3 6 6 6l1-1.5-2-1-1 1c-1-.5-2-1.5-2.5-2.5l1-1-1-2z"/>',
+  whatsapp: '<path fill="currentColor" stroke="none" d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.2-1.36A9.9 9.9 0 1 0 12.04 2zm0 1.8a8.1 8.1 0 1 1-4.13 15.07l-.3-.18-3.08.8.82-3-.2-.31A8.1 8.1 0 0 1 12.04 3.8zm-3.3 4.2c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48s1.07 2.88 1.22 3.08c.15.2 2.08 3.18 5.04 4.46 2.46 1.06 2.96.85 3.5.8.53-.05 1.72-.7 1.96-1.38.24-.68.24-1.26.17-1.38-.07-.12-.27-.2-.56-.34-.3-.15-1.73-.85-2-.95-.27-.1-.46-.15-.66.15-.2.3-.76.95-.93 1.14-.17.2-.34.22-.64.07-.3-.15-1.24-.46-2.37-1.46-.87-.78-1.46-1.74-1.63-2.04-.17-.3-.02-.45.13-.6.13-.13.3-.34.44-.51.15-.17.2-.3.3-.49.1-.2.05-.37-.02-.52-.08-.15-.66-1.6-.9-2.18-.24-.57-.48-.5-.66-.5z"/>',
 };
 export const icon = (name, klasse = 'icon') =>
   `<svg class="${klasse}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PFADE[name] || ''}</svg>`;
@@ -51,6 +56,10 @@ export function navigation(leistungenNachBereich) {
     return `<div class="mega-spalte"><a class="mega-titel" href="${b.slug}.html">${icon(b.icon)}<span>${esc(b.name)}</span></a><ul>${items}</ul></div>`;
   }).join('');
   return `
+${CONFIG.kontakt.telefon || CONFIG.kontakt.email ? `<div class="info-leiste"><div class="huelle info-innen">
+  <span class="info-zeiten">${esc(CONFIG.kontakt.oeffnungszeiten.map((z) => `${z.tage[0]}–${z.tage[z.tage.length - 1]} ${z.von}–${z.bis} Uhr`).join(', '))} · Essen und 50 km Umkreis</span>
+  <span class="info-kontakt">${CONFIG.kontakt.telefon ? `<a href="${telLink()}">${icon('telefon')}${esc(telAnzeige())}</a>` : ''}${CONFIG.kontakt.whatsapp ? `<a href="${esc(waLink())}" target="_blank" rel="noopener">${icon('whatsapp')}WhatsApp</a>` : ''}${CONFIG.kontakt.email ? `<a href="mailto:${esc(CONFIG.kontakt.email)}">${icon('mail')}${esc(CONFIG.kontakt.email)}</a>` : ''}</span>
+</div></div>` : ''}
 <header class="kopf" id="kopf">
   <div class="huelle kopf-innen">
     <a class="logo" href="index.html" title="Zur Startseite">${LOGO}</a>
@@ -114,10 +123,11 @@ export function fuss(leistungenNachBereich, orteSeiten, ortName) {
   <div class="huelle fuss-unten"><p>© ${new Date().getFullYear()} ${esc(CONFIG.firma.name)} · Essen · Einsatzgebiet rund 50 km um Essen</p></div>
 </footer>
 <div class="mobil-leiste" role="navigation" aria-label="Schnellzugriff">
-  ${k.telefon ? `<a href="tel:${esc(k.telefon.replace(/\s/g, ''))}">${icon('telefon')}Anrufen</a>` : `<a href="kontakt.html">${icon('mail')}Kontakt</a>`}
-  ${k.whatsapp ? `<a href="https://wa.me/${esc(k.whatsapp)}" rel="noopener">${icon('whatsapp')}WhatsApp</a>` : ''}
+  ${k.telefon ? `<a href="${telLink()}">${icon('telefon')}Anrufen</a>` : `<a href="kontakt.html">${icon('mail')}Kontakt</a>`}
+  ${k.whatsapp ? `<a class="mobil-whatsapp" href="${esc(waLink())}" target="_blank" rel="noopener">${icon('whatsapp')}WhatsApp</a>` : ''}
   <a class="mobil-cta" href="buchen.html">${icon('kalender')}Online buchen</a>
-</div>`;
+</div>
+${k.whatsapp ? `<a class="whatsapp-schwebend" href="${esc(waLink())}" target="_blank" rel="noopener" aria-label="Per WhatsApp schreiben">${icon('whatsapp')}<span>Per WhatsApp schreiben</span></a>` : ''}`;
 }
 
 // ---------------------------------------------------------------------------
