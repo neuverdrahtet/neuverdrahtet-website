@@ -445,7 +445,12 @@ export default {
       const result = await chatMitClaude({ env, messages });
       return jsonResponse(result, 200, headers);
     } catch (err) {
-      return jsonResponse({ error: err.message || 'Unbekannter Fehler' }, 500, headers);
+      // Genaue Fehlerursache landet im Worker-Log (npx wrangler tail), nicht in
+      // der Antwort an den Website-Besucher - sonst sähe ein Kunde bei einem
+      // Anthropic-API-Ausfall die rohe Fehlermeldung im Chat-Widget (gleiches
+      // Muster wie bereits im WhatsApp-Assistenten).
+      console.error('ki-assistent Fehler:', err);
+      return jsonResponse({ error: 'Es ist ein technisches Problem aufgetreten. Bitte versuchen Sie es später erneut.' }, 500, headers);
     }
   },
 };
