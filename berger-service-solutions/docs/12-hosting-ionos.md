@@ -42,9 +42,23 @@ Falls die Website in einem **Unterordner** einer Domain liegt (z. B. `domain.de/
 4. Erst dann `website.indexierbar: true` setzen und `npm run paket:bss` erneut ausführen und hochladen. Bis dahin sperrt die Website Suchmaschinen (robots.txt, Meta-Tag und `X-Robots-Tag`-Header).
 5. Google Search Console und Bing Webmaster Tools einrichten (siehe 02).
 
+## Sonderfall: IONOS Managed WordPress
+
+Bei „Managed WordPress“ ist WordPress bereits installiert. Die statische Website wird einfach daneben in denselben Ordner gelegt:
+
+1. Die WordPress-Installation ist noch leer („Hello world!“), es geht also nichts verloren. Optional vorher im IONOS-Konto ein Backup anlegen.
+2. Im IONOS-Konto bei der WordPress-Website die **SFTP-Zugangsdaten** aufrufen.
+3. Mit FileZilla verbinden. Im Hauptordner liegen `wp-admin`, `wp-content`, `index.php`, `.htaccess` …
+4. Den Inhalt des ZIP-Pakets in diesen Hauptordner hochladen und die vorhandene `.htaccess` **überschreiben** (vorher eine Kopie auf den eigenen Rechner laden).
+5. Ergebnis: Die Domain zeigt die neue Website (`index.html` hat Vorrang). Die WordPress-Verwaltung bleibt unter `/wp-admin/` bzw. `/wp-login.php` erreichbar, wird aber nicht mehr gebraucht.
+6. Testen: Startseite, Menü, eine Unterseite, Online-Buchung, eine falsche Adresse (404-Seite).
+
+Wenn IONOS die `.htaccess` später wieder durch die WordPress-Version ersetzt, erneut hochladen.
+
 ## Online-Buchung auf IONOS
 
 Ohne Endpunkt läuft die Buchung im Demo-Modus und überträgt nichts. Zwei Wege:
 
-- **Schnell (📝):** kleines PHP-Skript im selben Webspace, das die Anfrage prüft und per E-Mail an das Büro schickt. IONOS-Webhosting unterstützt PHP. Dateien werden dabei als Anhang mitgeschickt oder im geschützten Ordner abgelegt.
+- **E-Mail (✅ implementiert und getestet, 🟡 auf IONOS noch nicht live geprüft):** `api/anfrage.php` prüft jede Anfrage serverseitig erneut (Pflichtfelder, Dateityp per Inhalt, Größe, Herkunft, Rate-Limit, Bot-Schutz, doppeltes Absenden) und sendet eine E-Mail ans Büro – mit Fotos und `lead.json` für den späteren Werkora-Import – sowie eine Eingangsbestätigung an den Kunden. Auf dem Webspace werden keine Anfragen gespeichert.
+  Aktivieren: in `src/config.mjs` unter `buchung.email` `empfaenger` (wohin) und `absender` (ein IONOS-Postfach Ihrer Domain) eintragen, `npm run paket:bss`, neu hochladen. Danach eine Testanfrage mit Foto senden und prüfen, ob beide E-Mails ankommen (auch Spam-Ordner).
 - **Zielbild (📝):** Übertragung direkt nach Werkora (siehe 05).

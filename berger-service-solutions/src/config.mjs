@@ -65,9 +65,16 @@ export const CONFIG = {
   },
 
   buchung: {
-    // OFFEN: Endpunkt für die Lead-Übertragung nach Werkora.
-    // null = Demo-Modus: Formular läuft vollständig durch, überträgt aber nichts.
+    // Ziel der Online-Buchung. null + E-Mail-Empfänger gesetzt = PHP-Skript
+    // api/anfrage.php (E-Mail-Versand, z. B. bei IONOS). Beides leer = Demo-Modus.
+    // Später: URL des Werkora-Lead-Endpunkts.
     endpunkt: null,
+    email: {
+      empfaenger: null, // OFFEN: Adresse, an die Anfragen gehen
+      absender: null, // OFFEN: Postfach der eigenen Domain (IONOS verlangt eigene Domain als Absender)
+      kundenbestaetigung: true,
+    },
+    maxGesamtMB: 20,
     vorlaufWerktage: 2,
     horizontTage: 28,
     slotZeiten: ['08:00', '10:30', '13:30'],
@@ -78,6 +85,12 @@ export const CONFIG = {
 };
 
 /** Liste aller offenen Konfigurationspunkte – wird im Test und im Build-Log ausgegeben. */
+/** Tatsächliches Ziel der Online-Buchung (null = Demo-Modus). */
+export function buchungsEndpunkt(cfg = CONFIG) {
+  if (cfg.buchung.endpunkt) return cfg.buchung.endpunkt;
+  return cfg.buchung.email.empfaenger && cfg.buchung.email.absender ? 'api/anfrage.php' : null;
+}
+
 export function offeneKonfigurationspunkte(cfg = CONFIG) {
   const offen = [];
   const pruefe = (wert, label) => { if (wert === null || wert === undefined || wert === '') offen.push(label); };
@@ -90,7 +103,10 @@ export function offeneKonfigurationspunkte(cfg = CONFIG) {
   pruefe(cfg.kontakt.telefon, 'Telefonnummer');
   pruefe(cfg.kontakt.whatsapp, 'WhatsApp-Business-Nummer');
   pruefe(cfg.kontakt.email, 'E-Mail-Adresse');
-  pruefe(cfg.buchung.endpunkt, 'Lead-Endpunkt (Werkora-Schnittstelle)');
+  if (!cfg.buchung.endpunkt) {
+    pruefe(cfg.buchung.email.empfaenger, 'E-Mail-Empfänger für Online-Anfragen');
+    pruefe(cfg.buchung.email.absender, 'E-Mail-Absender (Postfach der eigenen Domain)');
+  }
   if (!cfg.einsatzgebiet.preiseFreigegeben) offen.push('Anfahrtspauschalen je Zone (Preisfreigabe)');
   if (!cfg.website.indexierbar) offen.push('Go-live-Schalter website.indexierbar (derzeit noindex)');
   return offen;

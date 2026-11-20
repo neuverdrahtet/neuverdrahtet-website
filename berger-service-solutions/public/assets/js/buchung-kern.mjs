@@ -76,6 +76,8 @@ export function pruefeDateien(dateien, konfig = {}) {
   const maxMB = konfig.maxDateiMB ?? 10;
   const typen = konfig.erlaubteDateitypen ?? ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'application/pdf'];
   if (dateien.length > max) return `Bitte höchstens ${max} Dateien auswählen.`;
+  const gesamtMB = konfig.maxGesamtMB ?? 20;
+  if (dateien.reduce((s, d) => s + d.size, 0) > gesamtMB * 1024 * 1024) return `Die Dateien sind zusammen größer als ${gesamtMB} MB.`;
   for (const d of dateien) {
     const typOk = typen.includes(d.type) || (/\.heic$/i.test(d.name) && typen.includes('image/heic'));
     if (!typOk) return `„${d.name}“ hat ein nicht unterstütztes Format.`;

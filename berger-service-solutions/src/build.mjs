@@ -5,7 +5,8 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CONFIG, offeneKonfigurationspunkte } from './config.mjs';
+import { readFileSync, copyFileSync } from 'node:fs';
+import { CONFIG, offeneKonfigurationspunkte, buchungsEndpunkt } from './config.mjs';
 import { BEREICHE, PROZESSE } from './daten/bereiche.mjs';
 import { LEISTUNGEN_ELEKTRO } from './daten/leistungen-elektro.mjs';
 import { LEISTUNGEN_HANDWERK, LEISTUNGEN_BODEN } from './daten/leistungen-handwerk.mjs';
@@ -347,7 +348,7 @@ function buchungsseite() {
     orte: ORTE.map((o) => ({ slug: o.slug, name: o.name })),
     einsatzgebiet: optEG,
     preiseFreigegeben: CONFIG.einsatzgebiet.preiseFreigegeben,
-    buchung: CONFIG.buchung,
+    buchung: { ...CONFIG.buchung, email: undefined, endpunkt: buchungsEndpunkt() },
   };
   const krumen = [['Online buchen', 'buchen.html']];
   const inhalt = `
@@ -400,7 +401,7 @@ function buchungsseite() {
       <div class="feld"><label for="f-zeitfenster">Bevorzugtes Zeitfenster</label><select id="f-zeitfenster" name="zeitfenster"><option value="egal">egal</option><option value="vormittag">vormittags</option><option value="nachmittag">nachmittags</option></select></div></div>
       <p class="feld-fehler" data-fehler="wunschtermin"></p>
     </div>
-    <div class="feld"><label for="f-dateien">Fotos und Dokumente (optional)</label><input id="f-dateien" name="dateien" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"><p class="feld-hilfe">Bis zu ${CONFIG.buchung.maxDateien} Dateien, je max. ${CONFIG.buchung.maxDateiMB} MB (JPG, PNG, WEBP, HEIC, PDF).</p><ul class="datei-liste" data-datei-liste></ul><p class="feld-fehler" data-fehler="dateien"></p></div>
+    <div class="feld"><label for="f-dateien">Fotos und Dokumente (optional)</label><input id="f-dateien" name="dateien" type="file" multiple accept="image/jpeg,image/png,image/webp,image/heic,application/pdf"><p class="feld-hilfe">Bis zu ${CONFIG.buchung.maxDateien} Dateien, je max. ${CONFIG.buchung.maxDateiMB} MB, zusammen max. ${CONFIG.buchung.maxGesamtMB} MB (JPG, PNG, WEBP, HEIC, PDF).</p><ul class="datei-liste" data-datei-liste></ul><p class="feld-fehler" data-fehler="dateien"></p></div>
   </fieldset>
 
   <fieldset class="schritt" data-schritt="4" hidden>
@@ -536,6 +537,7 @@ function datenschutz() {
 <h2>2. Hosting und Server-Logfiles</h2><p>Beim Aufruf der Website verarbeitet der Hosting-Anbieter technisch notwendige Daten (IP-Adresse, Zeitpunkt, aufgerufene Seite, Browserinformationen) zur Auslieferung und Absicherung der Website. Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO. <span class="platzhalter">[Anbieter, Speicherdauer, ggf. Auftragsverarbeitungsvertrag ergänzen]</span></p>
 <h2>3. Keine Tracking-Cookies</h2><p>Diese Website setzt derzeit keine Analyse- oder Marketing-Cookies und bindet keine externen Schriftarten, Karten oder Videos ein. Sollte künftig eine Reichweitenmessung eingesetzt werden, erfolgt dies nur nach Ihrer Einwilligung bzw. cookielos und datensparsam; diese Hinweise werden dann ergänzt.</p>
 <h2>4. Online-Buchung und Anfragen</h2><p>Wenn Sie das Buchungsformular nutzen, verarbeiten wir Name, Einsatzadresse, ggf. Rechnungsadresse, Telefonnummer, E-Mail-Adresse, Leistungswunsch, Beschreibung, Wunschtermin sowie hochgeladene Fotos und Dokumente. Zweck ist die Bearbeitung Ihrer Anfrage, die Terminplanung und ggf. die Durchführung des Auftrags. Rechtsgrundlage ist Art. 6 Abs. 1 lit. b DSGVO (vorvertragliche Maßnahmen bzw. Vertragserfüllung).</p>
+<p>Ihre Anfrage wird verschlüsselt an unseren Webserver übertragen und von dort per E-Mail an uns weitergeleitet; Sie erhalten eine Eingangsbestätigung per E-Mail. Auf dem Webserver selbst werden keine Anfragen gespeichert. Zum Schutz vor Missbrauch wird Ihre IP-Adresse für höchstens 10 Minuten in gekürzter, gehashter Form verarbeitet.</p>
 <p>Die Prüfung, ob Ihre Adresse im Einsatzgebiet liegt, erfolgt ausschließlich lokal in Ihrem Browser. Ihre Adresse wird dafür nicht an Kartendienste übermittelt.</p>
 <p>Zur Vermeidung doppelter Kundendatensätze werden E-Mail-Adresse, Telefonnummer und Adresse in normalisierter, gehashter Form mit bestehenden Datensätzen abgeglichen (Art. 6 Abs. 1 lit. f DSGVO, berechtigtes Interesse an einer korrekten Kundendatenhaltung).</p>
 <h2>5. Betriebssoftware (Werkora)</h2><p>Anfragen werden in unserer cloudbasierten Betriebssoftware gespeichert, in der Kundenakten, Aufträge, Termine und Dokumentationen geführt werden. <span class="platzhalter">[Serverstandort, Anbieter, Auftragsverarbeitung ergänzen]</span></p>
@@ -559,10 +561,37 @@ function technischeDateien() {
   const heute = new Date().toISOString().slice(0, 10);
   const indexierbare = seiten.filter((s) => !s.noindex);
   writeFileSync(path.join(PUBLIC, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${indexierbare.map((s) => `  <url><loc>${absUrl(s.pfad)}</loc><lastmod>${heute}</lastmod><priority>${s.prioritaet.toFixed(1)}</priority></url>`).join('\n')}\n</urlset>\n`);
+  // PHP-Empfang der Online-Buchung (E-Mail-Versand) für klassisches Webhosting.
+  mkdirSync(path.join(PUBLIC, 'api'), { recursive: true });
+  copyFileSync(path.join(WURZEL, 'src', 'php', 'anfrage.php'), path.join(PUBLIC, 'api', 'anfrage.php'));
+  const phpWert = (v) => (v === null || v === undefined ? 'null' : typeof v === 'boolean' || typeof v === 'number' ? String(v) : `'${String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`);
+  const phpKatalog = LEISTUNGEN.map((l) => `    ${phpWert(l.slug)} => ['name' => ${phpWert(l.name)}, 'buchung' => ${phpWert(l.buchung)}, 'bereich' => ${phpWert(l.bereich)}],`).join('\n');
+  writeFileSync(path.join(PUBLIC, 'api', 'einstellungen.php'), `<?php
+// Erzeugt von src/build.mjs aus src/config.mjs – nicht von Hand ändern.
+return [
+  'empfaenger' => ${phpWert(CONFIG.buchung.email.empfaenger)},
+  'absender' => ${phpWert(CONFIG.buchung.email.absender)},
+  'kundenbestaetigung' => ${phpWert(CONFIG.buchung.email.kundenbestaetigung)},
+  'firma' => ${phpWert(CONFIG.firma.name)},
+  'telefon' => ${phpWert(CONFIG.kontakt.telefon)},
+  'website' => ${phpWert(CONFIG.website.url)},
+  'erlaubteHosts' => [${phpWert(new URL(CONFIG.website.url).host)}],
+  'maxDateien' => ${CONFIG.buchung.maxDateien},
+  'maxDateiMB' => ${CONFIG.buchung.maxDateiMB},
+  'maxGesamtMB' => ${CONFIG.buchung.maxGesamtMB},
+  'ratenLimit' => 5,
+  'ratenFensterSek' => 600,
+  'leistungen' => [
+${phpKatalog}
+  ],
+];
+`);
+  writeFileSync(path.join(PUBLIC, 'api', '.htaccess'), '<Files "einstellungen.php">\n  Require all denied\n</Files>\n');
+
   // Apache-Konfiguration für klassisches Webhosting (z. B. IONOS). Wichtig: .mjs als
   // JavaScript ausliefern, sonst laden die Buchungs-Skripte im Browser nicht.
   writeFileSync(path.join(PUBLIC, '.htaccess'), `# BERGER SERVICE SOLUTIONS – erzeugt von src/build.mjs
-DirectoryIndex index.html
+DirectoryIndex index.html index.php
 ErrorDocument 404 /404.html
 
 AddType text/javascript .js .mjs

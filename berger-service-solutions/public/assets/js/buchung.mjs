@@ -252,10 +252,19 @@ form.addEventListener('submit', async (e) => {
     } else {
       const body = new FormData();
       body.append('lead', new Blob([JSON.stringify(lead)], { type: 'application/json' }));
-      dateien().forEach((f) => body.append('dateien', f, f.name));
+      dateien().forEach((f) => body.append('dateien[]', f, f.name));
       const res = await fetch(katalog.buchung.endpunkt, { method: 'POST', body, headers: { 'Idempotency-Key': idempotenzSchluessel } });
-      if (!res.ok) throw new Error(`Status ${res.status}`);
-      const antwort = await res.json();
+      const antwort = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const f = antwort.fehler || {};
+        if (res.status === 400 && Object.keys(f).some((k) => k !== 'allgemein')) {
+          for (let n = 1; n <= MAX; n++) {
+            if ($(`[data-schritt="${n}"]`).querySelector(Object.keys(f).filter((k) => k !== 'allgemein').map((k) => `[data-fehler="${k}"]`).join(','))) { geheZu(n); break; }
+          }
+          fehlerZeigen(f);
+        }
+        throw Object.assign(new Error(`Status ${res.status}`), { meldung: f.allgemein });
+      }
       vorgangsnummer = antwort.vorgangsnummer;
     }
     try { sessionStorage.setItem('bss-letzte-anfrage', JSON.stringify({ fingerabdruck, vorgangsnummer, demo })); } catch { /* ignorieren */ }
@@ -263,7 +272,7 @@ form.addEventListener('submit', async (e) => {
     bestaetigungZeigen(vorgangsnummer, demo, l);
   } catch (err) {
     console.error(err);
-    meldung('Die Anfrage konnte nicht gesendet werden. Bitte versuchen Sie es erneut – Ihre Eingaben bleiben erhalten.');
+    meldung(err.meldung || 'Die Anfrage konnte nicht gesendet werden. Bitte prüfen Sie die markierten Angaben oder versuchen Sie es erneut – Ihre Eingaben bleiben erhalten.');
     sendetGerade = false; knopf.disabled = false; knopf.textContent = l.buchung === 'direkt' ? 'Termin verbindlich anfragen' : 'Anfrage absenden';
   }
 });

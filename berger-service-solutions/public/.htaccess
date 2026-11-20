@@ -1,5 +1,5 @@
 # BERGER SERVICE SOLUTIONS – erzeugt von src/build.mjs
-DirectoryIndex index.html
+DirectoryIndex index.html index.php
 ErrorDocument 404 /404.html
 
 AddType text/javascript .js .mjs
