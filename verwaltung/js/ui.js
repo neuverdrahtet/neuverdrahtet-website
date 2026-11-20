@@ -1,6 +1,7 @@
 import { el, escapeHtml, debounce, uid, toast, farbeAusText, nextDailyNummer } from './utils.js';
 import { searchAddress } from './geocode.js';
 import { put, getAll, getSettings, setSettings } from './db.js';
+import { findeLieferantFuerHaendler } from './mahnungAbgleich.js';
 
 // Seitliches Ausblenden (Mask-Gradient) für horizontal scrollbare Container
 // (Tabellen, Positionstabellen, Plantafel-Gantt, Tag-Kalender, Kanban) - macht
@@ -551,6 +552,31 @@ export function openLieferantSchnellanlage({ onCreated } = {}) {
     close();
     if (onCreated) onCreated(neuerLieferant);
   });
+}
+
+/**
+ * Nicht-interaktives Gegenstück zu openLieferantSchnellanlage() oben: sucht
+ * per findeLieferantFuerHaendler() einen bereits angelegten Lieferanten mit
+ * passendem Namen, oder legt - ohne Formular/Rückfrage - einen neuen mit nur
+ * dem Namen an (20.11.2026, auf Dannys Wunsch: "automatisch die Lieferanten
+ * erstellen"). Gedacht für automatisierte Abläufe (E-Mail-Import, KI-Beleg-
+ * Erkennung), bei denen kein Nutzer zum Ausfüllen eines Formulars da ist.
+ * `lieferanten` wird vom Aufrufer gehalten und bei Neuanlage per `.push()`
+ * ergänzt, analog zu mountKundePicker/mountProjektPicker oben.
+ */
+export async function ermittleOderErstelleLieferant(haendler, lieferanten) {
+  if (!haendler) return null;
+  const bestehender = findeLieferantFuerHaendler(haendler, lieferanten);
+  if (bestehender) return bestehender;
+  const neuerLieferant = {
+    id: uid(), firma: haendler, ansprechpartner: '', telefon: '', email: '',
+    strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '', notizen: '',
+    idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
+    farbe: farbeAusText(haendler, LIEFERANT_SCHNELL_FARBEN),
+  };
+  await put('lieferanten', neuerLieferant);
+  lieferanten.push(neuerLieferant);
+  return neuerLieferant;
 }
 
 // Gemeinsamer Kunde/Projekt-Picker mit Schnellanlage (20.11.2026) - fasst das

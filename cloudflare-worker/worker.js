@@ -647,7 +647,7 @@ async function callClaudeAngebotImport({ apiKey, model, fileDataUrl, standardSte
 const BELEG_SCHEMA = {
   type: 'object',
   properties: {
-    dokumenttyp: { type: 'string', enum: ['eingangsrechnung', 'ausgangsrechnung', 'mahnung', 'sonstiges'] },
+    dokumenttyp: { type: 'string', enum: ['eingangsrechnung', 'ausgangsrechnung', 'mahnung', 'lieferschein', 'sonstiges'] },
     haendler: { type: 'string' },
     rechnungsnummer: { type: 'string' },
     mahnungRichtung: { type: 'string', enum: ['empfangen', 'gesendet', 'unklar'] },
@@ -672,13 +672,14 @@ WICHTIG - nicht jedes hochgeladene Dokument ist tatsächlich eine Eingangsrechnu
 - "eingangsrechnung": eine Rechnung/ein Kassenbon/Beleg, den der Betrieb selbst als Käufer/Kunde von einem Lieferanten/Dienstleister erhalten hat (ein echter eigener Einkauf/Kosten). NUR in diesem Fall sind Betrag/Kategorie für die Ausgaben-Erfassung wirklich gemeint.
 - "ausgangsrechnung": eine vom Betrieb SELBST an einen eigenen Kunden gestellte Rechnung (z.B. eine Kopie/ein Anhang der eigenen Rechnung, erkennbar am eigenen Firmennamen als Rechnungssteller/Absender) - das ist eine EINNAHME, kein Einkauf, gehört NICHT in die Ausgaben.
 - "mahnung": eine Zahlungserinnerung/Mahnung (egal ob der Betrieb selbst gemahnt wird, weil er eine Rechnung nicht bezahlt hat, oder eine Kopie einer eigenen Mahnung an einen Kunden) - das ist selbst KEIN neuer Einkauf/keine neue Ausgabe, sondern bezieht sich auf eine bereits an anderer Stelle erfasste Rechnung. Bestimme zusätzlich "mahnungRichtung".
-- "sonstiges": alles andere, das keinen Bezug zur Buchhaltung hat oder keine abrechenbare Ausgabe darstellt - z.B. AGB, Verträge, Datenblätter, Werbung, allgemeine Korrespondenz, Lieferscheine ohne Preisangabe, Angebote (noch keine Rechnung).
+- "lieferschein": ein eingehender Lieferschein eines Lieferanten zu einer Warenlieferung (meist ohne Preisangabe, mit Mengen/Artikeln) - KEIN eigener Einkauf mit Betrag, bezieht sich aber auf eine bereits an anderer Stelle erfasste oder noch folgende Eingangsrechnung desselben Lieferanten.
+- "sonstiges": alles andere, das keinen Bezug zur Buchhaltung hat oder keine abrechenbare Ausgabe darstellt - z.B. AGB, Verträge, Datenblätter, Werbung, allgemeine Korrespondenz, Angebote (noch keine Rechnung).
 Sei bei "eingangsrechnung" nicht übervorsichtig (ein normaler Kassenbon/eine normale Lieferantenrechnung ist der Normalfall), aber wähle "ausgangsrechnung"/"mahnung"/"sonstiges" bewusst, wenn das Dokument eindeutig danach aussieht - lieber einmal zu vorsichtig einsortieren als eine AGB oder die eigene Ausgangsrechnung als Ausgabe verbuchen.
 
 Regeln für die übrigen Felder (bei "dokumenttyp" ungleich "eingangsrechnung" nur so gut wie möglich ausfüllen, wird von der aufrufenden Software ohnehin nicht als Ausgabe übernommen):
 - Antworte ausschließlich auf Deutsch.
-- "haendler": bei "eingangsrechnung" der Name des Lieferanten/Geschäfts (z.B. "Hornbach", "Esso"); bei "mahnung" der Name des Ausstellers der Mahnung (bei "mahnungRichtung"="empfangen" also der Lieferant, von dem die Mahnung kommt - NICHT der eigene Betrieb); bei anderen Typen der erkennbare Absender/Aussteller des Dokuments.
-- "rechnungsnummer": die auf dem Dokument genannte Rechnungs-/Belegnummer (bei "eingangsrechnung" die Nummer dieser Rechnung, bei "mahnung" die Nummer der Rechnung, auf die sich die Mahnung bezieht). Leer lassen, wenn keine Nummer erkennbar ist.
+- "haendler": bei "eingangsrechnung" der Name des Lieferanten/Geschäfts (z.B. "Hornbach", "Esso"); bei "mahnung" der Name des Ausstellers der Mahnung (bei "mahnungRichtung"="empfangen" also der Lieferant, von dem die Mahnung kommt - NICHT der eigene Betrieb); bei "lieferschein" der Name des liefernden Lieferanten; bei anderen Typen der erkennbare Absender/Aussteller des Dokuments.
+- "rechnungsnummer": die auf dem Dokument genannte Rechnungs-/Belegnummer (bei "eingangsrechnung" die Nummer dieser Rechnung, bei "mahnung" die Nummer der Rechnung, auf die sich die Mahnung bezieht, bei "lieferschein" die genannte Bestell-/Auftrags-/Rechnungsnummer, falls vorhanden - NICHT die reine Lieferschein-Nummer selbst, falls beides unterscheidbar ist). Leer lassen, wenn keine Nummer erkennbar ist.
 - "mahnungRichtung": NUR bei "dokumenttyp"="mahnung" relevant (sonst "unklar"): "empfangen", wenn der Betrieb selbst der Empfänger/Adressat der Mahnung ist (ein Lieferant/Dienstleister mahnt den Betrieb, weil eine eigene Eingangsrechnung noch nicht bezahlt wurde); "gesendet", wenn es sich um eine Kopie einer vom Betrieb selbst erstellten/versendeten Mahnung an einen eigenen Kunden handelt (z.B. erkennbar am eigenen Firmennamen/Logo als Aussteller); "unklar", wenn sich das nicht sicher bestimmen lässt.
 - "datum": Belegdatum im Format JJJJ-MM-TT. Wenn nicht lesbar, leer lassen.
 - "betragBrutto": Gesamtbetrag (inkl. USt.) als Zahl, ohne Währungssymbol.
@@ -834,7 +835,7 @@ const EMAIL_KLASSIFIZIERUNG_SCHEMA = {
 function buildEmailKlassifizierungPrompt(heute) {
   return `Du sortierst E-Mails eines deutschen Elektro-Handwerksbetriebs (neuverdrahtet) nach Art. Für jede E-Mail in der Liste (id, Betreff, Absender, kurzer Textauszug) wählst du GENAU eine Kategorie:
 - "kundenanfrage": Anfragen, Rückfragen oder sonstige Kommunikation mit (potenziellen) Kunden zu Aufträgen, Terminen oder Angeboten - auch eigene gesendete Antworten darauf.
-- "rechnung-lieferant": Rechnungen, Bestellbestätigungen oder Belege von Lieferanten, Dienstleistern oder Software-Abos.
+- "rechnung-lieferant": Rechnungen, Mahnungen, Lieferscheine, Bestellbestätigungen oder Belege von Lieferanten, Dienstleistern oder Software-Abos.
 - "werbung": Newsletter, Marketing-/Werbe-Mails, Produktangebote, Social-Media- oder Blog-Benachrichtigungen.
 - "sonstiges": alles andere, z.B. interne Mails, Kalendererinnerungen, Systembenachrichtigungen oder unklare Fälle.
 

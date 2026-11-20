@@ -51,3 +51,39 @@ export function findeAusgabeFuerMahnung({ haendler, rechnungsnummer, betragBrutt
   }
   return kandidaten.length === 1 ? kandidaten[0] : null;
 }
+
+/**
+ * Findet einen bereits angelegten Lieferanten-Datensatz per Namensvergleich
+ * (gleiche Normalisierung wie oben), oder null, wenn keiner passt - der
+ * Aufrufer legt in diesem Fall einen neuen Lieferanten an (20.11.2026, auf
+ * Dannys Wunsch: "automatisch die Lieferanten erstellen").
+ */
+export function findeLieferantFuerHaendler(haendler, lieferanten) {
+  const haendlerNorm = normLieferant(haendler);
+  if (!haendlerNorm) return null;
+  return lieferanten.find((l) => l.firma && normLieferant(l.firma) === haendlerNorm) || null;
+}
+
+/**
+ * Ordnet einen per KI erkannten, EINGEHENDEN Lieferschein (ohne eigenen
+ * Betrag) der passenden, bereits erfassten Ausgabe zu - per Kaskade
+ * Lieferant -> Rechnungsnummer (20.11.2026, auf Dannys Wunsch). Ohne Betrag
+ * als Unterscheidungsmerkmal ist das strenger als bei Mahnungen: ohne
+ * Rechnungsnummer wird nur zugeordnet, wenn der Lieferant eindeutig genau
+ * eine offene/erfasste Ausgabe hat - sonst lieber keine automatische
+ * Zuordnung als eine falsche.
+ */
+export function findeAusgabeFuerLieferschein({ haendler, rechnungsnummer }, ausgaben) {
+  const haendlerNorm = normLieferant(haendler);
+  if (!haendlerNorm) return null;
+  let kandidaten = ausgaben.filter((a) => a.lieferant && normLieferant(a.lieferant) === haendlerNorm);
+  if (kandidaten.length === 0) return null;
+  if (kandidaten.length === 1) return kandidaten[0];
+
+  if (rechnungsnummer) {
+    const nummerNorm = rechnungsnummer.trim().toLowerCase();
+    const perNummer = kandidaten.filter((a) => (a.rechnungsnummer || '').trim().toLowerCase() === nummerNorm);
+    if (perNummer.length === 1) return perNummer[0];
+  }
+  return null;
+}
