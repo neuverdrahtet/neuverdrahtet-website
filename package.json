@@ -14,7 +14,7 @@
     "test:bss": "node berger-service-solutions/tests/logik.test.mjs && node berger-service-solutions/tests/site-qualitaet.test.mjs",
     "test:bss-browser": "node berger-service-solutions/tests/browser/buchung-e2e.test.mjs",
     "start:bss": "node berger-service-solutions/tests/hilfen/server.mjs",
-    "paket:bss": "node berger-service-solutions/src/build.mjs && mkdir -p berger-service-solutions/dist && rm -f berger-service-solutions/dist/berger-service-solutions-website.zip && cd berger-service-solutions/public && zip -qr ../dist/berger-service-solutions-website.zip . -x '*.DS_Store'"
+    "paket:bss": "node berger-service-solutions/src/paket.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
