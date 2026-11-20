@@ -126,9 +126,13 @@ function startseite() {
       <div class="knopf-gruppe"><a class="knopf knopf-akzent knopf-gross" href="buchen.html">${icon('kalender')}Termin online buchen</a><a class="knopf knopf-hell knopf-gross" href="buchen.html?art=anfrage">${icon('dokument')}Projekt anfragen</a></div>
       <ul class="held-punkte"><li>${icon('haken')}Prüf- und Wartungstermine direkt buchbar</li><li>${icon('haken')}Schriftliche Angebote nach Besichtigung</li><li>${icon('haken')}Digitale Dokumentation jedes Einsatzes</li></ul>
     </div>
-    <div class="held-seite"><picture><source media="(min-width: 960px)" srcset="assets/img/logo-dunkel.webp"><img class="held-logo" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" width="900" height="330" alt=""></picture><div class="held-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div>
+    <div class="held-seite"><div class="held-karte">${einsatzgebietPruefer()}<p class="klein">Die Prüfung läuft vollständig in Ihrem Browser. Es werden keine Daten übertragen.</p></div></div>
   </div>
 </section>
+<section class="abschnitt banner-abschnitt" aria-labelledby="banner-titel"><div class="huelle">
+  <h2 id="banner-titel" class="nur-sr">Alle Leistungen aus einer Hand</h2>
+  <a class="leistungsbanner" href="leistungen.html"><img src="assets/img/banner-leistungen-900.webp" srcset="assets/img/banner-leistungen-900.webp 900w, assets/img/banner-leistungen-1672.webp 1672w" sizes="(min-width: 1200px) 1168px, calc(100vw - 32px)" width="1672" height="941" loading="lazy" decoding="async" alt="Haus im Querschnitt mit den Leistungen von BERGER SERVICE SOLUTIONS: Elektrotechnik, Prüfung und Wartung, Fliesen und Böden, Malerarbeiten, Sanitär und Bad, Trockenbau, Hausmeisterservice, Gartenpflege, Glas- und Gebäudereinigung, Photovoltaik, Wallbox und Klimaanlagen"></a>
+</div></section>
 <section class="abschnitt" aria-labelledby="bereiche-titel"><div class="huelle">
   <h2 id="bereiche-titel">Unsere vier Leistungsbereiche</h2>
   <p class="unterzeile">Von der Elektroprüfung bis zur besenreinen Übergabe – abgestimmt und aus einer Hand.</p>

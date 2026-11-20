@@ -305,6 +305,12 @@ input:focus, select:focus, textarea:focus { border-color: var(--marke-3); outlin
 .bestaetigung .icon-gross { color: var(--ok); width: 3rem; height: 3rem; }
 .vorgang { font-family: ui-monospace, 'IBM Plex Mono', monospace; background: var(--hell); padding: 2px 8px; border-radius: 6px; }
 
+/* Leistungsbanner Startseite */
+.banner-abschnitt { padding-bottom: 0; }
+.leistungsbanner { display: block; border-radius: var(--radius); overflow: hidden; box-shadow: 0 16px 40px rgba(2,11,30,.25); border: 1px solid rgba(30,200,245,.35); }
+.leistungsbanner img { display: block; width: 100%; height: auto; }
+.leistungsbanner:hover { box-shadow: 0 18px 46px rgba(2,11,30,.35); }
+
 /* Projektfotos */
 .galerie { display: grid; gap: 14px; grid-template-columns: 1fr; }
 @media (min-width: 640px) { .galerie { grid-template-columns: repeat(2, 1fr); } }
