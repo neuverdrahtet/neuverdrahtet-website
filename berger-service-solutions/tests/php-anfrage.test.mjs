@@ -44,7 +44,7 @@ schreibeEinstellungen();
 const port = await new Promise((r) => { const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => r(p)); }); });
 const server = spawn('php', ['-d', `sendmail_path=${sendmail}`, '-d', 'upload_max_filesize=20M', '-d', 'post_max_size=40M', '-S', `127.0.0.1:${port}`, '-t', PUBLIC], { env: { ...process.env, BSS_EINSTELLUNGEN: einstellungen }, stdio: 'ignore' });
 const URL_ = `http://127.0.0.1:${port}/api/anfrage.php`;
-for (let i = 0; i < 50; i++) { try { await fetch(URL_); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
+for (let i = 0; i < 50; i++) { try { await (await fetch(URL_)).arrayBuffer(); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
 
 const mails = () => readdirSync(POST).sort().map((f) => readFileSync(path.join(POST, f), 'utf8'));
 const leeren = () => { for (const f of readdirSync(POST)) rmSync(path.join(POST, f)); };

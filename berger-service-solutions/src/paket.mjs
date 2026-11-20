@@ -32,7 +32,7 @@ export function paketieren() {
   cpSync(PUBLIC, site, { recursive: true });
   rmSync(path.join(site, '.htaccess'));
   // Direktaufruf unter /wp-content/bss-website/... nicht indexieren (Doppelinhalt)
-  writeFileSync(path.join(site, '.htaccess'), '<IfModule mod_headers.c>\n  <FilesMatch "\\.html$">\n    Header always set X-Robots-Tag "noindex, nofollow"\n  </FilesMatch>\n</IfModule>\nAddType text/javascript .mjs\nAddType image/webp .webp\nAddType font/woff2 .woff2\nOptions -Indexes\n');
+  writeFileSync(path.join(site, '.htaccess'), '<IfModule mod_headers.c>\n  <FilesMatch "\\.html$">\n    Header always set X-Robots-Tag "noindex, nofollow"\n  </FilesMatch>\n  <FilesMatch "\\.(webp|png|jpg|ico|woff2)$">\n    Header set Cache-Control "public, max-age=31536000"\n  </FilesMatch>\n  <FilesMatch "\\.(css|js|mjs)$">\n    Header set Cache-Control "public, max-age=604800"\n  </FilesMatch>\n</IfModule>\nAddType text/javascript .mjs\nAddType image/webp .webp\nAddType font/woff2 .woff2\nOptions -Indexes\n');
   // Bilder, CSS und Skripte direkt aus wp-content laden: Der Webserver liefert sie
   // dann selbst aus, auch wenn der Hoster statische Dateien nie an WordPress weiterreicht.
   for (const f of readdirSync(site).filter((n) => n.endsWith('.html'))) {

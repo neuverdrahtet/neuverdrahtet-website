@@ -20,7 +20,7 @@ const html = Object.fromEntries(dateien.map((f) => [f, readFileSync(path.join(PU
 const erstes = (s, re) => (s.match(re) || [])[1];
 const titel = (s) => erstes(s, /<title>([^<]*)<\/title>/)?.replace(/&amp;/g, '&');
 const beschreibung = (s) => erstes(s, /<meta name="description" content="([^"]*)"/);
-const text = (s) => s.replace(/<script[\s\S]*?<\/script>/g, ' ').replace(/<header[\s\S]*?<\/header>/, ' ').replace(/<footer[\s\S]*?<\/footer>/, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
+const text = (s) => s.replace(/<(script|style)[\s\S]*?<\/(script|style)>/g, ' ').replace(/<header[\s\S]*?<\/header>/, ' ').replace(/<footer[\s\S]*?<\/footer>/, ' ').replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
 const indexierbar = dateien.filter((f) => !['impressum.html', 'datenschutz.html', 'agb.html', 'widerruf.html', '404.html'].includes(f));
 
 console.log(`Seiten: ${dateien.length}`);

@@ -44,7 +44,7 @@ header('Content-Type: text/plain'); echo 'WORDPRESS';
 const port = await new Promise((r) => { const s = net.createServer().listen(0, () => { const p = s.address().port; s.close(() => r(p)); }); });
 const server = spawn('php', ['-d', `sendmail_path=${sendmail}`, '-S', `127.0.0.1:${port}`, '-t', path.join(tmp, 'docroot'), router], { env: { ...process.env, BSS_EINSTELLUNGEN: einstellungen }, stdio: 'ignore' });
 const B = `http://127.0.0.1:${port}`;
-for (let i = 0; i < 50; i++) { try { await fetch(B); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
+for (let i = 0; i < 50; i++) { try { await (await fetch(B)).arrayBuffer(); break; } catch { await new Promise((r) => setTimeout(r, 100)); } }
 const holen = async (p, opt) => { const r = await fetch(B + p, opt); return { s: r.status, t: r.headers.get('content-type') || '', h: r.headers, body: await r.text() }; };
 
 try {
@@ -54,7 +54,8 @@ try {
   });
   await test('Seiten verweisen für Bilder/CSS/Skripte direkt auf wp-content, alle Ziele existieren', async () => {
     const html = (await holen('/')).body;
-    assert.match(html, /href="\/wp-content\/bss-website\/assets\/css\/style\.css"/);
+    assert.match(html, /url\(\/wp-content\/bss-website\/assets\/fonts\/inter-var\.woff2\)/);
+    assert.match(html, /src="\/wp-content\/bss-website\/assets\/img\/logo-hell\.webp"/);
     assert.doesNotMatch(html, /(["\s,])assets\//);
     const { existsSync } = await import('node:fs');
     for (const m of html.matchAll(/(?:src|href)="\/wp-content\/bss-website\/([^"?#]+)"/g)) assert.ok(existsSync(path.join(wpVerzeichnis, 'bss-website', m[1])), m[1]);

@@ -177,6 +177,26 @@ try {
     }
   });
 
+  await test('Kopfzeile, Info-Leiste und Kontakt-Buttons: kein Umbruch, keine Überlappung, Logo nicht gestaucht (360–1920 px)', async () => {
+    for (const w of [360, 390, 768, 900, 1024, 1080, 1180, 1366, 1920]) {
+      const page = await neueSeite({ viewport: { width: w, height: 800 } });
+      await page.goto(`${basis}/index.html`);
+      const r = await page.evaluate(() => {
+        const logo = document.querySelector('.logo-bild').getBoundingClientRect();
+        const els = [...document.querySelectorAll('.kopf .logo, .nav-liste > li, .nav-cta, .nav-schalter')].filter((e) => e.offsetParent);
+        let ueber = 0;
+        for (let i = 0; i < els.length; i++) for (let j = i + 1; j < els.length; j++) { const a = els[i].getBoundingClientRect(), c = els[j].getBoundingClientRect(); if (a.right > c.left + 1 && c.right > a.left + 1 && a.bottom > c.top + 1 && c.bottom > a.top + 1) ueber++; }
+        const umbruch = [...document.querySelectorAll('.nav-liste > li > a, .mega-schalter, .nav-cta, .mobil-leiste a, .info-kontakt a')].filter((e) => e.offsetParent && e.getClientRects().length > 1).length;
+        const info = document.querySelector('.info-leiste');
+        return { verhaeltnis: logo.width / logo.height, ueber, umbruch, infoH: info && info.offsetParent !== null ? info.offsetHeight : 0, sw: document.documentElement.scrollWidth };
+      });
+      assert.ok(Math.abs(r.verhaeltnis - 520 / 163) < 0.1, `${w}px: Logo gestaucht (${r.verhaeltnis.toFixed(2)})`);
+      assert.equal(r.ueber, 0, `${w}px: Überlappung`); assert.equal(r.umbruch, 0, `${w}px: Umbruch`);
+      assert.ok(r.infoH === 0 || r.infoH <= 40, `${w}px: Info-Leiste zweizeilig`); assert.equal(r.sw, w, `${w}px: seitliches Scrollen`);
+      await page.close();
+    }
+  });
+
   await test('keine JavaScript-Fehler auf allen besuchten Seiten', async () => { assert.deepEqual(jsFehler, []); });
 } finally {
   await browser.close();

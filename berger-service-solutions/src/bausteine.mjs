@@ -1,5 +1,16 @@
 // HTML-Bausteine: Layout, Kopf, Navigation, Fußzeile, Icons, strukturierte Daten.
+import { readFileSync } from 'node:fs';
 import { CONFIG } from './config.mjs';
+
+// Stylesheet direkt in jede Seite einbetten (keine render-blockierende Zusatzanfrage).
+const CSS_INLINE = readFileSync(new URL('../public/assets/css/style.css', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/url\('\.\.\/fonts\/([^']+)'\)/g, 'url(assets/fonts/$1)')
+  .replace(/\s+/g, ' ')
+  .replace(/\s*([{}:;,>])\s*/g, '$1')
+  .replace(/;}/g, '}')
+  .replace(/@media\(/g, '@media (').replace(/\)and\(/g, ') and (')
+  .trim();
 import { BEREICHE } from './daten/bereiche.mjs';
 
 export const esc = (s) => String(s ?? '')
@@ -44,7 +55,7 @@ export const icon = (name, klasse = 'icon') =>
   `<svg class="${klasse}" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PFADE[name] || ''}</svg>`;
 
 // Firmenlogo (Originale in marke/, web-optimiert in public/assets/img/)
-const LOGO = '<img class="logo-bild" src="assets/img/logo-hell.webp" width="520" height="163" alt="BERGER SERVICE SOLUTIONS – Handwerk. Service. Lösungen.">';
+const LOGO = '<img class="logo-bild" src="assets/img/logo-hell.webp" srcset="assets/img/logo-hell-300.webp 300w, assets/img/logo-hell.webp 520w" sizes="(min-width: 1080px) 179px, 147px" width="520" height="163" alt="BERGER SERVICE SOLUTIONS – Handwerk. Service. Lösungen.">';
 
 // ---------------------------------------------------------------------------
 // Navigation
@@ -203,9 +214,8 @@ export function layout({ pfad, titel, beschreibung, inhalt, krumen = [], jsonld 
 <link rel="icon" href="assets/img/favicon.ico" sizes="any">
 <link rel="icon" href="assets/img/favicon-48.png" type="image/png">
 <link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
-<link rel="preload" href="assets/img/logo-hell.webp" as="image">
 <link rel="preload" href="assets/fonts/inter-var.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="assets/css/style.css">
+<style>${CSS_INLINE}</style>
 <script type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>
 </head>
 <body>

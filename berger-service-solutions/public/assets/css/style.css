@@ -55,6 +55,14 @@ p { margin: 0 0 1em; }
 @media (min-width: 1080px) { .kopf-innen { min-height: 76px; } .kopf { border-bottom: 3px solid var(--akzent); } }
 .logo { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--marke); }
 .logo-bild { display: block; height: 46px; width: auto; }
+.logo { flex: none; }
+@media (min-width: 1080px) and (max-width: 1279px) {
+  .hauptnav { gap: 12px !important; }
+  .nav-liste { gap: 0 !important; }
+  .nav-liste > li > a, .mega-schalter { padding: 10px 8px !important; font-size: .93rem !important; }
+  .logo-bild { height: 50px !important; }
+  .nav-cta { padding: .5em .9em !important; }
+}
 @media (min-width: 1080px) { .logo-bild { height: 56px; } }
 .nav-schalter { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; border: 1px solid var(--linie); background: var(--weiss); border-radius: 12px; color: var(--marke); cursor: pointer; }
 .nav-schalter .icon { width: 26px; height: 26px; }

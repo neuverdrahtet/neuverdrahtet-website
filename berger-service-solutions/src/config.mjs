@@ -24,8 +24,8 @@ export const CONFIG = {
   kontakt: {
     // OFFEN: Geschäftsadresse. Ohne Straße wird nur "Essen" ausgegeben und
     // die Adresse NICHT in strukturierte Daten geschrieben.
-    strasse: null,
-    plz: null,
+    strasse: 'Krayer Straße 245',
+    plz: '45307',
     ort: 'Essen',
     region: 'Nordrhein-Westfalen',
     land: 'DE',
