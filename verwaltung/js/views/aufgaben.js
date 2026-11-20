@@ -1,6 +1,6 @@
 import { getAll, put, remove } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, textColorForBg } from '../utils.js';
-import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountKundeProjektPicker } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
@@ -207,12 +207,10 @@ export async function render(container) {
       `,
     });
     body.querySelector('#btn-cancel').addEventListener('click', close);
-    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
-      kunden, kundenById, selectedId: data.kundeId,
-    });
-    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
-      projekte, kundenById, selectedId: data.projektId,
-      getKundeId: () => kundePicker.getValue(),
+    const { kundePicker, projektPicker } = mountKundeProjektPicker({
+      kundeHost: body.querySelector('#f-kunde-host'), projektHost: body.querySelector('#f-projekt-host'),
+      kunden, projekte, kundenById,
+      kundeSelectedId: data.kundeId, projektSelectedId: data.projektId,
     });
     if (!isEdit) {
       body.querySelector('#btn-ki-sprache').addEventListener('click', () => {

@@ -1,6 +1,6 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
 import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, localDateStr, nextDailyNummer } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { openModal, confirmDelete, mountChipPicker, mountKundeProjektPicker } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
 import { analyzeBeleg } from '../ai.js';
@@ -445,19 +445,18 @@ export async function render(container) {
       // Manuelle Verknüpfung mit einem bestehenden Kunden/Projekt/Angebot -
       // unabhängig vom automatischen Adressabgleich (verknuepfeEmailsMitKundenUndProjekten)
       // und von den Schnellaktions-Buttons oben, die stattdessen NEUE Datensätze anlegen.
-      const linkKundePicker = mountKundePicker(detailHost.querySelector('#pf-link-kunde-host'), {
-        kunden, kundenById, placeholder: '– kein Kunde verknüpft –', selectedId: full.kundeId || '',
-        onChange: async (kundeId) => {
+      mountKundeProjektPicker({
+        kundeHost: detailHost.querySelector('#pf-link-kunde-host'), projektHost: detailHost.querySelector('#pf-link-projekt-host'),
+        kunden, projekte, kundenById,
+        kundeSelectedId: full.kundeId || '', projektSelectedId: full.projektId || '',
+        kundePlaceholder: '– kein Kunde verknüpft –', projektPlaceholder: '– kein Projekt verknüpft –',
+        onKundeChange: async (kundeId) => {
           full.kundeId = kundeId || '';
           await put('emails', full);
           const idx = allEmails.findIndex((m) => m.id === full.id);
           if (idx !== -1) allEmails[idx] = full;
         },
-      });
-      mountProjektPicker(detailHost.querySelector('#pf-link-projekt-host'), {
-        projekte, kundenById, title: 'Projekt/Auftrag wählen', placeholder: '– kein Projekt verknüpft –', selectedId: full.projektId || '',
-        getKundeId: () => linkKundePicker.getValue(),
-        onChange: async (projektId) => {
+        onProjektChange: async (projektId) => {
           full.projektId = projektId || '';
           await put('emails', full);
           const idx = allEmails.findIndex((m) => m.id === full.id);

@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TERMIN_TYPEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, toast, navigationUrl, nimmPlantafelVorbelegung, localDateStr, textColorForBg } from '../utils.js';
-import { confirmDelete, attachAddressSearch, mountKundePicker, mountProjektPicker } from '../ui.js';
+import { confirmDelete, attachAddressSearch, mountKundeProjektPicker } from '../ui.js';
 import * as google from '../google.js';
 import { syncCalendar, deleteSyncedEvent } from '../googlesync.js';
 import { suggestSlot } from '../terminvorschlag.js';
@@ -878,14 +878,12 @@ export async function render(container, route, { autoSync = true } = {}) {
         </label>
       `).join('') || '<span class="text-mute">Keine Mitarbeiter verfügbar.</span>';
     }
-    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
-      kunden, kundenById, selectedId: data.kundeId,
-    });
-    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
-      projekte, kundenById, selectedId: data.projektId,
-      getKundeId: () => kundePicker.getValue(),
-      onCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
-      onChange: () => {
+    const { kundePicker, projektPicker } = mountKundeProjektPicker({
+      kundeHost: body.querySelector('#f-kunde-host'), projektHost: body.querySelector('#f-projekt-host'),
+      kunden, projekte, kundenById,
+      kundeSelectedId: data.kundeId, projektSelectedId: data.projektId,
+      onProjektCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
+      onProjektChange: () => {
         const checkedIds = Array.from(body.querySelectorAll('input[name="mitarbeiterIds"]:checked')).map((cb) => cb.value);
         updateProjektBereichHint(checkedIds);
       },
