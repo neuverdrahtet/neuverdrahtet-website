@@ -112,7 +112,7 @@ export const LEISTUNGEN_HANDWERK = [
     zielgruppen: ['Eigentümer', 'Vermieter', 'Gewerbe'],
     kostenfaktoren: ['Fläche und Format', 'Untergrundzustand', 'Schnittaufwand'],
     hinweis: HINWEIS_GEWERKE,
-    intern: 'Fliesen-, Platten- und Mosaikleger: zulassungspflichtig (Anlage A HwO seit 14.02.2020). Eintragung prüfen oder Partnerbetrieb.',
+    intern: 'Fliesen-, Platten- und Mosaikleger: zulassungspflichtig (Anlage A HwO) – laut Inhaber in der Handwerksrolle eingetragen (HWK Düsseldorf).',
     faq: [
       ['Können Fliesen auf Fliesen verlegt werden?', 'In manchen Fällen ja, wenn der alte Belag fest und tragfähig ist und die Aufbauhöhe passt. Das beurteilen wir vor Ort.'],
       ['Erneuern Sie auch nur Silikonfugen?', 'Ja, als Teil von Renovierungs- oder Objektservice-Aufträgen.'],
@@ -248,7 +248,7 @@ export const LEISTUNGEN_BODEN = [
     zielgruppen: ['Eigentümer und Selbstnutzer', 'Vermieter und Hausverwaltungen', 'Büros, Praxen und Ladenlokale'],
     kostenfaktoren: ['Fläche und Raumzuschnitt', 'Art und Qualität des Belags', 'Aufwand für Entfernung alter Beläge', 'Zustand des Untergrunds (Spachtel- und Ausgleichsarbeiten)', 'Sockelleisten, Profile, Treppen'],
     hinweis: HINWEIS_BODEN,
-    intern: 'Bodenleger: zulassungsfreies Handwerk (Anlage B1 HwO), Eintragung im Verzeichnis der zulassungsfreien Handwerke erforderlich. Parkettleger und Raumausstatter: zulassungspflichtig seit 14.02.2020. Mit HWK Düsseldorf abklären.',
+    intern: 'Bodenleger: laut Inhaber eingetragen (HWK Düsseldorf). Parkettleger und Raumausstatter: zulassungspflichtig, nicht eingetragen – nur über Partnerbetrieb.',
     faq: [
       ['Kann neuer Boden auf den alten Belag verlegt werden?', 'Manchmal ja, etwa Klickvinyl auf festem, ebenem Fliesenboden. Teppich, lose oder weiche Beläge müssen in der Regel entfernt werden. Wir prüfen den Untergrund vor Ort.'],
       ['Wie lange muss ein neuer Estrich trocknen, bevor Boden verlegt wird?', 'Das hängt von Estrichart, Dicke und Klima ab. Vor der Verlegung messen wir die Restfeuchte; erst wenn die zulässigen Werte erreicht sind, wird verlegt.'],

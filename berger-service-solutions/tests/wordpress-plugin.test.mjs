@@ -78,8 +78,9 @@ try {
       const r = await holen(p); assert.equal(r.s, 404, p); assert.doesNotMatch(r.body, /root:|<\?php|empfaenger/, p);
     }
   });
-  await test('Suchmaschinen-Sperre per Header solange noindex, Caching mit 304', async () => {
-    const r = await holen('/'); assert.match(r.h.get('x-robots-tag') || '', /noindex/);
+  await test('Suchmaschinen-Header passend zum Go-live-Schalter, Caching mit 304', async () => {
+    const r = await holen('/'); const { CONFIG } = await import('../src/config.mjs');
+    if (CONFIG.website.indexierbar) assert.equal(r.h.get('x-robots-tag'), null); else assert.match(r.h.get('x-robots-tag') || '', /noindex/);
     const lm = r.h.get('last-modified'); const c = await holen('/', { headers: { 'If-Modified-Since': lm } }); assert.equal(c.s, 304);
   });
   await test('Online-Buchung über das Plugin: E-Mail mit Anhang wird versendet', async () => {

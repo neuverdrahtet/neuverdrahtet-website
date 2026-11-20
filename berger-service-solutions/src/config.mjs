@@ -17,8 +17,8 @@ export const CONFIG = {
     ustId: 'DE456245279',
     // Steuernummer bewusst NICHT hier: gehört nicht ins Impressum (Missbrauchsrisiko).
     kammer: 'Handwerkskammer Düsseldorf, Georg-Schulhoff-Platz 1, 40221 Düsseldorf',
-    // OFFEN: eingetragene Handwerke/Berufsbezeichnung laut Handwerkskarte, z. B. 'Elektrotechniker-Handwerk (Meister)'
-    handwerksrolle: null,
+    // Eingetragene Handwerke laut Handwerkskarte (Handwerkskammer Düsseldorf)
+    handwerksrolle: 'Elektrotechniker-Handwerk; Fliesen-, Platten- und Mosaikleger; Bodenleger; Holz- und Bautenschutz; Mess- und Prüftechnik',
   },
 
   kontakt: {
@@ -45,7 +45,7 @@ export const CONFIG = {
     // Solange false: jede Seite trägt "noindex", robots.txt sperrt Crawler.
     // Erst auf true setzen, wenn Impressum, Datenschutz und Kontaktdaten
     // vollständig und geprüft sind (siehe docs/11-umsetzungsplan-qualitaetssicherung.md).
-    indexierbar: false,
+    indexierbar: true,
     // Gelbes Hinweisband „Prototyp“ oben auf jeder Seite (unabhängig von der Google-Sperre).
     prototypHinweis: false,
   },
