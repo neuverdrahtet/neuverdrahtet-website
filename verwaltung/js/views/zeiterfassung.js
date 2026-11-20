@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, TAETIGKEITEN, BEREICHE } from '../db.js';
 import { uid, escapeHtml, formatDate, getCurrentMitarbeiterId, setCurrentMitarbeiterId, toast, compressImage, toCsv, downloadTextFile } from '../utils.js';
-import { openModal, confirmDelete, openProjektSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountProjektPicker } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
@@ -199,11 +199,6 @@ export async function render(container, route) {
   // tatsächlich existierenden Projekt zugeordnet werden, statt mangels
   // Auswahl auf dem ersten Projekt der Liste zu landen (ohne leere Option
   // gab es vorher keinen "nichts ausgewählt"-Zustand für das <select>).
-  function projektOptionsHtml(selectedId, kundeFilterId) {
-    const liste = kundeFilterId ? projekte.filter((p) => p.kundeId === kundeFilterId) : projekte;
-    if (liste.length === 0) return `<option value="">– keine Projekte für diesen Kunden –</option>`;
-    return `<option value="">– wählen –</option>${liste.map((p) => `<option value="${p.id}" ${p.id === selectedId ? 'selected' : ''}>${escapeHtml(p.titel)}</option>`).join('')}`;
-  }
   function kundeProjektFieldsHtml(prefix, { kundeId = '', projektId = '', projektRequired = false } = {}) {
     return `
       <div class="field"><label>Kunde</label>
@@ -213,30 +208,28 @@ export async function render(container, route) {
         </select>
       </div>
       <div class="field"><label>Projekt${projektRequired ? ' *' : ' (optional)'}</label>
-        <div class="flex-row" style="gap:6px">
-          <select name="projektId" id="${prefix}-projekt" ${projektRequired ? 'required' : ''} style="flex:1">${projektOptionsHtml(projektId, kundeId)}</select>
-          <button type="button" class="btn btn-sm" id="${prefix}-projekt-neu" title="Neues Projekt anlegen">+ Neu</button>
-        </div>
+        <div id="${prefix}-projekt-host"></div>
       </div>
     `;
   }
-  function wireKundeProjektFields(body, prefix) {
+  function wireKundeProjektFields(body, prefix, { projektId = '' } = {}) {
     const kundeSelect = body.querySelector(`#${prefix}-kunde`);
-    const projektSelect = body.querySelector(`#${prefix}-projekt`);
+    const projektPicker = mountProjektPicker(body.querySelector(`#${prefix}-projekt-host`), {
+      placeholder: '– wählen –',
+      projekte,
+      items: kundeSelect.value ? projekte.filter((p) => p.kundeId === kundeSelect.value) : projekte,
+      kundenById, selectedId: projektId,
+      getKundeId: () => kundeSelect.value,
+      onCreated: (neuesProjekt) => {
+        projekteById[neuesProjekt.id] = neuesProjekt;
+        if (neuesProjekt.kundeId && neuesProjekt.kundeId !== kundeSelect.value) kundeSelect.value = neuesProjekt.kundeId;
+      },
+    });
     kundeSelect.addEventListener('change', () => {
-      projektSelect.innerHTML = projektOptionsHtml('', kundeSelect.value);
+      projektPicker.setItems(kundeSelect.value ? projekte.filter((p) => p.kundeId === kundeSelect.value) : projekte);
+      projektPicker.setValue('');
     });
-    body.querySelector(`#${prefix}-projekt-neu`).addEventListener('click', () => {
-      openProjektSchnellanlage({
-        kundeId: kundeSelect.value,
-        onCreated: (neuesProjekt) => {
-          projekte.push(neuesProjekt);
-          projekteById[neuesProjekt.id] = neuesProjekt;
-          if (neuesProjekt.kundeId && neuesProjekt.kundeId !== kundeSelect.value) kundeSelect.value = neuesProjekt.kundeId;
-          projektSelect.innerHTML = projektOptionsHtml(neuesProjekt.id, kundeSelect.value);
-        },
-      });
-    });
+    return projektPicker;
   }
   let filtered = eintraege;
   const bulk = createBulkSelect('zeiterfassung', { label: 'Einträge' });
@@ -459,9 +452,9 @@ export async function render(container, route) {
         </div>
         <button class="btn btn-primary" id="btn-start" style="margin-top:10px;font-size:16px;padding:14px 22px">▶️ Zeit starten</button>
       `;
-      wireKundeProjektFields(timerCard, 'timer');
+      const timerProjektPicker = wireKundeProjektFields(timerCard, 'timer');
       timerCard.querySelector('#btn-start').addEventListener('click', () => {
-        const projektId = timerCard.querySelector('#timer-projekt').value;
+        const projektId = timerProjektPicker.getValue();
         if (!projektId) { toast('Bitte ein Projekt wählen', 'danger'); return; }
         const mitarbeiterId = timerCard.querySelector('#timer-mitarbeiter').value;
         const taetigkeit = timerCard.querySelector('#timer-taetigkeit').value;
@@ -730,7 +723,7 @@ export async function render(container, route) {
       `,
     });
 
-    wireKundeProjektFields(body, 'tb');
+    wireKundeProjektFields(body, 'tb', { projektId: data.projektId });
     const beginnInput = body.querySelector('#tb-beginn');
     const endeInput = body.querySelector('#tb-ende');
     const pauseInput = body.querySelector('#tb-pause');
@@ -875,7 +868,7 @@ export async function render(container, route) {
         </form>
       `,
     });
-    wireKundeProjektFields(body, 'ze');
+    wireKundeProjektFields(body, 'ze', { projektId: data.projektId });
     const startzeitInput = body.querySelector('#ze-startzeit');
     const endzeitInput = body.querySelector('#ze-endzeit');
     const dauerInput = body.querySelector('#ze-dauer');

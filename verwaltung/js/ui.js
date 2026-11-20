@@ -328,6 +328,27 @@ const KUNDE_SCHNELL_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44
  * eigenen lokalen Listen (kunden/kundenById) einzutragen, da diese pro
  * Ansicht unterschiedlich gehalten werden.
  */
+// Grobe Ähnlichkeitsprüfung gegen Rechtsform-Zusätze/Groß-Klein-Schreibung
+// hinweg, damit "Müller Elektro" und "Müller Elektro GmbH" als derselbe
+// Kunde erkannt werden. Bewusst einfach gehalten (keine Tippfehler-Erkennung)
+// - reicht aus, um die häufigsten Dubletten abzufangen, ohne bei echten
+// Neuanlagen störend oft nachzufragen.
+function normFirma(s) {
+  return (s || '').toLowerCase()
+    .replace(/[.,]/g, '')
+    .replace(/\b(gmbh|ug|ag|kg|ohg|gbr|co|inh)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+function findAehnlichenKunden(firma, kunden) {
+  const norm = normFirma(firma);
+  if (norm.length < 4) return null;
+  return kunden.find((k) => {
+    const n = normFirma(k.firma);
+    return n.length >= 4 && (n === norm || n.includes(norm) || norm.includes(n));
+  });
+}
+
 export function openKundeSchnellanlage({ kunde, onCreated, onUpdated } = {}) {
   const isEdit = !!kunde;
   const data = kunde || { firma: '', ansprechpartner: '', telefon: '', email: '', strasse: '', plz: '', ort: '' };
@@ -364,6 +385,12 @@ export function openKundeSchnellanlage({ kunde, onCreated, onUpdated } = {}) {
     const fd = new FormData(e.target);
     const firma = (fd.get('firma') || '').toString().trim();
     if (!firma) return;
+    if (!isEdit) {
+      const aehnlicher = findAehnlichenKunden(firma, await getAll('kunden'));
+      if (aehnlicher && !window.confirm(`Es gibt bereits einen Kunden mit ähnlichem Namen: "${aehnlicher.firma}". Trotzdem einen neuen, separaten Kunden anlegen?`)) {
+        return;
+      }
+    }
     const submitBtn = body.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     const felder = {
@@ -523,6 +550,54 @@ export function openLieferantSchnellanlage({ onCreated } = {}) {
     toast('Lieferant angelegt', 'success');
     close();
     if (onCreated) onCreated(neuerLieferant);
+  });
+}
+
+// Gemeinsamer Kunde/Projekt-Picker mit Schnellanlage (20.11.2026) - fasst das
+// bis dahin fast identisch in 12 Formularen kopierte Muster
+// "mountChipPicker + onCreateNew -> openKunde-/openProjektSchnellanlage +
+// neuen Datensatz in die lokale(n) Liste(n) des Aufrufers eintragen" an
+// einer Stelle zusammen. `kunden`/`projekte` werden dabei weiterhin vom
+// Aufrufer gehalten (nicht hier geladen) und bei einer Neuanlage per
+// `.push()` ergänzt, damit bereits vorhandene abgeleitete Strukturen wie
+// `kundenById`/`projekteById` weiterhin über den `onCreated`-Callback
+// synchron gehalten werden können. Gibt wie mountChipPicker selbst
+// {getValue, setValue, setItems} zurück, für Aufrufer mit zusätzlicher
+// Logik (Bereichs-Hinweise, abhängige Felder, KI-Vorbelegung, ...).
+export function mountKundePicker(host, { kunden, kundenById, name = 'kundeId', selectedId = '', icon = '👤', title = 'Kunde wählen', placeholder = '– kein Kunde –', disabled = false, onChange, onCreated } = {}) {
+  return mountChipPicker(host, {
+    name, icon, title, placeholder, disabled,
+    items: kunden, selectedId,
+    itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
+    onChange,
+    onCreateNew: () => new Promise((resolve) => {
+      openKundeSchnellanlage({
+        onCreated: (neuerKunde) => {
+          kunden.push(neuerKunde);
+          if (kundenById) kundenById[neuerKunde.id] = neuerKunde;
+          if (onCreated) onCreated(neuerKunde);
+          resolve(neuerKunde);
+        },
+      });
+    }),
+  });
+}
+export function mountProjektPicker(host, { projekte, items, kundenById, name = 'projektId', selectedId = '', kundeId = '', getKundeId, icon = '📁', title = 'Projekt wählen', placeholder = '– kein Projekt –', disabled = false, onChange, onCreated } = {}) {
+  return mountChipPicker(host, {
+    name, icon, title, placeholder, disabled,
+    items: items || projekte, selectedId,
+    itemLabel: (p) => p.titel, itemSub: (p) => kundenById?.[p.kundeId]?.firma || '',
+    onChange,
+    onCreateNew: () => new Promise((resolve) => {
+      openProjektSchnellanlage({
+        kundeId: getKundeId ? getKundeId() : kundeId,
+        onCreated: (neuesProjekt) => {
+          projekte.push(neuesProjekt);
+          if (onCreated) onCreated(neuesProjekt);
+          resolve(neuesProjekt);
+        },
+      });
+    }),
   });
 }
 

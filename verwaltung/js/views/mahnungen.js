@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, daysBetween, toast, calcTotals, offenerRestbetrag } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
 import { printDokument, buildDocHtml } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
 import { openEmailComposer } from '../emailsend.js';
@@ -481,26 +481,13 @@ export async function render(container) {
         </form>
       `,
     });
-    const kundePicker = mountChipPicker(body.querySelector('#f-mahn-kunde-host'), {
-      name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
-      items: kunden, selectedId: '',
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => { kunden.push(neuerKunde); kundenById[neuerKunde.id] = neuerKunde; resolve(neuerKunde); },
-        });
-      }),
+    const kundePicker = mountKundePicker(body.querySelector('#f-mahn-kunde-host'), {
+      kunden, kundenById, icon: '🏢', placeholder: '– Kunde wählen –', selectedId: '',
     });
-    const projektPicker = mountChipPicker(body.querySelector('#f-mahn-projekt-host'), {
-      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
-      items: projekte, selectedId: '',
-      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
-      onCreateNew: () => new Promise((resolve) => {
-        openProjektSchnellanlage({
-          kundeId: kundePicker.getValue(),
-          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); projekteById[neuesProjekt.id] = neuesProjekt; resolve(neuesProjekt); },
-        });
-      }),
+    const projektPicker = mountProjektPicker(body.querySelector('#f-mahn-projekt-host'), {
+      projekte, kundenById, icon: '🔧', placeholder: '– Projekt wählen –', selectedId: '',
+      getKundeId: () => kundePicker.getValue(),
+      onCreated: (neuesProjekt) => { projekteById[neuesProjekt.id] = neuesProjekt; },
     });
     body.querySelector('select[name="stufe"]').addEventListener('change', (e) => {
       const neueStufe = Number(e.target.value);

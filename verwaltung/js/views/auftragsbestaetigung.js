@@ -1,6 +1,6 @@
 import { getAll, put, remove, getSettings, setSettings, resolveMarkeSettings, STEUERARTEN } from '../db.js';
 import { uid, escapeHtml, formatCurrency, formatDate, todayISO, addDays, nextDailyNummer, toast, calcTotals, nimmDokumentVorbelegung, openDokumentMitVorbelegung } from '../utils.js';
-import { openModal, confirmDelete, mountChipPicker, openKundeSchnellanlage, openProjektSchnellanlage } from '../ui.js';
+import { openModal, confirmDelete, mountKundePicker, mountProjektPicker } from '../ui.js';
 import { createPositionsEditor } from '../positions.js';
 import { printDokument, buildDocHtml, mountDocPreviewToggle } from '../pdf.js';
 import { buildDocPdfBlob } from '../docpdf.js';
@@ -256,30 +256,12 @@ export async function render(container, route) {
       `,
     });
 
-    const kundePicker = mountChipPicker(body.querySelector('#f-kunde-host'), {
-      name: 'kundeId', icon: '🏢', title: 'Kunde wählen', placeholder: '– Kunde wählen –',
-      items: kunden, selectedId: data.kundeId,
-      itemLabel: (k) => k.firma, itemSub: (k) => [k.plz, k.ort].filter(Boolean).join(' '),
-      onCreateNew: () => new Promise((resolve) => {
-        openKundeSchnellanlage({
-          onCreated: (neuerKunde) => {
-            kunden.push(neuerKunde);
-            kundenById[neuerKunde.id] = neuerKunde;
-            resolve(neuerKunde);
-          },
-        });
-      }),
+    const kundePicker = mountKundePicker(body.querySelector('#f-kunde-host'), {
+      kunden, kundenById, icon: '🏢', placeholder: '– Kunde wählen –', selectedId: data.kundeId,
     });
-    const projektPicker = mountChipPicker(body.querySelector('#f-projekt-host'), {
-      name: 'projektId', icon: '🔧', title: 'Projekt wählen', placeholder: '– Projekt wählen –',
-      items: projekte, selectedId: data.projektId,
-      itemLabel: (p) => p.titel, itemSub: (p) => kundenById[p.kundeId]?.firma || '',
-      onCreateNew: () => new Promise((resolve) => {
-        openProjektSchnellanlage({
-          kundeId: kundePicker.getValue(),
-          onCreated: (neuesProjekt) => { projekte.push(neuesProjekt); resolve(neuesProjekt); },
-        });
-      }),
+    const projektPicker = mountProjektPicker(body.querySelector('#f-projekt-host'), {
+      projekte, kundenById, icon: '🔧', placeholder: '– Projekt wählen –', selectedId: data.projektId,
+      getKundeId: () => kundePicker.getValue(),
     });
 
     let editor = createPositionsEditor({
