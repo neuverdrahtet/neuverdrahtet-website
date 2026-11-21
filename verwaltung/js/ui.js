@@ -504,6 +504,20 @@ export async function openProjektSchnellanlage({ kundeId = '', onCreated } = {})
 // funktionierenden - vollen Lieferanten-Ansicht ergänzen (Route bei Bedarf
 // in ROUTE_ROLLEN wieder freischalten).
 const LIEFERANT_SCHNELL_FARBEN = ['#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c', '#6b7280'];
+// Gemeinsame Feld-Grundstruktur für einen neuen Lieferanten, genutzt von
+// openLieferantSchnellanlage() (Nutzer füllt Ansprechpartner/Telefon/E-Mail
+// aus) und ermittleOderErstelleLieferant() (nur der Name ist bekannt) - ein
+// künftig neues Feld muss dadurch nur an einer Stelle ergänzt werden.
+function neuerLieferantBasis(firma, zusatzfelder = {}) {
+  return {
+    id: uid(), firma, ansprechpartner: '', telefon: '', email: '',
+    strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '', notizen: '',
+    idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
+    farbe: farbeAusText(firma, LIEFERANT_SCHNELL_FARBEN),
+    ...zusatzfelder,
+  };
+}
+
 export function openLieferantSchnellanlage({ onCreated } = {}) {
   const { body, close } = openModal({
     title: 'Neuer Lieferant',
@@ -531,16 +545,11 @@ export function openLieferantSchnellanlage({ onCreated } = {}) {
     if (!firma) return;
     const submitBtn = body.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    const neuerId = uid();
-    const neuerLieferant = {
-      id: neuerId, firma,
+    const neuerLieferant = neuerLieferantBasis(firma, {
       ansprechpartner: (fd.get('ansprechpartner') || '').toString().trim(),
       telefon: (fd.get('telefon') || '').toString().trim(),
       email: (fd.get('email') || '').toString().trim(),
-      strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '', notizen: '',
-      idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
-      farbe: farbeAusText(neuerId, LIEFERANT_SCHNELL_FARBEN),
-    };
+    });
     try {
       await put('lieferanten', neuerLieferant);
     } catch (err) {
@@ -568,12 +577,7 @@ export async function ermittleOderErstelleLieferant(haendler, lieferanten) {
   if (!haendler) return null;
   const bestehender = findeLieferantFuerHaendler(haendler, lieferanten);
   if (bestehender) return bestehender;
-  const neuerLieferant = {
-    id: uid(), firma: haendler, ansprechpartner: '', telefon: '', email: '',
-    strasse: '', plz: '', ort: '', kundennummer: '', zahlungszielTage: '', notizen: '',
-    idsConnectAktiv: false, idsConnectEndpoint: '', idsConnectBenutzername: '', idsConnectPasswort: '',
-    farbe: farbeAusText(haendler, LIEFERANT_SCHNELL_FARBEN),
-  };
+  const neuerLieferant = neuerLieferantBasis(haendler);
   await put('lieferanten', neuerLieferant);
   lieferanten.push(neuerLieferant);
   return neuerLieferant;

@@ -598,6 +598,15 @@ export async function render(container) {
                 toast(`Mahnung erkannt und mit bestehender Ausgabe "${treffer.lieferant || treffer.beschreibung}" (${formatCurrency(treffer.betragBrutto)}) verknüpft – bitte zeitnah zahlen.`, 'danger');
                 return { gespeichert: false, dokumenttyp: result.dokumenttyp, verknuepftMitAusgabeId: treffer.id };
               }
+              // Im Batch (ausgabenCache gesetzt) kein Treffer -> Endgültige
+              // Entscheidung (Hinweis anzeigen oder doch noch finden) dem
+              // Aufrufer überlassen: die zugehörige Eingangsrechnung könnte
+              // im selben Durchlauf noch folgen (E-Mails werden neueste
+              // zuerst verarbeitet, die Mahnung kann vor ihrer Rechnung
+              // auftauchen) - erst nach dem kompletten Batch nochmal prüfen.
+              if (ausgabenCache) {
+                return { gespeichert: false, dokumenttyp: result.dokumenttyp, nichtZugeordnet: { haendler: result.haendler, rechnungsnummer: result.rechnungsnummer, betragBrutto: Number(result.betragBrutto) || 0 } };
+              }
               toast('Mahnung erkannt, aber keine passende Ausgabe gefunden – bitte in Ausgaben manuell prüfen/verknüpfen.', 'info');
             } catch (mahnungErr) {
               toast(`Mahnung erkannt, Zuordnung fehlgeschlagen: ${mahnungErr.message}`, 'danger');
@@ -624,6 +633,11 @@ export async function render(container) {
                 }
                 toast(`Lieferschein erkannt und mit bestehender Ausgabe "${treffer.lieferant || treffer.beschreibung}" verknüpft.`, 'success');
                 return { gespeichert: false, dokumenttyp: result.dokumenttyp, verknuepftMitAusgabeId: treffer.id };
+              }
+              // Siehe Mahnung-Zweig oben - im Batch könnte die passende
+              // Eingangsrechnung noch im selben Durchlauf folgen.
+              if (ausgabenCache) {
+                return { gespeichert: false, dokumenttyp: result.dokumenttyp, nichtZugeordnet: { haendler: result.haendler, rechnungsnummer: result.rechnungsnummer } };
               }
               toast('Lieferschein erkannt, aber keine eindeutig passende Ausgabe gefunden – bitte in Ausgaben manuell prüfen/verknüpfen.', 'info');
             } catch (lieferscheinErr) {
@@ -1020,6 +1034,7 @@ export async function render(container) {
       const ausgabenCache = await getAll('ausgaben');
       let erledigt = 0;
       let aussortiert = 0;
+      const nachtraeglichPruefen = [];
       for (const m of kandidaten) {
         const anhang = (m.attachments || []).find((a) => a.mimeType === 'application/pdf')
           || (m.attachments || []).find((a) => istXmlAnhang(a))
@@ -1028,9 +1043,29 @@ export async function render(container) {
         try {
           const ergebnis = await uebernehmeAlsBeleg(m, anhang, { ausgabenCache });
           await put('emails', { ...m, belegUebernommen: true });
-          if (ergebnis?.gespeichert === false) aussortiert++;
+          if (ergebnis?.nichtZugeordnet) nachtraeglichPruefen.push(ergebnis);
+          else if (ergebnis?.gespeichert === false) aussortiert++;
           else erledigt++;
         } catch { /* einzelne fehlgeschlagene Übernahme blockiert die anderen nicht - Mail bleibt unmarkiert, nächster Versuch beim nächsten Öffnen */ }
+      }
+      // Zweiter Durchlauf für Mahnungen/Lieferscheine ohne Treffer: die
+      // zugehörige Eingangsrechnung kann im selben Batch noch verarbeitet
+      // worden sein (E-Mails laufen neueste zuerst durch, s.o.) - erst jetzt
+      // endgültig als "nicht zuordenbar" werten.
+      for (const { dokumenttyp, nichtZugeordnet } of nachtraeglichPruefen) {
+        const treffer = dokumenttyp === 'mahnung'
+          ? findeAusgabeFuerMahnung(nichtZugeordnet, ausgabenCache)
+          : findeAusgabeFuerLieferschein(nichtZugeordnet, ausgabenCache);
+        if (treffer) {
+          const aktualisiert = dokumenttyp === 'mahnung' ? { ...treffer, mahnungErhaltenAm: todayISO() } : { ...treffer, lieferscheinErhaltenAm: todayISO() };
+          if (!aktualisiert.lieferantId) aktualisiert.lieferantId = await ermittleLieferantId(nichtZugeordnet.haendler);
+          await put('ausgaben', aktualisiert);
+          const idx = ausgabenCache.findIndex((x) => x.id === treffer.id);
+          if (idx !== -1) ausgabenCache[idx] = aktualisiert;
+          erledigt++;
+        } else {
+          aussortiert++;
+        }
       }
       if (erledigt > 0 || aussortiert > 0) {
         const teile = [];
