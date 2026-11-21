@@ -33,7 +33,13 @@
   --bg: #f4f6fa;
   --card: rgba(255, 255, 255, 0.55);
   --card-2: rgba(255, 255, 255, 0.38);
-  --modal-bg: rgba(255, 255, 255, 0.86);
+  /* Bewusst UNDURCHSICHTIG, anders als --card/--card-2 (20.11.2026, Dannys
+     Beschwerde per Handy-Screenshot: beim Ausgabe-Formular schimmerten die
+     Zahlen/Buttons der Liste dahinter störend durch das durchscheinende
+     Modal). Modals sind dichte Lese-/Eingabeflächen (Formulare mit echten
+     Zahlen/Daten) - da zählt Lesbarkeit mehr als der Glas-Look, den Karten/
+     Sidebar weiterhin haben. */
+  --modal-bg: #fbfbfd;
   --sidebar-bg: rgba(22, 33, 62, 0.82);
   --border: rgba(22, 33, 62, 0.14);
   --text: #1b1c20;
@@ -60,7 +66,7 @@
   --bg: #0c0f1c;
   --card: rgba(255, 255, 255, 0.07);
   --card-2: rgba(255, 255, 255, 0.04);
-  --modal-bg: rgba(22, 27, 46, 0.82);
+  --modal-bg: #161b2e;
   --sidebar-bg: rgba(10, 14, 26, 0.6);
   --border: rgba(255, 255, 255, 0.14);
   --text: #f1f1f3;
@@ -99,7 +105,7 @@ body {
    einzelne Flächen (Karten/Modals/Sidebar), schwächer für Elemente, die oft
    wiederholt auf einer Seite vorkommen (Kanban-/Listen-Karten) - spart GPU-
    Last bei langen Listen/Boards.*/
-.card, .kpi-card, .tt-card, .modal, .lock-box, table.data-table,
+.card, .kpi-card, .tt-card, table.data-table,
 .chip-picker, .settings-nav, .social-channel-card {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);

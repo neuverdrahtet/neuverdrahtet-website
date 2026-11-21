@@ -65,6 +65,7 @@ function istXmlBlob(blob, belegMeta) {
 const DOKUMENTTYP_LABEL = {
   ausgangsrechnung: 'eigene Ausgangsrechnung (Einnahme, keine Ausgabe)',
   mahnung: 'Mahnung (kein neuer Einkauf)',
+  lieferschein: 'Lieferschein (kein neuer Einkauf)',
   sonstiges: 'kein Buchhaltungs-Beleg (z.B. AGB/Sonstiges)',
 };
 
