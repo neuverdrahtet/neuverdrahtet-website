@@ -1,5 +1,5 @@
 import { put, getAll, remove, getSettings, setSettings, EMAIL_KATEGORIEN } from '../db.js';
-import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, formatCurrency, localDateStr, nextDailyNummer } from '../utils.js';
+import { uid, escapeHtml, toast, todayISO, formatDateTime, formatDate, formatCurrency, extractEmailAddress, localDateStr, nextDailyNummer } from '../utils.js';
 import { openModal, confirmDelete, mountChipPicker, mountKundeProjektPicker, ermittleOderErstelleLieferant } from '../ui.js';
 import * as google from '../google.js';
 import { fullImport, incrementalSync, classifyPendingEmails, verknuepfeEmailsMitKundenUndProjekten } from '../emailsync.js';
@@ -11,6 +11,7 @@ import { FIREBASE_ENABLED, uploadBlobToStorage } from '../blobstore.js';
 import * as push from '../push.js';
 import * as journal from '../journal.js';
 import { openWhatsApp, toWhatsAppNumber } from '../whatsapp.js';
+import { openReplyOrNewEmailComposer } from '../emailsend.js';
 
 const LISTE_STANDARD_LIMIT = 200;
 
@@ -18,11 +19,6 @@ const LISTE_STANDARD_LIMIT = 200;
 // Umschalten per Button), geht aber beim Neuladen der Seite wieder auf den
 // Standard zurück - reine Anzeigepräferenz, kein Datenverlust-Risiko.
 let postfachModus = 'email';
-
-function extractEmailAddress(fromHeader) {
-  const match = /<([^>]+)>/.exec(fromHeader || '');
-  return match ? match[1] : (fromHeader || '').trim();
-}
 
 function bytesToBlob(bytes, mimeType) {
   return new Blob([bytes], { type: mimeType || 'application/octet-stream' });
@@ -860,63 +856,7 @@ export async function render(container) {
     }
 
     function openCompose({ replyTo } = {}) {
-      const to = replyTo ? extractEmailAddress(replyTo.from) : '';
-      const subject = replyTo ? (/^re:/i.test(replyTo.subject) ? replyTo.subject : `Re: ${replyTo.subject}`) : '';
-      const signaturBlock = settings.emailSignature ? `\n\n${settings.emailSignature}` : '';
-      const bodyText = replyTo
-        ? `${signaturBlock}\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${formatDateTime(replyTo.dateSort) || replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
-        : signaturBlock;
-      const { body, close } = openModal({
-        title: replyTo ? 'Antworten' : 'Neue E-Mail',
-        wide: true,
-        bodyHtml: `
-          <form id="pf-compose-form">
-            <div class="form-grid">
-              <div class="field col-span-2"><label>An *</label><input name="to" required value="${escapeHtml(to)}"></div>
-              <div class="field col-span-2"><label>Betreff *</label><input name="subject" required value="${escapeHtml(subject)}"></div>
-              <div class="field col-span-2"><label>Nachricht</label><textarea name="bodyText" rows="12">${escapeHtml(bodyText)}</textarea></div>
-              <div class="field col-span-2"><label>Anhang (optional)</label><input type="file" name="anhang"></div>
-            </div>
-            <div class="modal-actions">
-              <span class="spacer"></span>
-              <button type="button" class="btn" id="pf-compose-cancel">Abbrechen</button>
-              <button type="submit" class="btn btn-primary">Senden</button>
-            </div>
-          </form>
-        `,
-      });
-      body.querySelector('#pf-compose-cancel').addEventListener('click', close);
-      body.querySelector('#pf-compose-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData(e.target);
-        const submitBtn = e.target.querySelector('button[type=submit]');
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Sende ...';
-        try {
-          const anhang = body.querySelector('input[name="anhang"]').files[0];
-          const gemeinsam = {
-            to: (fd.get('to') || '').toString().trim(),
-            subject: (fd.get('subject') || '').toString().trim(),
-            bodyText: (fd.get('bodyText') || '').toString(),
-            inReplyTo: replyTo?.messageIdHeader || undefined,
-            referencesHeader: replyTo?.referencesHeader || undefined,
-            threadId: replyTo?.threadId || undefined,
-          };
-          if (anhang) {
-            await google.sendEmailWithAttachment({
-              ...gemeinsam, attachmentName: anhang.name, attachmentBlob: anhang, mimeType: anhang.type || 'application/octet-stream',
-            });
-          } else {
-            await google.sendEmail(gemeinsam);
-          }
-          toast('E-Mail gesendet', 'success');
-          close();
-        } catch (err) {
-          toast(`Senden fehlgeschlagen: ${err.message}`, 'danger');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Senden';
-        }
-      });
+      return openReplyOrNewEmailComposer({ replyTo });
     }
 
     container.querySelector('#btn-compose').addEventListener('click', () => openCompose());

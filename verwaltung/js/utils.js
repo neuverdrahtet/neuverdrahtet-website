@@ -146,6 +146,14 @@ export function navigationUrl(address) {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`;
 }
 
+// Extrahiert die reine E-Mail-Adresse aus einem "From"/"To"-Header wie
+// '"Max Mustermann" <max@beispiel.de>' - wird u.a. von postfach.js und
+// emailsend.js (Antworten-Funktion) gebraucht.
+export function extractEmailAddress(fromHeader) {
+  const match = /<([^>]+)>/.exec(fromHeader || '');
+  return match ? match[1] : (fromHeader || '').trim();
+}
+
 export function hexToRgb(hex, fallback = [15, 27, 45]) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
   if (!m) return fallback;

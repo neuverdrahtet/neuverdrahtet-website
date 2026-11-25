@@ -5,6 +5,7 @@ const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#
 import { openModal, confirmDelete, attachAddressSearch } from '../ui.js';
 import * as google from '../google.js';
 import { openWhatsApp } from '../whatsapp.js';
+import { openReplyOrNewEmailComposer } from '../emailsend.js';
 import { renderDokumenteSection, KUNDE_DOKUMENT_KATEGORIEN } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteCustomer, revokeInvite, revokeUserAccess, getCustomerAuthStatus } from '../employeeAuth.js';
@@ -706,6 +707,7 @@ export async function render(container, route) {
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
             ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+            ${isEdit && data.email ? '<button type="button" class="btn" id="btn-send-email">✉️ E-Mail senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -778,6 +780,12 @@ export async function render(container, route) {
           openWhatsApp(data.telefon, `Hallo${data.ansprechpartner ? ' ' + data.ansprechpartner : ''}, hier ist neuverdrahtet.`);
         });
       }
+      const sendEmailBtn = body.querySelector('#btn-send-email');
+      if (sendEmailBtn) {
+        sendEmailBtn.addEventListener('click', () => {
+          openReplyOrNewEmailComposer({ to: data.email });
+        });
+      }
       const loadEmailsBtn = body.querySelector('#btn-load-emails');
       if (loadEmailsBtn) {
         loadEmailsBtn.addEventListener('click', async () => {
@@ -796,9 +804,27 @@ export async function render(container, route) {
                       <div class="text-mute">${escapeHtml(m.from)} · ${escapeHtml(m.date)}</div>
                       <div class="text-mute">${escapeHtml(m.snippet)}</div>
                     </div>
-                    <a class="btn btn-sm" href="https://mail.google.com/mail/u/0/#all/${m.threadId}" target="_blank" rel="noopener">Öffnen</a>
+                    <div class="flex-row" style="gap:4px">
+                      <button type="button" class="btn btn-sm btn-reply-email" data-id="${escapeHtml(m.id)}">Antworten</button>
+                      <a class="btn btn-sm" href="https://mail.google.com/mail/u/0/#all/${m.threadId}" target="_blank" rel="noopener">Öffnen</a>
+                    </div>
                   </li>
                 `).join('')}</ul>`;
+            host.querySelectorAll('.btn-reply-email').forEach((btn) => {
+              btn.addEventListener('click', async () => {
+                btn.disabled = true;
+                btn.textContent = 'Lädt ...';
+                try {
+                  const full = await google.getMessageFull(btn.dataset.id);
+                  openReplyOrNewEmailComposer({ replyTo: full });
+                } catch (err) {
+                  toast(`Fehler: ${err.message}`, 'danger');
+                } finally {
+                  btn.disabled = false;
+                  btn.textContent = 'Antworten';
+                }
+              });
+            });
           } catch (err) {
             host.innerHTML = `<p class="text-mute">Fehler: ${escapeHtml(err.message)}</p>`;
           }
