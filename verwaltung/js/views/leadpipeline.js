@@ -4,6 +4,8 @@ import { openModal, confirmDelete } from '../ui.js';
 import { openStatusManager } from '../statusManager.js';
 import { render as renderProjekteKanban } from './kanban.js';
 import { render as renderProjekteBereich } from './projekte.js';
+import { openWhatsApp } from '../whatsapp.js';
+import { openReplyOrNewEmailComposer } from '../emailsend.js';
 
 const KUNDEN_FARBEN = ['#6b7280', '#2b7fd6', '#1f8a4c', '#f0a020', '#8e44ad', '#c0392b', '#14b8a6', '#e91e8c'];
 
@@ -234,6 +236,9 @@ async function renderLeads(container) {
             ${isEdit ? '<button type="button" class="btn" id="btn-neues-angebot">📄 + Angebot</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-neue-rechnung">🧾 + Rechnung</button>' : ''}
             ${isEdit ? '<button type="button" class="btn" id="btn-neue-ab">✅ + Auftragsbestätigung</button>' : ''}
+            ${isEdit && data.telefon ? `<a class="btn" id="btn-anrufen" href="tel:${escapeHtml(data.telefon)}">📞 Anrufen</a>` : ''}
+            ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+            ${isEdit && data.email ? '<button type="button" class="btn" id="btn-send-email">✉️ E-Mail senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -256,6 +261,18 @@ async function renderLeads(container) {
       body.querySelector('#btn-neues-angebot').addEventListener('click', () => { close(); openDokumentMitVorbelegung('angebote', { kundeId: data.id }); });
       body.querySelector('#btn-neue-rechnung').addEventListener('click', () => { close(); openDokumentMitVorbelegung('rechnungen', { kundeId: data.id }); });
       body.querySelector('#btn-neue-ab').addEventListener('click', () => { close(); openDokumentMitVorbelegung('auftragsbestaetigung', { kundeId: data.id }); });
+      const whatsappBtn = body.querySelector('#btn-whatsapp');
+      if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', () => {
+          openWhatsApp(data.telefon, `Hallo${data.ansprechpartner ? ' ' + data.ansprechpartner : ''}, hier ist neuverdrahtet.`);
+        });
+      }
+      const sendEmailBtn = body.querySelector('#btn-send-email');
+      if (sendEmailBtn) {
+        sendEmailBtn.addEventListener('click', () => {
+          openReplyOrNewEmailComposer({ to: data.email });
+        });
+      }
     }
     body.querySelector('#lead-form').addEventListener('submit', async (e) => {
       e.preventDefault();
