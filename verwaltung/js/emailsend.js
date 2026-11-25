@@ -1,6 +1,6 @@
 import { openModal } from './ui.js';
-import { escapeHtml, toast, formatDateTime } from './utils.js';
-import { getAll } from './db.js';
+import { escapeHtml, toast, formatDateTime, extractEmailAddress } from './utils.js';
+import { getAll, getSettings } from './db.js';
 import * as google from './google.js';
 import { ermittleDokumentAnhaenge, listeBerichte, holeDokumentBlob } from './agbAnhang.js';
 
@@ -98,6 +98,84 @@ export function openEmailComposer({
       toast(err.message, 'danger');
       sendBtn.disabled = false;
       sendBtn.textContent = 'Senden';
+    }
+  });
+}
+
+/**
+ * Einfacher E-Mail-Komponist OHNE PDF-Anhang-Zwang (anders als
+ * openEmailComposer oben, das immer ein Dokument anhängt) - für freie
+ * E-Mails z.B. an einen Kunden/Lead oder zum Antworten auf eine per
+ * google.searchEmailsForAddress()/getMessageFull() gefundene Nachricht
+ * (20.11.2026, auf Dannys Hinweis: bei Leads/Kunden gab es bisher nur einen
+ * "Öffnen"-Link zu Gmail, kein Senden/Antworten direkt aus Werkora). Ehemals
+ * eine lokale Funktion nur in postfach.js (openCompose), hierher verschoben
+ * und exportiert, damit kunden.js sie ebenfalls nutzen kann.
+ *
+ * - Ohne `replyTo`: neue, leere E-Mail an `to`/`subject`.
+ * - Mit `replyTo` (Form wie von google.getMessageFull() zurückgegeben,
+ *   braucht mindestens from/subject/text/dateSort-oder-date/messageIdHeader/
+ *   referencesHeader/threadId): vorausgefüllte Antwort mit Zitat und
+ *   korrekter Thread-Verknüpfung (In-Reply-To/References-Header).
+ */
+export async function openReplyOrNewEmailComposer({ to = '', subject = '', replyTo, onSent } = {}) {
+  const settings = await getSettings();
+  const effectiveTo = replyTo ? extractEmailAddress(replyTo.from) : to;
+  const effectiveSubject = replyTo ? (/^re:/i.test(replyTo.subject || '') ? replyTo.subject : `Re: ${replyTo.subject || ''}`) : subject;
+  const signaturBlock = settings.emailSignature ? `\n\n${settings.emailSignature}` : '';
+  const bodyText = replyTo
+    ? `${signaturBlock}\n\n--- Ursprüngliche Nachricht von ${replyTo.from} am ${formatDateTime(replyTo.dateSort) || replyTo.date} ---\n${(replyTo.text || '').split('\n').map((l) => `> ${l}`).join('\n').slice(0, 3000)}`
+    : signaturBlock;
+  const { body, close } = openModal({
+    title: replyTo ? 'Antworten' : 'Neue E-Mail',
+    wide: true,
+    bodyHtml: `
+      <form id="plain-compose-form">
+        <div class="form-grid">
+          <div class="field col-span-2"><label>An *</label><input name="to" required value="${escapeHtml(effectiveTo)}"></div>
+          <div class="field col-span-2"><label>Betreff *</label><input name="subject" required value="${escapeHtml(effectiveSubject)}"></div>
+          <div class="field col-span-2"><label>Nachricht</label><textarea name="bodyText" rows="12">${escapeHtml(bodyText)}</textarea></div>
+          <div class="field col-span-2"><label>Anhang (optional)</label><input type="file" name="anhang"></div>
+        </div>
+        <div class="modal-actions">
+          <span class="spacer"></span>
+          <button type="button" class="btn" id="plain-compose-cancel">Abbrechen</button>
+          <button type="submit" class="btn btn-primary">Senden</button>
+        </div>
+      </form>
+    `,
+  });
+  body.querySelector('#plain-compose-cancel').addEventListener('click', close);
+  body.querySelector('#plain-compose-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const submitBtn = e.target.querySelector('button[type=submit]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Sende ...';
+    try {
+      const anhang = body.querySelector('input[name="anhang"]').files[0];
+      const gemeinsam = {
+        to: (fd.get('to') || '').toString().trim(),
+        subject: (fd.get('subject') || '').toString().trim(),
+        bodyText: (fd.get('bodyText') || '').toString(),
+        inReplyTo: replyTo?.messageIdHeader || undefined,
+        referencesHeader: replyTo?.referencesHeader || undefined,
+        threadId: replyTo?.threadId || undefined,
+      };
+      if (anhang) {
+        await google.sendEmailWithAttachment({
+          ...gemeinsam, attachmentName: anhang.name, attachmentBlob: anhang, mimeType: anhang.type || 'application/octet-stream',
+        });
+      } else {
+        await google.sendEmail(gemeinsam);
+      }
+      toast('E-Mail gesendet', 'success');
+      if (onSent) await onSent().catch(() => { /* Folgeaktion ist ein Komfort-Feature, Versand ist bereits erfolgt */ });
+      close();
+    } catch (err) {
+      toast(`Senden fehlgeschlagen: ${err.message}`, 'danger');
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Senden';
     }
   });
 }
