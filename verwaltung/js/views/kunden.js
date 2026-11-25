@@ -706,6 +706,7 @@ export async function render(container, route) {
           ` : ''}
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit && data.telefon ? `<a class="btn" id="btn-anrufen" href="tel:${escapeHtml(data.telefon)}">📞 Anrufen</a>` : ''}
             ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
             ${isEdit && data.email ? '<button type="button" class="btn" id="btn-send-email">✉️ E-Mail senden</button>' : ''}
             <span class="spacer"></span>
