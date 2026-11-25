@@ -14,14 +14,21 @@ const SCOPES = [
 ].join(' ');
 
 let tokenClient = null;
-let accessToken = localStorage.getItem('nv-google-token') || null;
-let tokenExpiresAt = Number(localStorage.getItem('nv-google-token-exp') || 0);
+// typeof-Check statt direktem Zugriff: dieses Modul wird inzwischen auch
+// transitiv von views importiert, die in Node-Unittests (ohne Browser-DOM)
+// geladen werden (z.B. subunternehmer.js -> emailsend.js -> google.js) -
+// ein ungeschützter Top-Level-Zugriff würde dort mit "localStorage is not
+// defined" abstürzen, bevor überhaupt eine der hier getesteten Funktionen
+// aufgerufen wird.
+const hatLocalStorage = typeof localStorage !== 'undefined';
+let accessToken = hatLocalStorage ? (localStorage.getItem('nv-google-token') || null) : null;
+let tokenExpiresAt = hatLocalStorage ? Number(localStorage.getItem('nv-google-token-exp') || 0) : 0;
 // Merkt sich, mit welchem Scope der aktuelle Token geholt wurde. Ändert sich
 // SCOPES im Code (z.B. weil eine neue Berechtigung wie gmail.modify dazukommt),
 // bleibt ein alter, noch nicht abgelaufener Token sonst unbemerkt zu schwach
 // und jeder Aufruf schlägt mit "insufficient authentication scopes" fehl,
 // ohne dass die App das erkennt oder von sich aus neu nach Zustimmung fragt.
-let grantedScope = localStorage.getItem('nv-google-token-scope') || '';
+let grantedScope = hatLocalStorage ? (localStorage.getItem('nv-google-token-scope') || '') : '';
 let gisReady = false;
 let gisLoadPromise = null;
 // Zwischengespeicherter Einstellungen-Stand, damit connect() beim Klick auf

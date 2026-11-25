@@ -2,6 +2,8 @@ import { getAll, put, remove, GEWERKE } from '../db.js';
 import { uid, escapeHtml, toast, farbeAusText, excelFileToCsvText, toCsv, downloadTextFile } from '../utils.js';
 import { openModal, confirmDelete } from '../ui.js';
 import { createBulkSelect } from '../bulkselect.js';
+import { openWhatsApp } from '../whatsapp.js';
+import { openReplyOrNewEmailComposer } from '../emailsend.js';
 
 // Externe Nachunternehmer/Subunternehmer - bewusst getrennt von mitarbeiter.js
 // (keine eigene Personalakte/kein Login, sondern nur die Kontakt-/Leistungs-
@@ -172,6 +174,9 @@ export async function render(container) {
           </div>
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit && data.telefon ? `<a class="btn" id="btn-anrufen" href="tel:${escapeHtml(data.telefon)}">📞 Anrufen</a>` : ''}
+            ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+            ${isEdit && data.email ? '<button type="button" class="btn" id="btn-send-email">✉️ E-Mail senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -188,6 +193,18 @@ export async function render(container) {
         close();
         render(container);
       });
+      const whatsappBtn = body.querySelector('#btn-whatsapp');
+      if (whatsappBtn) {
+        whatsappBtn.addEventListener('click', () => {
+          openWhatsApp(data.telefon, `Hallo${data.ansprechpartner ? ' ' + data.ansprechpartner : ''}, hier ist neuverdrahtet.`);
+        });
+      }
+      const sendEmailBtn = body.querySelector('#btn-send-email');
+      if (sendEmailBtn) {
+        sendEmailBtn.addEventListener('click', () => {
+          openReplyOrNewEmailComposer({ to: data.email });
+        });
+      }
     }
     body.querySelector('#su-form').addEventListener('submit', async (e) => {
       e.preventDefault();
