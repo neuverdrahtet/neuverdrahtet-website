@@ -428,8 +428,13 @@ export async function entferneBuchungenFuerAnlage(anlageId) {
  * `bisDatum` synchron - erneuter Aufruf ersetzt den kompletten Plan, ist also
  * gefahrlos wiederholbar (idempotent), z.B. durch erneuten Klick auf
  * "Abschreibungen jetzt buchen". */
-export async function syncAbschreibungenFuerAnlage(anlage, settings, bisDatum) {
-  const konten = await getAll('konten');
-  const neueBuchungen = erzeugeAbschreibungsbuchungenFuerAnlage(anlage, { konten, settings, bisDatum });
+// konten (optional): beim Batch-Lauf über alle Anlagen ("Abschreibungen
+// jetzt buchen", siehe buchhaltung.js) wird der Kontenplan vom Aufrufer
+// EINMAL geladen und hier durchgereicht, statt pro Anlage erneut per
+// getAll('konten') geholt zu werden - sonst holt z.B. bei 20 Anlagegütern
+// jeder Durchlauf denselben, unveränderten Kontenplan 20x neu.
+export async function syncAbschreibungenFuerAnlage(anlage, settings, bisDatum, konten) {
+  const konto = konten || await getAll('konten');
+  const neueBuchungen = erzeugeAbschreibungsbuchungenFuerAnlage(anlage, { konten: konto, settings, bisDatum });
   await ersetzeAutomatischeBuchungen('anlagegut-afa', anlage.id, neueBuchungen);
 }

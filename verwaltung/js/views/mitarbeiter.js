@@ -5,6 +5,7 @@ import { renderDokumenteSection } from '../dokumente.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { FIREBASE_ENABLED, inviteEmployee, revokeInvite, revokeUserAccess, getEmployeeAuthStatus } from '../employeeAuth.js';
 import { openWhatsApp } from '../whatsapp.js';
+import { openReplyOrNewEmailComposer } from '../emailsend.js';
 
 /**
  * Fertiger Einladungstext mit Link + Registrierungs-/Installationshinweis -
@@ -549,6 +550,9 @@ export async function render(container) {
 
           <div class="modal-actions">
             ${isEdit ? '<button type="button" class="btn btn-danger" id="btn-delete">Löschen</button>' : ''}
+            ${isEdit && data.telefon ? `<a class="btn" id="btn-anrufen" href="tel:${escapeHtml(data.telefon)}">📞 Anrufen</a>` : ''}
+            ${isEdit && data.telefon ? '<button type="button" class="btn" id="btn-whatsapp">📱 Per WhatsApp senden</button>' : ''}
+            ${isEdit && data.email ? '<button type="button" class="btn" id="btn-send-email">✉️ E-Mail senden</button>' : ''}
             <span class="spacer"></span>
             <button type="button" class="btn" id="btn-cancel">Abbrechen</button>
             <button type="submit" class="btn btn-primary">Speichern</button>
@@ -564,6 +568,12 @@ export async function render(container) {
         toast('Mitarbeiter in den Papierkorb verschoben');
         close();
         render(container);
+      });
+      body.querySelector('#btn-whatsapp')?.addEventListener('click', () => {
+        openWhatsApp(data.telefon, `Hallo${data.name ? ' ' + data.name.split(' ')[0] : ''}, hier ist neuverdrahtet.`);
+      });
+      body.querySelector('#btn-send-email')?.addEventListener('click', () => {
+        openReplyOrNewEmailComposer({ to: data.email });
       });
       renderDokumenteSection(body.querySelector('#dok-host'), 'mitarbeiter', data.id, {
         kategorien: MA_DOKUMENT_KATEGORIEN, title: 'Dokumente (Vertrag, Ausweis, ...)',

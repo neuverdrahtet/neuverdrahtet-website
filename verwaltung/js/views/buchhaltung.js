@@ -1411,10 +1411,10 @@ export async function render(container) {
   container.querySelector('#btn-afa-jetzt-buchen').addEventListener('click', async () => {
     const jahr = container.querySelector('#anlage-afa-jahr-select').value;
     const bisDatum = `${jahr}-12-31`;
-    const anlagen = await getAll('anlagegueter');
+    const [anlagen, konten] = await Promise.all([getAll('anlagegueter'), getAll('konten')]);
     let gebucht = 0;
     for (const a of anlagen.filter((x) => x.status !== 'ausgeschieden')) {
-      await journal.syncAbschreibungenFuerAnlage(a, settings, bisDatum);
+      await journal.syncAbschreibungenFuerAnlage(a, settings, bisDatum, konten);
       gebucht++;
     }
     toast(`Abschreibungen für ${jahr} für ${gebucht} Anlage(n) gebucht/aktualisiert`, 'success');
