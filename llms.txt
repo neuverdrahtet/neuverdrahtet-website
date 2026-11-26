@@ -65,6 +65,11 @@
 - [Klingel- & Sprechanlage](https://neuverdrahtet.com/elektrotechnik-klingel-sprechanlage.html): Klingel, Video- und Smartphone-Sprechanlagen.
 - [Netzwerk & LAN](https://neuverdrahtet.com/elektrotechnik-netzwerk-lan-verkabelung.html): LAN-Kabel, Netzwerkdosen und Patchfeld.
 
+## Ratgeber-Artikel
+- [Elektrik im Altbau: Wann muss sie erneuert werden?](https://neuverdrahtet.com/ratgeber-elektrik-altbau-erneuern.html)
+- [Zählerschrank erneuern: Wann ist es Pflicht?](https://neuverdrahtet.com/ratgeber-zaehlerschrank-erneuern-pflicht.html)
+- [Wallbox, Wärmepumpe und PV: Reicht mein Hausanschluss?](https://neuverdrahtet.com/ratgeber-hausanschluss-wallbox-waermepumpe-pv.html)
+
 ## Privatkunden
 - [Privatkunden](https://neuverdrahtet.com/privatkunden.html): Elektroinstallation, Smart Home, Photovoltaik, Wallbox u.v.m. für Eigenheim, Eigentumswohnung, Neubau und Sanierung.
 
