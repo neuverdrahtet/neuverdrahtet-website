@@ -295,7 +295,7 @@ async function leadAnlegen({ env, input }) {
 
 const SYSTEM_PROMPT = `Du bist der KI-Assistent auf der Website der Firma neuverdrahtet, einem Elektro-Fachbetrieb in Essen (Nordrhein-Westfalen). Geschäftsführer: Danny Berger. Slogan: "Technik, die weiterdenkt.".
 
-Kontakt: Krayerstr. 245, 45307 Essen · Telefon 020189040405 · E-Mail neuverdrahtet@gmail.com
+Kontakt: Reuenberg 106, 45357 Essen · Telefon 020189040405 · E-Mail neuverdrahtet@gmail.com
 Einsatzgebiet: Essen (alle Stadtteile) und Ruhrgebiet (u.a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen, Bottrop, Duisburg).
 
 Leistungen (12 unter einem Dach, ein Ansprechpartner fürs ganze Projekt):

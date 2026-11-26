@@ -672,7 +672,7 @@ Die Verarbeitung personenbezogener Daten des Auftraggebers erfolgt im Rahmen der
 const WIDERRUF_TEXT_STANDARD = `## Widerrufsrecht
 Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.
 
-Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (neuverdrahtet UG (haftungsbeschränkt), Krayerstr. 245, 45307 Essen, Telefon +49 201 89040405, E-Mail neuverdrahtet@gmail.com) mittels einer eindeutigen Erklärung (z.B. ein mit der Post versandter Brief, Telefax oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.
+Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (neuverdrahtet UG (haftungsbeschränkt), Reuenberg 106, 45357 Essen, Telefon +49 201 89040405, E-Mail neuverdrahtet@gmail.com) mittels einer eindeutigen Erklärung (z.B. ein mit der Post versandter Brief, Telefax oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.
 
 Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.
 
@@ -687,7 +687,7 @@ Soll mit der Ausführung bereits vor Ablauf der 14-tägigen Widerrufsfrist begon
 ## Muster-Widerrufsformular
 (Wenn Sie den Vertrag widerrufen wollen, dann füllen Sie bitte dieses Formular aus und senden Sie es zurück.)
 
-An neuverdrahtet UG (haftungsbeschränkt), Krayerstr. 245, 45307 Essen, E-Mail: neuverdrahtet@gmail.com
+An neuverdrahtet UG (haftungsbeschränkt), Reuenberg 106, 45357 Essen, E-Mail: neuverdrahtet@gmail.com
 
 Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über die Erbringung der folgenden Dienstleistung:
 
@@ -705,8 +705,8 @@ Datum: ______________________
 
 const DEFAULT_SETTINGS = {
   firmenname: 'neuverdrahtet UG',
-  strasse: 'Krayerstr. 245',
-  plzOrt: '45307 Essen',
+  strasse: 'Reuenberg 106',
+  plzOrt: '45357 Essen',
   telefon: '020189040405',
   email: 'neuverdrahtet@gmail.com',
   ustId: '',
