@@ -65,6 +65,11 @@
 - [Essen-Kray](https://neuverdrahtet.com/einsatzgebiet-essen-kray.html)
 - [Essen-Frohnhausen](https://neuverdrahtet.com/einsatzgebiet-essen-frohnhausen.html)
 - [Essen-Schonnebeck](https://neuverdrahtet.com/einsatzgebiet-essen-schonnebeck.html)
+- [Essen-Holsterhausen](https://neuverdrahtet.com/einsatzgebiet-essen-holsterhausen.html)
+- [Essen-Bredeney](https://neuverdrahtet.com/einsatzgebiet-essen-bredeney.html)
+- [Essen-Huttrop](https://neuverdrahtet.com/einsatzgebiet-essen-huttrop.html)
+- [Essen-Katernberg](https://neuverdrahtet.com/einsatzgebiet-essen-katernberg.html)
+- [Essen-Überruhr](https://neuverdrahtet.com/einsatzgebiet-essen-ueberruhr.html)
 
 ## Weitere Städte im Ruhrgebiet
 - [Oberhausen](https://neuverdrahtet.com/einsatzgebiet-oberhausen.html)
