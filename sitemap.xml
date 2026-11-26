@@ -44,7 +44,7 @@
   </url>
   <url>
     <loc>https://neuverdrahtet.com/einsatzgebiet.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.9</priority>
     <changefreq>monthly</changefreq>
   </url>
@@ -255,6 +255,36 @@
   <url>
     <loc>https://neuverdrahtet.com/einsatzgebiet-essen-schonnebeck.html</loc>
     <lastmod>2026-09-29</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-holsterhausen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bredeney.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-huttrop.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-katernberg.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-ueberruhr.html</loc>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
