@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://neuverdrahtet.com/</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>1.0</priority>
     <changefreq>weekly</changefreq>
   </url>
@@ -38,13 +38,13 @@
   </url>
   <url>
     <loc>https://neuverdrahtet.com/elektrotechnik.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.9</priority>
     <changefreq>monthly</changefreq>
   </url>
   <url>
     <loc>https://neuverdrahtet.com/einsatzgebiet.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.9</priority>
     <changefreq>monthly</changefreq>
   </url>
@@ -259,6 +259,234 @@
     <changefreq>monthly</changefreq>
   </url>
   <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-holsterhausen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bredeney.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-huttrop.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-katernberg.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-ueberruhr.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-stadtkern.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-ostviertel.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-nordviertel.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-westviertel.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-suedviertel.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-suedostviertel.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-rellinghausen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bergerhausen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-stadtwald.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-altendorf.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-fulerum.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-haarzopf.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-margarethenhoehe.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-schoenebeck.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bedingrade.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-dellwig.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-gerschede.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bochold.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-bergeborbeck.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-karnap.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-vogelheim.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-stoppenberg.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-frillendorf.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-freisenbruch.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-horst.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-leithe.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-heisingen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-kupferdreh.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-byfang.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-burgaltendorf.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-heidhausen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-fischlaken.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/einsatzgebiet-essen-schuir.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.7</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
     <loc>https://neuverdrahtet.com/einsatzgebiet-bochum.html</loc>
     <lastmod>2026-09-29</lastmod>
     <priority>0.7</priority>
@@ -302,7 +530,7 @@
   </url>
   <url>
     <loc>https://neuverdrahtet.com/ratgeber.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
@@ -317,5 +545,101 @@
     <lastmod>2026-09-29</lastmod>
     <priority>0.3</priority>
     <changefreq>yearly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-kleinauftraege.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-lampe-anschliessen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-steckdosen-lichtschalter.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-herd-anschliessen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-durchlauferhitzer-anschliessen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-starkstromanschluss.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-sicherung-fliegt-raus.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-fi-schutzschalter-nachruesten.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-ueberspannungsschutz.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-balkonkraftwerk.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-nachtspeicher-ersetzen.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-klingel-sprechanlage.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/elektrotechnik-netzwerk-lan-verkabelung.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-elektrik-altbau-erneuern.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-zaehlerschrank-erneuern-pflicht.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-hausanschluss-wallbox-waermepumpe-pv.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
   </url>
 </urlset>
