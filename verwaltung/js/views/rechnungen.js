@@ -15,6 +15,7 @@ import { openStichpunkteSprachModal } from '../voicenote.js';
 import * as lexoffice from '../lexoffice.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 import * as journal from '../journal.js';
+import { ladeEntwurf, loescheEntwurf, autosaveEntwurf } from '../formdraft.js';
 
 const STATUS_LABEL = { offen: 'Offen', teilbezahlt: 'Teilbezahlt', bezahlt: 'Bezahlt', storniert: 'Storniert' };
 const STATUS_BADGE = { offen: 'badge-warn', teilbezahlt: 'badge-accent', bezahlt: 'badge-success', storniert: 'badge-danger' };
@@ -671,16 +672,22 @@ export async function render(container, route) {
 
   function openForm(r, prefill) {
     const isEdit = !!r;
+    // nutzeEntwurf: siehe angebote.js - ein evtl. vorhandener Entwurf wird nur
+    // bei der ganz normalen Blanko-"Neue Rechnung" automatisch übernommen,
+    // nicht bei einem Prefill (z.B. Umwandlung aus Angebot/Auftragsbestätigung).
+    const nutzeEntwurf = !isEdit && !prefill;
+    const entwurf = nutzeEntwurf ? ladeEntwurf('rechnung') : null;
     const data = r || {
-      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', angebotId: prefill?.angebotId || null, auftragsbestaetigungId: prefill?.auftragsbestaetigungId || null, datum: todayISO(), leistungsdatum: todayISO(),
-      faelligAm: addDays(todayISO(), settings.zahlungszielTage || 14),
-      status: 'offen', betreff: prefill?.betreff || '', notizen: '', positionen: prefill?.positionen || [], bezahltAm: '', createdAt: new Date().toISOString(),
+      id: uid(), nummer: entwurf?.formData.nummer || '', kundeId: entwurf?.formData.kundeId || prefill?.kundeId || '', projektId: entwurf?.formData.projektId || prefill?.projektId || '', angebotId: prefill?.angebotId || null, auftragsbestaetigungId: prefill?.auftragsbestaetigungId || null, datum: entwurf?.formData.datum || todayISO(), leistungsdatum: entwurf?.formData.leistungsdatum || todayISO(),
+      faelligAm: entwurf?.formData.faelligAm || addDays(todayISO(), settings.zahlungszielTage || 14),
+      status: 'offen', betreff: entwurf?.formData.betreff || prefill?.betreff || '', notizen: entwurf?.formData.notizen || '', positionen: entwurf?.positionen || prefill?.positionen || [], bezahltAm: '', createdAt: new Date().toISOString(),
       versendet: false, versendetAm: '', stornoVonNummer: '', storniertDurchNummer: '',
-      steuerart: prefill?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
-      rechnungstyp: prefill?.rechnungstyp || 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
-      skontoProzent: settings.skontoProzentStandard || 0, skontoTage: settings.skontoTageStandard || 0,
-      zahlungsart: 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
+      steuerart: entwurf?.formData.steuerart || prefill?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
+      rechnungstyp: entwurf?.formData.rechnungstyp || prefill?.rechnungstyp || 'rechnung', verrechneteAbschlaege: [], verrechnetIn: '',
+      skontoProzent: entwurf?.formData.skontoProzent || settings.skontoProzentStandard || 0, skontoTage: entwurf?.formData.skontoTage || settings.skontoTageStandard || 0,
+      zahlungsart: entwurf?.formData.zahlungsart || 'ueberweisung', unterschriftKunde: '', unterschriftMitarbeiter: '',
     };
+    if (entwurf) toast('Nicht gespeicherter Entwurf wurde wiederhergestellt', 'info');
     const locked = isEdit && !!data.versendet;
     const abschlaegeChecked = new Set(
       (data.verrechneteAbschlaege || []).map((a) => a.rechnungId)
@@ -698,6 +705,7 @@ export async function render(container, route) {
       title: isEdit ? `Rechnung ${data.nummer}` : 'Neue Rechnung',
       wide: true,
       fullscreen: true,
+      onClose: () => entwurfHandle?.stop(),
       bodyHtml: `
         <form id="re-form">
           ${locked ? `<p class="hint">🔒 Versendet am ${formatDate(data.versendetAm)} – gesperrt (GoBD). ${data.stornoVonNummer ? `Stornorechnung zu ${escapeHtml(data.stornoVonNummer)}.` : ''} ${data.stornoVonNummer && (data.stornoGrund || data.stornoGrundText) ? `Grund: ${escapeHtml([GRUENDE_STORNO.find((g) => g.id === data.stornoGrund)?.titel, data.stornoGrundText].filter(Boolean).join(' – '))}.` : ''} ${data.storniertDurchNummer ? `Storniert durch ${escapeHtml(data.storniertDurchNummer)}.` : ''}</p>` : ''}
@@ -790,6 +798,11 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
       vorlagen,
       readOnly: locked,
     });
+
+    // Entwurf-Autosave nur fürs ganz neue, unausgefüllte Formular (siehe
+    // nutzeEntwurf oben) - rein lokal (localStorage), damit nie eine echte
+    // Rechnungsnummer durch einen nie abgeschickten Entwurf verbraucht wird.
+    const entwurfHandle = nutzeEntwurf ? autosaveEntwurf(body.querySelector('#re-form'), 'rechnung', () => editor.getPositionen()) : null;
 
     function mountSigSection(host, initialUrl, label) {
       let pad = null;
@@ -1067,7 +1080,11 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
     }
     mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
 
-    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-cancel').addEventListener('click', () => {
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('rechnung');
+      close();
+    });
     if (isEdit) {
       const deleteBtn = body.querySelector('#btn-delete');
       if (deleteBtn) {
@@ -1365,6 +1382,8 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
         if (z) await put('zeiterfassung', { ...z, abgerechnet: true });
       }
       toast(isEdit ? 'Rechnung aktualisiert' : 'Rechnung angelegt', 'success');
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('rechnung');
       close();
       render(container);
     });
