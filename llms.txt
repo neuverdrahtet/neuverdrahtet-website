@@ -5,8 +5,10 @@
 > Prüftechnik, Wartung, Wärme & Klima, MSR/Gebäudeautomation und Elektrotechnik unter einem Dach — ein Ansprechpartner für das gesamte Projekt.
 
 ## Kontakt
-- Adresse: Donnerstr. 131, 45357 Essen
-- Telefon: 01706398575
+- Adresse: Krayerstr. 245, 45307 Essen
+- Telefon: 0201 89040405
+- Mobil: 0170 6398575
+- WhatsApp: https://wa.me/4920189040405
 - E-Mail: neuverdrahtet@gmail.com
 - Einsatzgebiet: Essen und Ruhrgebiet (u. a. Bochum, Mülheim an der Ruhr, Oberhausen, Gelsenkirchen, Bottrop, Duisburg)
 - [Kontakt / Anfrage](https://neuverdrahtet.com/kontakt.html)
@@ -43,9 +45,25 @@
 - [Smart Home](https://neuverdrahtet.com/elektrotechnik-smart-home.html)
 - [Photovoltaik](https://neuverdrahtet.com/elektrotechnik-photovoltaik.html)
 - [Wallbox](https://neuverdrahtet.com/elektrotechnik-wallbox.html)
+- [Rauchwarnmelder](https://neuverdrahtet.com/elektrotechnik-rauchwarnmelder.html)
 - [Elektro-Kostenrechner](https://neuverdrahtet.com/elektro-kostenrechner.html): Interaktiver Konfigurator für Beleuchtung, Photovoltaik, Wallbox, Smart Home u. v. m.
 - [Wallbox-Kostenschätzer](https://neuverdrahtet.com/wallbox-kostenschaetzer.html)
 - [KI-Check Unterverteilung](https://neuverdrahtet.com/ki-check-unterverteilung.html): Kostenloser KI-gestützter Foto-Check mit unverbindlicher Ersteinschätzung.
+
+## Elektro-Kleinaufträge (Haushalt)
+- [Elektriker für Kleinaufträge in Essen](https://neuverdrahtet.com/elektrotechnik-kleinauftraege.html): Auch einzelne kleine Elektroarbeiten. Kein Notdienst, Termine nach Vereinbarung.
+- [Lampe anschließen](https://neuverdrahtet.com/elektrotechnik-lampe-anschliessen.html): Deckenlampe, Wandleuchte und LED-Spots fachgerecht montiert.
+- [Steckdosen & Lichtschalter](https://neuverdrahtet.com/elektrotechnik-steckdosen-lichtschalter.html): Steckdosen nachrüsten, Schalter tauschen, Außensteckdose, Dimmer.
+- [Herd anschließen](https://neuverdrahtet.com/elektrotechnik-herd-anschliessen.html): Elektroherd, Backofen und Induktionskochfeld anschließen.
+- [Durchlauferhitzer anschließen](https://neuverdrahtet.com/elektrotechnik-durchlauferhitzer-anschliessen.html): Anschluss und Tausch von Durchlauferhitzern.
+- [Starkstromanschluss](https://neuverdrahtet.com/elektrotechnik-starkstromanschluss.html): Drehstrom 400 V für Küche, Garage, Werkstatt und Sauna.
+- [Sicherung fliegt raus](https://neuverdrahtet.com/elektrotechnik-sicherung-fliegt-raus.html): Fehlersuche, wenn Sicherung oder FI immer wieder auslöst.
+- [FI-Schutzschalter nachrüsten](https://neuverdrahtet.com/elektrotechnik-fi-schutzschalter-nachruesten.html): Schutz vor Stromschlag – auch im Altbau.
+- [Überspannungsschutz](https://neuverdrahtet.com/elektrotechnik-ueberspannungsschutz.html): Schutz für Elektronik vor Blitz- und Schaltüberspannungen.
+- [Balkonkraftwerk](https://neuverdrahtet.com/elektrotechnik-balkonkraftwerk.html): Stromkreis prüfen, Einspeisesteckdose, Anmeldung.
+- [Nachtspeicher ersetzen](https://neuverdrahtet.com/elektrotechnik-nachtspeicher-ersetzen.html): Rückbau, Zähleranlage und Anschluss der neuen Heizung.
+- [Klingel- & Sprechanlage](https://neuverdrahtet.com/elektrotechnik-klingel-sprechanlage.html): Klingel, Video- und Smartphone-Sprechanlagen.
+- [Netzwerk & LAN](https://neuverdrahtet.com/elektrotechnik-netzwerk-lan-verkabelung.html): LAN-Kabel, Netzwerkdosen und Patchfeld.
 
 ## Privatkunden
 - [Privatkunden](https://neuverdrahtet.com/privatkunden.html): Elektroinstallation, Smart Home, Photovoltaik, Wallbox u.v.m. für Eigenheim, Eigentumswohnung, Neubau und Sanierung.
