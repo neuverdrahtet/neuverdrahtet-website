@@ -12,6 +12,7 @@ import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 import { generateAngebotFromStichpunkte } from '../ai.js';
 import { openStichpunkteSprachModal } from '../voicenote.js';
+import { ladeEntwurf, loescheEntwurf, autosaveEntwurf } from '../formdraft.js';
 
 const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', bestaetigt: 'Bestätigt', storniert: 'Storniert' };
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', bestaetigt: 'badge-success', storniert: 'badge-danger' };
@@ -193,14 +194,20 @@ export async function render(container, route) {
 
   function openForm(a, ausAngebot, prefill) {
     const isEdit = !!a;
+    // nutzeEntwurf: siehe angebote.js - ein evtl. vorhandener Entwurf wird nur
+    // bei der ganz normalen Blanko-"Neue Auftragsbestätigung" automatisch
+    // übernommen, nicht bei einer Umwandlung aus einem Angebot oder einem Prefill.
+    const nutzeEntwurf = !isEdit && !ausAngebot && !prefill;
+    const entwurf = nutzeEntwurf ? ladeEntwurf('ab') : null;
     const data = a || {
-      id: uid(), nummer: '', kundeId: ausAngebot?.kundeId || prefill?.kundeId || '', projektId: ausAngebot?.projektId || prefill?.projektId || '', datum: todayISO(),
-      status: 'entwurf', betreff: ausAngebot?.betreff || '', notizen: ausAngebot?.notizen || '',
-      positionen: ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : [],
+      id: uid(), nummer: entwurf?.formData.nummer || '', kundeId: entwurf?.formData.kundeId || ausAngebot?.kundeId || prefill?.kundeId || '', projektId: entwurf?.formData.projektId || ausAngebot?.projektId || prefill?.projektId || '', datum: entwurf?.formData.datum || todayISO(),
+      status: 'entwurf', betreff: entwurf?.formData.betreff || ausAngebot?.betreff || '', notizen: entwurf?.formData.notizen || ausAngebot?.notizen || '',
+      positionen: entwurf?.positionen || (ausAngebot ? ausAngebot.positionen.map((p) => ({ ...p, id: uid() })) : []),
       angebotId: ausAngebot?.id || '', createdAt: new Date().toISOString(),
-      steuerart: ausAngebot?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
+      steuerart: entwurf?.formData.steuerart || ausAngebot?.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
       unterschriftKunde: '', stornoGrund: '', stornoGrundText: '',
     };
+    if (entwurf) toast('Nicht gespeicherter Entwurf wurde wiederhergestellt', 'info');
 
     const suggestedNummer = !isEdit
       ? nextDailyNummer(settings.auftragsbestaetigungPrefix, { datum: settings.auftragsbestaetigungNummerDatum, zaehler: settings.auftragsbestaetigungNummerZaehler }).nummer
@@ -210,6 +217,7 @@ export async function render(container, route) {
       title: isEdit ? `Auftragsbestätigung ${data.nummer}` : 'Neue Auftragsbestätigung',
       wide: true,
       fullscreen: true,
+      onClose: () => entwurfHandle?.stop(),
       bodyHtml: `
         <form id="ab-form">
           <div class="form-grid">
@@ -270,6 +278,11 @@ export async function render(container, route) {
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
     });
+
+    // Entwurf-Autosave nur fürs ganz neue, unausgefüllte Formular (siehe
+    // nutzeEntwurf oben) - rein lokal (localStorage), kein Firestore-Schreiben.
+    const entwurfHandle = nutzeEntwurf ? autosaveEntwurf(body.querySelector('#ab-form'), 'ab', () => editor.getPositionen()) : null;
+
     if (!isEdit) {
       body.querySelector('#btn-ki-erstellen').addEventListener('click', () => {
         openStichpunkteSprachModal({
@@ -365,7 +378,11 @@ export async function render(container, route) {
     }
     mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
 
-    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-cancel').addEventListener('click', () => {
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('ab');
+      close();
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Auftragsbestätigung ${data.nummer} wirklich löschen?`)) return;
@@ -480,6 +497,8 @@ export async function render(container, route) {
 
       await put('auftragsbestaetigungen', updated);
       toast(isEdit ? 'Auftragsbestätigung aktualisiert' : 'Auftragsbestätigung angelegt', 'success');
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('ab');
       close();
       render(container);
     });

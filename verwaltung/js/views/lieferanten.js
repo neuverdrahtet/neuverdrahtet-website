@@ -39,6 +39,7 @@ function parseLieferantenCsv(text) {
 export async function render(container) {
   let liste = await getAll('lieferanten');
   liste.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
+  let filtered = liste;
   const bulk = createBulkSelect('lieferanten', { label: 'Lieferanten' });
 
   container.innerHTML = `
@@ -51,13 +52,16 @@ export async function render(container) {
       </div>
     </div>
     <p class="hint">Kontakt-/Stammdaten eurer Großhändler und Lieferanten. Der Abschnitt "Großhandelsanbindung" ist optional - erst ausfüllen, wenn ihr echte IDS-Connect-Zugangsdaten vom jeweiligen Großhändler bekommen habt.</p>
+    <div class="search-bar">
+      <input type="search" id="search" placeholder="Suche nach Firma, Ansprechpartner, Ort ...">
+    </div>
     <div id="table-host"></div>
   `;
   const tableHost = container.querySelector('#table-host');
 
   function renderTable() {
-    if (liste.length === 0) {
-      tableHost.innerHTML = '<div class="empty-state">Noch keine Lieferanten angelegt.</div>';
+    if (filtered.length === 0) {
+      tableHost.innerHTML = `<div class="empty-state">${liste.length === 0 ? 'Noch keine Lieferanten angelegt.' : 'Keine Lieferanten gefunden.'}</div>`;
       return;
     }
     tableHost.innerHTML = `
@@ -65,7 +69,7 @@ export async function render(container) {
       <table class="data-table">
         <thead><tr>${bulk.headerCell()}<th></th><th>Firma</th><th>Ansprechpartner</th><th>Telefon</th><th>E-Mail</th><th>Ort</th><th>Großhandelsanbindung</th></tr></thead>
         <tbody>
-          ${liste.map((l) => `
+          ${filtered.map((l) => `
             <tr data-id="${l.id}">
               ${bulk.rowCell(l.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${l.farbe || FARBEN[0]}"></span></td>
@@ -87,10 +91,19 @@ export async function render(container) {
       onChange: renderTable,
       onDeleted: (ids) => {
         liste = liste.filter((l) => !ids.includes(l.id));
+        filtered = filtered.filter((l) => !ids.includes(l.id));
         renderTable();
       },
     });
   }
+
+  container.querySelector('#search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    filtered = liste.filter((l) =>
+      [l.firma, l.ansprechpartner, l.ort, l.email, l.telefon].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+    renderTable();
+  });
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export').addEventListener('click', () => {

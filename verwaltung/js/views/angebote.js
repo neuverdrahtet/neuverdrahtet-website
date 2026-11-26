@@ -16,6 +16,7 @@ import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
 import * as google from '../google.js';
 import { openAngebotsrechner } from '../angebotsrechner.js';
+import { ladeEntwurf, loescheEntwurf, autosaveEntwurf } from '../formdraft.js';
 
 const STATUS_LABEL = {
   entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt',
@@ -588,15 +589,23 @@ export async function render(container, route) {
 
   function openForm(a, prefill) {
     const isEdit = !!a;
+    // nutzeEntwurf: ein evtl. vorhandener, nie abgeschickter Entwurf wird nur
+    // beim ganz normalen Blanko-"Neues Angebot" automatisch übernommen - bei
+    // einem Prefill (z.B. Übernahme aus einer Anfrage/E-Mail) hat dessen Inhalt
+    // Vorrang, sonst würde ein alter Entwurf überraschend die eigentlich
+    // gewollten Prefill-Daten überschreiben.
+    const nutzeEntwurf = !isEdit && !prefill;
+    const entwurf = nutzeEntwurf ? ladeEntwurf('angebot') : null;
     const data = a || {
-      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
-      gueltigBis: addDays(todayISO(), settings.angebotGueltigTage || 30),
-      status: 'entwurf', betreff: prefill?.betreff || '', notizen: prefill?.notizen || '', positionen: prefill?.positionen || [], createdAt: new Date().toISOString(),
-      steuerart: settings.kleinunternehmer ? 'kleinunternehmer' : 'regel',
+      id: uid(), nummer: entwurf?.formData.nummer || '', kundeId: entwurf?.formData.kundeId || prefill?.kundeId || '', projektId: entwurf?.formData.projektId || prefill?.projektId || '', datum: entwurf?.formData.datum || todayISO(),
+      gueltigBis: entwurf?.formData.gueltigBis || addDays(todayISO(), settings.angebotGueltigTage || 30),
+      status: 'entwurf', betreff: entwurf?.formData.betreff || prefill?.betreff || '', notizen: entwurf?.formData.notizen || prefill?.notizen || '', positionen: entwurf?.positionen || prefill?.positionen || [], createdAt: new Date().toISOString(),
+      steuerart: entwurf?.formData.steuerart || (settings.kleinunternehmer ? 'kleinunternehmer' : 'regel'),
       unterschriftKunde: '', ablehnungsgrund: '', ablehnungsgrundText: '', annahmeGrund: '', annahmeGrundText: '',
-      detailgrad: 'einzelpreise',
+      detailgrad: entwurf?.formData.detailgrad || 'einzelpreise',
       nachtragZuAngebotId: prefill?.nachtragZuAngebotId || '', nachtragZuNummer: prefill?.nachtragZuNummer || '',
     };
+    if (entwurf) toast('Nicht gespeicherter Entwurf wurde wiederhergestellt', 'info');
 
     const suggestedNummer = !isEdit
       ? nextDailyNummer(settings.angebotPrefix, { datum: settings.angebotNummerDatum, zaehler: settings.angebotNummerZaehler }).nummer
@@ -606,6 +615,7 @@ export async function render(container, route) {
       title: isEdit ? `Angebot ${data.nummer}` : 'Neues Angebot',
       wide: true,
       fullscreen: true,
+      onClose: () => entwurfHandle?.stop(),
       bodyHtml: `
         <form id="ang-form">
           <div class="form-grid">
@@ -702,6 +712,12 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
       defaultSteuersatz: settings.standardSteuersatz,
       vorlagen,
     });
+
+    // Entwurf-Autosave nur fürs ganz neue, unausgefüllte Angebot (siehe
+    // nutzeEntwurf oben) - schützt vor Datenverlust bei versehentlichem
+    // Schließen (Backdrop-Klick, Escape, Wegnavigieren), ohne eine echte
+    // Rechnungs-/Angebotsnummer zu "verbrauchen" (rein lokal, kein Firestore).
+    const entwurfHandle = nutzeEntwurf ? autosaveEntwurf(body.querySelector('#ang-form'), 'angebot', () => editor.getPositionen()) : null;
 
     const angebotsvorlageSelect = body.querySelector('#f-angebotsvorlage-select');
     if (angebotsvorlageSelect) {
@@ -905,7 +921,11 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
     }
     mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
 
-    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-cancel').addEventListener('click', () => {
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('angebot');
+      close();
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Angebot ${data.nummer} in den Papierkorb verschieben?`)) return;
@@ -1103,6 +1123,8 @@ const { kundePicker, projektPicker } = mountKundeProjektPicker({
       const wurdeGeradeVersendet = isEdit && data.status !== 'versendet' && updated.status === 'versendet';
       await put('angebote', updated);
       toast(isEdit ? 'Angebot aktualisiert' : 'Angebot angelegt', 'success');
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('angebot');
 
       // Automatischer Versand bei Freigabe (Statuswechsel -> "Versendet"):
       // bewusst nur wenn explizit in den Einstellungen aktiviert (Standard

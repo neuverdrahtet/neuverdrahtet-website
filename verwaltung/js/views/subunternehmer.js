@@ -43,6 +43,7 @@ export function parseSubunternehmerCsv(text) {
 export async function render(container) {
   let liste = await getAll('subunternehmer');
   liste.sort((a, b) => (a.firma || '').localeCompare(b.firma || ''));
+  let filtered = liste;
   const bulk = createBulkSelect('subunternehmer', { label: 'Subunternehmer' });
 
   container.innerHTML = `
@@ -54,13 +55,16 @@ export async function render(container) {
         <button class="btn btn-primary" id="btn-new">+ Neuer Subunternehmer</button>
       </div>
     </div>
+    <div class="search-bar">
+      <input type="search" id="search" placeholder="Suche nach Firma, Ansprechpartner, Gewerk ...">
+    </div>
     <div id="table-host"></div>
   `;
   const tableHost = container.querySelector('#table-host');
 
   function renderTable() {
-    if (liste.length === 0) {
-      tableHost.innerHTML = '<div class="empty-state">Noch keine Subunternehmer angelegt.</div>';
+    if (filtered.length === 0) {
+      tableHost.innerHTML = `<div class="empty-state">${liste.length === 0 ? 'Noch keine Subunternehmer angelegt.' : 'Keine Subunternehmer gefunden.'}</div>`;
       return;
     }
     tableHost.innerHTML = `
@@ -68,7 +72,7 @@ export async function render(container) {
       <table class="data-table">
         <thead><tr>${bulk.headerCell()}<th></th><th>Firma</th><th>Ansprechpartner</th><th>Telefon</th><th>E-Mail</th><th>Gewerk</th></tr></thead>
         <tbody>
-          ${liste.map((s) => `
+          ${filtered.map((s) => `
             <tr data-id="${s.id}">
               ${bulk.rowCell(s.id)}
               <td><span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${s.farbe || FARBEN[0]}"></span></td>
@@ -89,10 +93,19 @@ export async function render(container) {
       onChange: renderTable,
       onDeleted: (ids) => {
         liste = liste.filter((s) => !ids.includes(s.id));
+        filtered = filtered.filter((s) => !ids.includes(s.id));
         renderTable();
       },
     });
   }
+
+  container.querySelector('#search').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    filtered = liste.filter((s) =>
+      [s.firma, s.ansprechpartner, s.email, s.telefon, gewerkTitel(s.gewerk)].filter(Boolean).join(' ').toLowerCase().includes(q)
+    );
+    renderTable();
+  });
 
   container.querySelector('#btn-new').addEventListener('click', () => openForm());
   container.querySelector('#btn-export').addEventListener('click', () => {
