@@ -18,6 +18,7 @@ import { sendDocumentViaWhatsApp } from '../whatsapp.js';
 import { createBulkSelect } from '../bulkselect.js';
 import { mountSignaturePad } from '../signature.js';
 import { downloadCsv, exportDokumenteAlsPdf } from '../docexport.js';
+import { ladeEntwurf, loescheEntwurf, autosaveEntwurf } from '../formdraft.js';
 
 const STATUS_LABEL = { entwurf: 'Entwurf', versendet: 'Versendet', storniert: 'Storniert' };
 const STATUS_BADGE = { entwurf: 'badge', versendet: 'badge-accent', storniert: 'badge-danger' };
@@ -188,14 +189,20 @@ export async function render(container, route) {
 
   function openForm(l, prefill) {
     const isEdit = !!l;
+    // nutzeEntwurf: siehe angebote.js - ein evtl. vorhandener Entwurf wird nur
+    // bei dem ganz normalen Blanko-"Neuer Lieferschein" automatisch übernommen,
+    // nicht bei einem Prefill (z.B. Umwandlung aus einem Angebot/einer AB).
+    const nutzeEntwurf = !isEdit && !prefill;
+    const entwurf = nutzeEntwurf ? ladeEntwurf('lieferschein') : null;
     const data = l || {
-      id: uid(), nummer: '', kundeId: prefill?.kundeId || '', projektId: prefill?.projektId || '', datum: todayISO(),
-      status: 'entwurf', betreff: prefill?.betreff || '', notizen: '',
-      positionen: prefill?.positionen ? prefill.positionen.map((p) => ({ ...p, id: uid() })) : [],
+      id: uid(), nummer: entwurf?.formData.nummer || '', kundeId: entwurf?.formData.kundeId || prefill?.kundeId || '', projektId: entwurf?.formData.projektId || prefill?.projektId || '', datum: entwurf?.formData.datum || todayISO(),
+      status: 'entwurf', betreff: entwurf?.formData.betreff || prefill?.betreff || '', notizen: entwurf?.formData.notizen || '',
+      positionen: entwurf?.positionen || (prefill?.positionen ? prefill.positionen.map((p) => ({ ...p, id: uid() })) : []),
       angebotId: prefill?.angebotId || '', auftragsbestaetigungId: prefill?.auftragsbestaetigungId || '',
       createdAt: new Date().toISOString(),
       unterschriftKunde: '', stornoGrund: '', stornoGrundText: '',
     };
+    if (entwurf) toast('Nicht gespeicherter Entwurf wurde wiederhergestellt', 'info');
 
     const suggestedNummer = !isEdit
       ? nextDailyNummer(settings.lieferscheinPrefix, { datum: settings.lieferscheinNummerDatum, zaehler: settings.lieferscheinNummerZaehler }).nummer
@@ -205,6 +212,7 @@ export async function render(container, route) {
       title: isEdit ? `Lieferschein ${data.nummer}` : 'Neuer Lieferschein',
       wide: true,
       fullscreen: true,
+      onClose: () => entwurfHandle?.stop(),
       bodyHtml: `
         <form id="ls-form">
           <div class="form-grid">
@@ -260,6 +268,10 @@ export async function render(container, route) {
       vorlagen,
     });
 
+    // Entwurf-Autosave nur fürs ganz neue, unausgefüllte Formular (siehe
+    // nutzeEntwurf oben) - rein lokal (localStorage), kein Firestore-Schreiben.
+    const entwurfHandle = nutzeEntwurf ? autosaveEntwurf(body.querySelector('#ls-form'), 'lieferschein', () => editor.getPositionen()) : null;
+
     if (isEdit) {
       body.querySelector('#f-status').addEventListener('change', (e) => {
         body.querySelector('#storno-grund-section').hidden = e.target.value !== 'storniert';
@@ -307,7 +319,11 @@ export async function render(container, route) {
     }
     mountDocPreviewToggle({ body, getDocOpts: docOpts, settings, defaultView: settings.dokStandardansicht });
 
-    body.querySelector('#btn-cancel').addEventListener('click', close);
+    body.querySelector('#btn-cancel').addEventListener('click', () => {
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('lieferschein');
+      close();
+    });
     if (isEdit) {
       body.querySelector('#btn-delete').addEventListener('click', async () => {
         if (!confirmDelete(`Lieferschein ${data.nummer} wirklich löschen?`)) return;
@@ -384,6 +400,8 @@ export async function render(container, route) {
 
       await put('lieferscheine', updated);
       toast(isEdit ? 'Lieferschein aktualisiert' : 'Lieferschein angelegt', 'success');
+      entwurfHandle?.stop();
+      if (nutzeEntwurf) loescheEntwurf('lieferschein');
       close();
       render(container);
     });
