@@ -530,7 +530,7 @@
   </url>
   <url>
     <loc>https://neuverdrahtet.com/ratgeber.html</loc>
-    <lastmod>2026-09-29</lastmod>
+    <lastmod>2026-11-26</lastmod>
     <priority>0.7</priority>
     <changefreq>monthly</changefreq>
   </url>
@@ -622,6 +622,24 @@
     <loc>https://neuverdrahtet.com/elektrotechnik-netzwerk-lan-verkabelung.html</loc>
     <lastmod>2026-11-26</lastmod>
     <priority>0.8</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-elektrik-altbau-erneuern.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-zaehlerschrank-erneuern-pflicht.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
+    <changefreq>monthly</changefreq>
+  </url>
+  <url>
+    <loc>https://neuverdrahtet.com/ratgeber-hausanschluss-wallbox-waermepumpe-pv.html</loc>
+    <lastmod>2026-11-26</lastmod>
+    <priority>0.6</priority>
     <changefreq>monthly</changefreq>
   </url>
 </urlset>
