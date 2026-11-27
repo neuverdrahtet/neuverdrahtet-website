@@ -36,8 +36,11 @@ Containers (`docker restart werkora`) verliert nichts.
 ### Ohne Docker (Node 22+ muss installiert sein)
 
 ```
-node selfhost-server/server.js
+cd selfhost-server && npm install && node server.js
 ```
+
+(`npm install` wird nur für Push-Benachrichtigungen gebraucht - die einzige
+externe Abhängigkeit des ganzen Servers, siehe `package.json`.)
 
 ## Erstes Login
 
@@ -85,6 +88,23 @@ betroffenen E-Mail-Adressen auf.
 | `DATA_DIR`       | `./data`              | Ordner für Datenbank, Dateien, Session-Key  |
 | `ADMIN_EMAIL`    | `admin@werkora.local` | Nur beim allerersten Start relevant         |
 | `ADMIN_PASSWORD` | zufällig erzeugt      | Nur beim allerersten Start relevant         |
+| `PUSH_CONTACT_EMAIL` | `ADMIN_EMAIL`     | Kontaktadresse für Push-Dienste (VAPID "mailto:") |
+
+Die VAPID-Schlüssel für Push-Benachrichtigungen werden beim allerersten
+Start automatisch erzeugt und in `data/vapid-keys.json` abgelegt - kein
+manueller Schritt nötig.
+
+## Push-Benachrichtigungen (Web-Push statt Firebase Cloud Messaging)
+
+Funktioniert mit jedem Browser, der die Standard-Push-API unterstützt (kein
+Google/Firebase-Konto nötig). Server-seitig verifiziert (VAPID-Schlüssel
+erzeugen/laden, Senden inkl. Entfernen abgelaufener Geräte bei einer
+410-Antwort des Push-Dienstes). Der eigentliche Browser-Teil
+(`pushManager.subscribe()`) folgt dem etablierten Standardmuster, ließ sich
+in der Entwicklungsumgebung dieses Projekts aber nicht vollständig
+ausprobieren (abgeschottete Netzwerkumgebung ohne Zugriff auf echte
+Push-Dienste) - bitte nach dem ersten Einsatz einmal mit einem echten
+Gerät/Browser unter Einstellungen -> Benachrichtigungen prüfen.
 
 ## Bekannte Lücken (bewusst noch nicht portiert)
 
@@ -92,9 +112,6 @@ betroffenen E-Mail-Adressen auf.
   bisherigen Firebase-Auth sind noch nicht nachgebaut. Login per
   E-Mail+Passwort sowie Einladungs-basierte Registrierung (Mitarbeiter/Kunden)
   funktionieren.
-- **Push-Benachrichtigungen**: noch nicht fertig nachgebaut (siehe
-  `verwaltung/js/push.js` - müsste auf Standard-Web-Push/VAPID umgestellt
-  werden statt Firebase Cloud Messaging).
 - **Mehrgeräte-Live-Updates** (z.B. sofortiges Erscheinen neuer
   Beleg-Vorschläge auf einem anderen Gerät ohne Neuladen) laufen aktuell per
   einfachem Nachladen statt Firestores Echtzeit-Listenern - im Alltag eines

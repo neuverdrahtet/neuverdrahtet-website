@@ -6,6 +6,7 @@ import * as metaSocial from '../metaSocial.js';
 import * as lexoffice from '../lexoffice.js';
 import * as push from '../push.js';
 import { FIREBASE_ENABLED } from '../employeeAuth.js';
+import { selfhostConfig } from '../selfhost-config.js';
 import { previewLegacyData, migrateLegacyData } from '../migrate.js';
 import { isStandalone, canPromptInstall, isIos, onInstallAvailabilityChange, promptInstall } from '../installPrompt.js';
 
@@ -117,6 +118,7 @@ export async function render(container) {
   const pushCapable = push.isBrowserCapable();
   const pushPermission = push.permissionState();
   const pushSubscribed = pushCapable ? await push.isSubscribed() : false;
+  const SELFHOST_ENABLED = !!selfhostConfig.enabled;
 
   container.innerHTML = `
     <div class="view-header">
@@ -514,8 +516,9 @@ export async function render(container) {
             Muss je Gerät/Browser einmal aktiviert werden (Handy, Laptop, ... jeweils einzeln).
           </p>
           ${!pushCapable ? `
-            <p class="hint">${!FIREBASE_ENABLED ? 'Benachrichtigungen benötigen die Firebase-Cloud-Anbindung (im lokalen Testmodus nicht verfügbar).' : 'Dieser Browser/dieses Gerät unterstützt Push-Benachrichtigungen nicht (z.B. iPhone-Safari ohne "Zum Home-Bildschirm hinzufügen").'}</p>
+            <p class="hint">${!FIREBASE_ENABLED ? 'Benachrichtigungen benötigen die Firebase-Cloud- oder die Selfhost-Server-Anbindung (im lokalen Testmodus nicht verfügbar).' : 'Dieser Browser/dieses Gerät unterstützt Push-Benachrichtigungen nicht (z.B. iPhone-Safari ohne "Zum Home-Bildschirm hinzufügen").'}</p>
           ` : `
+            ${!SELFHOST_ENABLED ? `
             <form id="push-vapid-form">
               <div class="form-grid">
                 <div class="field col-span-2"><label>VAPID-Key (aus der Firebase-Konsole, Cloud Messaging)</label><input type="password" name="pushVapidKey" value="${escapeHtml(settings.pushVapidKey || '')}"></div>
@@ -523,12 +526,13 @@ export async function render(container) {
               <div class="modal-actions" style="border:none;padding-top:10px"><button type="submit" class="btn btn-primary">Speichern</button></div>
             </form>
             <div class="divider"></div>
+            ` : ''}
             <div class="flex-row" style="gap:10px;align-items:center">
               <span id="push-status" class="badge ${pushSubscribed ? 'badge-success' : 'badge'}">${pushSubscribed ? 'Aktiviert auf diesem Gerät' : pushPermission === 'denied' ? 'Vom Browser blockiert' : 'Nicht aktiviert'}</span>
               <span class="spacer"></span>
               ${pushSubscribed
                 ? '<button type="button" class="btn" id="btn-push-toggle">Auf diesem Gerät deaktivieren</button>'
-                : `<button type="button" class="btn" id="btn-push-toggle" ${!settings.pushVapidKey || pushPermission === 'denied' ? 'disabled' : ''}>Auf diesem Gerät aktivieren</button>`}
+                : `<button type="button" class="btn" id="btn-push-toggle" ${(!SELFHOST_ENABLED && !settings.pushVapidKey) || pushPermission === 'denied' ? 'disabled' : ''}>Auf diesem Gerät aktivieren</button>`}
             </div>
             ${pushPermission === 'denied' ? '<p class="hint">Benachrichtigungen wurden für diese Seite im Browser blockiert - das lässt sich nur in den Browser-Einstellungen wieder ändern.</p>' : ''}
           `}

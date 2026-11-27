@@ -1,6 +1,7 @@
 import { initializeApp } from './js/vendor/firebase/firebase-app.js';
 import { getMessaging, onBackgroundMessage } from './js/vendor/firebase/firebase-messaging-sw.js';
 import { firebaseConfig } from './js/firebase-config.js';
+import { selfhostConfig } from './js/selfhost-config.js';
 
 const CACHE_NAME = 'nv-verwaltung-v3';
 
@@ -65,8 +66,25 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Push-Benachrichtigungen: nur wenn ein Firebase-Projekt konfiguriert ist
-// (im lokalen IndexedDB-Fallback-Modus gibt es keinen Messaging-Sender).
+// notificationclick gilt für beide Push-Wege (Firebase UND Selfhost/Web-Push)
+// gleichermaßen - deshalb hier außerhalb der beiden Blöcke unten, unabhängig
+// davon registriert, welcher der beiden Wege die Benachrichtigung erzeugt hat.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || './index.html';
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((c) => c.url.includes('verwaltung/index.html'));
+      if (existing) return existing.focus();
+      return self.clients.openWindow(url);
+    })
+  );
+});
+
+// Push-Benachrichtigungen: entweder über Firebase Cloud Messaging oder über
+// Standard-Web-Push gegen den eigenen Selfhost-Server (siehe
+// selfhost-server/lib/push.js) - im lokalen IndexedDB-Fallback-Modus gibt es
+// keinen von beiden.
 if (firebaseConfig.projectId && firebaseConfig.messagingSenderId) {
   const app = initializeApp(firebaseConfig);
   const messaging = getMessaging(app);
@@ -80,16 +98,30 @@ if (firebaseConfig.projectId && firebaseConfig.messagingSenderId) {
       data: { url: payload.data?.url || './index.html' },
     });
   });
+}
 
-  self.addEventListener('notificationclick', (event) => {
-    event.notification.close();
-    const url = event.notification.data?.url || './index.html';
-    event.waitUntil(
-      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-        const existing = clients.find((c) => c.url.includes('verwaltung/index.html'));
-        if (existing) return existing.focus();
-        return self.clients.openWindow(url);
-      })
-    );
+if (selfhostConfig.enabled) {
+  // Standard-Web-Push liefert die Nachricht als verschlüsselten Payload an
+  // GENAU dieses "push"-Event - es gibt (anders als Firebase Messaging)
+  // keinen separaten Vordergrund/Hintergrund-Unterschied auf Protokollebene;
+  // ob ein Tab offen ist, wird hier selbst per postMessage an die Clients
+  // weitergereicht (siehe initForegroundListener() in js/push.js).
+  self.addEventListener('push', (event) => {
+    let data = {};
+    try { data = event.data?.json() || {}; } catch { /* kein gültiges JSON - leere Benachrichtigung */ }
+    event.waitUntil((async () => {
+      const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const vordergrundOffen = clients.some((c) => c.visibilityState === 'visible');
+      if (vordergrundOffen) {
+        for (const c of clients) c.postMessage({ type: 'nv-push', title: data.title, body: data.body, url: data.url });
+      } else {
+        await self.registration.showNotification(data.title || 'Werkora', {
+          body: data.body || '',
+          icon: './icons/icon-192.png',
+          badge: './icons/icon-192.png',
+          data: { url: data.url || './index.html' },
+        });
+      }
+    })());
   });
 }
