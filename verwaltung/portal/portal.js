@@ -1,4 +1,6 @@
 import { firebaseConfig } from '../js/firebase-config.js';
+import { selfhostConfig } from '../js/selfhost-config.js';
+import * as selfhost from '../js/selfhostClient.js';
 import { get, getAll } from '../js/db.js';
 import { escapeHtml, formatDate, formatCurrency } from '../js/utils.js';
 
@@ -6,9 +8,12 @@ import { escapeHtml, formatDate, formatCurrency } from '../js/utils.js';
 // verwaltung-SPA/main.js) - Kunden bekommen nie die interne
 // Sidebar/Navigation zu sehen, und ein Bug hier kann nicht versehentlich
 // interne Admin-Routen erreichbar machen. Rein lesend: Angebote/Rechnungen/
-// Termine des eigenen Kunden. Sicherheit läuft über firestore.rules
-// (myKundeId() == resource.data.kundeId je Dokument), nicht über UI-Logik.
-const FIREBASE_ENABLED = !!firebaseConfig.projectId;
+// Termine des eigenen Kunden. Sicherheit läuft serverseitig (im Selfhost-
+// Betrieb über die Rollenprüfung in selfhost-server/lib/access.js, im
+// Firestore-Betrieb über firestore.rules: myKundeId() == resource.data.kundeId
+// je Dokument) - nicht über UI-Logik.
+const SELFHOST_ENABLED = !!selfhostConfig.enabled;
+const FIREBASE_ENABLED = !SELFHOST_ENABLED && !!firebaseConfig.projectId;
 
 const STATUS_LABEL_ANGEBOT = { entwurf: 'Entwurf', versendet: 'Versendet', angenommen: 'Angenommen', abgelehnt: 'Abgelehnt' };
 const STATUS_BADGE_ANGEBOT = { entwurf: 'badge', versendet: 'badge-accent', angenommen: 'badge-success', abgelehnt: 'badge-danger' };
@@ -28,7 +33,7 @@ const AUTH_ERROR_MESSAGES = {
 let session = null; // { kundeId, email, name }
 
 async function main() {
-  session = FIREBASE_ENABLED ? await initFirebaseAuth() : await initFallbackAuth();
+  session = SELFHOST_ENABLED ? await initSelfhostAuth() : FIREBASE_ENABLED ? await initFirebaseAuth() : await initFallbackAuth();
   await showPortal();
 }
 
@@ -65,6 +70,85 @@ async function initFallbackAuth() {
       }
       lockScreen.hidden = true;
       resolve({ kundeId: kunde.id, email: kunde.email, name: kunde.firma });
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Echtes Login: Selfhost-Server (E-Mail + Passwort), gespiegelt von auth.js'
+// initSelfhostLogin() - hier aber mit Prüfung auf Rolle 'kunde' statt einer
+// gemeinsamen sessionStorage-Session (Portal ist eine eigene Seite).
+// ---------------------------------------------------------------------------
+async function initSelfhostAuth() {
+  const lockScreen = document.getElementById('lock-screen');
+  const form = document.getElementById('auth-form');
+  const emailInput = document.getElementById('auth-email');
+  const passwordInput = document.getElementById('auth-password');
+  const error = document.getElementById('auth-error');
+  const title = document.getElementById('auth-title');
+  const submitBtn = document.getElementById('auth-submit');
+  const modeToggle = document.getElementById('auth-mode-toggle');
+  const hint = document.getElementById('auth-hint');
+
+  let mode = 'login';
+  function setMode(next) {
+    mode = next;
+    error.hidden = true;
+    title.textContent = mode === 'login' ? 'Anmelden' : 'Konto erstellen';
+    submitBtn.textContent = mode === 'login' ? 'Anmelden' : 'Konto erstellen';
+    modeToggle.textContent = mode === 'login' ? 'Registrieren' : 'Bereits ein Konto? Anmelden';
+    hint.textContent = mode === 'login'
+      ? 'Bitte mit deiner E-Mail und deinem Passwort anmelden.'
+      : 'Nur möglich, wenn neuverdrahtet dich per E-Mail-Adresse für das Portal eingeladen hat.';
+  }
+  setMode('login');
+
+  return new Promise((resolve) => {
+    function finish(session, fallbackEmail) {
+      lockScreen.hidden = true;
+      resolve({ kundeId: session.kundeId, email: fallbackEmail, name: session.name || fallbackEmail });
+    }
+
+    async function handleSession(session, fallbackEmail) {
+      if (session && session.role === 'kunde' && session.kundeId) {
+        finish(session, fallbackEmail);
+        return true;
+      }
+      if (session) {
+        await selfhost.logout();
+        error.textContent = 'Dieses Konto hat keinen Portal-Zugang. Bitte bei neuverdrahtet nachfragen.';
+        error.hidden = false;
+      }
+      return false;
+    }
+
+    (async () => {
+      const session = await selfhost.fetchSession();
+      if (session && (await handleSession(session))) return;
+      lockScreen.hidden = false;
+    })();
+
+    modeToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      setMode(mode === 'login' ? 'register' : 'login');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      error.hidden = true;
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) return;
+      submitBtn.disabled = true;
+      try {
+        const session = mode === 'login' ? await selfhost.login(email, password) : await selfhost.register(email, password);
+        await handleSession(session, email);
+      } catch (err) {
+        error.textContent = err.message || 'Unbekannter Fehler.';
+        error.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+      }
     });
   });
 }
@@ -218,7 +302,9 @@ async function showPortal() {
   document.getElementById('portal-kunde-name').textContent = kunde?.firma ? `Willkommen, ${kunde.firma}` : 'Willkommen';
 
   document.getElementById('btn-logout').addEventListener('click', async () => {
-    if (FIREBASE_ENABLED) {
+    if (SELFHOST_ENABLED) {
+      await selfhost.logout();
+    } else if (FIREBASE_ENABLED) {
       const { auth } = await import('../js/firebase.js');
       const { signOut } = await import('../js/vendor/firebase/firebase-auth.js');
       await signOut(auth);

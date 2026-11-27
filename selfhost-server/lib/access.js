@@ -29,6 +29,10 @@ const KUNDE_LESBARE_COLLECTIONS = new Set([
 const MITARBEITER_GESPERRTE_COLLECTIONS = new Set([
   'mitarbeiter', 'katalog', 'konten', 'buchungen', 'bankbuchungen', 'anlagegueter',
   'reisekostensaetze', 'reisekostenabrechnungen', 'mitarbeiterBenefits', 'benefitSteuerregeln', 'bonusreferenzwerte',
+  // passwordResets enthält Tokens, mit denen sich JEDES Passwort (auch das
+  // von admin) setzen lässt, solange sie gültig sind - über die generische
+  // API dürfen die niemand außer admin/büro sehen oder anlegen können.
+  'passwordResets',
 ]);
 
 function gehoertZuKunde(collection, row, kundeId) {
