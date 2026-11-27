@@ -7,6 +7,7 @@ compatibility_date = "2026-01-01"
 
 [vars]
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
+MODEL_ID = "claude-sonnet-4-5"
 
 # Begrenzt teure Claude-Vision-Aufrufe auf 20 pro IP und Minute - schützt vor
 # unbegrenzten Kosten durch ein Skript. Seit P0-Sicherheitskorrektur (siehe
