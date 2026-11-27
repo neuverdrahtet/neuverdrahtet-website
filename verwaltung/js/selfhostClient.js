@@ -40,6 +40,12 @@ export async function fetchSession() {
     return null;
   }
 }
+export async function forgotPassword(email) {
+  return request('POST', '/api/forgot-password', { email });
+}
+export async function resetPassword(token, password) {
+  return request('POST', '/api/reset-password', { token, password });
+}
 
 // --- Generische Collection-API ----------------------------------------------
 export async function getAllSelfhost(collectionName, filter) {

@@ -107,9 +107,10 @@ function initPinLock() {
 // ---------------------------------------------------------------------------
 // Echtes Login: eigener Selfhost-Server (E-Mail + Passwort)
 // ---------------------------------------------------------------------------
-// Bewusst ohne Zwei-Faktor-Code und "Passwort vergessen" (siehe
-// selfhost-server/README.md "Bekannte Lücken") - die entsprechenden Boxen
-// aus dem Firebase-Login bleiben hier einfach ungenutzt/versteckt.
+// Bewusst ohne Zwei-Faktor-Code (siehe selfhost-server/README.md "Bekannte
+// Lücken") - die MFA-Box aus dem Firebase-Login bleibt hier ungenutzt/
+// versteckt. "Passwort vergessen" nutzt dieselbe Box wie die Firebase-
+// Variante, nur mit dem Selfhost-Server als Ziel (siehe unten).
 function initSelfhostLogin() {
   return new Promise((resolve) => {
     const lockScreen = document.getElementById('lock-screen');
@@ -126,7 +127,47 @@ function initSelfhostLogin() {
     const modeToggle = document.getElementById('auth-mode-toggle');
     const hint = document.getElementById('auth-hint');
     const forgotToggle = document.getElementById('auth-forgot-toggle');
-    if (forgotToggle) forgotToggle.hidden = true;
+
+    const forgotBox = document.getElementById('lock-forgot-box');
+    const forgotForm = document.getElementById('forgot-form');
+    const forgotEmailInput = document.getElementById('forgot-email');
+    const forgotError = document.getElementById('forgot-error');
+    const forgotSubmitBtn = document.getElementById('forgot-submit');
+    const forgotBack = document.getElementById('forgot-back');
+
+    if (forgotToggle) {
+      forgotToggle.addEventListener('click', (e) => {
+        e.preventDefault();
+        forgotEmailInput.value = emailInput.value.trim();
+        authBox.hidden = true;
+        forgotError.hidden = true;
+        forgotBox.hidden = false;
+      });
+    }
+    forgotBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      forgotBox.hidden = true;
+      authBox.hidden = false;
+    });
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      forgotError.hidden = true;
+      const email = forgotEmailInput.value.trim();
+      if (!email) return;
+      forgotSubmitBtn.disabled = true;
+      try {
+        const { message } = await selfhost.forgotPassword(email);
+        forgotError.className = 'lock-hint';
+        forgotError.textContent = message;
+        forgotError.hidden = false;
+      } catch (err) {
+        forgotError.className = 'lock-error';
+        forgotError.textContent = err.message || 'Unbekannter Fehler.';
+        forgotError.hidden = false;
+      } finally {
+        forgotSubmitBtn.disabled = false;
+      }
+    });
 
     let mode = 'login';
     function setMode(next) {

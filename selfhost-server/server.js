@@ -34,6 +34,8 @@ import { hashPassword, verifyPassword, createAuth, parseCookies, randomUUID } fr
 import { getOrCreateVapidKeys, createPusher } from './lib/push.js';
 import { pruefeCollectionZugriff, filtereZeilenFuerRolle, istZeileErlaubt } from './lib/access.js';
 import { createLoginLimiter } from './lib/rateLimit.js';
+import { createResetToken, consumeResetToken } from './lib/passwordReset.js';
+import { createMailer } from './lib/mailer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -60,7 +62,16 @@ const auth = createAuth(getOrCreateSecret());
 const vapidKeys = getOrCreateVapidKeys(DATA_DIR, process.env.PUSH_CONTACT_EMAIL || process.env.ADMIN_EMAIL || 'admin@werkora.local');
 const pusher = createPusher(vapidKeys);
 const loginLimiter = createLoginLimiter();
+// Eigenes Limit fürs Anfordern von Reset-Mails (lockert nicht das Login-
+// Limit oben, soll aber genauso verhindern, dass jemand eine fremde Adresse
+// mit E-Mails zuspammt).
+const forgotPasswordLimiter = createLoginLimiter({ maxVersuche: 3, sperrdauerMs: 10 * 60 * 1000, fensterMs: 10 * 60 * 1000 });
+const mailer = createMailer();
 const MINDEST_PASSWORT_LAENGE = 8;
+
+if (!mailer) {
+  console.log('Hinweis: SMTP_HOST ist nicht gesetzt - "Passwort vergessen"-Links werden statt per E-Mail in dieser Konsolenausgabe angezeigt.');
+}
 
 // --- Erstes Admin-Konto beim allerersten Start ---------------------------
 function bootstrapAdminIfNeeded() {
@@ -186,6 +197,43 @@ async function handleApi(req, res, url) {
     const session = { uid: user.id, role: user.role, mitarbeiterId: user.mitarbeiterId, kundeId: user.kundeId, name: user.name };
     setSessionCookie(res, session);
     return sendJson(res, 200, session);
+  }
+
+  if (req.method === 'POST' && parts[0] === 'forgot-password') {
+    const { email } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    const gesperrtFuer = forgotPasswordLimiter.pruefeSperre(email);
+    // Absichtlich IMMER dieselbe generische Antwort, egal ob die Adresse
+    // existiert, gesperrt ist oder gerade eine Mail bekommt - sonst liesse
+    // sich über die Antwort ausprobieren, welche E-Mail-Adressen als Konto
+    // angelegt sind (Enumeration), siehe auch auth.js' Firebase-Variante.
+    const antwort = { message: 'Falls zu dieser E-Mail-Adresse ein Konto existiert, wurde gerade eine E-Mail zum Zurücksetzen versendet.' };
+    if (gesperrtFuer) return sendJson(res, 200, antwort);
+    forgotPasswordLimiter.vermerkeFehlschlag(email);
+    const user = store.getAll('users').find((u) => u.email === email);
+    if (user) {
+      const token = createResetToken(store, email);
+      const origin = `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}`;
+      const resetUrl = `${origin}/reset-password.html?token=${token}`;
+      if (mailer) {
+        mailer.sendResetMail(email, resetUrl).catch((err) => console.error('Reset-Mail konnte nicht versendet werden:', err.message));
+      } else {
+        console.log(`Passwort-Reset-Link für ${email} (1 Stunde gültig): ${resetUrl}`);
+      }
+    }
+    return sendJson(res, 200, antwort);
+  }
+
+  if (req.method === 'POST' && parts[0] === 'reset-password') {
+    const { token, password } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!password || password.length < MINDEST_PASSWORT_LAENGE) {
+      return sendJson(res, 400, { error: `Das Passwort muss mindestens ${MINDEST_PASSWORT_LAENGE} Zeichen lang sein.` });
+    }
+    const email = consumeResetToken(store, token || '');
+    if (!email) return sendJson(res, 400, { error: 'Der Link ist ungültig oder abgelaufen. Bitte erneut "Passwort vergessen" anfordern.' });
+    const user = store.getAll('users').find((u) => u.email === email);
+    if (!user) return sendJson(res, 400, { error: 'Der Link ist ungültig oder abgelaufen. Bitte erneut "Passwort vergessen" anfordern.' });
+    store.put('users', { ...user, passwordHash: hashPassword(password) });
+    return sendJson(res, 200, { ok: true });
   }
 
   if (req.method === 'POST' && parts[0] === 'logout') {

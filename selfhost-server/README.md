@@ -39,8 +39,9 @@ Containers (`docker restart werkora`) verliert nichts.
 cd selfhost-server && npm install && node server.js
 ```
 
-(`npm install` wird nur für Push-Benachrichtigungen gebraucht - die einzige
-externe Abhängigkeit des ganzen Servers, siehe `package.json`.)
+(`npm install` wird für Push-Benachrichtigungen und "Passwort vergessen"-
+E-Mails gebraucht - die einzigen externen Abhängigkeiten des ganzen
+Servers, siehe `package.json`.)
 
 ## Erstes Login
 
@@ -89,6 +90,12 @@ betroffenen E-Mail-Adressen auf.
 | `ADMIN_EMAIL`    | `admin@werkora.local` | Nur beim allerersten Start relevant         |
 | `ADMIN_PASSWORD` | zufällig erzeugt      | Nur beim allerersten Start relevant         |
 | `PUSH_CONTACT_EMAIL` | `ADMIN_EMAIL`     | Kontaktadresse für Push-Dienste (VAPID "mailto:") |
+| `SMTP_HOST`      | nicht gesetzt         | SMTP-Server für "Passwort vergessen"-E-Mails (siehe unten) |
+| `SMTP_PORT`      | `587`                 | SMTP-Port                                   |
+| `SMTP_SECURE`    | `false`               | `true` für direktes TLS (Port 465); sonst STARTTLS |
+| `SMTP_USER`      | nicht gesetzt         | SMTP-Benutzername (falls der Server Login verlangt) |
+| `SMTP_PASSWORD`  | nicht gesetzt         | SMTP-Passwort                               |
+| `SMTP_FROM`      | `SMTP_USER`           | Absenderadresse der Reset-E-Mails           |
 
 Die VAPID-Schlüssel für Push-Benachrichtigungen werden beim allerersten
 Start automatisch erzeugt und in `data/vapid-keys.json` abgelegt - kein
@@ -105,6 +112,24 @@ in der Entwicklungsumgebung dieses Projekts aber nicht vollständig
 ausprobieren (abgeschottete Netzwerkumgebung ohne Zugriff auf echte
 Push-Dienste) - bitte nach dem ersten Einsatz einmal mit einem echten
 Gerät/Browser unter Einstellungen -> Benachrichtigungen prüfen.
+
+## Passwort vergessen
+
+Ersetzt Firebase Auths `sendPasswordResetEmail()`: "Passwort vergessen?" auf
+dem Anmelde-Bildschirm fordert eine E-Mail mit einem 1 Stunde gültigen,
+einmal verwendbaren Link an (`/reset-password.html?token=...`).
+
+Ohne `SMTP_HOST` (siehe Konfiguration oben) kann der Server die E-Mail nicht
+verschicken - der Link erscheint dann stattdessen einmalig in der
+Konsolenausgabe (genauso wie das Admin-Passwort beim allerersten Start), und
+jemand mit Zugriff auf die Server-Logs müsste ihn der betroffenen Person
+händisch weitergeben. Für echten Selbstbedienungs-Betrieb `SMTP_HOST` (und
+bei Bedarf `SMTP_USER`/`SMTP_PASSWORD`) auf einen echten SMTP-Account
+setzen, z.B. den eines bestehenden E-Mail-Postfachs oder eines
+Transaktions-Mail-Anbieters.
+
+Gilt nur für den Haupt-Login (verwaltung/js/auth.js) - das Kundenportal
+hatte auch im Firebase-Betrieb keine eigene "Passwort vergessen"-Funktion.
 
 ## Sicherheit
 
@@ -132,12 +157,17 @@ Nach einer gezielten Review folgender Fixes umgesetzt (siehe
   Knie zwingt.
 - Session-Cookie-Signatur wird jetzt zeitkonstant verglichen (wie der
   Passwort-Hash), nicht mehr mit einem normalen String-Vergleich.
+- Die neue `passwordResets`-Collection (Reset-Tokens, mit denen sich JEDES
+  Passwort setzen lässt) ist über die generische Collection-API für
+  Mitarbeiter/Techniker gesperrt - genauso wie das Anfordern selbst über ein
+  eigenes, von Login getrenntes Limit (3 Anfragen je E-Mail-Adresse pro 10
+  Minuten) vor Spam/Enumeration geschützt ist.
 
 ## Bekannte Lücken (bewusst noch nicht portiert)
 
-- **Zwei-Faktor-Login (TOTP)** und **"Passwort vergessen"-E-Mail** aus der
-  bisherigen Firebase-Auth sind noch nicht nachgebaut. Login per
-  E-Mail+Passwort sowie Einladungs-basierte Registrierung (Mitarbeiter/Kunden)
+- **Zwei-Faktor-Login (TOTP)** aus der bisherigen Firebase-Auth ist noch
+  nicht nachgebaut. Login per E-Mail+Passwort, Einladungs-basierte
+  Registrierung (Mitarbeiter/Kunden) und "Passwort vergessen" (siehe oben)
   funktionieren.
 - **Mehrgeräte-Live-Updates** (z.B. sofortiges Erscheinen neuer
   Beleg-Vorschläge auf einem anderen Gerät ohne Neuladen) laufen aktuell per
