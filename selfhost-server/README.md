@@ -106,6 +106,33 @@ ausprobieren (abgeschottete Netzwerkumgebung ohne Zugriff auf echte
 Push-Dienste) - bitte nach dem ersten Einsatz einmal mit einem echten
 Gerät/Browser unter Einstellungen -> Benachrichtigungen prüfen.
 
+## Sicherheit
+
+Nach einer gezielten Review folgender Fixes umgesetzt (siehe
+`selfhost-server/lib/access.js`, `lib/rateLimit.js`, `lib/auth.js`,
+`server.js`):
+
+- **Rollenbasierte Zugriffskontrolle** für die generische Collection-API
+  (`lib/access.js`): Kundenportal-Konten (Rolle "kunde") können nur lesen,
+  nur aus einer festen Liste relevanter Collections (Angebote/Rechnungen/
+  Aufträge/Termine/...) und darin nur eigene Datensätze - weder Listen- noch
+  Einzelabruf lässt fremde Daten durch. Mitarbeiter/Techniker kommen nicht an
+  Personaldaten, Einkaufspreise oder Finanzbuchhaltung heran. **Das ist eine
+  bewusst unvollständige Übergangslösung**, keine vollständige Nachbildung
+  der früheren, feingranularen firestore.rules - Rollen "büro"/"mitarbeiter"/
+  "techniker" haben hier spürbar mehr Zugriff, als ihnen die Firestore-Regeln
+  einräumen würden (z.B. sehen sie auch Kundendaten/Projekte anderer
+  Kollegen, nicht nur die eigenen Aufgaben/Serviceaufträge).
+- **Brute-Force-Schutz beim Login** (`lib/rateLimit.js`): nach 5
+  Fehlversuchen zu einer E-Mail-Adresse 5 Minuten Sperre.
+- **Mindestlänge für Passwörter** (8 Zeichen) wird jetzt auch serverseitig
+  geprüft, nicht nur im Browser-Formular.
+- **Obergrenze für jede Anfrage** (30 MB) - verhindert, dass ein direkter
+  API-Aufruf (am UI vorbei) den Server mit einer riesigen Anfrage in die
+  Knie zwingt.
+- Session-Cookie-Signatur wird jetzt zeitkonstant verglichen (wie der
+  Passwort-Hash), nicht mehr mit einem normalen String-Vergleich.
+
 ## Bekannte Lücken (bewusst noch nicht portiert)
 
 - **Zwei-Faktor-Login (TOTP)** und **"Passwort vergessen"-E-Mail** aus der
@@ -116,11 +143,10 @@ Gerät/Browser unter Einstellungen -> Benachrichtigungen prüfen.
   Beleg-Vorschläge auf einem anderen Gerät ohne Neuladen) laufen aktuell per
   einfachem Nachladen statt Firestores Echtzeit-Listenern - im Alltag eines
   Solo-Betriebs meist kein spürbarer Unterschied.
-- **Feingranulare Rollen-Rechte** (z.B. dass normale Mitarbeiter keine
-  Einkaufspreise im Katalog sehen): aktuell kann jeder angemeldete Nutzer auf
-  alle Collections zugreifen - die generische API prüft nur "angemeldet
-  ja/nein", nicht die Rolle. Vor einem Einsatz mit mehreren Mitarbeiter-
-  Rollen und wirklich sensiblen Daten sollte das nachgerüstet werden.
+- **Feingranulare Rollen-Rechte darüber hinaus**: siehe "Sicherheit" oben -
+  der grobe Blockzugriff für Mitarbeiter/Techniker/Kundenportal ist
+  nachgerüstet, eine vollständige 1:1-Entsprechung der bisherigen
+  firestore.rules (inkl. feld-/einzelfallgenauer Regeln je Rolle) nicht.
 
 ## Backup
 
