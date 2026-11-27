@@ -7,7 +7,7 @@ compatibility_date = "2026-01-01"
 
 [vars]
 ALLOWED_ORIGINS = "https://neuverdrahtet.com,https://www.neuverdrahtet.com"
-MODEL_ID = "claude-opus-4-8"
+MODEL_ID = "claude-sonnet-4-5"
 
 # JARVIS-Automatisierungsschalter (siehe JARVIS_FEATURE_FLAGS in worker.js) -
 # jeder Schalter schreibt AUSSCHLIESSLICH interne Vorschlaege/Entwuerfe/
