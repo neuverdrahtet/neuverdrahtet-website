@@ -23,6 +23,15 @@ if (!defined('ABSPATH')) { exit; }
         if (strpos($pfad, $wp) === 0) { return; }
     }
     if (isset($_GET['rest_route']) || isset($_GET['p']) || isset($_GET['page_id']) || isset($_GET['preview'])) { return; }
+    // Immer auf https://<Hauptdomain> umleiten (http und www), nur für die eigene Domain
+    $sicher = (function_exists('is_ssl') && is_ssl()) || (($_SERVER['SERVER_PORT'] ?? '') == 443)
+        || strtolower($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https' || strtolower($_SERVER['HTTP_X_FORWARDED_SSL'] ?? '') === 'on';
+    $host = strtolower(preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? '')));
+    if (defined('BSS_DOMAIN') && ($host === BSS_DOMAIN || $host === 'www.' . BSS_DOMAIN) && (!$sicher || $host !== BSS_DOMAIN)
+        && in_array($_SERVER['REQUEST_METHOD'] ?? 'GET', ['GET', 'HEAD'], true)) {
+        header('Location: https://' . BSS_DOMAIN . ($_SERVER['REQUEST_URI'] ?? '/'), true, 301);
+        exit;
+    }
     if (strpos($pfad, "\0") !== false || preg_match('#(^|/)\.\.?(/|$)#', $pfad)) { $pfad = '/404.html'; }
 
     if (substr($pfad, -1) === '/') { $pfad .= 'index.html'; }
@@ -63,6 +72,7 @@ if (!defined('ABSPATH')) { exit; }
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: SAMEORIGIN');
+    if ($sicher && defined('BSS_DOMAIN') && $host === BSS_DOMAIN) { header('Strict-Transport-Security: max-age=31536000'); }
     if (!BSS_INDEXIERBAR) { header('X-Robots-Tag: noindex, nofollow'); }
     $geaendert = filemtime($datei);
     header('Last-Modified: ' . gmdate('D, d M Y H:i:s', $geaendert) . ' GMT');

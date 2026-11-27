@@ -83,6 +83,14 @@ try {
     if (CONFIG.website.indexierbar) assert.equal(r.h.get('x-robots-tag'), null); else assert.match(r.h.get('x-robots-tag') || '', /noindex/);
     const lm = r.h.get('last-modified'); const c = await holen('/', { headers: { 'If-Modified-Since': lm } }); assert.equal(c.s, 304);
   });
+  await test('http und www werden per 301 auf https://Hauptdomain umgeleitet, fremde Hosts nicht', async () => {
+    const http = await import('node:http');
+    const anfrage = (host, extra = {}) => new Promise((ok, err) => http.get({ host: '127.0.0.1', port, path: '/leistungen.html?x=1', headers: { Host: host, ...extra } }, (r) => { r.resume(); ok(r); }).on('error', err));
+    let r = await anfrage('berger-servicesolution.de'); assert.equal(r.statusCode, 301); assert.equal(r.headers.location, 'https://berger-servicesolution.de/leistungen.html?x=1');
+    r = await anfrage('www.berger-servicesolution.de', { 'X-Forwarded-Proto': 'https' }); assert.equal(r.statusCode, 301); assert.equal(r.headers.location, 'https://berger-servicesolution.de/leistungen.html?x=1');
+    r = await anfrage('berger-servicesolution.de', { 'X-Forwarded-Proto': 'https' }); assert.equal(r.statusCode, 200); assert.match(r.headers['strict-transport-security'] || '', /max-age=/);
+    r = await anfrage('127.0.0.1'); assert.equal(r.statusCode, 200);
+  });
   await test('Online-Buchung über das Plugin: E-Mail mit Anhang wird versendet', async () => {
     const lead = {
       schemaVersion: 'bss-lead/1', idempotenzSchluessel: 'wp-test-12345678', quelle: { kanal: 'website' }, vorgangsart: 'anfrage',

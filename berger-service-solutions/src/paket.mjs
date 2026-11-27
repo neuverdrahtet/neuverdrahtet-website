@@ -41,7 +41,7 @@ export function paketieren() {
   }
   mkdirSync(path.join(wp, 'mu-plugins'), { recursive: true });
   const plugin = readFileSync(path.join(WURZEL, 'src', 'php', 'wordpress-mu-plugin.php'), 'utf8')
-    .replace("if (!defined('ABSPATH')) { exit; }", `if (!defined('ABSPATH')) { exit; }\nif (!defined('BSS_INDEXIERBAR')) { define('BSS_INDEXIERBAR', ${CONFIG.website.indexierbar ? 'true' : 'false'}); }`);
+    .replace("if (!defined('ABSPATH')) { exit; }", `if (!defined('ABSPATH')) { exit; }\nif (!defined('BSS_INDEXIERBAR')) { define('BSS_INDEXIERBAR', ${CONFIG.website.indexierbar ? 'true' : 'false'}); }\nif (!defined('BSS_DOMAIN')) { define('BSS_DOMAIN', '${new URL(CONFIG.website.url).hostname}'); }`);
   writeFileSync(path.join(wp, 'mu-plugins', 'bss-website.php'), plugin);
   zip(wp, path.join(DIST, 'berger-service-solutions-wordpress.zip'));
   return { wpVerzeichnis: wp };
