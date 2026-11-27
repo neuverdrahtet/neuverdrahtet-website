@@ -41,7 +41,13 @@ export function createAuth(secret) {
     if (!cookieValue) return null;
     const [payload, sig] = cookieValue.split('.');
     if (!payload || !sig) return null;
-    if (sign(payload, secret) !== sig) return null;
+    // timingSafeEqual statt !==: ein normaler String-Vergleich bricht beim
+    // ersten abweichenden Byte ab und lässt sich über die Antwortzeit als
+    // Seitenkanal ausnutzen, um die Signatur Byte für Byte zu erraten - wie
+    // beim Passwort-Hash oben wird deshalb auch hier zeitkonstant verglichen.
+    const erwartet = Buffer.from(sign(payload, secret));
+    const erhalten = Buffer.from(sig);
+    if (erwartet.length !== erhalten.length || !timingSafeEqual(erwartet, erhalten)) return null;
     try {
       const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       if (!session.exp || session.exp < Date.now()) return null;

@@ -32,6 +32,8 @@ import { openStore } from './lib/store.js';
 import { createFileStore } from './lib/files.js';
 import { hashPassword, verifyPassword, createAuth, parseCookies, randomUUID } from './lib/auth.js';
 import { getOrCreateVapidKeys, createPusher } from './lib/push.js';
+import { pruefeCollectionZugriff, filtereZeilenFuerRolle, istZeileErlaubt } from './lib/access.js';
+import { createLoginLimiter } from './lib/rateLimit.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -57,6 +59,8 @@ const files = createFileStore(FILES_DIR);
 const auth = createAuth(getOrCreateSecret());
 const vapidKeys = getOrCreateVapidKeys(DATA_DIR, process.env.PUSH_CONTACT_EMAIL || process.env.ADMIN_EMAIL || 'admin@werkora.local');
 const pusher = createPusher(vapidKeys);
+const loginLimiter = createLoginLimiter();
+const MINDEST_PASSWORT_LAENGE = 8;
 
 // --- Erstes Admin-Konto beim allerersten Start ---------------------------
 function bootstrapAdminIfNeeded() {
@@ -85,11 +89,36 @@ function sendJson(res, status, body) {
   res.end(json);
 }
 
+// Obergrenze für jeden Request-Body (Datei-Uploads eingeschlossen) - ohne
+// das würde jede Anfrage unbegrenzt im Arbeitsspeicher gepuffert; das
+// 25-MB-Limit in blobstore.js gilt nur clientseitig und schützt nicht vor
+// einem direkten API-Aufruf oder einem Client-Bug. Etwas großzügiger als
+// die client-seitigen 25 MB, um Kodierungs-Overhead abzudecken.
+const MAX_BODY_BYTES = 30 * 1024 * 1024;
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
+    let total = 0;
+    let zuGross = false;
+    req.on('data', (c) => {
+      total += c.length;
+      if (total > MAX_BODY_BYTES) {
+        // Socket NICHT hier schon zerstören: req/res teilen sich bei
+        // HTTP/1.1-Keep-Alive dieselbe Verbindung - ein req.destroy() mitten
+        // im Datenstrom würde auch das spätere Senden der 413-Antwort
+        // verhindern. Stattdessen nur nicht mehr puffern und nach dem
+        // regulären 'end' ablehnen; die Verbindung wird erst NACH der
+        // Antwort geschlossen (siehe unten, err.status === 413).
+        zuGross = true;
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on('end', () => {
+      if (zuGross) reject(Object.assign(new Error('Anfrage zu groß.'), { status: 413 }));
+      else resolve(Buffer.concat(chunks));
+    });
     req.on('error', reject);
   });
 }
@@ -125,10 +154,16 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && parts[0] === 'login') {
     const { email, password } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    const gesperrtFuer = loginLimiter.pruefeSperre(email);
+    if (gesperrtFuer) {
+      return sendJson(res, 429, { error: `Zu viele Fehlversuche - bitte in ${gesperrtFuer} Sekunden erneut versuchen.` });
+    }
     const user = store.getAll('users').find((u) => u.email === email);
     if (!user || !verifyPassword(password || '', user.passwordHash)) {
+      loginLimiter.vermerkeFehlschlag(email);
       return sendJson(res, 401, { error: 'E-Mail oder Passwort ist falsch.' });
     }
+    loginLimiter.vermerkeErfolg(email);
     const session = { uid: user.id, role: user.role, mitarbeiterId: user.mitarbeiterId, kundeId: user.kundeId, name: user.name };
     setSessionCookie(res, session);
     return sendJson(res, 200, session);
@@ -136,6 +171,9 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && parts[0] === 'register') {
     const { email, password } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    if (!password || password.length < MINDEST_PASSWORT_LAENGE) {
+      return sendJson(res, 400, { error: `Das Passwort muss mindestens ${MINDEST_PASSWORT_LAENGE} Zeichen lang sein.` });
+    }
     const invite = store.get('invites', email);
     if (!invite) return sendJson(res, 404, { error: 'Keine Einladung für diese E-Mail-Adresse gefunden.' });
     if (store.getAll('users').some((u) => u.email === email)) return sendJson(res, 409, { error: 'Für diese E-Mail existiert bereits ein Konto.' });
@@ -169,6 +207,10 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === 'POST' && parts[0] === 'push' && parts[1] === 'notify') {
+    // Kein Kundenportal-Konto darf beliebigen Titel/Text/Link an interne
+    // Geräte (z.B. alle "admin"-Rollen) schicken - das wäre ein direkter
+    // Phishing-Weg über eine eigentlich harmlose Benachrichtigung.
+    if (session.role === 'kunde') return sendJson(res, 403, { error: 'Keine Berechtigung.' });
     const { roles, title, body, url } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
     const alle = store.getAll('pushSubscriptions');
     const ziel = alle.filter((s) => (roles || []).includes(s.role) && s.userId !== session.uid);
@@ -196,12 +238,17 @@ async function handleApi(req, res, url) {
   const [collection, id] = parts;
   if (!collection) return sendJson(res, 404, { error: 'Unbekannte Route.' });
 
+  // Rollenbasierte Zugriffskontrolle (siehe lib/access.js - bewusst
+  // unvollständige Übergangslösung, keine vollständige Nachbildung der
+  // bisherigen firestore.rules, deckt aber die eindeutigsten Fälle ab:
+  // Kundenportal nur lesend/nur eigene Daten, Mitarbeiter/Techniker ohne
+  // Personal-/Preis-/Finanzdaten).
+  const zugriff = pruefeCollectionZugriff(session, collection, req.method);
+  if (!zugriff.ok) return sendJson(res, zugriff.status, { error: zugriff.error });
+
   // Passwort-Hash NIE über die generische API ausliefern - sonst könnte jede
   // angemeldete Person (unabhängig von ihrer Rolle) die Hashes aller Konten
-  // mitlesen. Eine echte, rollenbasierte Zugriffskontrolle wie in den
-  // bisherigen firestore.rules (siehe README "Bekannte Lücken") gibt es hier
-  // noch nicht - das ist der einzige Collection-spezifische Sonderfall, der
-  // unabhängig davon in jedem Fall gilt.
+  // mitlesen.
   function redact(row) {
     if (collection !== 'users' || !row) return row;
     const { passwordHash, ...rest } = row;
@@ -210,11 +257,13 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && !id) {
     const filter = Object.fromEntries(url.searchParams.entries());
-    return sendJson(res, 200, store.getAll(collection, Object.keys(filter).length ? filter : undefined).map(redact));
+    const rows = store.getAll(collection, Object.keys(filter).length ? filter : undefined);
+    return sendJson(res, 200, filtereZeilenFuerRolle(session, collection, rows).map(redact));
   }
   if (req.method === 'GET' && id) {
     const row = store.get(collection, id);
-    return row ? sendJson(res, 200, redact(row)) : sendJson(res, 404, { error: 'Nicht gefunden.' });
+    if (!row || !istZeileErlaubt(session, collection, row)) return sendJson(res, 404, { error: 'Nicht gefunden.' });
+    return sendJson(res, 200, redact(row));
   }
   if (req.method === 'PUT' && id) {
     const value = JSON.parse((await readBody(req)).toString('utf8') || '{}');
@@ -282,8 +331,13 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith('/files/')) return await serveFileUpload(req, res, url);
     return await handleStatic(req, res, url);
   } catch (err) {
-    console.error('Serverfehler:', err);
-    sendJson(res, 500, { error: err.message || 'Interner Serverfehler' });
+    if (err.status !== 413) console.error('Serverfehler:', err);
+    sendJson(res, err.status || 500, { error: err.message || 'Interner Serverfehler' });
+    // Verbindung nach einer zu großen Anfrage hart schließen statt für
+    // Keep-Alive wiederzuverwenden - der Rest des (verworfenen) Bodys ist
+    // bereits durchgelaufen, ein Wiederverwenden derselben Verbindung für
+    // die nächste Anfrage wäre sonst nicht mehr sauber synchronisiert.
+    if (err.status === 413) res.socket?.destroy();
   }
 });
 
