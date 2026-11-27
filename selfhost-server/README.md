@@ -10,6 +10,14 @@ unberührt und funktioniert weiterhin wie bisher über die normale
 Google-Anmeldung in den Einstellungen - das ist eine bewusst getrennte
 Entscheidung, keine Firebase-Abhängigkeit.
 
+## Aktivieren
+
+Die App selbst muss wissen, dass sie mit diesem Server statt mit Firebase
+sprechen soll: in `verwaltung/js/selfhost-config.js` `enabled` auf `true`
+setzen. Standardmäßig steht das auf `false`, damit die bisherige Firebase/
+GitHub-Pages-Variante unverändert weiterläuft, bis hier bewusst umgeschaltet
+wird.
+
 ## Starten
 
 ### Mit Docker (empfohlen - ein Befehl, keine weitere Einrichtung)
@@ -42,6 +50,33 @@ Wer eigene Zugangsdaten statt der zufällig erzeugten will, setzt vor dem
 allerersten Start `ADMIN_EMAIL` und `ADMIN_PASSWORD` als Umgebungsvariablen
 (z.B. `docker run -e ADMIN_EMAIL=... -e ADMIN_PASSWORD=... ...`).
 
+## Bestehende Firebase-Daten übernehmen
+
+Wer schon länger mit der Firebase-Variante arbeitet, muss die Daten einmalig
+herüberholen, bevor umgeschaltet wird (siehe "Aktivieren" oben):
+
+1. In der Firebase Console: Projekteinstellungen -> Dienstkonten -> "Neuen
+   privaten Schlüssel generieren" - lädt eine JSON-Datei herunter. Diese
+   Datei NIE ins Repo einchecken oder sonst wo veröffentlichen, nur lokal
+   verwenden und danach löschen.
+2. Vorschau (schreibt noch nichts, zeigt nur Anzahlen je Collection):
+   ```
+   GOOGLE_APPLICATION_CREDENTIALS=/pfad/zum/service-account.json \
+     node selfhost-server/migrate-from-firebase.mjs --project neuverdrahtet-verwaltung --dry-run
+   ```
+3. Wenn die Vorschau plausibel aussieht, denselben Befehl ohne `--dry-run`
+   ausführen - überträgt alle Collections in `data/werkora.db`.
+
+`--project` muss exakt mit der `project_id` in der Service-Account-Datei
+übereinstimmen (Schutz gegen ein vertipptes/verwechseltes Projekt). Das
+Skript liest nur aus Firestore, schreibt/löscht dort nichts.
+
+Mitarbeiter-/Kundenportal-Konten lassen sich dabei NICHT mit Passwort
+übernehmen (Firebase gibt Passwort-Hashes grundsätzlich nicht heraus) -
+jede betroffene Person bekommt stattdessen automatisch eine neue Einladung
+und registriert sich einmalig neu. Das Skript listet am Ende alle
+betroffenen E-Mail-Adressen auf.
+
 ## Konfiguration (alles optional)
 
 | Variable         | Standard              | Bedeutung                                   |
@@ -64,9 +99,11 @@ allerersten Start `ADMIN_EMAIL` und `ADMIN_PASSWORD` als Umgebungsvariablen
   Beleg-Vorschläge auf einem anderen Gerät ohne Neuladen) laufen aktuell per
   einfachem Nachladen statt Firestores Echtzeit-Listenern - im Alltag eines
   Solo-Betriebs meist kein spürbarer Unterschied.
-- **Datenübernahme aus dem bestehenden Firebase-Projekt**: noch kein
-  automatisches Migrationsskript vorhanden - nötig, bevor auf den Selfhost-
-  Server umgestiegen werden kann, ohne die bisherigen Daten zu verlieren.
+- **Feingranulare Rollen-Rechte** (z.B. dass normale Mitarbeiter keine
+  Einkaufspreise im Katalog sehen): aktuell kann jeder angemeldete Nutzer auf
+  alle Collections zugreifen - die generische API prüft nur "angemeldet
+  ja/nein", nicht die Rolle. Vor einem Einsatz mit mehreren Mitarbeiter-
+  Rollen und wirklich sensiblen Daten sollte das nachgerüstet werden.
 
 ## Backup
 

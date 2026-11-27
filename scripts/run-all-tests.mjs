@@ -26,6 +26,7 @@ const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
 const TEST_VERZEICHNISSE = [
   'verwaltung/tests',
+  'selfhost-server/tests',
   'cloudflare-worker/jarvis-tests',
   'cloudflare-worker-ki-buerokraft/tests',
   'cloudflare-worker-api/tests',
