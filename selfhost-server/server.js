@@ -11,6 +11,10 @@
 //   DATA_DIR          Standard: ./data (enthält werkora.db, Dateien, Session-Secret)
 //   ADMIN_EMAIL       Nur beim allerersten Start relevant (siehe unten)
 //   ADMIN_PASSWORD    Nur beim allerersten Start relevant (siehe unten)
+//   PUSH_CONTACT_EMAIL E-Mail-Adresse für den VAPID-"mailto:"-Kontakt bei
+//                      Push-Benachrichtigungen (Standard: ADMIN_EMAIL bzw.
+//                      admin@werkora.local) - wird nur Push-Diensten
+//                      gegenüber angegeben, falls sie Rückfragen haben.
 //
 // Beim allerersten Start (noch keine Nutzer in der Datenbank) wird automatisch
 // ein Admin-Konto angelegt - mit ADMIN_EMAIL/ADMIN_PASSWORD falls gesetzt,
@@ -27,6 +31,7 @@ import { randomBytes } from 'node:crypto';
 import { openStore } from './lib/store.js';
 import { createFileStore } from './lib/files.js';
 import { hashPassword, verifyPassword, createAuth, parseCookies, randomUUID } from './lib/auth.js';
+import { getOrCreateVapidKeys, createPusher } from './lib/push.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -50,6 +55,8 @@ function getOrCreateSecret() {
 const store = openStore(DB_PATH);
 const files = createFileStore(FILES_DIR);
 const auth = createAuth(getOrCreateSecret());
+const vapidKeys = getOrCreateVapidKeys(DATA_DIR, process.env.PUSH_CONTACT_EMAIL || process.env.ADMIN_EMAIL || 'admin@werkora.local');
+const pusher = createPusher(vapidKeys);
 
 // --- Erstes Admin-Konto beim allerersten Start ---------------------------
 function bootstrapAdminIfNeeded() {
@@ -156,6 +163,21 @@ async function handleApi(req, res, url) {
   // Alles ab hier erfordert eine gültige Session.
   const session = sessionFromRequest(req);
   if (!session) return sendJson(res, 401, { error: 'Nicht angemeldet.' });
+
+  if (req.method === 'GET' && parts[0] === 'push' && parts[1] === 'vapid-public-key') {
+    return sendJson(res, 200, { publicKey: vapidKeys.publicKey });
+  }
+
+  if (req.method === 'POST' && parts[0] === 'push' && parts[1] === 'notify') {
+    const { roles, title, body, url } = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+    const alle = store.getAll('pushSubscriptions');
+    const ziel = alle.filter((s) => (roles || []).includes(s.role) && s.userId !== session.uid);
+    const ergebnisse = await pusher.sendToAll(ziel, { title, body, url });
+    for (const r of ergebnisse) {
+      if (!r.ok && r.abgelaufen) store.remove('pushSubscriptions', r.id);
+    }
+    return sendJson(res, 200, { gesendet: ergebnisse.filter((r) => r.ok).length, insgesamt: ziel.length });
+  }
 
   if (parts[0] === 'files' && parts.length > 1) {
     const relPath = parts.slice(1).join('/');

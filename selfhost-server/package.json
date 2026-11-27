@@ -1,7 +1,7 @@
 {
   "name": "werkora-selfhost-server",
   "version": "1.0.0",
-  "description": "Selbst gehosteter Ein-Server-Betrieb für Werkora - ersetzt Firebase (Firestore/Auth/Storage). Keine externen Abhängigkeiten.",
+  "description": "Selbst gehosteter Ein-Server-Betrieb für Werkora - ersetzt Firebase (Firestore/Auth/Storage/Cloud Messaging). Einzige externe Abhängigkeit: web-push (Push-Benachrichtigungen), alles andere nur Node-Bordmittel.",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -9,5 +9,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "web-push": "^4.0.0"
   }
 }

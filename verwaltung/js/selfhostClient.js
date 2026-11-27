@@ -84,3 +84,22 @@ export async function uploadFileSelfhost(relPath, blob) {
 export async function deleteFileSelfhost(relPath) {
   await fetch(`/api/files/${encodePath(relPath)}`, { method: 'DELETE', credentials: 'same-origin' });
 }
+
+// --- Push-Benachrichtigungen (Ersatz für Firebase Cloud Messaging, siehe push.js) ---
+export async function pushVapidPublicKeySelfhost() {
+  const { publicKey } = await request('GET', '/api/push/vapid-public-key');
+  return publicKey;
+}
+
+export async function pushSubscribeSelfhost(subscription, { userId, role }) {
+  const json = subscription.toJSON();
+  return putSelfhost('pushSubscriptions', { ...json, id: json.endpoint, userId, role });
+}
+
+export async function pushUnsubscribeSelfhost(endpoint) {
+  await removeSelfhost('pushSubscriptions', endpoint);
+}
+
+export async function pushNotifyRolesSelfhost(roles, { title, body, url }) {
+  return request('POST', '/api/push/notify', { roles, title, body, url });
+}
