@@ -1,14 +1,21 @@
 import { firebaseConfig } from './firebase-config.js';
+import { selfhostConfig } from './selfhost-config.js';
+import { uploadFileSelfhost, deleteFileSelfhost } from './selfhostClient.js';
 import { enqueueUpload, listQueuedUploads, removeQueuedUpload } from './uploadQueue.js';
 import { toast } from './utils.js';
 
-// Solange kein Firebase-Projekt konfiguriert ist, werden Blobs weiterhin
-// direkt in IndexedDB gespeichert (unverändertes Verhalten). Im Firebase-
-// Modus können Blobs nicht direkt in Firestore-Dokumenten liegen (kein
-// unterstützter Feldtyp, zusätzlich 1-MB-Dokumentgrenze) - sie werden
-// stattdessen in Firebase Storage hochgeladen; das Firestore-Dokument
-// bekommt nur URL/Pfad/Mime/Größe statt des rohen Blobs.
-export const FIREBASE_ENABLED = !!firebaseConfig.projectId;
+// Solange weder Selfhost-Server noch Firebase-Projekt konfiguriert sind,
+// werden Blobs weiterhin direkt in IndexedDB gespeichert (unverändertes
+// Verhalten). Im Firebase-Modus können Blobs nicht direkt in
+// Firestore-Dokumenten liegen (kein unterstützter Feldtyp, zusätzlich
+// 1-MB-Dokumentgrenze) - sie werden stattdessen in Firebase Storage
+// hochgeladen; das Firestore-Dokument bekommt nur URL/Pfad/Mime/Größe statt
+// des rohen Blobs. Im Selfhost-Modus gilt dieselbe Begründung für den
+// eigenen Server statt Firebase Storage.
+const SELFHOST_ENABLED = !!selfhostConfig.enabled;
+// Name bewusst beibehalten (siehe fotos.js/ausgaben.js/... - Gate "gibt es
+// einen echten Upload-Backend-Dienst").
+export const FIREBASE_ENABLED = SELFHOST_ENABLED || !!firebaseConfig.projectId;
 
 function isNetworkError(err) {
   return !navigator.onLine
@@ -44,24 +51,45 @@ function withTimeout(promise, ms, message) {
 // verständlichere Fehlermeldung VOR dem eigentlichen Upload-Versuch.
 export const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
+// Backend-spezifischer Upload/Download/Löschvorgang - der Rest (Größenlimit,
+// Offline-Warteschlange, Timeouts) ist für Selfhost und Firebase identisch,
+// siehe uploadBlobToStorage/deleteBlobFromStorage unten.
+async function uploadToBackend(path, blob) {
+  if (SELFHOST_ENABLED) {
+    const meta = await withTimeout(
+      uploadFileSelfhost(path, blob),
+      30000, 'Hochladen abgebrochen (Zeitüberschreitung nach 30 Sekunden). Bitte Internetverbindung prüfen und erneut versuchen.',
+    );
+    return { url: meta.url, path, mime: blob.type || '', size: blob.size || 0 };
+  }
+  const { storage } = await import('./firebase.js');
+  const { ref, uploadBytes, getDownloadURL } = await import('./vendor/firebase/firebase-storage.js');
+  const storageRef = ref(storage, path);
+  await withTimeout(
+    uploadBytes(storageRef, blob, { contentType: blob.type || 'application/octet-stream' }),
+    30000, 'Hochladen abgebrochen (Zeitüberschreitung nach 30 Sekunden). Bitte Internetverbindung prüfen und erneut versuchen.',
+  );
+  const url = await withTimeout(
+    getDownloadURL(storageRef),
+    15000, 'Datei wurde hochgeladen, aber die Download-URL konnte nicht abgerufen werden (Zeitüberschreitung).',
+  );
+  return { url, path, mime: blob.type || '', size: blob.size || 0 };
+}
+
+async function deleteFromBackend(path) {
+  if (SELFHOST_ENABLED) return deleteFileSelfhost(path);
+  const { storage } = await import('./firebase.js');
+  const { ref, deleteObject } = await import('./vendor/firebase/firebase-storage.js');
+  await deleteObject(ref(storage, path));
+}
+
 export async function uploadBlobToStorage(path, blob) {
   if ((blob?.size || 0) > MAX_UPLOAD_BYTES) {
     throw new Error(`Datei ist zu groß (${(blob.size / 1024 / 1024).toFixed(1)} MB) - maximal ${MAX_UPLOAD_BYTES / 1024 / 1024} MB erlaubt.`);
   }
   try {
     if (!navigator.onLine) throw new Error('offline');
-    const { storage } = await import('./firebase.js');
-    const { ref, uploadBytes, getDownloadURL } = await import('./vendor/firebase/firebase-storage.js');
-    const storageRef = ref(storage, path);
-    await withTimeout(
-      uploadBytes(storageRef, blob, { contentType: blob.type || 'application/octet-stream' }),
-      30000, 'Hochladen abgebrochen (Zeitüberschreitung nach 30 Sekunden). Bitte Internetverbindung prüfen und erneut versuchen.',
-    );
-    const url = await withTimeout(
-      getDownloadURL(storageRef),
-      15000, 'Datei wurde hochgeladen, aber die Download-URL konnte nicht abgerufen werden (Zeitüberschreitung).',
-    );
-    return { url, path, mime: blob.type || '', size: blob.size || 0 };
+    return await uploadToBackend(path, blob);
   } catch (err) {
     if (!isNetworkError(err)) throw err;
     await enqueueUpload(path, blob);
@@ -73,10 +101,8 @@ export async function uploadBlobToStorage(path, blob) {
 export async function deleteBlobFromStorage(path) {
   if (!path) return;
   await removeQueuedUpload(path).catch(() => { /* war evtl. nie in der Warteschlange */ });
-  const { storage } = await import('./firebase.js');
-  const { ref, deleteObject } = await import('./vendor/firebase/firebase-storage.js');
   try {
-    await deleteObject(ref(storage, path));
+    await deleteFromBackend(path);
   } catch {
     // Datei existiert evtl. schon nicht mehr (z.B. doppelt gelöscht, oder war
     // nur lokal in der Warteschlange und nie tatsächlich hochgeladen)
@@ -109,18 +135,11 @@ export async function trySyncPendingUploads() {
   if (!FIREBASE_ENABLED || !navigator.onLine) return;
   const queued = await listQueuedUploads();
   if (queued.length === 0) return;
-  const { storage } = await import('./firebase.js');
-  const { ref, uploadBytes, getDownloadURL } = await import('./vendor/firebase/firebase-storage.js');
   let synced = 0;
   for (const item of queued) {
     try {
-      const storageRef = ref(storage, item.path);
-      await withTimeout(
-        uploadBytes(storageRef, item.blob, { contentType: item.blob.type || 'application/octet-stream' }),
-        30000, 'Zeitüberschreitung beim Hochladen.',
-      );
-      const url = await withTimeout(getDownloadURL(storageRef), 15000, 'Zeitüberschreitung beim Abrufen der Download-URL.');
-      const meta = { url, path: item.path, mime: item.blob.type || '', size: item.blob.size || 0, pendingUpload: undefined };
+      const result = await uploadToBackend(item.path, item.blob);
+      const meta = { url: result.url, path: item.path, mime: item.blob.type || '', size: item.blob.size || 0, pendingUpload: undefined };
       await patchDocForPath(item.path, meta);
       await removeQueuedUpload(item.path);
       synced += 1;

@@ -203,6 +203,12 @@ async function handleApi(req, res, url) {
     store.remove(collection, id);
     return sendJson(res, 200, { ok: true });
   }
+  if (req.method === 'DELETE' && !id) {
+    // Komplette Collection leeren - für den CSV-"Ersetzen statt ergänzen"-
+    // Import (siehe clearStore() in db.js), kein Soft-Delete/Papierkorb.
+    store.clear(collection);
+    return sendJson(res, 200, { ok: true });
+  }
 
   return sendJson(res, 404, { error: 'Unbekannte Route.' });
 }

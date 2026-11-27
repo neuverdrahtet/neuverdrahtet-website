@@ -2,15 +2,23 @@ import {
   collection, doc, getDoc, getDocs, setDoc, deleteDoc, deleteField, onSnapshot, runTransaction,
 } from './vendor/firebase/firebase-firestore.js';
 import { firebaseConfig } from './firebase-config.js';
+import { selfhostConfig } from './selfhost-config.js';
 import { deleteBlobFromStorage } from './blobstore.js';
+import {
+  getAllSelfhost, getSelfhost, putSelfhost, removeSelfhost, clearStoreSelfhost,
+} from './selfhostClient.js';
 
-// Solange kein echtes Firebase-Projekt in firebase-config.js hinterlegt ist,
-// läuft die App unverändert mit der bisherigen lokalen IndexedDB weiter (wie
-// vor der Mehrbenutzer-Umstellung). Erst wenn firebaseConfig.projectId gesetzt
-// ist, wird auf die gemeinsame Firestore-Datenbank umgeschaltet. So bricht die
-// produktiv genutzte App nicht, bevor das Firebase-Projekt wirklich eingerichtet
-// und die Zugangsdaten eingetragen sind.
-const FIREBASE_ENABLED = !!firebaseConfig.projectId;
+// Drei mögliche Betriebsarten, in dieser Reihenfolge geprüft:
+// 1. Selfhost-Server (selfhostConfig.enabled, siehe selfhost-config.js) -
+//    eigener Ein-Server-Betrieb ohne Firebase (siehe selfhost-server/).
+// 2. Firestore (firebaseConfig.projectId gesetzt) - gemeinsame Cloud-Datenbank.
+// 3. Lokale IndexedDB (Standard, wenn weder 1 noch 2 konfiguriert ist) - wie
+//    vor der Mehrbenutzer-Umstellung, rein lokal im Browser.
+// SELFHOST_ENABLED schaltet FIREBASE_ENABLED bewusst zwangsweise aus, damit
+// nie beide Backends gleichzeitig aktiv wären, selbst wenn firebase-config.js
+// noch eine alte projectId stehen hat.
+const SELFHOST_ENABLED = !!selfhostConfig.enabled;
+const FIREBASE_ENABLED = !SELFHOST_ENABLED && !!firebaseConfig.projectId;
 let firestore = null;
 let auth = null;
 if (FIREBASE_ENABLED) {
@@ -355,8 +363,8 @@ async function clearStoreFs(storeName) {
 // --- Öffentliche API: wählt je nach FIREBASE_ENABLED die passende Implementierung ---
 
 export async function openDB() {
-  if (!FIREBASE_ENABLED) return openIndexedDB();
-  return Promise.resolve(); // Firestore braucht kein explizites "Öffnen" wie IndexedDB
+  if (SELFHOST_ENABLED || FIREBASE_ENABLED) return Promise.resolve(); // brauchen kein explizites "Öffnen" wie IndexedDB
+  return openIndexedDB();
 }
 
 // Stores, für die "Löschen" ein Papierkorb ist (Soft-Delete statt echtem
@@ -440,16 +448,19 @@ export function istEndgueltigLoeschbar(storeName, row) {
 }
 
 export async function getAll(storeName, { includeDeleted = false } = {}) {
-  const rows = FIREBASE_ENABLED ? await getAllFs(storeName) : await getAllIdb(storeName);
+  const rows = SELFHOST_ENABLED ? await getAllSelfhost(storeName)
+    : FIREBASE_ENABLED ? await getAllFs(storeName) : await getAllIdb(storeName);
   if (includeDeleted || !isTrashStore(storeName)) return rows;
   return rows.filter((r) => !r._geloescht);
 }
 
 export async function get(storeName, key) {
+  if (SELFHOST_ENABLED) return getSelfhost(storeName, key);
   return FIREBASE_ENABLED ? getFs(storeName, key) : getIdb(storeName, key);
 }
 
 export async function put(storeName, value) {
+  if (SELFHOST_ENABLED) return putSelfhost(storeName, value);
   return FIREBASE_ENABLED ? putFs(storeName, value) : putIdb(storeName, value);
 }
 
@@ -514,6 +525,7 @@ export async function hardRemove(storeName, key) {
   if (storeName === 'ausgaben' || storeName === 'zeiterfassung') {
     await cleanupBlobs(storeName, existing);
   }
+  if (SELFHOST_ENABLED) return removeSelfhost(storeName, key);
   return FIREBASE_ENABLED ? removeFs(storeName, key) : removeIdb(storeName, key);
 }
 
@@ -577,6 +589,7 @@ export async function syncKatalogOeffentlich() {
 }
 
 export async function clearStore(storeName) {
+  if (SELFHOST_ENABLED) return clearStoreSelfhost(storeName);
   return FIREBASE_ENABLED ? clearStoreFs(storeName) : clearStoreIdb(storeName);
 }
 

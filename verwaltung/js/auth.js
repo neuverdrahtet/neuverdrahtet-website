@@ -1,11 +1,14 @@
 import { getSettings, getAll } from './db.js';
 import { setCurrentMitarbeiterId } from './utils.js';
 import { firebaseConfig } from './firebase-config.js';
+import { selfhostConfig } from './selfhost-config.js';
+import * as selfhost from './selfhostClient.js';
 
-// Solange kein echtes Firebase-Projekt konfiguriert ist, bleibt der bisherige
-// PIN-Zugangscode-Screen aktiv (IndexedDB-Fallback). Erst mit echtem Firebase-
-// Projekt gibt es echtes Mitarbeiter-Login per E-Mail+Passwort.
-const FIREBASE_ENABLED = !!firebaseConfig.projectId;
+// Solange weder Selfhost-Server noch echtes Firebase-Projekt konfiguriert
+// sind, bleibt der bisherige PIN-Zugangscode-Screen aktiv (IndexedDB-
+// Fallback). SELFHOST_ENABLED hat Vorrang vor FIREBASE_ENABLED (siehe db.js).
+const SELFHOST_ENABLED = !!selfhostConfig.enabled;
+const FIREBASE_ENABLED = !SELFHOST_ENABLED && !!firebaseConfig.projectId;
 const SESSION_KEY = 'nv-unlocked-session';
 
 export function getSession() {
@@ -17,6 +20,7 @@ export function getSession() {
 }
 
 export function initLock() {
+  if (SELFHOST_ENABLED) return initSelfhostLogin();
   return FIREBASE_ENABLED ? initFirebaseLogin() : initPinLock();
 }
 
@@ -28,14 +32,16 @@ export function initLock() {
  * um einen sinnlosen Auto-Lock-Timer in diesem Fall gar nicht erst zu
  * starten. */
 export async function hasActiveProtection() {
-  if (FIREBASE_ENABLED) return true;
+  if (SELFHOST_ENABLED || FIREBASE_ENABLED) return true;
   const [settings, mitarbeiter] = await Promise.all([getSettings(), getAll('mitarbeiter')]);
   return !!settings.passcode || mitarbeiter.some((m) => m.zugangscode);
 }
 
 export function lockNow() {
   sessionStorage.removeItem(SESSION_KEY);
-  if (FIREBASE_ENABLED) {
+  if (SELFHOST_ENABLED) {
+    selfhost.logout().finally(() => window.location.reload());
+  } else if (FIREBASE_ENABLED) {
     import('./firebase.js').then(async ({ auth }) => {
       const { signOut } = await import('./vendor/firebase/firebase-auth.js');
       await signOut(auth);
@@ -95,6 +101,87 @@ function initPinLock() {
       }
     });
     input.focus();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Echtes Login: eigener Selfhost-Server (E-Mail + Passwort)
+// ---------------------------------------------------------------------------
+// Bewusst ohne Zwei-Faktor-Code und "Passwort vergessen" (siehe
+// selfhost-server/README.md "Bekannte Lücken") - die entsprechenden Boxen
+// aus dem Firebase-Login bleiben hier einfach ungenutzt/versteckt.
+function initSelfhostLogin() {
+  return new Promise((resolve) => {
+    const lockScreen = document.getElementById('lock-screen');
+    const authBox = document.getElementById('lock-auth-box');
+    const pinBox = document.getElementById('lock-pin-box');
+    pinBox.hidden = true;
+
+    const form = document.getElementById('auth-form');
+    const emailInput = document.getElementById('auth-email');
+    const passwordInput = document.getElementById('auth-password');
+    const error = document.getElementById('auth-error');
+    const title = document.getElementById('auth-title');
+    const submitBtn = document.getElementById('auth-submit');
+    const modeToggle = document.getElementById('auth-mode-toggle');
+    const hint = document.getElementById('auth-hint');
+    const forgotToggle = document.getElementById('auth-forgot-toggle');
+    if (forgotToggle) forgotToggle.hidden = true;
+
+    let mode = 'login';
+    function setMode(next) {
+      mode = next;
+      error.hidden = true;
+      title.textContent = mode === 'login' ? 'Anmelden' : 'Konto erstellen';
+      submitBtn.textContent = mode === 'login' ? 'Anmelden' : 'Konto erstellen';
+      modeToggle.textContent = mode === 'login'
+        ? 'Als eingeladener Mitarbeiter registrieren'
+        : 'Bereits ein Konto? Anmelden';
+      hint.textContent = mode === 'login'
+        ? 'Bitte mit deiner E-Mail und deinem Passwort anmelden.'
+        : 'Nur möglich, wenn dich ein Admin per E-Mail-Adresse eingeladen hat.';
+    }
+
+    function finish(session) {
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+      if (session.mitarbeiterId) setCurrentMitarbeiterId(session.mitarbeiterId);
+      lockScreen.hidden = true;
+      resolve(session);
+    }
+
+    (async () => {
+      const session = await selfhost.fetchSession();
+      if (session) {
+        finish(session);
+        return;
+      }
+      lockScreen.hidden = false;
+      authBox.hidden = false;
+      setMode('login');
+    })();
+
+    modeToggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      setMode(mode === 'login' ? 'register' : 'login');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      error.hidden = true;
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) return;
+      submitBtn.disabled = true;
+      try {
+        const session = mode === 'login' ? await selfhost.login(email, password) : await selfhost.register(email, password);
+        finish(session);
+      } catch (err) {
+        error.textContent = err.message || 'Unbekannter Fehler.';
+        error.hidden = false;
+      } finally {
+        submitBtn.disabled = false;
+      }
+    });
   });
 }
 
